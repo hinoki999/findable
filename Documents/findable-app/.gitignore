@@ -1,0 +1,21 @@
+﻿# Python
+ai-builder/venv/
+ai-builder/__pycache__/
+ai-builder/*.pyc
+ai-builder/.env
+ai-builder/generated_code.swift
+
+# Node
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/.expo-shared/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
