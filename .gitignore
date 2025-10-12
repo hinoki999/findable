@@ -1,0 +1,27 @@
+﻿# Dependencies
+node_modules/
+.expo/
+.expo-shared/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+build/
+*.apk
+*.ipa
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
