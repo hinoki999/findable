@@ -1,6 +1,6 @@
-﻿import React from 'react';
-import ScannerScreen from './src/screens/ScannerScreen';
+﻿import React from "react";
+import AppNavigator from "./src/navigation/AppNavigator";
 
 export default function App() {
-  return <ScannerScreen />;
+  return <AppNavigator />;
 }
