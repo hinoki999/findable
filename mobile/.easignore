@@ -1,0 +1,33 @@
+﻿node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+AppData/
+
+# Temporary files
+*.tmp
+*.log
+*.cache
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
