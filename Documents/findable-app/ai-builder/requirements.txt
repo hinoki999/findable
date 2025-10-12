@@ -1,0 +1,11 @@
+﻿langgraph==0.2.50
+langchain==0.3.13
+langchain-openai==0.2.14
+litellm==1.77.7
+langfuse==2.60.10
+llm-guard==0.3.15
+presidio-analyzer==2.2.354
+presidio-anonymizer==2.2.354
+pytest==8.3.4
+python-dotenv==1.0.1
+requests==2.32.3
