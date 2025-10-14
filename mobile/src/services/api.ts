@@ -1,30 +1,47 @@
-const API_URL = 'http://172.20.10.2:8000';
+// src/services/api.ts
+export const BASE_URL = "http://example.invalid";
+const USE_STUB = true; // keep true for now
 
-export const saveDeviceScan = async (device: {
-  name: string;
-  rssi: number;
-  distance: number;
-  user_id: number;
-}) => {
-  try {
-    const response = await fetch(API_URL + '/devices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(device),
-    });
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to save device:', error);
-    throw error;
-  }
+export type Device = { 
+  id?: number; 
+  name: string; 
+  rssi: number; 
+  distanceFeet: number;
+  action?: 'dropped' | 'accepted' | 'declined' | 'returned';
+  timestamp?: Date;
 };
 
-export const getDeviceHistory = async () => {
-  try {
-    const response = await fetch(API_URL + '/devices');
-    return await response.json();
-  } catch (error) {
-    console.error('Failed to fetch devices:', error);
-    throw error;
+// --- simple in-memory store for stub mode ---
+const _store: Device[] = [];
+const sleep = (ms:number) => new Promise(r => setTimeout(r, ms));
+
+export async function saveDevice(d: Device) {
+  if (USE_STUB) {
+    await sleep(150);
+    const item = { 
+      id: Date.now(), 
+      action: d.action || 'dropped',
+      timestamp: d.timestamp || new Date(),
+      ...d 
+    };
+    _store.unshift(item);
+    return item;
   }
-};
+  const res = await fetch(`${BASE_URL}/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(d),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function getDevices(): Promise<Device[]> {
+  if (USE_STUB) {
+    await sleep(120);
+    return _store.slice();
+  }
+  const res = await fetch(`${BASE_URL}/devices`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

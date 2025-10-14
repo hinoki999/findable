@@ -25,7 +25,8 @@
       "package": "com.hirule.mobile"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "extra": {
       "eas": {
@@ -33,7 +34,8 @@
       }
     },
     "plugins": [
-      "react-native-ble-plx"
+      "react-native-ble-plx",
+      "expo-font"
     ]
   }
 }
