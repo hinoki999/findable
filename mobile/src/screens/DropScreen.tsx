@@ -1,31 +1,42 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, Animated } from 'react-native';
+import { View, Text, FlatList, Pressable, Modal, Animated, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
 import { saveDevice } from '../services/api';
 import { useDarkMode } from '../../App';
-
-type Person = { id:string; name:string; distanceFt:number; bio?:string; visibility?:'Public'|'Private' };
-const mockNearby: Person[] = [
-  { id:'1', name:'A. Nguyen',    distanceFt:12, bio:'Tinkers with firmware', visibility:'Public' },
-  { id:'2', name:'Blue Jacket',  distanceFt:18, bio:'Ask me about coffee.',   visibility:'Public' },
-  { id:'3', name:'Jess M',       distanceFt:24, visibility:'Public' },
-  { id:'4', name:'KJ',           distanceFt:32, visibility:'Private' },
-  { id:'5', name:'M. Patel',     distanceFt:41, visibility:'Public' },
-  { id:'6', name:'Rae',          distanceFt:48, visibility:'Public' },
-];
+import { useBLEScanner, BleDevice } from '../components/BLEScanner';
+import { DeviceCard } from '../components/DeviceCard';
 
 export default function DropScreen() {
-  const [active, setActive] = useState<Person|null>(null);
+  const [active, setActive] = useState<BleDevice|null>(null);
   const [incomingDrop, setIncomingDrop] = useState<{ name: string; text: string } | null>(null);
   const [bounceAnim] = useState(new Animated.Value(0));
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  
+  // Use BLE scanner hook
+  const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
 
-  const handleDrop = async (p: Person) => {
-    await saveDevice({ name: p.name, rssi: -60, distanceFeet: p.distanceFt, action: 'dropped' });
-    setActive(null);
+  // Auto-start scanning when component mounts
+  useEffect(() => {
+    startScan();
+  }, []);
+
+  const handleDrop = async (device: BleDevice) => {
+    try {
+      await saveDevice({ 
+        name: device.name, 
+        rssi: device.rssi, 
+        distanceFeet: device.distanceFeet, 
+        action: 'dropped' 
+      });
+      setActive(null);
+      Alert.alert('Success', `Dropped to ${device.name}`);
+    } catch (error) {
+      console.error('Failed to save device:', error);
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save device');
+    }
   };
 
   // Simulate receiving a drop (you can trigger this manually for testing)
@@ -167,36 +178,65 @@ export default function DropScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom:80 }}
         ListHeaderComponent={
           <View style={{ ...theme.card, backgroundColor: theme.colors.bg, marginBottom: 12 }}>
-            <Text style={theme.type.muted}>Scanning nearby…</Text>
+            <Text style={theme.type.muted}>
+              {isScanning ? 'Scanning nearby devices...' : 'Scan complete'}
+            </Text>
+            {error && (
+              <Text style={[theme.type.muted, { color: '#FF6B6B', marginTop: 4 }]}>
+                Error: {error}
+              </Text>
+            )}
+            <Pressable
+              onPress={isScanning ? stopScan : startScan}
+              style={{
+                backgroundColor: theme.colors.blue,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                marginTop: 8,
+                alignSelf: 'flex-start',
+              }}
+            >
+              <Text style={theme.type.button}>
+                {isScanning ? 'Stop Scan' : 'Start Scan'}
+              </Text>
+            </Pressable>
           </View>
         }
-        data={mockNearby}
-        keyExtractor={(i)=>i.id}
+        data={devices}
+        keyExtractor={(device) => device.id}
         renderItem={({ item }) => (
-            <Pressable
-              onPress={() => setActive(item)}
-              style={({ pressed }) => ({
-                ...theme.card,
-                marginTop: 12,
-                borderColor: pressed ? theme.colors.blue : theme.card.borderColor,
-              })}
-            >
-              <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
-                <Text style={theme.type.h1}>{item.name}</Text>
-                <Text style={theme.type.muted}>{item.distanceFt} ft</Text>
-              </View>
-            </Pressable>
-          )}
-        />
+          <Pressable
+            onPress={() => setActive(item)}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <DeviceCard
+              id={item.id}
+              name={item.name}
+              distanceFeet={item.distanceFeet}
+              rssi={item.rssi}
+              isDarkMode={isDarkMode}
+            />
+          </Pressable>
+        )}
+        ListEmptyComponent={
+          <View style={{ ...theme.card, backgroundColor: theme.colors.bg }}>
+            <Text style={theme.type.muted}>
+              {isScanning ? 'Looking for nearby devices...' : 'No devices found. Try scanning again.'}
+            </Text>
+          </View>
+        }
+      />
 
       {/* Profile modal */}
       <Modal visible={!!active} transparent animationType="fade" onRequestClose={()=>setActive(null)}>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.18)', justifyContent:'center', padding:20 }}>
           <View style={{ ...theme.card, padding:22 }}>
             <Text style={{ ...theme.type.h1, textAlign:'center', marginBottom:6 }}>{active?.name}</Text>
-            {!!active?.bio && <Text style={{ ...theme.type.muted, textAlign:'center' }}>{active.bio}</Text>}
             <Text style={{ ...theme.type.muted, textAlign:'center', marginTop:4 }}>
-              Visibility: {active?.visibility ?? 'Public'} • {active?.distanceFt} ft away
+              {active?.distanceFeet.toFixed(1)} ft away • RSSI: {active?.rssi} dBm
             </Text>
 
             {/* Bottom action bar */}

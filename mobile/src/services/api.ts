@@ -36,10 +36,19 @@ export async function saveDevice(d: Device) {
     _store.unshift(item);
     return item;
   }
+  
+  // Map frontend format to backend format
+  const backendData = {
+    name: d.name,
+    rssi: d.rssi,
+    distance: d.distanceFeet, // Backend expects distance in feet
+    user_id: 1, // Default user ID, could be from context later
+  };
+  
   const res = await fetch(`${BASE_URL}/devices`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(d),
+    body: JSON.stringify(backendData),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
