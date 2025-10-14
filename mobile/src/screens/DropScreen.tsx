@@ -163,16 +163,16 @@ export default function DropScreen() {
       )}
 
 
-      <View style={{ padding:16 }}>
-        <View style={{ ...theme.card, backgroundColor: theme.colors.bg }}>
-          <Text style={theme.type.muted}>Scanning nearby…</Text>
-        </View>
-
-        <FlatList
-          contentContainerStyle={{ paddingTop:12, paddingBottom:80 }}
-          data={mockNearby}
-          keyExtractor={(i)=>i.id}
-          renderItem={({ item }) => (
+      <FlatList
+        contentContainerStyle={{ padding: 16, paddingBottom:80 }}
+        ListHeaderComponent={
+          <View style={{ ...theme.card, backgroundColor: theme.colors.bg, marginBottom: 12 }}>
+            <Text style={theme.type.muted}>Scanning nearby…</Text>
+          </View>
+        }
+        data={mockNearby}
+        keyExtractor={(i)=>i.id}
+        renderItem={({ item }) => (
             <Pressable
               onPress={() => setActive(item)}
               style={({ pressed }) => ({
@@ -188,7 +188,6 @@ export default function DropScreen() {
             </Pressable>
           )}
         />
-      </View>
 
       {/* Profile modal */}
       <Modal visible={!!active} transparent animationType="fade" onRequestClose={()=>setActive(null)}>
