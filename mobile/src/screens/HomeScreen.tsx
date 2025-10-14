@@ -1,9 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, Animated, Pressable, Modal } from 'react-native';
+import { View, Text, Animated, Pressable, Modal, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
-import { useDarkMode } from '../../App';
-import { saveDevice } from '../services/api';
+import { useDarkMode, usePinnedProfiles } from '../../App';
+import { saveDevice, getDevices, Device } from '../services/api';
 import LinkIcon from '../components/LinkIcon';
 
 export default function HomeScreen() {
@@ -18,8 +18,21 @@ export default function HomeScreen() {
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isDiscoverable, setIsDiscoverable] = useState(true);
+  const [pinnedProfiles, setPinnedProfiles] = useState<Device[]>([]);
+  const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const { isDarkMode } = useDarkMode();
+  const { pinnedIds } = usePinnedProfiles();
   const theme = getTheme(isDarkMode);
+
+  // Load pinned profiles
+  useEffect(() => {
+    (async () => {
+      const devices = await getDevices();
+      const pinned = devices.filter(d => d.id && pinnedIds.has(d.id));
+      setPinnedProfiles(pinned);
+    })();
+  }, [pinnedIds]);
 
   const showLinkPopupAnimation = () => {
     console.log('Showing link popup animation');
@@ -150,8 +163,268 @@ export default function HomeScreen() {
       </View>
 
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        {/* Central Raindrop Logo with Ripple - positioned on top of grid */}
-        <View style={{ alignItems: 'center', marginBottom: 20, zIndex: 10 }}>
+        {/* Pinned Profiles Stack - positioned on the left */}
+        {pinnedProfiles.length > 0 && (() => {
+          // Calculate total height of the stack
+          const cardHeight = 330; // Approximate full card height
+          const stackSpacing = 42; // Spacing between cards
+          const totalStackHeight = cardHeight + ((pinnedProfiles.length - 1) * stackSpacing);
+          
+          return (
+          <View style={{
+            position: 'absolute',
+            left: '10%',
+            top: '50%',
+            transform: [{ translateY: -Math.min(totalStackHeight / 2, 300) }],
+            width: 250,
+            maxHeight: 600,
+            zIndex: 10,
+          }}>
+            <ScrollView 
+              style={{ flex: 1 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ minHeight: totalStackHeight }}
+            >
+              {pinnedProfiles.map((profile, index) => {
+                const isExpanded = expandedCardId === profile.id;
+                const isBottomCard = index === 0;
+                // Reverse order: bottom card should be rendered last (highest in stack visually at bottom)
+                const stackPosition = pinnedProfiles.length - 1 - index;
+                
+                return (
+                <View
+                  key={profile.id}
+                  style={{
+                    position: 'absolute',
+                    top: stackPosition * 42,
+                    left: 0,
+                    right: 0,
+                    zIndex: isExpanded ? 1000 : (pinnedProfiles.length - index),
+                  }}
+                >
+                  <Pressable
+                    onPress={() => {
+                      if (!isBottomCard) {
+                        setExpandedCardId(isExpanded ? null : profile.id);
+                      }
+                    }}
+                    style={{
+                      backgroundColor: theme.colors.white,
+                      borderRadius: 16,
+                      width: 250,
+                      overflow: 'hidden',
+                      ...theme.card,
+                    }}
+                  >
+                    {/* ID Header - Always visible */}
+                    <View style={{
+                      backgroundColor: '#34C759',
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      alignItems: 'center',
+                    }}>
+                      <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
+                        {profile.name}
+                      </Text>
+                    </View>
+
+                    {/* ID Content - Show for bottom card or when expanded */}
+                    {(isBottomCard || isExpanded) && (
+                    <View style={{ padding: 16 }}>
+                      {/* Profile Picture and Name Row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                        <View style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 20,
+                          backgroundColor: '#D1F2DB',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 10,
+                        }}>
+                          <MaterialCommunityIcons name="account" size={22} color="#34C759" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[theme.type.muted, { fontSize: 9 }]}>
+                            Digital Contact
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Contact Information */}
+                      <View style={{ marginBottom: 14 }}>
+                        {/* Phone */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <MaterialCommunityIcons name="phone" size={12} color={theme.colors.muted} />
+                          <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                            +1 (555) 123-4567
+                          </Text>
+                        </View>
+
+                        {/* Email */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <MaterialCommunityIcons name="email" size={12} color={theme.colors.muted} />
+                          <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                            user@example.com
+                          </Text>
+                        </View>
+
+                        {/* Social Media */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <MaterialCommunityIcons name="instagram" size={12} color={theme.colors.muted} />
+                          <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                            @yourhandle
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <MaterialCommunityIcons name="twitter" size={12} color={theme.colors.muted} />
+                          <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                            @yourhandle
+                          </Text>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <MaterialCommunityIcons name="linkedin" size={12} color={theme.colors.muted} />
+                          <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                            yourname
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Bio Section */}
+                      <View style={{
+                        backgroundColor: theme.colors.bg,
+                        padding: 10,
+                        borderRadius: 6,
+                      }}>
+                        <Text style={[theme.type.muted, { fontSize: 8, marginBottom: 3 }]}>
+                          BIO
+                        </Text>
+                        <Text style={[theme.type.body, { fontSize: 9, color: theme.colors.text }]}>
+                          "Optional bio line goes here."
+                        </Text>
+                      </View>
+                      </View>
+                    )}
+                  </Pressable>
+                </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+          );
+        })()}
+
+        {/* User's Contact Card - positioned on the right */}
+        <View style={{
+          position: 'absolute',
+          right: '20%',
+          top: '50%',
+          transform: [{ translateX: 125 }, { translateY: -165 }],
+          backgroundColor: theme.colors.white,
+          borderRadius: 16,
+          width: 250,
+          overflow: 'hidden',
+          ...theme.card,
+          zIndex: 10,
+        }}>
+          {/* ID Header */}
+          <View style={{
+            backgroundColor: '#34C759',
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            alignItems: 'center',
+          }}>
+            <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
+              CONTACT CARD
+            </Text>
+          </View>
+
+          {/* ID Content */}
+          <View style={{ padding: 16 }}>
+            {/* Profile Picture and Name Row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: '#D1F2DB',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 10,
+              }}>
+                <MaterialCommunityIcons name="account" size={22} color="#34C759" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[theme.type.h2, { color: theme.colors.text, fontSize: 13, marginBottom: 2 }]}>
+                  Your Name
+                </Text>
+                <Text style={[theme.type.muted, { fontSize: 9 }]}>
+                  Digital Contact
+                </Text>
+              </View>
+            </View>
+
+            {/* Contact Information */}
+            <View style={{ marginBottom: 14 }}>
+              {/* Phone */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="phone" size={12} color={theme.colors.muted} />
+                <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                  +1 (555) 123-4567
+                </Text>
+              </View>
+
+              {/* Email */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="email" size={12} color={theme.colors.muted} />
+                <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                  user@example.com
+                </Text>
+              </View>
+
+              {/* Social Media */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="instagram" size={12} color={theme.colors.muted} />
+                <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                  @yourhandle
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="twitter" size={12} color={theme.colors.muted} />
+                <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                  @yourhandle
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <MaterialCommunityIcons name="linkedin" size={12} color={theme.colors.muted} />
+                <Text style={[theme.type.body, { marginLeft: 6, color: theme.colors.text, fontSize: 10 }]}>
+                  yourname
+                </Text>
+              </View>
+            </View>
+
+            {/* Bio Section */}
+            <View style={{
+              backgroundColor: theme.colors.bg,
+              padding: 10,
+              borderRadius: 6,
+            }}>
+              <Text style={[theme.type.muted, { fontSize: 8, marginBottom: 3 }]}>
+                BIO
+              </Text>
+              <Text style={[theme.type.body, { fontSize: 9, color: theme.colors.text }]}>
+                "Optional bio line goes here."
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Central Raindrop Logo with Ripple - centered */}
+        <View style={{ alignItems: 'center', zIndex: 10 }}>
           <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center' }}>
             {/* Ripple Effect */}
             <Animated.View
@@ -161,7 +434,7 @@ export default function HomeScreen() {
                 height: 80,
                 borderRadius: 40,
                 borderWidth: 2,
-                borderColor: theme.colors.blue,
+                borderColor: '#007AFF',
                 opacity: rippleAnim.interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, 0.3],
@@ -175,9 +448,46 @@ export default function HomeScreen() {
               }}
             />
             
-            <MaterialCommunityIcons name="water" size={40} color={theme.colors.blue} />
+            <MaterialCommunityIcons name="water" size={40} color="#007AFF" />
           </Pressable>
-          <Text style={[theme.type.muted, { fontSize: 12, marginTop: 4, color: theme.colors.blue }]}>Your Drops</Text>
+          <Text style={[theme.type.body, { fontSize: 12, marginTop: 4, color: '#007AFF', fontWeight: '500' }]}>Your Drops</Text>
+          
+          {/* Discoverability Toggle */}
+          <View style={{ marginTop: 28, alignItems: 'center' }}>
+            <View style={{ position: 'relative' }}>
+              <Pressable onPress={() => setIsDiscoverable(!isDiscoverable)}>
+                <View style={{
+                  width: 50,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: isDiscoverable ? '#D1F2DB' : '#F0F0F0',
+                  padding: 2,
+                  justifyContent: 'center',
+                }}>
+                  <View style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: isDiscoverable ? '#34C759' : '#FFFFFF',
+                    transform: [{ translateX: isDiscoverable ? 22 : 0 }],
+                  }} />
+                </View>
+              </Pressable>
+              <View style={{ 
+                position: 'absolute', 
+                top: 32, 
+                left: isDiscoverable ? 22 : 0,
+                alignItems: 'center',
+                width: 24,
+              }}>
+                {isDiscoverable ? (
+                  <MaterialCommunityIcons name="flash-outline" size={18} color="#34C759" />
+                ) : (
+                  <MaterialCommunityIcons name="ghost-outline" size={18} color="#8E8E93" />
+                )}
+              </View>
+            </View>
+          </View>
         </View>
 
       </View>

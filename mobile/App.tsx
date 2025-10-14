@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -16,6 +17,17 @@ const DarkModeContext = createContext<{
 });
 
 export const useDarkMode = () => useContext(DarkModeContext);
+
+// Pinned Profiles Context
+const PinnedProfilesContext = createContext<{
+  pinnedIds: Set<number>;
+  togglePin: (id: number) => void;
+}>({
+  pinnedIds: new Set(),
+  togglePin: () => {},
+});
+
+export const usePinnedProfiles = () => useContext(PinnedProfilesContext);
 
 import { useFonts,
   Inter_300Light,
@@ -37,6 +49,7 @@ export default function App() {
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Drop');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
+  const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
   
   useEffect(() => { 
     console.log('APP_BOOT_MARKER', Date.now());
@@ -49,6 +62,18 @@ export default function App() {
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  const togglePin = (id: number) => {
+    setPinnedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
   };
 
   const theme = getTheme(isDarkMode);
@@ -78,7 +103,8 @@ export default function App() {
 
   return (
     <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-      <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
         <View style={{ flex: 1 }}>
           <Screen />
         </View>
@@ -90,22 +116,69 @@ export default function App() {
           borderTopColor: theme.colors.border,
           backgroundColor: theme.colors.white
         }}>
-          {(['Home','Drop','History','Account'] as const).map(name => (
-            <Pressable
-              key={name}
-              onPress={() => setTab(name)}
-              style={{
-                flex: 1, paddingVertical: 14, alignItems:'center',
-                backgroundColor: tab === name ? theme.colors.blueLight : theme.colors.white
-              }}
-            >
-              <Text style={{ ...theme.type.tab, fontWeight: tab === name ? '700' : '500', color: theme.colors.blue }}>
-                {name}
-              </Text>
-            </Pressable>
-          ))}
+           {/* Home */}
+           <Pressable
+             onPress={() => setTab('Home')}
+             style={{
+               flex: 1, paddingVertical: 14, alignItems:'center',
+               backgroundColor: tab === 'Home' ? '#D1F2DB' : theme.colors.white
+             }}
+           >
+             <MaterialCommunityIcons 
+               name="home-outline" 
+               size={24} 
+               color="#34C759" 
+               style={{ fontWeight: '100' }}
+             />
+           </Pressable>
+
+          {/* Drop */}
+          <Pressable
+            onPress={() => setTab('Drop')}
+            style={{
+              flex: 1, paddingVertical: 14, alignItems:'center',
+              backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
+            }}
+          >
+            <MaterialCommunityIcons 
+              name="water-outline" 
+              size={24} 
+              color={theme.colors.blue} 
+            />
+          </Pressable>
+
+        {/* History */}
+        <Pressable
+          onPress={() => setTab('History')}
+          style={{
+            flex: 1, paddingVertical: 14, alignItems:'center',
+            backgroundColor: tab === 'History' ? '#D1F2DB' : theme.colors.white
+          }}
+        >
+          <MaterialCommunityIcons
+            name="link-variant"
+            size={24}
+            color="#34C759"
+          />
+        </Pressable>
+
+          {/* Account */}
+          <Pressable
+            onPress={() => setTab('Account')}
+            style={{
+              flex: 1, paddingVertical: 14, alignItems:'center',
+              backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
+            }}
+          >
+            <MaterialCommunityIcons 
+              name="account-outline" 
+              size={24} 
+              color={theme.colors.blue} 
+            />
+          </Pressable>
         </View>
       </View>
+      </PinnedProfilesContext.Provider>
     </DarkModeContext.Provider>
   );
 }

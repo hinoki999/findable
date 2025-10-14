@@ -92,20 +92,6 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        {/* Drop Visibility Card */}
-        <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Drop visibility</Text>
-          <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop:10 }}>
-            <Text style={theme.type.muted}>Public</Text>
-            <Switch 
-              value={isPublic} 
-              onValueChange={setIsPublic}
-              trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
-              thumbColor={isPublic ? theme.colors.blue : theme.colors.muted}
-            />
-          </View>
-        </View>
-
         {/* Dark Mode Card */}
         <View style={theme.card}>
           <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Dark mode</Text>

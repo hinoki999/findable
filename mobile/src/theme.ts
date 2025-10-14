@@ -1,21 +1,25 @@
 ﻿export const colors = {
-  blue: '#0A66FF',
+  blue: '#007AFF', // Apple System Blue
   bg:   '#F6F8FB',
   border: '#E6EAF2',
   text:  '#111827',
   muted: '#6E7DA0',
   white: '#FFFFFF',
-  blueLight: '#EAF2FF',
+  blueLight: '#E5F1FF',
+  green: '#34C759', // Apple System Green
+  greenLight: '#D1F2DB',
 };
 
 export const darkColors = {
-  blue: '#0A66FF',
+  blue: '#007AFF', // Apple System Blue
   bg:   '#000000',
   border: '#333333',
   text:  '#FFFFFF',
   muted: '#CCCCCC',
   white: '#1A1A1A',
   blueLight: '#1E3A8A',
+  green: '#34C759', // Apple System Green
+  greenLight: '#1A3A24',
 };
 
 export const radius = { sm:10, md:14, lg:20, pill:999 };
