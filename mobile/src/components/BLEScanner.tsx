@@ -7,6 +7,7 @@ export interface BleDevice {
   name: string;
   rssi: number;
   distanceFeet: number;
+  bio?: string;
 }
 
 interface UseBLEScannerReturn {
@@ -71,12 +72,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       // Simulate scanning with mock devices
       setTimeout(() => {
         const mockDevices: BleDevice[] = [
-          { id: '0', name: 'Jamie Parker', rssi: -35, distanceFeet: 5.0 },
-          { id: '1', name: 'Sarah Chen', rssi: -45, distanceFeet: 8.5 },
+          { id: '0', name: 'Jamie Parker', rssi: -35, distanceFeet: 5.0, bio: 'Software engineer passionate about AI and mobile development. Love hiking and photography!' },
+          { id: '1', name: 'Sarah Chen', rssi: -45, distanceFeet: 8.5, bio: 'Product designer | Coffee enthusiast ☕ | Always sketching new ideas' },
           { id: '2', name: 'Alex Rivera', rssi: -60, distanceFeet: 12.0 },
-          { id: '3', name: 'Jordan Kim', rssi: -55, distanceFeet: 15.5 },
+          { id: '3', name: 'Jordan Kim', rssi: -55, distanceFeet: 15.5, bio: 'Entrepreneur & startup advisor. Building the future one line of code at a time.' },
           { id: '4', name: 'Taylor Smith', rssi: -70, distanceFeet: 18.0 },
-          { id: '5', name: 'Morgan Lee', rssi: -50, distanceFeet: 10.5 },
+          { id: '5', name: 'Morgan Lee', rssi: -50, distanceFeet: 10.5, bio: 'Digital nomad 🌍 | UX researcher | Currently exploring new cities' },
           { id: '6', name: 'Casey Brown', rssi: -48, distanceFeet: 9.0 },
           { id: '7', name: 'Riley Davis', rssi: -65, distanceFeet: 20.0 },
           { id: '8', name: 'Avery Wilson', rssi: -58, distanceFeet: 14.0 },

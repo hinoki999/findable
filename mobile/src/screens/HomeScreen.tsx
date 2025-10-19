@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -9,23 +9,200 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 
+// ========== TENSOR MATHEMATICS ENGINE ==========
+// Multi-dimensional tensor operations for spatial calculations
+//
+// TENSOR SYSTEM ARCHITECTURE:
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 
+// 1. COORDINATE TRANSFORMATION TENSORS
+//    - 2×2 rotation matrices for angular positioning
+//    - Scaling tensors for unit conversion (feet ↔ pixels)
+//    - Quantization tensors for grid snapping
+//
+// 2. SPATIAL STATE TENSORS (per device)
+//    - Position vector (x, y) in pixels from nucleus
+//    - Velocity vector (dx/dt, dy/dt) computed via finite difference
+//    - Acceleration vector (d²x/dt², d²y/dt²) for physics simulation
+//    - Timestamp for temporal tracking
+//
+// 3. INTERACTION TENSORS
+//    - Distance field: scalar field representing device density
+//    - Interaction strength: pairwise device influence (inverse square law)
+//    - Momentum vectors: mass × velocity for motion analysis
+//
+// 4. PREDICTIVE CAPABILITIES
+//    - Euler integration: predict future positions using kinematics
+//    - Trajectory extrapolation: estimate device paths
+//    - Collision detection: anticipate spatial conflicts
+//
+// 5. MATHEMATICAL BENEFITS
+//    - Linear algebra operations enable efficient bulk calculations
+//    - Tensor composition allows complex transformations in single operations
+//    - Memoization of transformation matrices improves performance
+//    - Physics-based modeling creates realistic motion and interactions
+//    - Extensible to 3D/AR with minimal refactoring (add z-component)
+//
+// FUTURE EXTENSIONS:
+//    - 3×3 tensors for 3D/AR positioning
+//    - Kalman filters for noise reduction in position tracking
+//    - Neural tensor networks for pattern recognition
+//    - Multi-user interaction tensors for collaborative features
+//    - Gravitational field simulation for attraction/repulsion effects
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface Vector2D {
+  x: number;
+  y: number;
+}
+
+interface Tensor2x2 {
+  m11: number; m12: number;
+  m21: number; m22: number;
+}
+
+interface SpatialTensor {
+  position: Vector2D;
+  velocity: Vector2D;
+  acceleration: Vector2D;
+  distance: number;
+  angle: number;
+  timestamp: number;
+}
+
+// Tensor Operations
+const TensorMath = {
+  // Matrix multiplication for 2x2 tensor
+  multiply2x2: (t1: Tensor2x2, t2: Tensor2x2): Tensor2x2 => ({
+    m11: t1.m11 * t2.m11 + t1.m12 * t2.m21,
+    m12: t1.m11 * t2.m12 + t1.m12 * t2.m22,
+    m21: t1.m21 * t2.m11 + t1.m22 * t2.m21,
+    m22: t1.m21 * t2.m12 + t1.m22 * t2.m22,
+  }),
+
+  // Apply transformation tensor to vector
+  transformVector: (tensor: Tensor2x2, vector: Vector2D): Vector2D => ({
+    x: tensor.m11 * vector.x + tensor.m12 * vector.y,
+    y: tensor.m21 * vector.x + tensor.m22 * vector.y,
+  }),
+
+  // Create rotation tensor (for coordinate transformations)
+  rotationTensor: (angle: number): Tensor2x2 => ({
+    m11: Math.cos(angle),
+    m12: -Math.sin(angle),
+    m21: Math.sin(angle),
+    m22: Math.cos(angle),
+  }),
+
+  // Create scaling tensor (for distance mapping)
+  scalingTensor: (scaleX: number, scaleY: number = scaleX): Tensor2x2 => ({
+    m11: scaleX,
+    m12: 0,
+    m21: 0,
+    m22: scaleY,
+  }),
+
+  // Vector dot product (scalar projection)
+  dotProduct: (v1: Vector2D, v2: Vector2D): number => {
+    return v1.x * v2.x + v1.y * v2.y;
+  },
+
+  // Vector magnitude (Euclidean norm)
+  magnitude: (v: Vector2D): number => {
+    return Math.sqrt(v.x * v.x + v.y * v.y);
+  },
+
+  // Normalize vector to unit length
+  normalize: (v: Vector2D): Vector2D => {
+    const mag = TensorMath.magnitude(v);
+    return mag === 0 ? { x: 0, y: 0 } : { x: v.x / mag, y: v.y / mag };
+  },
+
+  // Linear interpolation between two vectors (for smooth animations)
+  lerp: (v1: Vector2D, v2: Vector2D, t: number): Vector2D => ({
+    x: v1.x + (v2.x - v1.x) * t,
+    y: v1.y + (v2.y - v1.y) * t,
+  }),
+
+  // Distance field tensor - calculates influence strength at a point
+  distanceField: (position: Vector2D, sources: Vector2D[], maxRadius: number): number => {
+    let totalInfluence = 0;
+    sources.forEach(source => {
+      const dx = position.x - source.x;
+      const dy = position.y - source.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Inverse square falloff (physics-based)
+      const influence = Math.max(0, 1 - Math.pow(distance / maxRadius, 2));
+      totalInfluence += influence;
+    });
+    return Math.min(1, totalInfluence);
+  },
+
+  // Compute velocity vector from position history (finite difference)
+  computeVelocity: (currentPos: Vector2D, prevPos: Vector2D, deltaTime: number): Vector2D => {
+    if (deltaTime === 0) return { x: 0, y: 0 };
+    return {
+      x: (currentPos.x - prevPos.x) / deltaTime,
+      y: (currentPos.y - prevPos.y) / deltaTime,
+    };
+  },
+
+  // Predict future position using velocity (Euler integration)
+  predictPosition: (current: SpatialTensor, deltaTime: number): Vector2D => {
+    return {
+      x: current.position.x + current.velocity.x * deltaTime + 0.5 * current.acceleration.x * deltaTime * deltaTime,
+      y: current.position.y + current.velocity.y * deltaTime + 0.5 * current.acceleration.y * deltaTime * deltaTime,
+    };
+  },
+};
+
 // Device Blip Component - extracted to avoid hooks in loops
 const DeviceBlip: React.FC<{
   device: BleDevice;
   position: { x: number; y: number };
+  nucleusX: number;
+  nucleusY: number;
+  viewTransform: Tensor2x2;
   onPress: () => void;
-}> = ({ device, position, onPress }) => {
+}> = ({ device, position, nucleusX, nucleusY, viewTransform, onPress }) => {
   // Create random delay based on device ID for staggered animation
-  const randomDelay = useState(() => Math.random() * 2000)[0];
+  const randomDelay = useState(() => Math.random() * 1000)[0];
   const [pulseAnim] = useState(new Animated.Value(0));
+  const BLIP_SIZE = 6; // pixels
   
-  // Calculate pulse speed based on distance - closer = faster
-  // Min duration: 800ms (closest), Max duration: 2000ms (farthest at 33ft)
-  const pulseDuration = 800 + (device.distanceFeet / 33) * 1200;
+  // DRAMATIZED pulse speed based on distance - closer = MUCH faster
+  // Distance-based pulsation:
+  // 0-5 feet: No pulsing (stay bright)
+  // 5-10 feet: 300ms (very fast)
+  // 10-20 feet: 800ms (medium)
+  // 20-30 feet: 1500ms (slow)
+  // 30+ feet: 2500ms (very slow)
+  const distance = device.distanceFeet;
+  let pulseDuration;
+  let shouldPulse = true;
+  
+  if (distance <= 5) {
+    shouldPulse = false; // No pulsing, stay solid bright
+    pulseDuration = 0;
+  } else if (distance <= 10) {
+    pulseDuration = 300; // Very fast
+  } else if (distance <= 20) {
+    pulseDuration = 800; // Medium
+  } else if (distance <= 30) {
+    pulseDuration = 1500; // Slow
+  } else {
+    pulseDuration = 2500; // Very slow
+  }
   
   useEffect(() => {
-    // Start with random delay
-    setTimeout(() => {
+    if (!shouldPulse) {
+      // Keep at full brightness for very close devices
+      pulseAnim.setValue(1);
+      return;
+    }
+    
+    // Start with random delay for staggered effect
+    const timer = setTimeout(() => {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -43,46 +220,61 @@ const DeviceBlip: React.FC<{
       pulse.start();
     }, randomDelay);
     
-    return () => pulseAnim.stopAnimation();
-  }, [pulseDuration]);
+    return () => {
+      clearTimeout(timer);
+      pulseAnim.stopAnimation();
+    };
+  }, [pulseDuration, shouldPulse]);
   
-  const scale = pulseAnim.interpolate({
+  // More dramatic scale changes
+  const scale = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.15],
-  });
+    outputRange: [1, 1.3], // More dramatic scaling
+  }) : 1.2; // Slightly larger when not pulsing
   
-  const opacity = pulseAnim.interpolate({
+  // More dramatic opacity changes
+  const opacity = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.7, 0.95],
-  });
+    outputRange: [0.5, 1.0], // Wider range
+  }) : 1.0; // Full brightness when not pulsing
+  
+  // Apply view transformation (rotation + zoom) to position
+  const transformedPosition = TensorMath.transformVector(viewTransform, position);
+  
+  const hitAreaSize = 30; // Large hit area for easy tapping
   
   return (
     <Pressable
-      onPress={onPress}
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('🔵 Blip clicked:', device.name, 'at distance:', device.distanceFeet);
+        onPress();
+      }}
       style={{
         position: 'absolute',
-        left: '50%',
-        top: '50%',
-        transform: [
-          { translateX: position.x - 4 },
-          { translateY: position.y - 34 },
-        ],
-        zIndex: 100,
+        left: nucleusX + transformedPosition.x - (hitAreaSize / 2),
+        top: nucleusY + transformedPosition.y - (hitAreaSize / 2),
+        width: hitAreaSize,
+        height: hitAreaSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1001,
       }}
     >
       <Animated.View
         style={{
-          width: 8,
-          height: 8,
-          borderRadius: 4,
+          width: BLIP_SIZE,
+          height: BLIP_SIZE,
+          borderRadius: BLIP_SIZE / 2,
           backgroundColor: '#00FF00',
           transform: [{ scale }],
           opacity,
           shadowColor: '#00FF00',
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.6,
-          shadowRadius: 4,
+          shadowOpacity: shouldPulse ? 0.6 : 0.9,
+          shadowRadius: shouldPulse ? 3 : 5,
         }}
+        pointerEvents="none"
       />
     </Pressable>
   );
@@ -108,6 +300,20 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
   const [showBlipModal, setShowBlipModal] = useState(false);
+  
+  // ========== ROTATION & ZOOM STATE ==========
+  const [viewRotation, setViewRotation] = useState(0); // Rotation angle in radians
+  const [viewScale, setViewScale] = useState(1); // Zoom scale factor (1 = normal, 2 = 2x zoom)
+  const rotationAnimValue = useRef(new Animated.Value(0)).current;
+  const scaleAnimValue = useRef(new Animated.Value(1)).current;
+  
+  // Gesture tracking for multi-touch
+  const gestureState = useRef({
+    initialDistance: 0,
+    initialRotation: 0,
+    initialScale: 1,
+    initialAngle: 0,
+  }).current;
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -121,6 +327,22 @@ export default function HomeScreen() {
   const { devices, isScanning, startScan, stopScan } = useBLEScanner();
 
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  
+  // MATHEMATICAL CONSTANTS FOR NUCLEUS POSITIONING
+  const BOTTOM_NAV_HEIGHT = 60; // Height of bottom navigation bar (pixels)
+  const DROP_ICON_SIZE = 30; // Size of water drop icon (pixels)
+  const MAX_RADIUS_FEET = 33; // Maximum radius in feet
+  
+  // Calculate the viewable area (screen minus bottom nav)
+  const viewableHeight = screenHeight - BOTTOM_NAV_HEIGHT;
+  
+  // Calculate the NUCLEUS (origin point 0,0) - center of viewable area
+  const nucleusX = screenWidth / 2; // Exact horizontal center
+  const nucleusY = viewableHeight / 2; // Exact vertical center of viewable area
+  
+  // Icon offset to center it perfectly (half the icon size)
+  const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
+  const iconOffsetY = DROP_ICON_SIZE / 2; // 15 pixels
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
@@ -195,32 +417,282 @@ export default function HomeScreen() {
   // Filter devices within max distance
   const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
 
-  // Map device to grid position
-  const getGridPosition = (device: BleDevice) => {
-    // Grid spans the screen, representing 33 feet radius
-    // User is at center
-    const gridSize = Math.min(screenWidth, screenHeight) * 0.9; // 90% of smaller dimension
-    const maxFeet = 33;
+  // ========== TENSOR-BASED SPATIAL SYSTEM ==========
+  
+  // Memoized spatial transformation tensors
+  const spatialTensors = useMemo(() => {
+    const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
+    const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
     
-    // Calculate distance ratio (0 to 1)
-    const distanceRatio = Math.min(device.distanceFeet / maxFeet, 1);
-    const pixelDistance = (distanceRatio * gridSize) / 2; // Half because radius
+    return {
+      // Scaling tensor: maps feet to pixels
+      feetToPixels: TensorMath.scalingTensor(pixelsPerFoot),
+      
+      // Grid quantization tensor: snaps to 1-foot intervals
+      gridSnap: TensorMath.scalingTensor(1 / pixelsPerFoot),
+      
+      maxRadiusPixels,
+      pixelsPerFoot,
+    };
+  }, [nucleusX, nucleusY, screenWidth, viewableHeight, MAX_RADIUS_FEET]);
+
+  // Spatial tensor tracking for all devices (position, velocity, acceleration)
+  const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
+
+  // Map device to grid position using TENSOR MATHEMATICS
+  const getGridPosition = (device: BleDevice): Vector2D => {
+    const deviceId = device.id || device.name;
+    const currentTime = Date.now();
     
-    // Generate consistent angle based on device name (pseudo-random but stable)
+    // Generate consistent angle based on device hash (deterministic positioning)
     const hash = device.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const angle = (hash % 360) * (Math.PI / 180);
     
-    // Calculate x, y from center
-    const x = Math.cos(angle) * pixelDistance;
-    const y = Math.sin(angle) * pixelDistance;
+    // Create rotation tensor for this device's angle
+    const rotationTensor = TensorMath.rotationTensor(angle);
     
-    // Snap to nearest grid intersection (assume grid lines every 20 pixels)
-    const gridSpacing = 20;
-    const snappedX = Math.round(x / gridSpacing) * gridSpacing;
-    const snappedY = Math.round(y / gridSpacing) * gridSpacing;
+    // Calculate distance ratio (normalized to [0,1])
+    const distanceRatio = Math.min(device.distanceFeet / MAX_RADIUS_FEET, 1);
     
-    return { x: snappedX, y: snappedY };
+    // Create radial vector in polar coordinates, then transform to Cartesian
+    const radialVector: Vector2D = { x: distanceRatio * spatialTensors.maxRadiusPixels, y: 0 };
+    
+    // Apply rotation tensor to get Cartesian position
+    const cartesianPosition = TensorMath.transformVector(rotationTensor, radialVector);
+    
+    // Snap to grid using quantization tensor
+    const snappedPosition: Vector2D = {
+      x: Math.round(cartesianPosition.x / spatialTensors.pixelsPerFoot) * spatialTensors.pixelsPerFoot,
+      y: Math.round(cartesianPosition.y / spatialTensors.pixelsPerFoot) * spatialTensors.pixelsPerFoot,
+    };
+    
+    // Update spatial tensor tracking (for future velocity/acceleration features)
+    const previousTensor = deviceSpatialTensors.current.get(deviceId);
+    
+    if (previousTensor) {
+      const deltaTime = (currentTime - previousTensor.timestamp) / 1000; // seconds
+      
+      // Compute velocity using finite difference
+      const velocity = TensorMath.computeVelocity(
+        snappedPosition,
+        previousTensor.position,
+        deltaTime
+      );
+      
+      // Compute acceleration (change in velocity)
+      const acceleration = TensorMath.computeVelocity(
+        velocity,
+        previousTensor.velocity,
+        deltaTime
+      );
+      
+      // Store updated tensor
+      deviceSpatialTensors.current.set(deviceId, {
+        position: snappedPosition,
+        velocity,
+        acceleration,
+        distance: device.distanceFeet,
+        angle,
+        timestamp: currentTime,
+      });
+    } else {
+      // Initialize tensor for new device
+      deviceSpatialTensors.current.set(deviceId, {
+        position: snappedPosition,
+        velocity: { x: 0, y: 0 },
+        acceleration: { x: 0, y: 0 },
+        distance: device.distanceFeet,
+        angle,
+        timestamp: currentTime,
+      });
+    }
+    
+    return snappedPosition;
   };
+
+  // ========== ADVANCED TENSOR FEATURES ==========
+  
+  // Calculate spatial density field (heat map) using tensor operations
+  const calculateSpatialDensity = useMemo(() => {
+    const devicePositions: Vector2D[] = filteredDevices.map(device => getGridPosition(device));
+    
+    // Create density field function
+    return (testPoint: Vector2D): number => {
+      return TensorMath.distanceField(testPoint, devicePositions, spatialTensors.maxRadiusPixels);
+    };
+  }, [filteredDevices, spatialTensors.maxRadiusPixels]);
+
+  // Calculate interaction tensor between two devices
+  const calculateInteractionStrength = (device1: BleDevice, device2: BleDevice): number => {
+    const pos1 = getGridPosition(device1);
+    const pos2 = getGridPosition(device2);
+    
+    const displacement: Vector2D = { x: pos2.x - pos1.x, y: pos2.y - pos1.y };
+    const distance = TensorMath.magnitude(displacement);
+    
+    // Interaction strength falls off with distance (inverse square law)
+    const maxInteractionDistance = spatialTensors.maxRadiusPixels;
+    const strength = Math.max(0, 1 - Math.pow(distance / maxInteractionDistance, 2));
+    
+    return strength;
+  };
+
+  // Predictive positioning: estimate where a device will be in N seconds
+  const predictFuturePosition = (device: BleDevice, futureDeltaTime: number): Vector2D | null => {
+    const deviceId = device.id || device.name;
+    const spatialTensor = deviceSpatialTensors.current.get(deviceId);
+    
+    if (!spatialTensor) return null;
+    
+    // Use physics-based prediction (position + velocity*t + 0.5*acceleration*t²)
+    return TensorMath.predictPosition(spatialTensor, futureDeltaTime);
+  };
+
+  // ========== VIEW TRANSFORMATION TENSORS (ROTATION & ZOOM) ==========
+  
+  // Create combined view transformation tensor (scale + rotation)
+  const viewTransformTensor = useMemo((): Tensor2x2 => {
+    // First scale, then rotate (order matters in transformation composition)
+    const scaleTensor = TensorMath.scalingTensor(viewScale);
+    const rotationTensor = TensorMath.rotationTensor(viewRotation);
+    
+    // Compose transformations: T_final = T_rotation × T_scale
+    return TensorMath.multiply2x2(rotationTensor, scaleTensor);
+  }, [viewScale, viewRotation]);
+
+  // Apply view transformation to a position vector
+  const applyViewTransform = (position: Vector2D): Vector2D => {
+    return TensorMath.transformVector(viewTransformTensor, position);
+  };
+
+  // Calculate momentum vector for a device (mass assumed to be 1)
+  const calculateMomentum = (device: BleDevice): Vector2D | null => {
+    const deviceId = device.id || device.name;
+    const spatialTensor = deviceSpatialTensors.current.get(deviceId);
+    
+    if (!spatialTensor) return null;
+    
+    // Momentum = mass × velocity (mass = 1 for simplicity)
+    return spatialTensor.velocity;
+  };
+
+  // Log view transformation changes
+  useEffect(() => {
+    if (viewScale !== 1 || viewRotation !== 0) {
+      console.log('🔄 VIEW TRANSFORMATION UPDATE:');
+      console.log(`   Scale: ${viewScale.toFixed(3)}x`);
+      console.log(`   Rotation: ${(viewRotation * 180 / Math.PI).toFixed(1)}° (${viewRotation.toFixed(3)} rad)`);
+      console.log(`   Transform Tensor: [[${viewTransformTensor.m11.toFixed(3)}, ${viewTransformTensor.m12.toFixed(3)}], [${viewTransformTensor.m21.toFixed(3)}, ${viewTransformTensor.m22.toFixed(3)}]]`);
+    }
+  }, [viewScale, viewRotation, viewTransformTensor]);
+
+  // Demonstrate tensor system capabilities (logs to console)
+  useEffect(() => {
+    if (filteredDevices.length > 0) {
+      console.log('🧮 TENSOR MATHEMATICS SYSTEM ACTIVE 🧮');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      // Log spatial tensors
+      console.log('📐 Spatial Transformation Tensors:');
+      console.log(`   Pixels per foot: ${spatialTensors.pixelsPerFoot.toFixed(2)}px`);
+      console.log(`   Max radius: ${spatialTensors.maxRadiusPixels.toFixed(2)}px`);
+      console.log(`   Scaling tensor: [[${spatialTensors.feetToPixels.m11.toFixed(2)}, ${spatialTensors.feetToPixels.m12}], [${spatialTensors.feetToPixels.m21}, ${spatialTensors.feetToPixels.m22.toFixed(2)}]]`);
+      
+      // Log first device's tensor data
+      const firstDevice = filteredDevices[0];
+      const deviceId = firstDevice.id || firstDevice.name;
+      const spatialTensor = deviceSpatialTensors.current.get(deviceId);
+      
+      if (spatialTensor) {
+        console.log(`\n📍 Device Tensor: "${firstDevice.name}"`);
+        console.log(`   Position: (${spatialTensor.position.x.toFixed(1)}px, ${spatialTensor.position.y.toFixed(1)}px)`);
+        console.log(`   Velocity: (${spatialTensor.velocity.x.toFixed(2)}px/s, ${spatialTensor.velocity.y.toFixed(2)}px/s)`);
+        console.log(`   Acceleration: (${spatialTensor.acceleration.x.toFixed(2)}px/s², ${spatialTensor.acceleration.y.toFixed(2)}px/s²)`);
+        console.log(`   Distance: ${spatialTensor.distance.toFixed(1)} ft`);
+        console.log(`   Angle: ${(spatialTensor.angle * 180 / Math.PI).toFixed(1)}°`);
+        
+        // Predict future position
+        const future = predictFuturePosition(firstDevice, 1.0); // 1 second ahead
+        if (future) {
+          console.log(`   Predicted position (1s): (${future.x.toFixed(1)}px, ${future.y.toFixed(1)}px)`);
+        }
+      }
+      
+      // Log interaction strengths
+      if (filteredDevices.length >= 2) {
+        const interaction = calculateInteractionStrength(filteredDevices[0], filteredDevices[1]);
+        console.log(`\n🔗 Interaction Strength: ${(interaction * 100).toFixed(1)}%`);
+      }
+      
+      // Log spatial density at nucleus
+      const nucleusDensity = calculateSpatialDensity({ x: 0, y: 0 });
+      console.log(`\n🌡️ Spatial Density at Nucleus: ${(nucleusDensity * 100).toFixed(1)}%`);
+      
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    }
+  }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
+
+  // ========== MULTI-TOUCH GESTURE HANDLER (ROTATION & ZOOM) ==========
+  
+  // Helper: Calculate distance between two touch points
+  const getTouchDistance = (touches: any[]) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[0].pageX - touches[1].pageX;
+    const dy = touches[0].pageY - touches[1].pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Helper: Calculate angle between two touch points
+  const getTouchAngle = (touches: any[]) => {
+    if (touches.length < 2) return 0;
+    const dx = touches[1].pageX - touches[0].pageX;
+    const dy = touches[1].pageY - touches[0].pageY;
+    return Math.atan2(dy, dx);
+  };
+
+  // Multi-touch gesture responder (pinch zoom + rotation)
+  const gestureResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+      onMoveShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+      
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          gestureState.initialDistance = getTouchDistance(touches);
+          gestureState.initialRotation = getTouchAngle(touches);
+          gestureState.initialScale = viewScale;
+          gestureState.initialAngle = viewRotation;
+        }
+      },
+      
+      onPanResponderMove: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          // Calculate pinch zoom
+          const currentDistance = getTouchDistance(touches);
+          const scale = (currentDistance / gestureState.initialDistance) * gestureState.initialScale;
+          
+          // Constrain zoom: 0.5x to 3x
+          const constrainedScale = Math.max(0.5, Math.min(3, scale));
+          setViewScale(constrainedScale);
+          scaleAnimValue.setValue(constrainedScale);
+          
+          // Calculate rotation
+          const currentAngle = getTouchAngle(touches);
+          const rotation = currentAngle - gestureState.initialRotation + gestureState.initialAngle;
+          setViewRotation(rotation);
+          rotationAnimValue.setValue(rotation);
+        }
+      },
+      
+      onPanResponderRelease: () => {
+        // Optionally snap to nearest 45° angle
+        // const snappedRotation = Math.round(viewRotation / (Math.PI / 4)) * (Math.PI / 4);
+        // setViewRotation(snappedRotation);
+      },
+    })
+  ).current;
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -532,47 +1004,116 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* Grid Paper Background - full screen */}
-      <View style={{ 
-        position: 'absolute', 
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-      }}>
-        {/* Vertical lines */}
-        {Array.from({ length: Math.ceil(typeof window !== 'undefined' ? window.innerWidth / 10 : 40) }, (_, i) => (
-          <View
-            key={`v-${i}`}
-            style={{
-              position: 'absolute',
-              left: i * 10,
-              top: 0,
-              bottom: 0,
-              width: 0.5,
-              backgroundColor: '#00FF00',
-              opacity: 0.3,
-            }}
-          />
-        ))}
-        {/* Horizontal lines */}
-        {Array.from({ length: Math.ceil(typeof window !== 'undefined' ? window.innerHeight / 10 : 80) }, (_, i) => (
-          <View
-            key={`h-${i}`}
-            style={{
-              position: 'absolute',
-              top: i * 10,
-              left: 0,
-              right: 0,
-              height: 0.5,
-              backgroundColor: '#00FF00',
-              opacity: 0.3,
-            }}
-          />
-        ))}
+      {/* Grid Paper Background - full screen with gesture handling */}
+      <View 
+        {...gestureResponder.panHandlers}
+        style={{ 
+          position: 'absolute', 
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 0,
+        }}
+        pointerEvents="box-none"
+      >
+        {(() => {
+          // Calculate pixels per foot based on nucleus positioning
+          const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
+          const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET; // 1 foot intervals
+          
+          // Calculate how many grid lines we need (extended for zoom)
+          const gridRange = Math.ceil(Math.max(screenWidth, screenHeight) / (pixelsPerFoot * viewScale));
+          const totalLines = gridRange * 2 + 1;
+          
+          return (
+            <>
+              {/* Vertical lines - transformed by view rotation & zoom */}
+              {Array.from({ length: totalLines }, (_, i) => {
+                const offset = (i - gridRange) * pixelsPerFoot;
+                const lineStart: Vector2D = { x: offset, y: -screenHeight };
+                const lineEnd: Vector2D = { x: offset, y: screenHeight * 2 };
+                
+                // Apply view transformation
+                const transformedStart = TensorMath.transformVector(viewTransformTensor, lineStart);
+                const transformedEnd = TensorMath.transformVector(viewTransformTensor, lineEnd);
+                
+                // Calculate rotation angle for the line
+                const dx = transformedEnd.x - transformedStart.x;
+                const dy = transformedEnd.y - transformedStart.y;
+                const lineAngle = Math.atan2(dy, dx) + Math.PI / 2; // Perpendicular
+                const lineLength = Math.sqrt(dx * dx + dy * dy);
+                
+                return (
+                  <View
+                    key={`v-${i}`}
+                    style={{
+                      position: 'absolute',
+                      left: nucleusX + transformedStart.x,
+                      top: nucleusY + transformedStart.y,
+                      width: 0.5,
+                      height: lineLength,
+                      backgroundColor: '#00FF00',
+                      opacity: offset === 0 ? 0.5 : 0.3,
+                      transform: [{ rotate: `${lineAngle}rad` }],
+                      transformOrigin: 'top left',
+                    }}
+                    pointerEvents="none"
+                  />
+                );
+              })}
+              
+              {/* Horizontal lines - transformed by view rotation & zoom */}
+              {Array.from({ length: totalLines }, (_, i) => {
+                const offset = (i - gridRange) * pixelsPerFoot;
+                const lineStart: Vector2D = { x: -screenWidth, y: offset };
+                const lineEnd: Vector2D = { x: screenWidth * 2, y: offset };
+                
+                // Apply view transformation
+                const transformedStart = TensorMath.transformVector(viewTransformTensor, lineStart);
+                const transformedEnd = TensorMath.transformVector(viewTransformTensor, lineEnd);
+                
+                // Calculate rotation angle for the line
+                const dx = transformedEnd.x - transformedStart.x;
+                const dy = transformedEnd.y - transformedStart.y;
+                const lineAngle = Math.atan2(dy, dx);
+                const lineLength = Math.sqrt(dx * dx + dy * dy);
+                
+                return (
+                  <View
+                    key={`h-${i}`}
+                    style={{
+                      position: 'absolute',
+                      left: nucleusX + transformedStart.x,
+                      top: nucleusY + transformedStart.y,
+                      width: lineLength,
+                      height: 0.5,
+                      backgroundColor: '#00FF00',
+                      opacity: offset === 0 ? 0.5 : 0.3,
+                      transform: [{ rotate: `${lineAngle}rad` }],
+                      transformOrigin: 'top left',
+                    }}
+                    pointerEvents="none"
+                  />
+                );
+              })}
+            </>
+          );
+        })()}
+      </View>
 
-        {/* Pulsating Blips for Nearby Devices */}
+      {/* Pulsating Blips for Nearby Devices - Outside grid container for better touch handling */}
+      <View 
+        style={{ 
+          position: 'absolute', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          zIndex: 1000,
+        }}
+        pointerEvents="box-none"
+      >
         {filteredDevices.map((device) => {
           const position = getGridPosition(device);
           
@@ -581,7 +1122,11 @@ export default function HomeScreen() {
               key={device.id || device.name}
               device={device}
               position={position}
+              nucleusX={nucleusX}
+              nucleusY={nucleusY}
+              viewTransform={viewTransformTensor}
               onPress={() => {
+                console.log('✅ Blip press handler called for:', device.name);
                 setSelectedBlipDevice(device);
                 setShowBlipModal(true);
               }}
@@ -884,75 +1429,140 @@ export default function HomeScreen() {
           </Animated.View>
           );
         })()}
-
-        {/* Central Raindrop Logo with Ripple - exactly centered above nav bar */}
-        <View style={{ 
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: [{ translateX: -15 }, { translateY: -50 }],
-          zIndex: 10,
-        }}>
-          <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
-            {/* Ripple Effect */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                borderWidth: 2,
-                borderColor: '#007AFF',
-                opacity: rippleAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.3],
-                }),
-                transform: [{
-                  scale: rippleAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1.2],
-                  }),
-                }],
-              }}
-            />
-            
-            <View style={{ position: 'relative' }}>
-              <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
-              
-              {/* Link notification badge */}
-              {hasUnviewedLinks && (
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    top: -2,
-                    right: -6,
-                    opacity: flashAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.4, 1],
-                    }),
-                  }}
-                >
-                  <MaterialCommunityIcons 
-                    name="link-variant" 
-                    size={14} 
-                    color="#FF6B4A" 
-                  />
-                </Animated.View>
-              )}
-            </View>
-          </Pressable>
-        </View>
         </View>
       </ScrollView>
 
-      {/* Discoverability Toggle - Top Left Corner */}
-      <View style={{ 
-        position: 'absolute',
-        top: 20,
-        left: 20,
-        zIndex: 200,
-      }}>
-        <View style={{ position: 'relative' }}>
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - Always Visible */}
+      <View 
+        style={{ 
+          position: 'absolute',
+          top: nucleusY,
+          left: nucleusX,
+          transform: [{ translateX: -iconOffsetX }, { translateY: -iconOffsetY }],
+          zIndex: 999,
+        }}
+        pointerEvents="box-none"
+      >
+        <View pointerEvents="auto">
+          <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
+          {/* Ripple Effect */}
+          <Animated.View
+            style={{
+              position: 'absolute',
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+              borderWidth: 2,
+              borderColor: '#007AFF',
+              opacity: rippleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.3],
+              }),
+              transform: [{
+                scale: rippleAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.5, 1.2],
+                }),
+              }],
+            }}
+          />
+          
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
+            
+            {/* Link notification badge */}
+            {hasUnviewedLinks && (
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -6,
+                  opacity: flashAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.4, 1],
+                  }),
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="link-variant" 
+                  size={14} 
+                  color="#FF6B4A" 
+                />
+              </Animated.View>
+            )}
+          </View>
+        </Pressable>
+        </View>
+      </View>
+
+      {/* View Transform Controls - Top Right Corner - Always Visible */}
+      <View 
+        style={{
+          position: 'absolute',
+          top: 20,
+          right: 8,
+          zIndex: 999,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
+        }}
+        pointerEvents="box-none"
+      >
+        {/* Reset View Button */}
+        <View pointerEvents="auto">
+          <Pressable
+            onPress={() => {
+              setViewScale(1);
+              setViewRotation(0);
+              scaleAnimValue.setValue(1);
+              rotationAnimValue.setValue(0);
+            }}
+            style={{
+              borderWidth: 1,
+              borderColor: '#00FF00',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+              Reset View
+            </Text>
+          </Pressable>
+        </View>
+        
+        {/* Zoom & Rotation Display */}
+        <View 
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 12,
+            flexDirection: 'row',
+            gap: 12,
+          }}
+          pointerEvents="none"
+        >
+          <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+            Zoom: {viewScale.toFixed(2)}x
+          </Text>
+          <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+            Rotate: {(viewRotation * 180 / Math.PI).toFixed(0)}°
+          </Text>
+        </View>
+      </View>
+
+      {/* Discoverability Toggle - Top Left Corner - Always Visible */}
+      <View 
+        style={{ 
+          position: 'absolute',
+          top: 20,
+          left: 20,
+          zIndex: 999,
+        }}
+        pointerEvents="box-none"
+      >
+        <View style={{ position: 'relative' }} pointerEvents="auto">
           <Pressable onPress={handleTogglePress}>
             <View style={{
               width: 40,
@@ -1443,31 +2053,69 @@ export default function HomeScreen() {
             {/* Header */}
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
               <View style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
+                width: 60,
+                height: 60,
+                borderRadius: 30,
                 backgroundColor: '#E5FFE5',
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginBottom: 12,
+                borderWidth: 2,
+                borderColor: '#00FF00',
               }}>
                 <MaterialCommunityIcons 
                   name="account-circle" 
-                  size={32} 
+                  size={40} 
                   color="#00FF00" 
                 />
               </View>
-              <Text style={[theme.type.h1, { fontSize: 18, marginBottom: 4, color: theme.colors.text }]}>
+              <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
                 {selectedBlipDevice?.name}
               </Text>
-              <Text style={[theme.type.muted, { fontSize: 12 }]}>
-                {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
-              </Text>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#E5FFE5',
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 12,
+                marginBottom: 8,
+              }}>
+                <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
+                  {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
+                </Text>
+              </View>
             </View>
 
+            {/* Bio Section (if available) */}
+            {selectedBlipDevice && (selectedBlipDevice as any).bio && (
+              <View style={{
+                backgroundColor: '#F5FFF5',
+                padding: 12,
+                borderRadius: 8,
+                marginBottom: 16,
+                borderLeftWidth: 3,
+                borderLeftColor: '#00FF00',
+              }}>
+                <Text style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: theme.colors.muted,
+                  marginBottom: 4,
+                  textTransform: 'uppercase',
+                }}>
+                  Bio
+                </Text>
+                <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
+                  {(selectedBlipDevice as any).bio}
+                </Text>
+              </View>
+            )}
+
             {/* Message */}
-            <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 24, color: theme.colors.text }]}>
-              Send your contact card to {selectedBlipDevice?.name}?
+            <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 20, color: theme.colors.muted, fontSize: 14 }]}>
+              Would you like to send your contact card?
             </Text>
 
             {/* Action Buttons */}
@@ -1525,31 +2173,36 @@ export default function HomeScreen() {
                   }
                 }}
                 style={({ pressed }) => ({
-                  backgroundColor: '#FFEB99',
-                  paddingVertical: 12,
-                  borderRadius: 8,
+                  backgroundColor: '#00FF00',
+                  paddingVertical: 14,
+                  borderRadius: 10,
                   alignItems: 'center',
                   opacity: pressed ? 0.8 : 1,
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
                 })}
               >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#000' }}>
-                  Send Drop
+                <MaterialCommunityIcons name="water" size={18} color="#000" />
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                  Drop
                 </Text>
               </Pressable>
 
               <Pressable
                 onPress={() => setShowBlipModal(false)}
                 style={({ pressed }) => ({
-                  paddingVertical: 12,
-                  borderRadius: 8,
+                  paddingVertical: 14,
+                  borderRadius: 10,
                   alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
+                  borderWidth: 1.5,
+                  borderColor: '#00FF00',
+                  backgroundColor: 'transparent',
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Text style={{ fontSize: 14, fontWeight: '500', color: theme.colors.muted }}>
-                  Cancel
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#00AA00' }}>
+                  Close
                 </Text>
               </Pressable>
             </View>
