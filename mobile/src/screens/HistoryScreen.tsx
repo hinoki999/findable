@@ -1,9 +1,11 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
+import { useTutorial } from '../contexts/TutorialContext';
+import TutorialOverlay from '../components/TutorialOverlay';
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
@@ -20,6 +22,15 @@ export default function HistoryScreen() {
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { showToast } = useToast();
   const theme = getTheme(isDarkMode);
+  const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
+  
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
+
+  // Start History screen tutorial when component mounts
+  useEffect(() => {
+    startScreenTutorial('History', 4);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -157,6 +168,30 @@ export default function HistoryScreen() {
     return bTime - aTime;
   });
 
+  // History screen tutorial steps
+  const tutorialSteps = [
+    {
+      message: 'Click on any contact to view their full contact card!',
+      position: { top: 150, left: screenWidth * 0.1, right: screenWidth * 0.1 },
+      arrow: undefined,
+    },
+    {
+      message: 'Pin your favorite contacts to quickly access them on the Home screen.',
+      position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
+      arrow: 'down' as const,
+    },
+    {
+      message: 'Delete any contact you no longer want to keep.',
+      position: { top: 135, left: screenWidth * 0.35, right: screenWidth * 0.05 },
+      arrow: 'down' as const,
+    },
+    {
+      message: 'Use the search bar to quickly find your contacts!',
+      position: { top: 100, left: screenWidth * 0.1, right: screenWidth * 0.1 },
+      arrow: 'up' as const,
+    },
+  ];
+
   if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
   if (err) return <Text style={{ margin: 16, color: 'crimson' }}>{err}</Text>;
 
@@ -285,13 +320,13 @@ export default function HistoryScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1 }}>
                     <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
-                    <Text style={theme.type.muted}>RSSI: {item.rssi} • Distance: {item.distanceFeet} ft</Text>
                   <Pressable 
                     onPress={(e) => {
                       e.stopPropagation();
                       handleTogglePin(item);
                     }} 
-                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
+                    hitSlop={0}
+                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
                   >
                     <MaterialCommunityIcons 
                       name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
@@ -318,7 +353,8 @@ export default function HistoryScreen() {
                         e.stopPropagation();
                         handleDeleteClick(item);
                       }} 
-                      style={{ marginTop: 4 }}
+                      hitSlop={0}
+                      style={{ marginTop: 4, alignSelf: 'flex-end' }}
                     >
                       <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue }]}>
                         Delete
@@ -528,6 +564,18 @@ export default function HistoryScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Tutorial Overlay - Show for History screen */}
+      {isActive && currentScreen === 'History' && currentStep > 0 && (
+        <TutorialOverlay
+          step={tutorialSteps[currentStep - 1]}
+          currentStepNumber={currentStep}
+          totalSteps={totalSteps}
+          onNext={nextStep}
+          onBack={prevStep}
+          onSkip={skipTutorial}
+        />
+      )}
     </View>
   );
 }

@@ -71,11 +71,26 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       // Simulate scanning with mock devices
       setTimeout(() => {
         const mockDevices: BleDevice[] = [
-          { id: '0', name: 'Jamie Parker', rssi: -35, distanceFeet: 2.0 },   // 2 ft - FULL gradient reference
-          { id: '1', name: 'Sarah Chen', rssi: -45, distanceFeet: 8.5 },    // Very close - mostly blue
-          { id: '2', name: 'Alex Rivera', rssi: -60, distanceFeet: 22.0 },  // Mid-range - purple mix
-          { id: '3', name: 'Jordan Kim', rssi: -55, distanceFeet: 41.0 },   // Mid-far - orange-purple
-          { id: '4', name: 'Taylor Smith', rssi: -70, distanceFeet: 68.0 }, // Far - mostly orange
+          { id: '0', name: 'Jamie Parker', rssi: -35, distanceFeet: 5.0 },
+          { id: '1', name: 'Sarah Chen', rssi: -45, distanceFeet: 8.5 },
+          { id: '2', name: 'Alex Rivera', rssi: -60, distanceFeet: 12.0 },
+          { id: '3', name: 'Jordan Kim', rssi: -55, distanceFeet: 15.5 },
+          { id: '4', name: 'Taylor Smith', rssi: -70, distanceFeet: 18.0 },
+          { id: '5', name: 'Morgan Lee', rssi: -50, distanceFeet: 10.5 },
+          { id: '6', name: 'Casey Brown', rssi: -48, distanceFeet: 9.0 },
+          { id: '7', name: 'Riley Davis', rssi: -65, distanceFeet: 20.0 },
+          { id: '8', name: 'Avery Wilson', rssi: -58, distanceFeet: 14.0 },
+          { id: '9', name: 'Quinn Taylor', rssi: -52, distanceFeet: 11.5 },
+          { id: '10', name: 'Sage Anderson', rssi: -62, distanceFeet: 17.0 },
+          { id: '11', name: 'Phoenix Martinez', rssi: -68, distanceFeet: 25.0 },
+          { id: '12', name: 'Skylar Johnson', rssi: -54, distanceFeet: 13.0 },
+          { id: '13', name: 'Dakota White', rssi: -72, distanceFeet: 28.0 },
+          { id: '14', name: 'Charlie Garcia', rssi: -56, distanceFeet: 16.0 },
+          { id: '15', name: 'River Thompson', rssi: -64, distanceFeet: 19.5 },
+          { id: '16', name: 'Kai Moore', rssi: -74, distanceFeet: 30.0 },
+          { id: '17', name: 'Blake Jackson', rssi: -66, distanceFeet: 22.5 },
+          { id: '18', name: 'Rowan Martin', rssi: -59, distanceFeet: 14.5 },
+          { id: '19', name: 'Ember Clark', rssi: -76, distanceFeet: 32.0 },
         ];
         setDevices(mockDevices);
         setIsScanning(false);

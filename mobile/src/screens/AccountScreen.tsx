@@ -1,24 +1,21 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import Slider from '@react-native-community/slider';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
-import { useDarkMode, useUserProfile, useToast, useSettings } from '../../App';
+import { useDarkMode, useUserProfile, useToast } from '../../App';
 
 export default function AccountScreen() {
   const [isPublic, setIsPublic] = useState(true);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
-  const { maxDistance, setMaxDistance } = useSettings();
   const { name, phoneNumber, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-platform' | 'social-handle' | null>(null);
   const [tempValue, setTempValue] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
-  const [refreshing, setRefreshing] = useState(false);
 
   const theme = getTheme(isDarkMode);
 
@@ -150,13 +147,6 @@ export default function AccountScreen() {
     setValidationError('');
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    // Simulate a brief refresh (in a real app, this would reload profile data from server)
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setRefreshing(false);
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <TopBar title="Account" />
@@ -164,14 +154,6 @@ export default function AccountScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.blue}
-            colors={[theme.colors.blue]}
-          />
-        }
       >
         {/* Name and Bio Card */}
         <View style={theme.card}>
@@ -200,39 +182,6 @@ export default function AccountScreen() {
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
             />
-          </View>
-        </View>
-
-        {/* Distance Filter Card */}
-        <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Device distance filter</Text>
-          <Text style={[theme.type.muted, { marginTop: 8, fontSize: 12 }]}>
-            Only show devices within this distance
-          </Text>
-          <View style={{ marginTop: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, fontSize: 16, fontWeight: '600' }]}>
-                {maxDistance} feet
-              </Text>
-              <Text style={[theme.type.muted, { fontSize: 11 }]}>
-                Range: 10-75 ft
-              </Text>
-            </View>
-            <Slider
-              style={{ width: '100%', height: 40 }}
-              minimumValue={10}
-              maximumValue={75}
-              step={5}
-              value={maxDistance}
-              onValueChange={setMaxDistance}
-              minimumTrackTintColor={theme.colors.blue}
-              maximumTrackTintColor={theme.colors.border}
-              thumbTintColor={theme.colors.blue}
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -8 }}>
-              <Text style={[theme.type.muted, { fontSize: 10 }]}>10 ft</Text>
-              <Text style={[theme.type.muted, { fontSize: 10 }]}>75 ft</Text>
-            </View>
           </View>
         </View>
 

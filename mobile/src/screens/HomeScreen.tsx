@@ -2,11 +2,91 @@
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
-import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications } from '../../App';
+import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
+import { useBLEScanner, BleDevice } from '../components/BLEScanner';
+
+// Device Blip Component - extracted to avoid hooks in loops
+const DeviceBlip: React.FC<{
+  device: BleDevice;
+  position: { x: number; y: number };
+  onPress: () => void;
+}> = ({ device, position, onPress }) => {
+  // Create random delay based on device ID for staggered animation
+  const randomDelay = useState(() => Math.random() * 2000)[0];
+  const [pulseAnim] = useState(new Animated.Value(0));
+  
+  // Calculate pulse speed based on distance - closer = faster
+  // Min duration: 800ms (closest), Max duration: 2000ms (farthest at 33ft)
+  const pulseDuration = 800 + (device.distanceFeet / 33) * 1200;
+  
+  useEffect(() => {
+    // Start with random delay
+    setTimeout(() => {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: pulseDuration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0,
+            duration: pulseDuration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      pulse.start();
+    }, randomDelay);
+    
+    return () => pulseAnim.stopAnimation();
+  }, [pulseDuration]);
+  
+  const scale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.15],
+  });
+  
+  const opacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.7, 0.95],
+  });
+  
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: [
+          { translateX: position.x - 4 },
+          { translateY: position.y - 34 },
+        ],
+        zIndex: 100,
+      }}
+    >
+      <Animated.View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: '#00FF00',
+          transform: [{ scale }],
+          opacity,
+          shadowColor: '#00FF00',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.6,
+          shadowRadius: 4,
+        }}
+      />
+    </Pressable>
+  );
+};
 
 export default function HomeScreen() {
   const [fadeAnim] = useState(new Animated.Value(1));
@@ -26,15 +106,32 @@ export default function HomeScreen() {
   const [pinnedProfiles, setPinnedProfiles] = useState<Device[]>([]);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
+  const [showBlipModal, setShowBlipModal] = useState(false);
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
   const { showToast } = useToast();
-  const { linkNotifications, dismissNotification, markAsViewed } = useLinkNotifications();
-  const { currentStep, totalSteps, isActive, nextStep, skipTutorial } = useTutorial();
+  const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
+  const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
+  const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
+  
+  // Use BLE scanner for nearby devices
+  const { devices, isScanning, startScan, stopScan } = useBLEScanner();
 
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+  // Start Home screen tutorial when component mounts
+  useEffect(() => {
+    startScreenTutorial('Home', 6);
+  }, []);
+
+  // Start BLE scanning when component mounts
+  useEffect(() => {
+    startScan();
+    return () => stopScan(); // Cleanup on unmount
+  }, []);
   
   // Get unviewed and not dismissed link notifications for badge
   const unviewedLinks = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
@@ -43,58 +140,87 @@ export default function HomeScreen() {
   // Tutorial steps for Home screen
   const tutorialSteps = [
     {
-      title: 'Welcome to DropLink!',
-      description: 'Exchange contact info instantly with people nearby. Let me show you around! 👋',
-      tooltipPosition: 'center' as const,
-      icon: 'hand-wave',
-    },
-    {
-      title: 'Your Visibility Switch',
-      description: 'Toggle between Active (discoverable) and Ghost mode (invisible to others). Right now you\'re Active!',
-      spotlightPosition: {
-        top: screenHeight * 0.58,
-        left: screenWidth * 0.38,
-        width: 50,
-        height: 28,
-        borderRadius: 14,
+      message: 'Welcome to DropLink! This is your home screen.',
+      position: {
+        top: 80,
+        left: 20,
+        right: 20,
       },
-      tooltipPosition: 'bottom' as const,
-      icon: 'flash',
+      arrow: undefined,
     },
     {
-      title: 'Your Drops Hub',
-      description: 'Tap this icon to view incoming contact requests and link notifications from others.',
-      spotlightPosition: {
-        top: screenHeight * 0.445,
-        left: screenWidth * 0.43,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
+      message: 'Toggle your visibility here. Active = discoverable, Ghost = invisible.',
+      position: {
+        top: 60,
+        left: 20,
       },
-      tooltipPosition: 'bottom' as const,
-      icon: 'water',
+      arrow: 'up' as const,
     },
     {
-      title: 'Pinned Contacts',
-      description: 'Your favorite connections appear here. Double-tap a card to unpin or delete.',
-      spotlightPosition: {
-        top: screenHeight * 0.24,
-        left: screenWidth * 0.03,
-        width: 150,
-        height: 280,
-        borderRadius: 12,
+      message: 'Tap this to see incoming requests and link notifications.',
+      position: {
+        top: screenHeight * 0.54,
+        left: screenWidth * 0.15,
+        right: screenWidth * 0.15,
       },
-      tooltipPosition: 'top' as const,
-      icon: 'pin',
+      arrow: 'up' as const,
     },
     {
-      title: 'Ready to Connect!',
-      description: 'Swipe left to find nearby people and send your first drop. Have fun linking! 🎉',
-      tooltipPosition: 'center' as const,
-      icon: 'check-circle',
-      showSwipeIndicator: true,
+      message: 'Your pinned contacts appear here. Double-tap a card to manage.',
+      position: {
+        top: screenHeight * 0.2,
+        left: screenWidth * 0.4,
+      },
+      arrow: 'left' as const,
+    },
+    {
+      message: 'This is your contact card. Set up your info in the Account page!',
+      position: {
+        top: screenHeight * 0.35,
+        right: screenWidth * 0.08,
+      },
+      arrow: 'down' as const,
+    },
+    {
+      message: 'Swipe left to find nearby people and start dropping!',
+      position: {
+        bottom: 120,
+        left: 20,
+        right: 20,
+      },
+      arrow: 'right' as const,
     },
   ];
+
+  // Filter devices within max distance
+  const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+
+  // Map device to grid position
+  const getGridPosition = (device: BleDevice) => {
+    // Grid spans the screen, representing 33 feet radius
+    // User is at center
+    const gridSize = Math.min(screenWidth, screenHeight) * 0.9; // 90% of smaller dimension
+    const maxFeet = 33;
+    
+    // Calculate distance ratio (0 to 1)
+    const distanceRatio = Math.min(device.distanceFeet / maxFeet, 1);
+    const pixelDistance = (distanceRatio * gridSize) / 2; // Half because radius
+    
+    // Generate consistent angle based on device name (pseudo-random but stable)
+    const hash = device.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const angle = (hash % 360) * (Math.PI / 180);
+    
+    // Calculate x, y from center
+    const x = Math.cos(angle) * pixelDistance;
+    const y = Math.sin(angle) * pixelDistance;
+    
+    // Snap to nearest grid intersection (assume grid lines every 20 pixels)
+    const gridSpacing = 20;
+    const snappedX = Math.round(x / gridSpacing) * gridSpacing;
+    const snappedY = Math.round(y / gridSpacing) * gridSpacing;
+    
+    return { x: snappedX, y: snappedY };
+  };
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -445,6 +571,23 @@ export default function HomeScreen() {
             }}
           />
         ))}
+
+        {/* Pulsating Blips for Nearby Devices */}
+        {filteredDevices.map((device) => {
+          const position = getGridPosition(device);
+          
+          return (
+            <DeviceBlip
+              key={device.id || device.name}
+              device={device}
+              position={position}
+              onPress={() => {
+                setSelectedBlipDevice(device);
+                setShowBlipModal(true);
+              }}
+            />
+          );
+        })}
       </View>
 
       <ScrollView
@@ -479,8 +622,8 @@ export default function HomeScreen() {
             />
           )}
 
-        {/* Pinned Profiles Stack - positioned on the left */}
-        {pinnedProfiles.length > 0 && (() => {
+        {/* Pinned Profiles Stack - REMOVED */}
+        {false && pinnedProfiles.length > 0 && (() => {
           // Calculate total height of the stack
           const cardHeight = 280; // Approximate full card height
           // Dynamic spacing: increase when dragging
@@ -742,108 +885,22 @@ export default function HomeScreen() {
           );
         })()}
 
-        {/* User's Contact Card - positioned on the right */}
-        <View style={{
-          ...theme.card,
+        {/* Central Raindrop Logo with Ripple - exactly centered above nav bar */}
+        <View style={{ 
           position: 'absolute',
-          right: '3%',
           top: '50%',
-          transform: [{ translateY: 50 }],
-          width: 150,
-          overflow: 'hidden',
+          left: '50%',
+          transform: [{ translateX: -15 }, { translateY: -50 }],
           zIndex: 10,
         }}>
-          {/* ID Header */}
-          <View style={{
-            backgroundColor: '#FF6B4A',
-            paddingVertical: 6,
-            paddingHorizontal: 12,
-            alignItems: 'center',
-          }}>
-            <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
-              {profile.name}
-            </Text>
-          </View>
-
-          {/* ID Content */}
-          <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 4 }}>
-            {/* Profile Picture */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-              <View style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: '#FFE5DC',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <MaterialCommunityIcons name="account" size={18} color="#FF6B4A" />
-              </View>
-            </View>
-
-            {/* Contact Information */}
-            <View style={{ marginBottom: 6 }}>
-              {/* Phone */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                <MaterialCommunityIcons name="phone" size={10} color={theme.colors.muted} />
-                <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                  {profile.phoneNumber}
-                </Text>
-              </View>
-
-              {/* Email */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                <MaterialCommunityIcons name="email" size={10} color={theme.colors.muted} />
-                <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                  {profile.email}
-                </Text>
-              </View>
-
-              {/* Social Media - only show if exists */}
-              {profile.socialMedia.map((social, index) => social.platform && social.handle ? (
-                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                  <MaterialCommunityIcons 
-                    name={social.platform.toLowerCase().includes('instagram') ? 'instagram' :
-                          social.platform.toLowerCase().includes('twitter') || social.platform.toLowerCase().includes('x') ? 'twitter' :
-                          social.platform.toLowerCase().includes('linkedin') ? 'linkedin' :
-                          social.platform.toLowerCase().includes('facebook') ? 'facebook' :
-                          'web'} 
-                    size={10} 
-                    color={theme.colors.muted} 
-                  />
-                  <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                    {social.handle}
-                </Text>
-              </View>
-              ) : null)}
-            </View>
-
-            {/* Bio Section */}
-            <View style={{
-              backgroundColor: theme.colors.bg,
-              padding: 6,
-              borderRadius: 6,
-            }}>
-              <Text style={[theme.type.muted, { fontSize: 6, marginBottom: 1 }]}>
-                BIO
-              </Text>
-              <Text style={[theme.type.body, { fontSize: 7, color: theme.colors.text }]}>
-                {profile.bio}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Central Raindrop Logo with Ripple - centered */}
-        <View style={{ alignItems: 'center', zIndex: 10 }}>
           <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
             {/* Ripple Effect */}
             <Animated.View
               style={{
                 position: 'absolute',
-                width: 80,
-                height: 80,
-                borderRadius: 40,
+                width: 60,
+                height: 60,
+                borderRadius: 30,
                 borderWidth: 2,
                 borderColor: '#007AFF',
                 opacity: rippleAnim.interpolate({
@@ -860,7 +917,7 @@ export default function HomeScreen() {
             />
             
             <View style={{ position: 'relative' }}>
-              <MaterialCommunityIcons name="water" size={40} color="#007AFF" />
+              <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
               
               {/* Link notification badge */}
               {hasUnviewedLinks && (
@@ -884,47 +941,51 @@ export default function HomeScreen() {
               )}
             </View>
           </Pressable>
-          <Text style={[theme.type.body, { fontSize: 12, marginTop: 4, color: '#007AFF', fontWeight: '500' }]}>Your Drops</Text>
-          
-          {/* Discoverability Toggle */}
-          <View style={{ marginTop: 28, alignItems: 'center' }}>
-            <View style={{ position: 'relative' }}>
-              <Pressable onPress={handleTogglePress}>
-                <View style={{
-                  width: 50,
-                  height: 28,
-                  borderRadius: 14,
-                  backgroundColor: isDiscoverable ? '#FFE5DC' : '#F0F0F0',
-                  padding: 2,
-                  justifyContent: 'center',
-                }}>
-                  <View style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: 12,
-                    backgroundColor: isDiscoverable ? '#FF6B4A' : '#FFFFFF',
-                    transform: [{ translateX: isDiscoverable ? 22 : 0 }],
-                  }} />
-                </View>
-              </Pressable>
-              <View style={{ 
-                position: 'absolute', 
-                top: 32, 
-                left: isDiscoverable ? 22 : 0,
-                alignItems: 'center',
-                width: 24,
-              }}>
-                {isDiscoverable ? (
-                  <MaterialCommunityIcons name="flash-outline" size={18} color="#FF6B4A" />
-                ) : (
-                  <MaterialCommunityIcons name="ghost-outline" size={18} color="#8E8E93" />
-                )}
-              </View>
-            </View>
-          </View>
         </View>
         </View>
       </ScrollView>
+
+      {/* Discoverability Toggle - Top Left Corner */}
+      <View style={{ 
+        position: 'absolute',
+        top: 20,
+        left: 20,
+        zIndex: 200,
+      }}>
+        <View style={{ position: 'relative' }}>
+          <Pressable onPress={handleTogglePress}>
+            <View style={{
+              width: 40,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: isDiscoverable ? '#FFE5DC' : '#F0F0F0',
+              padding: 2,
+              justifyContent: 'center',
+            }}>
+              <View style={{
+                width: 18,
+                height: 18,
+                borderRadius: 9,
+                backgroundColor: isDiscoverable ? '#FF6B4A' : '#FFFFFF',
+                transform: [{ translateX: isDiscoverable ? 18 : 0 }],
+              }} />
+            </View>
+          </Pressable>
+          <View style={{ 
+            position: 'absolute', 
+            top: 24, 
+            left: isDiscoverable ? 18 : 0,
+            alignItems: 'center',
+            width: 18,
+          }}>
+            {isDiscoverable ? (
+              <MaterialCommunityIcons name="flash-outline" size={14} color="#FF6B4A" />
+            ) : (
+              <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
+            )}
+          </View>
+        </View>
+      </View>
 
       {/* Link Popup Animation */}
       {showLinkPopup && (
@@ -1351,6 +1412,151 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Blip Device Modal - Execute Drop */}
+      <Modal
+        visible={showBlipModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBlipModal(false)}
+      >
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: 'rgba(0,0,0,0.6)', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          padding: 20 
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 16,
+            padding: 24,
+            width: '100%',
+            maxWidth: 300,
+            borderWidth: 2,
+            borderColor: '#00FF00',
+            shadowColor: '#00FF00',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 10,
+          }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: '#E5FFE5',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+              }}>
+                <MaterialCommunityIcons 
+                  name="account-circle" 
+                  size={32} 
+                  color="#00FF00" 
+                />
+              </View>
+              <Text style={[theme.type.h1, { fontSize: 18, marginBottom: 4, color: theme.colors.text }]}>
+                {selectedBlipDevice?.name}
+              </Text>
+              <Text style={[theme.type.muted, { fontSize: 12 }]}>
+                {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
+              </Text>
+            </View>
+
+            {/* Message */}
+            <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 24, color: theme.colors.text }]}>
+              Send your contact card to {selectedBlipDevice?.name}?
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={{ gap: 10 }}>
+              <Pressable
+                onPress={async () => {
+                  if (selectedBlipDevice) {
+                    await saveDevice({ 
+                      name: selectedBlipDevice.name, 
+                      rssi: selectedBlipDevice.rssi, 
+                      distanceFeet: selectedBlipDevice.distanceFeet, 
+                      action: 'dropped' 
+                    });
+                    setShowBlipModal(false);
+                    showToast({
+                      message: `Drop sent to ${selectedBlipDevice.name}!`,
+                      type: 'success',
+                      duration: 3000,
+                    });
+                    
+                    // Simulate link back after 3 seconds
+                    setTimeout(async () => {
+                      const uniqueId = Date.now();
+                      const linkData = {
+                        name: selectedBlipDevice.name,
+                        phoneNumber: '(555) 123-4567',
+                        email: `${selectedBlipDevice.name.toLowerCase().replace(' ', '.')}@example.com`,
+                        bio: 'This is a test bio for the linked contact.',
+                        socialMedia: [
+                          { platform: 'Instagram', handle: `@${selectedBlipDevice.name.toLowerCase().replace(' ', '')}` },
+                        ],
+                      };
+                      
+                      await saveDevice({
+                        id: uniqueId,
+                        name: linkData.name,
+                        rssi: -55,
+                        distanceFeet: 18,
+                        action: 'returned',
+                        phoneNumber: linkData.phoneNumber,
+                        email: linkData.email,
+                        bio: linkData.bio,
+                        socialMedia: linkData.socialMedia,
+                      });
+                      
+                      addLinkNotification({
+                        deviceId: uniqueId,
+                        name: linkData.name,
+                        phoneNumber: linkData.phoneNumber,
+                        email: linkData.email,
+                        bio: linkData.bio,
+                        socialMedia: linkData.socialMedia,
+                      });
+                    }, 3000);
+                  }
+                }}
+                style={({ pressed }) => ({
+                  backgroundColor: '#FFEB99',
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: '#000' }}>
+                  Send Drop
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setShowBlipModal(false)}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '500', color: theme.colors.muted }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Confirmation Modal */}
       <Modal
         visible={showConfirmModal}
@@ -1552,12 +1758,13 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Tutorial Overlay */}
-      {isActive && currentStep > 0 && (
+      {isActive && currentScreen === 'Home' && currentStep > 0 && (
         <TutorialOverlay
           step={tutorialSteps[currentStep - 1]}
           currentStepNumber={currentStep}
           totalSteps={totalSteps}
           onNext={nextStep}
+          onBack={prevStep}
           onSkip={skipTutorial}
         />
       )}

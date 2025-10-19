@@ -20,9 +20,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 }) => {
   const theme = getTheme(isDarkMode);
   
-  // Calculate proximity percentage based on distance (75-0 ft)
-  // 0 ft = 100% (closest), 75 ft = 0% (farthest)
-  const maxDistance = 75;
+  // Calculate proximity percentage based on distance (33-0 ft)
+  // 0 ft = 100% (closest), 33 ft = 0% (farthest)
+  const maxDistance = 33;
   const proximityPercent = Math.max(0.1, Math.min(100, ((maxDistance - distanceFeet) / maxDistance) * 100));
   
   // Calculate gradient width so it always spans the full track conceptually

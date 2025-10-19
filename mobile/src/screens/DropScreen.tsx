@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
@@ -7,6 +7,8 @@ import { saveDevice } from '../services/api';
 import { useDarkMode, useLinkNotifications, useToast, useSettings } from '../../App';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
+import { useTutorial } from '../contexts/TutorialContext';
+import TutorialOverlay from '../components/TutorialOverlay';
 
 // Track if scan has been performed in this app session
 let hasScannedThisSession = false;
@@ -21,6 +23,15 @@ export default function DropScreen() {
   const { showToast } = useToast();
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
+  const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
+  
+  const screenWidth = Dimensions.get('window').width;
+  const screenHeight = Dimensions.get('window').height;
+
+  // Start Drop screen tutorial when component mounts
+  useEffect(() => {
+    startScreenTutorial('Drop', 2);
+  }, []);
   
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
@@ -142,6 +153,20 @@ export default function DropScreen() {
     startScan();
     setRefreshing(false);
   };
+
+  // Drop screen tutorial steps
+  const tutorialSteps = [
+    {
+      message: `This page shows all people you can drop within ${maxDistance} ft (10m). Track here!`,
+      position: { top: screenHeight * 0.28, left: screenWidth * 0.3, right: screenWidth * 0.05 },
+      arrow: 'down' as const,
+    },
+    {
+      message: 'Click on a name to send a drop and share your contact card!',
+      position: { top: screenHeight * 0.38 - 40, left: screenWidth * 0.05, right: screenWidth * 0.3 },
+      arrow: 'down' as const,
+    },
+  ];
 
   return (
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
@@ -354,6 +379,18 @@ export default function DropScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Tutorial Overlay - Show for Drop screen */}
+      {isActive && currentScreen === 'Drop' && currentStep > 0 && (
+        <TutorialOverlay
+          step={tutorialSteps[currentStep - 1]} // Map to Drop screen step index
+          currentStepNumber={currentStep}
+          totalSteps={totalSteps}
+          onNext={nextStep}
+          onBack={prevStep}
+          onSkip={skipTutorial}
+        />
+      )}
     </View>
   );
 }
