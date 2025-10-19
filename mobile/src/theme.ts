@@ -6,8 +6,8 @@
   muted: '#6E7DA0',
   white: '#FFFFFF',
   blueLight: '#E5F1FF',
-  green: '#34C759', // Apple System Green
-  greenLight: '#D1F2DB',
+  green: '#FF6B4A', // Strawberry Apricot Orange
+  greenLight: '#FFE5DC',
 };
 
 export const darkColors = {
@@ -18,8 +18,8 @@ export const darkColors = {
   muted: '#CCCCCC',
   white: '#1A1A1A',
   blueLight: '#1E3A8A',
-  green: '#34C759', // Apple System Green
-  greenLight: '#1A3A24',
+  green: '#FF6B4A', // Strawberry Apricot Orange
+  greenLight: '#4A2618',
 };
 
 export const radius = { sm:10, md:14, lg:20, pill:999 };

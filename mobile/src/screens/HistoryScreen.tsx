@@ -1,28 +1,34 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Pressable, Modal } from 'react-native';
+﻿import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDevices, Device } from '../services/api';
+import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
-import { useDarkMode, usePinnedProfiles } from '../../App';
+import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedContact, setSelectedContact] = useState<Device | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Device | null>(null);
+  const lastDeletedItemRef = useRef<Device | null>(null); // Using ref to avoid closure issues
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
+  const { showToast } = useToast();
   const theme = getTheme(isDarkMode);
 
   useEffect(() => {
     (async () => {
       try {
         const items = await getDevices();
-        // Filter out declined drops
-        const filteredItems = (items ?? []).filter(item => item.action !== 'declined');
+        // Only show accepted and returned (linked) contacts - no unanswered drops
+        const filteredItems = (items ?? []).filter(item => 
+          item.action === 'accepted' || item.action === 'returned'
+        );
         setData(filteredItems);
       } catch (e:any) {
         setErr(e?.message || 'Failed to load');
@@ -33,11 +39,6 @@ export default function HistoryScreen() {
   }, []);
 
   const handleContactPress = (item: Device) => {
-    // Don't show contact card for declined drops
-    if (item.action === 'declined') {
-      return;
-    }
-    
     setSelectedContact(item);
     setShowContactModal(true);
   };
@@ -52,12 +53,44 @@ export default function HistoryScreen() {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
-    if (itemToDelete) {
+  const confirmDelete = async () => {
+    if (itemToDelete && itemToDelete.id) {
+      // Store for undo using ref (synchronous)
+      lastDeletedItemRef.current = itemToDelete;
+      
+      // Delete from API/store
+      await deleteDevice(itemToDelete.id);
+      // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
+      console.log('🗑️ Device deleted from history and store');
+      
+      // Show toast with undo
+      showToast({
+        message: `${itemToDelete.name} deleted`,
+        type: 'success',
+        duration: 4000,
+        actionLabel: 'UNDO',
+        onAction: handleUndoDelete,
+      });
     }
     setShowDeleteModal(false);
     setItemToDelete(null);
+  };
+
+  const handleUndoDelete = async () => {
+    const lastDeletedItem = lastDeletedItemRef.current; // Get from ref
+    if (!lastDeletedItem) return;
+    
+    console.log('🔄 UNDOING delete for:', lastDeletedItem.name);
+    
+    // Restore to API/store
+    await restoreDevice(lastDeletedItem);
+    
+    // Restore to local data
+    setData(prevData => [...prevData, lastDeletedItem]);
+    lastDeletedItemRef.current = null; // Clear ref
+    
+    console.log('✅ Contact fully restored to history and store');
   };
 
   const cancelDelete = () => {
@@ -67,11 +100,52 @@ export default function HistoryScreen() {
 
   const handleTogglePin = (item: Device) => {
     if (!item.id) return;
+    const isPinned = pinnedIds.has(item.id);
     togglePin(item.id);
+    
+    // Show toast
+    showToast({
+      message: isPinned ? `${item.name} unpinned` : `${item.name} pinned to Home`,
+      type: 'success',
+      duration: 2000,
+    });
   };
 
-  // Sort data: pinned items first, then by timestamp
-  const sortedData = [...data].sort((a, b) => {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const items = await getDevices();
+      // Only show accepted and returned (linked) contacts - no unanswered drops
+      const filteredItems = (items ?? []).filter(item => 
+        item.action === 'accepted' || item.action === 'returned'
+      );
+      setData(filteredItems);
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message || 'Failed to reload');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Filter data based on search query
+  const filteredData = data.filter(item => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const name = item.name?.toLowerCase() || '';
+    const email = item.email?.toLowerCase() || '';
+    const phone = item.phoneNumber?.toLowerCase() || '';
+    const bio = item.bio?.toLowerCase() || '';
+    
+    return name.includes(query) || 
+           email.includes(query) || 
+           phone.includes(query) || 
+           bio.includes(query);
+  });
+
+  // Sort filtered data: pinned items first, then by timestamp
+  const sortedData = [...filteredData].sort((a, b) => {
     const aPin = a.id && pinnedIds.has(a.id) ? 1 : 0;
     const bPin = b.id && pinnedIds.has(b.id) ? 1 : 0;
     
@@ -88,18 +162,79 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <View style={{ alignItems: 'center', paddingVertical: 8, paddingTop: 16 }}>
-        <MaterialCommunityIcons
-          name="link-variant"
-          size={28}
-          color="#34C759"
-        />
-      </View>
       <FlatList
-        contentContainerStyle={{ padding: 16, paddingTop: 8 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         data={sortedData}
         keyExtractor={(item, i) => String(item.id ?? i)}
-          renderItem={({ item }) => {
+        ListHeaderComponent={
+          <>
+            <View style={{ alignItems: 'center', paddingVertical: 8, paddingTop: 16 }}>
+              <MaterialCommunityIcons
+                name="link-variant"
+                size={28}
+                color="#FF6B4A"
+              />
+            </View>
+            
+            {/* Search Bar */}
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.colors.white,
+                borderRadius: 12,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}>
+                <MaterialCommunityIcons 
+                  name="magnify" 
+                  size={20} 
+                  color={theme.colors.muted} 
+                />
+                <TextInput
+                  style={[
+                    {
+                      flex: 1,
+                      marginLeft: 8,
+                      fontSize: 14,
+                      color: theme.colors.text,
+                      fontFamily: 'Inter_400Regular',
+                    },
+                    // @ts-ignore - web-specific style
+                    { outline: 'none' }
+                  ]}
+                  placeholder="Search links..."
+                  placeholderTextColor={theme.colors.muted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  underlineColorAndroid="transparent"
+                  selectionColor={theme.colors.blue}
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable onPress={() => setSearchQuery('')}>
+                    <MaterialCommunityIcons 
+                      name="close-circle" 
+                      size={18} 
+                      color={theme.colors.muted} 
+                    />
+                  </Pressable>
+                )}
+              </View>
+            </View>
+            <View style={{ height: 8 }} />
+          </>
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.blue}
+            colors={[theme.colors.blue]}
+          />
+        }
+        renderItem={({ item }) => {
             const formatTimestamp = (timestamp?: Date) => {
               if (!timestamp) return 'Unknown time';
               const now = new Date();
@@ -117,7 +252,7 @@ export default function HistoryScreen() {
             };
 
                 const getActionColor = (action?: string) => {
-                  return '#34C759'; // Apple System Green for all actions
+                  return '#FF6B4A'; // Strawberry Apricot Orange for all actions
                 };
 
                         const getActionText = (action?: string) => {
@@ -132,7 +267,7 @@ export default function HistoryScreen() {
 
                         const getActionIcon = (action?: string) => {
                           if (action === 'returned') {
-                            return <MaterialCommunityIcons name="link-variant" size={16} color="#34C759" />;
+                            return <MaterialCommunityIcons name="link-variant" size={16} color="#FF6B4A" />;
                           }
                           return null;
                         };
@@ -142,23 +277,28 @@ export default function HistoryScreen() {
                 onPress={() => handleContactPress(item)}
                 style={({ pressed }) => ({
                   ...theme.card,
+                  marginHorizontal: 16,
+                  marginBottom: 12,
                   opacity: pressed ? 0.8 : 1,
                 })}
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#34C759' }]}>{item.name}</Text>
+                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
                     <Text style={theme.type.muted}>RSSI: {item.rssi} • Distance: {item.distanceFeet} ft</Text>
                   <Pressable 
-                    onPress={() => handleTogglePin(item)} 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleTogglePin(item);
+                    }} 
                     style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}
                   >
                     <MaterialCommunityIcons 
                       name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
                       size={11} 
-                      color="#D0F0D0" 
+                      color={theme.colors.blue} 
                     />
-                    <Text style={[theme.type.muted, { fontSize: 11, color: '#D0F0D0', marginLeft: 4 }]}>
+                    <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
                       {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
                     </Text>
                   </Pressable>
@@ -173,8 +313,14 @@ export default function HistoryScreen() {
                     <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
                       {formatTimestamp(item.timestamp)}
                     </Text>
-                    <Pressable onPress={() => handleDeleteClick(item)} style={{ marginTop: 4 }}>
-                      <Text style={[theme.type.muted, { fontSize: 11, color: '#D0F0D0' }]}>
+                    <Pressable 
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(item);
+                      }} 
+                      style={{ marginTop: 4 }}
+                    >
+                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue }]}>
                         Delete
                       </Text>
                     </Pressable>
@@ -183,7 +329,21 @@ export default function HistoryScreen() {
               </Pressable>
             );
           }}
-          ListEmptyComponent={<Text style={theme.type.muted}>No activity yet. All drop activity will be displayed here.</Text>}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 20 }}>
+              {searchQuery.trim() ? (
+                <>
+                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
+                  <Text style={[theme.type.h2, { marginBottom: 4 }]}>No results found</Text>
+                  <Text style={[theme.type.muted, { textAlign: 'center' }]}>
+                    Try searching with a different name, email, or phone number
+                  </Text>
+                </>
+              ) : (
+                <Text style={theme.type.muted}>No links yet. Accepted drops and returned links will appear here.</Text>
+              )}
+            </View>
+          }
         />
 
       {/* Contact Card Modal */}
@@ -210,38 +370,29 @@ export default function HistoryScreen() {
           }}>
             {/* ID Header */}
             <View style={{
-              backgroundColor: '#34C759',
+              backgroundColor: '#FF6B4A',
               paddingVertical: 12,
               paddingHorizontal: 20,
               alignItems: 'center',
             }}>
               <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                CONTACT CARD
+                {selectedContact?.name}
               </Text>
             </View>
 
             {/* ID Content */}
             <View style={{ padding: 20 }}>
-              {/* Profile Picture and Name Row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                  <View style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 30,
-                    backgroundColor: '#D1F2DB',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 16,
-                  }}>
-                    <MaterialCommunityIcons name="account" size={30} color="#34C759" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[theme.type.h2, { color: theme.colors.text, marginBottom: 4 }]}>
-                    {selectedContact?.name}
-                  </Text>
-                  <Text style={[theme.type.muted, { fontSize: 12 }]}>
-                    Digital Contact
-                  </Text>
+              {/* Profile Picture */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <View style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  backgroundColor: '#FFE5DC',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <MaterialCommunityIcons name="account" size={30} color="#FF6B4A" />
                 </View>
               </View>
 
@@ -303,7 +454,7 @@ export default function HistoryScreen() {
               <Pressable
                 onPress={closeContactModal}
                 style={{
-                  backgroundColor: '#34C759',
+                  backgroundColor: '#FF6B4A',
                   paddingVertical: 10,
                   paddingHorizontal: 20,
                   borderRadius: 8,
@@ -328,33 +479,33 @@ export default function HistoryScreen() {
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'rgba(0,0,0,0.6)',
           justifyContent: 'center',
           alignItems: 'center',
           padding: 20
         }}>
-          <View style={[theme.card, { width: '100%', maxWidth: 350, padding: 24 }]}>
-            <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 16 }]}>
+          <View style={[theme.card, { width: '100%', maxWidth: 220, padding: 14 }]}>
+            <Text style={[theme.type.h2, { fontSize: 15, textAlign: 'center', marginBottom: 6 }]}>
               Delete Contact
             </Text>
-            <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 24, color: theme.colors.muted }]}>
+            <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.muted }]}>
               Are you sure you want to delete this profile?
             </Text>
             
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 onPress={cancelDelete}
                 style={{
                   flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  borderWidth: 1.5,
                   borderColor: theme.colors.border,
                   backgroundColor: theme.colors.bg,
                 }}
               >
-                <Text style={[theme.type.body, { textAlign: 'center', color: theme.colors.muted }]}>
+                <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.muted }]}>
                   Cancel
                 </Text>
               </Pressable>
@@ -363,13 +514,13 @@ export default function HistoryScreen() {
               onPress={confirmDelete}
               style={{
                 flex: 1,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                backgroundColor: '#34C759',
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+                backgroundColor: '#FF6B4A',
               }}
             >
-              <Text style={[theme.type.button, { textAlign: 'center', fontSize: 16 }]}>
+              <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
                 Yes, Delete
               </Text>
             </Pressable>

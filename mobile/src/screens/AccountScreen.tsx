@@ -1,28 +1,84 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView } from 'react-native';
+import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
-import { useDarkMode } from '../../App';
+import { useDarkMode, useUserProfile, useToast, useSettings } from '../../App';
 
 export default function AccountScreen() {
   const [isPublic, setIsPublic] = useState(true);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const [phoneNumber, setPhoneNumber] = useState('+1 (555) 123-4567');
-  const [email, setEmail] = useState('user@example.com');
-  const [name, setName] = useState('Your Name');
-  const [bio, setBio] = useState('Optional bio line goes here.');
-  const [socialMedia, setSocialMedia] = useState<{ platform: string; handle: string }[]>([]);
+  const { profile, updateProfile } = useUserProfile();
+  const { showToast } = useToast();
+  const { maxDistance, setMaxDistance } = useSettings();
+  const { name, phoneNumber, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-platform' | 'social-handle' | null>(null);
   const [tempValue, setTempValue] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
+  const [validationError, setValidationError] = useState<string>('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const theme = getTheme(isDarkMode);
 
+  // Format phone number as (###) ###-####
+  const formatPhoneNumber = (text: string) => {
+    // Remove all non-numeric characters
+    const cleaned = text.replace(/\D/g, '');
+    // Limit to 10 digits
+    const limited = cleaned.slice(0, 10);
+    
+    // Format based on length
+    if (limited.length <= 3) {
+      return limited ? `(${limited}` : '';
+    } else if (limited.length <= 6) {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+    } else {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+    }
+  };
+
+  // Validation functions
+  const validateEmail = (email: string): string => {
+    if (!email.trim()) {
+      return 'Email is required';
+    }
+    if (!email.includes('@')) {
+      return 'Must have an @ symbol';
+    }
+    // Check for basic domain structure (at least one dot after @)
+    const atIndex = email.indexOf('@');
+    const afterAt = email.substring(atIndex + 1);
+    if (!afterAt.includes('.') || afterAt.length < 3) {
+      return 'Must have a valid domain (e.g., .com, .org)';
+    }
+    return '';
+  };
+
+  const validatePhone = (phone: string): string => {
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 0) {
+      return 'Phone number is required';
+    }
+    if (cleaned.length !== 10) {
+      return 'Phone number must be exactly 10 digits';
+    }
+    return '';
+  };
+
+  const validateName = (name: string): string => {
+    if (!name.trim()) {
+      return 'Name is required';
+    }
+    return '';
+  };
+
   const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-platform' | 'social-handle', socialIndex?: number) => {
     setEditingField(field);
+    setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
+      // Remove formatting for editing, keep only the formatted value
       setTempValue(phoneNumber);
     } else if (field === 'email') {
       setTempValue(email);
@@ -38,14 +94,31 @@ export default function AccountScreen() {
   };
 
   const handleSave = () => {
+    // Validate based on field type
+    let error = '';
     if (editingField === 'phone') {
-      setPhoneNumber(tempValue);
+      error = validatePhone(tempValue);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      updateProfile({ phoneNumber: tempValue });
     } else if (editingField === 'email') {
-      setEmail(tempValue);
+      error = validateEmail(tempValue);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      updateProfile({ email: tempValue });
     } else if (editingField === 'name') {
-      setName(tempValue);
+      error = validateName(tempValue);
+      if (error) {
+        setValidationError(error);
+        return;
+      }
+      updateProfile({ name: tempValue });
     } else if (editingField === 'bio') {
-      setBio(tempValue);
+      updateProfile({ bio: tempValue });
     } else if ((editingField === 'social-platform' || editingField === 'social-handle') && tempSocialIndex !== null) {
       const updatedSocial = [...socialMedia];
       if (editingField === 'social-platform') {
@@ -53,12 +126,20 @@ export default function AccountScreen() {
       } else {
         updatedSocial[tempSocialIndex].handle = tempValue;
       }
-      setSocialMedia(updatedSocial);
+      updateProfile({ socialMedia: updatedSocial });
     }
     setEditModalVisible(false);
     setEditingField(null);
     setTempValue('');
     setTempSocialIndex(null);
+    setValidationError('');
+    
+    // Show success toast
+    showToast({
+      message: 'Changes saved successfully!',
+      type: 'success',
+      duration: 2000,
+    });
   };
 
   const handleCancel = () => {
@@ -66,6 +147,14 @@ export default function AccountScreen() {
     setEditingField(null);
     setTempValue('');
     setTempSocialIndex(null);
+    setValidationError('');
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Simulate a brief refresh (in a real app, this would reload profile data from server)
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setRefreshing(false);
   };
 
   return (
@@ -75,6 +164,14 @@ export default function AccountScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.blue}
+            colors={[theme.colors.blue]}
+          />
+        }
       >
         {/* Name and Bio Card */}
         <View style={theme.card}>
@@ -103,6 +200,39 @@ export default function AccountScreen() {
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
             />
+          </View>
+        </View>
+
+        {/* Distance Filter Card */}
+        <View style={theme.card}>
+          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Device distance filter</Text>
+          <Text style={[theme.type.muted, { marginTop: 8, fontSize: 12 }]}>
+            Only show devices within this distance
+          </Text>
+          <View style={{ marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={[theme.type.body, { color: theme.colors.blue, fontSize: 16, fontWeight: '600' }]}>
+                {maxDistance} feet
+              </Text>
+              <Text style={[theme.type.muted, { fontSize: 11 }]}>
+                Range: 10-75 ft
+              </Text>
+            </View>
+            <Slider
+              style={{ width: '100%', height: 40 }}
+              minimumValue={10}
+              maximumValue={75}
+              step={5}
+              value={maxDistance}
+              onValueChange={setMaxDistance}
+              minimumTrackTintColor={theme.colors.blue}
+              maximumTrackTintColor={theme.colors.border}
+              thumbTintColor={theme.colors.blue}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: -8 }}>
+              <Text style={[theme.type.muted, { fontSize: 10 }]}>10 ft</Text>
+              <Text style={[theme.type.muted, { fontSize: 10 }]}>75 ft</Text>
+            </View>
           </View>
         </View>
 
@@ -159,7 +289,7 @@ export default function AccountScreen() {
               onPress={() => {
                 const newSocial = [...socialMedia, { platform: '', handle: '' }];
                 if (newSocial.length <= 3) {
-                  setSocialMedia(newSocial);
+                  updateProfile({ socialMedia: newSocial });
                 }
               }}
               style={{ padding: 4 }}
@@ -203,7 +333,7 @@ export default function AccountScreen() {
                   style={{ padding: 4, marginLeft: 4 }} 
                   onPress={() => {
                     const updatedSocial = socialMedia.filter((_, i) => i !== index);
-                    setSocialMedia(updatedSocial);
+                    updateProfile({ socialMedia: updatedSocial });
                   }}
                 >
                   <MaterialCommunityIcons name="close" size={16} color={theme.colors.muted} />
@@ -241,7 +371,7 @@ export default function AccountScreen() {
             <TextInput
               style={{
                 borderWidth: 1,
-                borderColor: theme.colors.border,
+                borderColor: validationError ? '#FF6B6B' : theme.colors.border,
                 borderRadius: 8,
                 padding: 12,
                 marginTop: 16,
@@ -253,8 +383,22 @@ export default function AccountScreen() {
                 textAlignVertical: editingField === 'bio' ? 'top' : 'center',
               }}
               value={tempValue}
-              onChangeText={setTempValue}
-              placeholder={editingField === 'phone' ? 'Enter phone number' :
+              onChangeText={(text) => {
+                if (editingField === 'phone') {
+                  setTempValue(formatPhoneNumber(text));
+                } else if (editingField === 'bio') {
+                  if (text.length <= 50) {
+                    setTempValue(text);
+                  }
+                } else {
+                  setTempValue(text);
+                }
+                // Clear validation error when user starts typing
+                if (validationError) {
+                  setValidationError('');
+                }
+              }}
+              placeholder={editingField === 'phone' ? '(555) 555-5555' :
                           editingField === 'email' ? 'Enter email' :
                           editingField === 'name' ? 'Enter your name' :
                           editingField === 'bio' ? 'Enter your bio' :
@@ -263,8 +407,21 @@ export default function AccountScreen() {
               placeholderTextColor={theme.colors.muted}
               keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
               multiline={editingField === 'bio'}
+              maxLength={editingField === 'bio' ? 50 : undefined}
               autoFocus={true}
             />
+            
+            {validationError && (
+              <Text style={{ color: '#FF6B6B', fontSize: 12, marginTop: 4 }}>
+                {validationError}
+              </Text>
+            )}
+            
+            {editingField === 'bio' && (
+              <Text style={[theme.type.muted, { fontSize: 12, marginTop: 4, textAlign: 'right' }]}>
+                {tempValue.length}/50
+              </Text>
+            )}
 
             <View style={{
               flexDirection: 'row',

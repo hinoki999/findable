@@ -17,7 +17,8 @@ interface UseBLEScannerReturn {
   error: string | null;
 }
 
-const bleManager = new BleManager();
+// Only create BleManager on native platforms (iOS/Android)
+const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
 
 export const useBLEScanner = (): UseBLEScannerReturn => {
   const [devices, setDevices] = useState<BleDevice[]>([]);
@@ -63,6 +64,26 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     setError(null);
     setDevices([]);
     
+    // Mock data for web platform
+    if (Platform.OS === 'web') {
+      setIsScanning(true);
+      
+      // Simulate scanning with mock devices
+      setTimeout(() => {
+        const mockDevices: BleDevice[] = [
+          { id: '0', name: 'Jamie Parker', rssi: -35, distanceFeet: 2.0 },   // 2 ft - FULL gradient reference
+          { id: '1', name: 'Sarah Chen', rssi: -45, distanceFeet: 8.5 },    // Very close - mostly blue
+          { id: '2', name: 'Alex Rivera', rssi: -60, distanceFeet: 22.0 },  // Mid-range - purple mix
+          { id: '3', name: 'Jordan Kim', rssi: -55, distanceFeet: 41.0 },   // Mid-far - orange-purple
+          { id: '4', name: 'Taylor Smith', rssi: -70, distanceFeet: 68.0 }, // Far - mostly orange
+        ];
+        setDevices(mockDevices);
+        setIsScanning(false);
+      }, 2000);
+      
+      return;
+    }
+
     const hasPermissions = await requestPermissions();
     if (!hasPermissions) {
       return;
@@ -70,7 +91,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     setIsScanning(true);
 
-    bleManager.startDeviceScan(null, null, (error, device) => {
+    bleManager!.startDeviceScan(null, null, (error, device) => {
       if (error) {
         console.error('BLE scan error:', error);
         setError(error.message);
@@ -103,14 +124,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Stop scanning
   const stopScan = useCallback(() => {
-    bleManager.stopDeviceScan();
+    if (Platform.OS !== 'web' && bleManager) {
+      bleManager.stopDeviceScan();
+    }
     setIsScanning(false);
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      bleManager.destroy();
+      if (Platform.OS !== 'web' && bleManager) {
+        bleManager.destroy();
+      }
     };
   }, []);
 

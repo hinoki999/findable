@@ -1,26 +1,39 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, Animated, Alert } from 'react-native';
+import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
 import { saveDevice } from '../services/api';
-import { useDarkMode } from '../../App';
+import { useDarkMode, useLinkNotifications, useToast, useSettings } from '../../App';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
+
+// Track if scan has been performed in this app session
+let hasScannedThisSession = false;
 
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
   const [incomingDrop, setIncomingDrop] = useState<{ name: string; text: string } | null>(null);
   const [bounceAnim] = useState(new Animated.Value(0));
+  const [refreshing, setRefreshing] = useState(false);
   const { isDarkMode } = useDarkMode();
+  const { addLinkNotification } = useLinkNotifications();
+  const { showToast } = useToast();
+  const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
+  
+  // Filter devices based on max distance setting
+  const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
 
-  // Auto-start scanning when component mounts
+  // Auto-start scanning only on first app launch, not on every page visit
   useEffect(() => {
-    startScan();
+    if (!hasScannedThisSession) {
+      startScan();
+      hasScannedThisSession = true;
+    }
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
@@ -32,10 +45,55 @@ export default function DropScreen() {
         action: 'dropped' 
       });
       setActive(null);
-      Alert.alert('Success', `Dropped to ${device.name}`);
+      showToast({
+        message: `Drop sent to ${device.name}!`,
+        type: 'success',
+        duration: 3000,
+      });
+      
+      // For testing: Simulate them linking back after 3 seconds
+      setTimeout(async () => {
+        // Generate a unique ID for both device and notification
+        const uniqueId = Date.now();
+        
+        const linkData = {
+          name: device.name,
+          phoneNumber: '(555) 123-4567',
+          email: `${device.name.toLowerCase().replace(' ', '.')}@example.com`,
+          bio: 'This is a test bio for the linked contact.',
+          socialMedia: [
+            { platform: 'Instagram', handle: `@${device.name.toLowerCase().replace(' ', '')}` },
+            { platform: 'Twitter', handle: `@${device.name.toLowerCase().replace(' ', '_')}` },
+            { platform: 'LinkedIn', handle: device.name },
+          ],
+        };
+        
+        // Save to devices store with specific id
+        await saveDevice({
+          id: uniqueId,
+          name: linkData.name,
+          rssi: -55,
+          distanceFeet: 18,
+          action: 'returned',
+          phoneNumber: linkData.phoneNumber,
+          email: linkData.email,
+          bio: linkData.bio,
+          socialMedia: linkData.socialMedia,
+        });
+        
+        // Add link notification with reference to the device id
+        addLinkNotification({
+          ...linkData,
+          deviceId: uniqueId, // Link to the device in the store
+        });
+      }, 3000);
     } catch (error) {
       console.error('Failed to save device:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save device');
+      showToast({
+        message: error instanceof Error ? error.message : 'Failed to save device',
+        type: 'error',
+        duration: 3000,
+      });
     }
   };
 
@@ -76,6 +134,15 @@ export default function DropScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Stop current scan and start a new one
+    stopScan();
+    await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause
+    startScan();
+    setRefreshing(false);
+  };
+
   return (
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
       <TopBar title="Drop" />
@@ -91,7 +158,7 @@ export default function DropScreen() {
             transform: [{
               scale: bounceAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [1, 1.1],
+               outputRange: [1, 1.1],
               }),
             }],
           }}
@@ -177,33 +244,29 @@ export default function DropScreen() {
       <FlatList
         contentContainerStyle={{ padding: 16, paddingBottom:80 }}
         ListHeaderComponent={
-          <View style={{ ...theme.card, backgroundColor: theme.colors.bg, marginBottom: 12 }}>
-            <Text style={theme.type.muted}>
-              {isScanning ? 'Scanning nearby devices...' : 'Scan complete'}
+          <>
+            <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 12 }]}>
+              {isScanning ? 'Scanning for nearby devices...' : 'Scan completed'}
+            </Text>
+            <Text style={[theme.type.muted, { fontSize: 11, marginBottom: 12 }]}>
+              Showing devices within {maxDistance} ft
             </Text>
             {error && (
-              <Text style={[theme.type.muted, { color: '#FF6B6B', marginTop: 4 }]}>
+              <Text style={[theme.type.muted, { color: '#FF6B6B', marginTop: 4, marginBottom: 12, fontSize: 12 }]}>
                 Error: {error}
               </Text>
             )}
-            <Pressable
-              onPress={isScanning ? stopScan : startScan}
-              style={{
-                backgroundColor: theme.colors.blue,
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                marginTop: 8,
-                alignSelf: 'flex-start',
-              }}
-            >
-              <Text style={theme.type.button}>
-                {isScanning ? 'Stop Scan' : 'Start Scan'}
-              </Text>
-            </Pressable>
-          </View>
+          </>
         }
-        data={devices}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.blue}
+            colors={[theme.colors.blue]}
+          />
+        }
+        data={filteredDevices}
         keyExtractor={(device) => device.id}
         renderItem={({ item }) => (
           <Pressable
@@ -221,26 +284,45 @@ export default function DropScreen() {
             />
           </Pressable>
         )}
-        ListEmptyComponent={
-          <View style={{ ...theme.card, backgroundColor: theme.colors.bg }}>
-            <Text style={theme.type.muted}>
-              {isScanning ? 'Looking for nearby devices...' : 'No devices found. Try scanning again.'}
-            </Text>
-          </View>
-        }
+        ListEmptyComponent={null}
       />
 
-      {/* Profile modal */}
+      {/* Confirmation modal */}
       <Modal visible={!!active} transparent animationType="fade" onRequestClose={()=>setActive(null)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.18)', justifyContent:'center', padding:20 }}>
-          <View style={{ ...theme.card, padding:22 }}>
-            <Text style={{ ...theme.type.h1, textAlign:'center', marginBottom:6 }}>{active?.name}</Text>
-            <Text style={{ ...theme.type.muted, textAlign:'center', marginTop:4 }}>
-              {active?.distanceFeet.toFixed(1)} ft away • RSSI: {active?.rssi} dBm
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', padding:20 }}>
+          <View style={{ ...theme.card, padding:24 }}>
+            {/* Icon */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: theme.colors.blueLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+              }}>
+                <MaterialCommunityIcons 
+                  name="account-arrow-right" 
+                  size={28} 
+                  color={theme.colors.blue} 
+                />
+              </View>
+            </View>
+
+            {/* Confirmation text */}
+            <Text style={{ ...theme.type.h1, textAlign:'center', marginBottom:12, fontSize: 22 }}>
+              Send drop to {active?.name}?
+            </Text>
+            <Text style={{ ...theme.type.body, textAlign:'center', marginBottom:8, color: theme.colors.muted }}>
+              This will share your contact card with them
+            </Text>
+            <Text style={{ ...theme.type.muted, textAlign:'center', fontSize: 12 }}>
+              {active?.distanceFeet.toFixed(1)} ft away
             </Text>
 
-            {/* Bottom action bar */}
-            <View style={{ marginTop:18, borderTopColor: theme.colors.border, borderTopWidth:1, paddingTop:14 }}>
+            {/* Action buttons */}
+            <View style={{ marginTop:24, gap: 10 }}>
               <Pressable
                 onPress={() => active && handleDrop(active)}
                 style={({ pressed }) => ({
@@ -251,11 +333,22 @@ export default function DropScreen() {
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
-                <Text style={theme.type.button}>Drop</Text>
+                <Text style={theme.type.button}>Send Drop</Text>
               </Pressable>
 
-              <Pressable onPress={()=>setActive(null)} style={{ alignSelf:'center', marginTop:12 }}>
-                <Text style={theme.type.muted}>Cancel</Text>
+              <Pressable 
+                onPress={()=>setActive(null)} 
+                style={({ pressed }) => ({
+                  paddingVertical:14,
+                  borderRadius: radius.pill,
+                  alignItems:'center',
+                  backgroundColor: theme.colors.bg,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ ...theme.type.body, color: theme.colors.muted }}>Cancel</Text>
               </Pressable>
             </View>
           </View>
