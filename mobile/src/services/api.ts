@@ -9,6 +9,10 @@ export type Device = {
   distanceFeet: number;
   action?: 'dropped' | 'accepted' | 'declined' | 'returned';
   timestamp?: Date;
+  phoneNumber?: string;
+  email?: string;
+  bio?: string;
+  socialMedia?: Array<{ platform: string; handle: string }>;
 };
 
 // --- simple in-memory store for stub mode ---
@@ -28,12 +32,18 @@ export async function saveDevice(d: Device) {
   if (USE_STUB) {
     await sleep(150);
     const item = { 
-      id: Date.now(), 
+      id: d.id || Date.now(), // Use provided id if available
       action: d.action || 'dropped',
       timestamp: d.timestamp || new Date(),
       ...d 
     };
-    _store.unshift(item);
+    // Check if device with this id already exists, update instead of adding duplicate
+    const existingIndex = _store.findIndex(device => device.id === item.id);
+    if (existingIndex !== -1) {
+      _store[existingIndex] = item;
+    } else {
+      _store.unshift(item);
+    }
     return item;
   }
   
@@ -62,4 +72,37 @@ export async function getDevices(): Promise<Device[]> {
   const res = await fetch(`${BASE_URL}/devices`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+export async function deleteDevice(deviceId: number): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    const index = _store.findIndex(d => d.id === deviceId);
+    if (index !== -1) {
+      _store.splice(index, 1);
+      console.log(`✅ Device ${deviceId} deleted from store`);
+    }
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/devices/${deviceId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function restoreDevice(device: Device): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    // Add back to store
+    _store.unshift(device);
+    console.log(`✅ Device ${device.id} restored to store`);
+    return;
+  }
+  // For real API, would need to POST it back
+  const res = await fetch(`${BASE_URL}/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(device),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface LinkIconProps {
   size?: number;
@@ -7,8 +7,10 @@ interface LinkIconProps {
 
 export default function LinkIcon({ size = 24 }: LinkIconProps) {
   return (
-    <Text style={{ fontSize: size }}>
-      🔗
-    </Text>
+    <MaterialCommunityIcons 
+      name="link-variant" 
+      size={size} 
+      color="#FF6B4A" 
+    />
   );
 }
