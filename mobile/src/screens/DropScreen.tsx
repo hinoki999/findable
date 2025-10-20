@@ -309,7 +309,37 @@ export default function DropScreen() {
             />
           </Pressable>
         )}
-        ListEmptyComponent={null}
+        ListEmptyComponent={
+          <View style={{ 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            paddingVertical: 80,
+            paddingHorizontal: 40,
+          }}>
+            <MaterialCommunityIcons 
+              name="account-search-outline" 
+              size={64} 
+              color={theme.colors.muted} 
+              style={{ marginBottom: 20, opacity: 0.6 }} 
+            />
+            <Text style={[theme.type.h1, { 
+              textAlign: 'center', 
+              marginBottom: 12, 
+              fontSize: 20,
+              color: theme.colors.text,
+            }]}>
+              No DropLink users nearby
+            </Text>
+            <Text style={[theme.type.muted, { 
+              textAlign: 'center', 
+              fontSize: 15, 
+              lineHeight: 22,
+              opacity: 0.8,
+            }]}>
+              Keep your app open to stay discoverable. New connections will appear here when someone is within {maxDistance} feet!
+            </Text>
+          </View>
+        }
       />
 
       {/* Confirmation modal */}

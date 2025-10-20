@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
@@ -156,6 +156,208 @@ const TensorMath = {
   },
 };
 
+// ========== 3D SPHERE MATHEMATICS ENGINE ==========
+// 3D spherical coordinate system with perspective projection
+//
+// SPHERE SYSTEM ARCHITECTURE:
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//
+// 1. 3D COORDINATE SYSTEMS
+//    - Cartesian (x, y, z) for linear calculations
+//    - Spherical (r, theta, phi) for globe surface positioning
+//    - Screen (sx, sy, depth) for 2D projection
+//
+// 2. PERSPECTIVE PROJECTION
+//    - Camera positioned at (0, 0, -cameraDistance)
+//    - Field of view (FOV) for realistic depth perception
+//    - Z-buffer for depth sorting and occlusion
+//
+// 3. GRID LINES
+//    - Latitude lines: horizontal circles at various angles
+//    - Longitude lines: vertical meridians through poles
+//    - Curved SVG paths for smooth rendering
+//
+// 4. ROTATION IN 3D
+//    - Euler angles (pitch, yaw, roll)
+//    - Quaternions for smooth interpolation (future)
+//    - 3x3 rotation matrices for transformations
+//
+// 5. BLIP POSITIONING
+//    - Map distance/angle to sphere surface
+//    - Project 3D position to 2D screen
+//    - Scale and fade based on depth (z-coordinate)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface Vector3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+interface SphericalCoord {
+  r: number;      // radius
+  theta: number;  // azimuthal angle (longitude) [0, 2π]
+  phi: number;    // polar angle (latitude) [0, π]
+}
+
+interface ProjectedPoint {
+  x: number;      // screen x
+  y: number;      // screen y
+  z: number;      // depth (for sorting)
+  visible: boolean; // is point facing camera?
+}
+
+const Sphere3D = {
+  // Convert spherical coordinates to Cartesian (x, y, z)
+  sphericalToCartesian: (coord: SphericalCoord): Vector3D => {
+    return {
+      x: coord.r * Math.sin(coord.phi) * Math.cos(coord.theta),
+      y: coord.r * Math.sin(coord.phi) * Math.sin(coord.theta),
+      z: coord.r * Math.cos(coord.phi),
+    };
+  },
+
+  // Convert Cartesian to spherical
+  cartesianToSpherical: (point: Vector3D): SphericalCoord => {
+    const r = Math.sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
+    return {
+      r,
+      theta: Math.atan2(point.y, point.x),
+      phi: Math.acos(point.z / r),
+    };
+  },
+
+  // Rotate a 3D point around X axis (pitch)
+  rotateX: (point: Vector3D, angle: number): Vector3D => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: point.x,
+      y: point.y * cos - point.z * sin,
+      z: point.y * sin + point.z * cos,
+    };
+  },
+
+  // Rotate a 3D point around Y axis (yaw)
+  rotateY: (point: Vector3D, angle: number): Vector3D => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: point.x * cos + point.z * sin,
+      y: point.y,
+      z: -point.x * sin + point.z * cos,
+    };
+  },
+
+  // Rotate a 3D point around Z axis (roll)
+  rotateZ: (point: Vector3D, angle: number): Vector3D => {
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: point.x * cos - point.y * sin,
+      y: point.x * sin + point.y * cos,
+      z: point.z,
+    };
+  },
+
+  // Apply full rotation (yaw, then pitch, then roll)
+  rotate3D: (point: Vector3D, yaw: number, pitch: number, roll: number): Vector3D => {
+    let p = Sphere3D.rotateY(point, yaw);
+    p = Sphere3D.rotateX(p, pitch);
+    p = Sphere3D.rotateZ(p, roll);
+    return p;
+  },
+
+  // Project 3D point to 2D screen with perspective
+  project: (point: Vector3D, cameraDistance: number, fov: number): ProjectedPoint => {
+    // Camera is at (0, 0, -cameraDistance) looking at origin
+    const z = point.z + cameraDistance;
+    
+    // Check if point is behind camera
+    if (z <= 0) {
+      return { x: 0, y: 0, z: point.z, visible: false };
+    }
+
+    // Perspective projection
+    const scale = cameraDistance / z;
+    const fovScale = Math.tan(fov / 2);
+    
+    return {
+      x: (point.x * scale) / fovScale,
+      y: (point.y * scale) / fovScale,
+      z: point.z,
+      visible: true,
+    };
+  },
+
+  // Generate points for a latitude circle (horizontal ring)
+  generateLatitudeCircle: (
+    radius: number,
+    phi: number,
+    segments: number,
+    yaw: number,
+    pitch: number,
+    roll: number,
+    cameraDistance: number,
+    fov: number
+  ): ProjectedPoint[] => {
+    const points: ProjectedPoint[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const theta = (i / segments) * Math.PI * 2;
+      const spherical: SphericalCoord = { r: radius, theta, phi };
+      let cartesian = Sphere3D.sphericalToCartesian(spherical);
+      cartesian = Sphere3D.rotate3D(cartesian, yaw, pitch, roll);
+      const projected = Sphere3D.project(cartesian, cameraDistance, fov);
+      points.push(projected);
+    }
+    return points;
+  },
+
+  // Generate points for a longitude line (vertical meridian)
+  generateLongitudeLine: (
+    radius: number,
+    theta: number,
+    segments: number,
+    yaw: number,
+    pitch: number,
+    roll: number,
+    cameraDistance: number,
+    fov: number
+  ): ProjectedPoint[] => {
+    const points: ProjectedPoint[] = [];
+    for (let i = 0; i <= segments; i++) {
+      const phi = (i / segments) * Math.PI;
+      const spherical: SphericalCoord = { r: radius, theta, phi };
+      let cartesian = Sphere3D.sphericalToCartesian(spherical);
+      cartesian = Sphere3D.rotate3D(cartesian, yaw, pitch, roll);
+      const projected = Sphere3D.project(cartesian, cameraDistance, fov);
+      points.push(projected);
+    }
+    return points;
+  },
+
+  // Convert projected points to SVG path string
+  pointsToSVGPath: (points: ProjectedPoint[]): string => {
+    if (points.length === 0) return '';
+    
+    const visiblePoints = points.filter(p => p.visible);
+    if (visiblePoints.length === 0) return '';
+    
+    let path = `M ${visiblePoints[0].x} ${visiblePoints[0].y}`;
+    for (let i = 1; i < visiblePoints.length; i++) {
+      path += ` L ${visiblePoints[i].x} ${visiblePoints[i].y}`;
+    }
+    return path;
+  },
+
+  // Calculate opacity based on depth (z-coordinate)
+  depthToOpacity: (z: number, minZ: number, maxZ: number): number => {
+    const normalized = (z - minZ) / (maxZ - minZ);
+    // Points closer to camera (higher z) are more opaque
+    return 0.2 + 0.6 * normalized;
+  },
+};
+
 // Device Blip Component - extracted to avoid hooks in loops
 const DeviceBlip: React.FC<{
   device: BleDevice;
@@ -163,8 +365,9 @@ const DeviceBlip: React.FC<{
   nucleusX: number;
   nucleusY: number;
   viewTransform: Tensor2x2;
+  depth?: number; // z-coordinate for depth effects
   onPress: () => void;
-}> = ({ device, position, nucleusX, nucleusY, viewTransform, onPress }) => {
+}> = ({ device, position, nucleusX, nucleusY, viewTransform, depth = 0, onPress }) => {
   // Create random delay based on device ID for staggered animation
   const randomDelay = useState(() => Math.random() * 1000)[0];
   const [pulseAnim] = useState(new Animated.Value(0));
@@ -226,17 +429,24 @@ const DeviceBlip: React.FC<{
     };
   }, [pulseDuration, shouldPulse]);
   
-  // More dramatic scale changes
-  const scale = shouldPulse ? pulseAnim.interpolate({
+  // Calculate depth-based effects (farther away = smaller & dimmer)
+  const depthFactor = depth !== undefined ? Math.max(0.4, 1 - Math.abs(depth) / 200) : 1;
+  
+  // More dramatic scale changes with depth factor
+  const baseScale = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.3], // More dramatic scaling
   }) : 1.2; // Slightly larger when not pulsing
   
-  // More dramatic opacity changes
-  const opacity = shouldPulse ? pulseAnim.interpolate({
+  const scale = typeof baseScale === 'number' ? baseScale * depthFactor : baseScale;
+  
+  // More dramatic opacity changes with depth factor
+  const baseOpacity = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.5, 1.0], // Wider range
   }) : 1.0; // Full brightness when not pulsing
+  
+  const opacity = typeof baseOpacity === 'number' ? baseOpacity * depthFactor : baseOpacity;
   
   // Apply view transformation (rotation + zoom) to position
   const transformedPosition = TensorMath.transformVector(viewTransform, position);
@@ -280,6 +490,64 @@ const DeviceBlip: React.FC<{
   );
 };
 
+// Link Marker Component - for accepted links (no pulsation, link icon)
+const LinkMarker: React.FC<{
+  device: Device;
+  position: { x: number; y: number };
+  nucleusX: number;
+  nucleusY: number;
+  viewTransform: Tensor2x2;
+  depth?: number;
+  onPress: () => void;
+}> = ({ device, position, nucleusX, nucleusY, viewTransform, depth = 0, onPress }) => {
+  const LINK_ICON_SIZE = 18; // Slightly larger than blips for visibility
+  
+  // Apply view transformation (rotation + zoom) to position
+  const transformedPosition = TensorMath.transformVector(viewTransform, position);
+  
+  // Calculate depth-based effects (farther away = dimmer)
+  const depthFactor = depth !== undefined ? Math.max(0.5, 1 - Math.abs(depth) / 200) : 1;
+  
+  const hitAreaSize = 30; // Large hit area for easy tapping
+  
+  return (
+    <Pressable
+      onPress={(e) => {
+        e.stopPropagation();
+        console.log('🔗 Link clicked:', device.name, 'at distance:', device.distanceFeet);
+        onPress();
+      }}
+      style={{
+        position: 'absolute',
+        left: nucleusX + transformedPosition.x - (hitAreaSize / 2),
+        top: nucleusY + transformedPosition.y - (hitAreaSize / 2),
+        width: hitAreaSize,
+        height: hitAreaSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1002, // Above blips
+      }}
+    >
+      <View
+        style={{
+          width: LINK_ICON_SIZE,
+          height: LINK_ICON_SIZE,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: depthFactor,
+        }}
+        pointerEvents="none"
+      >
+        <MaterialCommunityIcons 
+          name="link-variant" 
+          size={LINK_ICON_SIZE} 
+          color="#FFB366"
+        />
+      </View>
+    </Pressable>
+  );
+};
+
 export default function HomeScreen() {
   const [fadeAnim] = useState(new Animated.Value(1));
   const [rippleAnim] = useState(new Animated.Value(0));
@@ -300,6 +568,11 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
   const [showBlipModal, setShowBlipModal] = useState(false);
+  
+  // Link markers state (accepted links only, not returned drops)
+  const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
+  const [selectedLink, setSelectedLink] = useState<Device | null>(null);
+  const [showLinkModal, setShowLinkModal] = useState(false);
   
   // ========== ROTATION & ZOOM STATE ==========
   const [viewRotation, setViewRotation] = useState(0); // Rotation angle in radians
@@ -326,7 +599,22 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan } = useBLEScanner();
 
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+  // Screen dimensions (reactive to orientation changes)
+  const [screenDimensions, setScreenDimensions] = useState(() => {
+    const { width, height } = Dimensions.get('window');
+    return { width, height };
+  });
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
+  // Listen for orientation changes and update dimensions
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setScreenDimensions({ width: window.width, height: window.height });
+    });
+
+    return () => subscription?.remove();
+  }, []);
   
   // MATHEMATICAL CONSTANTS FOR NUCLEUS POSITIONING
   const BOTTOM_NAV_HEIGHT = 60; // Height of bottom navigation bar (pixels)
@@ -355,6 +643,21 @@ export default function HomeScreen() {
     return () => stopScan(); // Cleanup on unmount
   }, []);
   
+  // Fetch linked devices (accepted links only) when component mounts
+  useEffect(() => {
+    const fetchLinkedDevices = async () => {
+      try {
+        const allDevices = await getDevices();
+        // Filter for accepted links only (not returned drops)
+        const links = (allDevices ?? []).filter(device => device.action === 'accepted');
+        setLinkedDevices(links);
+      } catch (error) {
+        console.error('Failed to fetch linked devices:', error);
+      }
+    };
+    fetchLinkedDevices();
+  }, []);
+  
   // Get unviewed and not dismissed link notifications for badge
   const unviewedLinks = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
   const hasUnviewedLinks = unviewedLinks.length > 0;
@@ -371,15 +674,42 @@ export default function HomeScreen() {
       arrow: undefined,
     },
     {
-      message: 'Toggle your visibility here. Active = discoverable, Ghost = invisible.',
+      message: 'Green dots are nearby people within 33 feet. They pulsate faster when closer to you. Tap any dot to connect!',
       position: {
-        top: 60,
+        top: screenHeight * 0.4,
+        left: 20,
+        right: 20,
+      },
+      arrow: undefined,
+    },
+    {
+      message: 'Toggle your visibility here. Active = Discoverable, Ghost = Invisible.',
+      position: {
+        top: 70,
         left: 20,
       },
       arrow: 'up' as const,
+      arrowOffset: 15, // Position arrow 15px from left to center on toggle button
     },
     {
-      message: 'Tap this to see incoming requests and link notifications.',
+      message: 'Use 2-finger pinch to zoom and rotate the grid view.',
+      position: {
+        top: 70,
+        right: 20,
+      },
+      arrow: undefined,
+    },
+    {
+      message: 'Tap Reset View to return to the default view anytime.',
+      position: {
+        top: 70,
+        right: 20,
+      },
+      arrow: 'up' as const,
+      arrowOffset: 65, // Position arrow above the "w" in "View"
+    },
+    {
+      message: 'Tap this to see drop requests and link notifications.',
       position: {
         top: screenHeight * 0.54,
         left: screenWidth * 0.15,
@@ -388,23 +718,7 @@ export default function HomeScreen() {
       arrow: 'up' as const,
     },
     {
-      message: 'Your pinned contacts appear here. Double-tap a card to manage.',
-      position: {
-        top: screenHeight * 0.2,
-        left: screenWidth * 0.4,
-      },
-      arrow: 'left' as const,
-    },
-    {
-      message: 'This is your contact card. Set up your info in the Account page!',
-      position: {
-        top: screenHeight * 0.35,
-        right: screenWidth * 0.08,
-      },
-      arrow: 'down' as const,
-    },
-    {
-      message: 'Swipe left to find nearby people and start dropping!',
+      message: "You're all set! Swipe left to explore the Drop page and start connecting with nearby people.",
       position: {
         bottom: 120,
         left: 20,
@@ -439,34 +753,54 @@ export default function HomeScreen() {
   // Spatial tensor tracking for all devices (position, velocity, acceleration)
   const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
 
-  // Map device to grid position using TENSOR MATHEMATICS
-  const getGridPosition = (device: BleDevice): Vector2D => {
+  // Map device to 2D position with ACCURATE grid snapping (1 ft intervals)
+  const GRID_SPACING_FEET = 1; // Must match grid configuration
+  
+  const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
     const currentTime = Date.now();
     
     // Generate consistent angle based on device hash (deterministic positioning)
     const hash = device.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const angle = (hash % 360) * (Math.PI / 180);
+    const angleInRadians = (hash % 360) * (Math.PI / 180);
     
-    // Create rotation tensor for this device's angle
-    const rotationTensor = TensorMath.rotationTensor(angle);
+    // ACCURATE distance mapping to pixel radius (linear scale for symmetry)
+    const distanceInFeet = Math.min(device.distanceFeet, MAX_RADIUS_FEET);
+    const radiusInPixels = (distanceInFeet / MAX_RADIUS_FEET) * spatialTensors.maxRadiusPixels;
     
-    // Calculate distance ratio (normalized to [0,1])
-    const distanceRatio = Math.min(device.distanceFeet / MAX_RADIUS_FEET, 1);
-    
-    // Create radial vector in polar coordinates, then transform to Cartesian
-    const radialVector: Vector2D = { x: distanceRatio * spatialTensors.maxRadiusPixels, y: 0 };
-    
-    // Apply rotation tensor to get Cartesian position
-    const cartesianPosition = TensorMath.transformVector(rotationTensor, radialVector);
-    
-    // Snap to grid using quantization tensor
-    const snappedPosition: Vector2D = {
-      x: Math.round(cartesianPosition.x / spatialTensors.pixelsPerFoot) * spatialTensors.pixelsPerFoot,
-      y: Math.round(cartesianPosition.y / spatialTensors.pixelsPerFoot) * spatialTensors.pixelsPerFoot,
+    // Calculate raw 2D position (polar to cartesian)
+    const rawPosition: Vector2D = {
+      x: radiusInPixels * Math.cos(angleInRadians),
+      y: radiusInPixels * Math.sin(angleInRadians),
     };
     
+    // SNAP TO NEAREST GRID INTERSECTION (1 ft intervals) - BEFORE sphere projection
+    // This ensures nodes align perfectly with visible grid lines for accuracy
+    const gridPixelSpacing = spatialTensors.pixelsPerFoot * GRID_SPACING_FEET;
+    const snappedPosition: Vector2D = {
+      x: Math.round(rawPosition.x / gridPixelSpacing) * gridPixelSpacing,
+      y: Math.round(rawPosition.y / gridPixelSpacing) * gridPixelSpacing,
+    };
+    
+    // Apply CUBED SPHERE PROJECTION to match curved grid (EXACT same formula as grid lines)
+    // CRITICAL: Must use same sphere radius calculation as grid for alignment
+    const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Matches grid exactly
+    const normalizedX = snappedPosition.x / sphereRadius;
+    const normalizedY = snappedPosition.y / sphereRadius;
+    const denominator = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY + 1);
+    const depth = 1 / denominator;
+    const projectedX = normalizedX / denominator;
+    const projectedY = normalizedY / denominator;
+    const bulgeFactor = 1.15; // Matches grid exactly
+    const curvedPosition: Vector2D = {
+      x: projectedX * sphereRadius * bulgeFactor,
+      y: projectedY * sphereRadius * bulgeFactor,
+    };
+    
+    const z = depth; // Depth factor from sphere projection (0-1)
+    
     // Update spatial tensor tracking (for future velocity/acceleration features)
+    // Track snapped position (pre-curve) for accurate velocity/acceleration
     const previousTensor = deviceSpatialTensors.current.get(deviceId);
     
     if (previousTensor) {
@@ -492,7 +826,7 @@ export default function HomeScreen() {
         velocity,
         acceleration,
         distance: device.distanceFeet,
-        angle,
+        angle: angleInRadians, // Store angle for tracking
         timestamp: currentTime,
       });
     } else {
@@ -502,19 +836,27 @@ export default function HomeScreen() {
         velocity: { x: 0, y: 0 },
         acceleration: { x: 0, y: 0 },
         distance: device.distanceFeet,
-        angle,
+        angle: angleInRadians, // Store angle for tracking
         timestamp: currentTime,
       });
     }
     
-    return snappedPosition;
+    // Return CURVED position that matches the 3D grid projection
+    return {
+      x: curvedPosition.x,
+      y: curvedPosition.y,
+      z: z, // Depth for perspective effects (0-1)
+    };
   };
 
   // ========== ADVANCED TENSOR FEATURES ==========
   
   // Calculate spatial density field (heat map) using tensor operations
   const calculateSpatialDensity = useMemo(() => {
-    const devicePositions: Vector2D[] = filteredDevices.map(device => getGridPosition(device));
+    const devicePositions: Vector2D[] = filteredDevices.map(device => {
+      const pos = getGridPosition(device);
+      return { x: pos.x, y: pos.y }; // Extract 2D position
+    });
     
     // Create density field function
     return (testPoint: Vector2D): number => {
@@ -1004,98 +1346,171 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* Grid Paper Background - full screen with gesture handling */}
+      {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View 
         {...gestureResponder.panHandlers}
         style={{ 
-          position: 'absolute', 
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 0,
+        position: 'absolute', 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 0,
         }}
         pointerEvents="box-none"
       >
         {(() => {
-          // Calculate pixels per foot based on nucleus positioning
+          // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
-          const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET; // 1 foot intervals
+          const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
           
-          // Calculate how many grid lines we need (extended for zoom)
-          const gridRange = Math.ceil(Math.max(screenWidth, screenHeight) / (pixelsPerFoot * viewScale));
-          const totalLines = gridRange * 2 + 1;
+          // Sphere radius extended to cover entire screen for full background grid
+          const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Full screen coverage
+          
+          // Grid Configuration - 1 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
+          const GRID_SPACING_FEET = 1; // Grid every 1 foot for precise distance mapping
+          const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
+          const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
+          const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
+          const segmentsPerLine = 50; // Smooth curves, optimized for mobile performance
+          
+          // Helper: Cubed Sphere Projection - (x, y, 1) / √(x² + y² + 1)
+          // Optimized for 33 ft visible range with dramatic curvature
+          const projectToSphere = (x: number, y: number): { x: number; y: number; depth: number } => {
+            // Normalize coordinates relative to 33 ft sphere radius
+            const normalizedX = x / sphereRadius;
+            const normalizedY = y / sphereRadius;
+            
+            // Cubed sphere projection formula: (x, y, 1) / √(x² + y² + 1)
+            // This projects the flat plane onto a sphere surface
+            const denominator = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY + 1);
+            
+            // The z-component (depth) from the projection
+            const depth = 1 / denominator;
+            
+            // Project x and y coordinates onto sphere
+            const projectedX = normalizedX / denominator;
+            const projectedY = normalizedY / denominator;
+            
+            // Scale back to screen coordinates
+            // Multiply by a factor > 1 to create outward bulge effect
+            const bulgeFactor = 1.15; // Subtle outward expansion for mobile-friendly 3D effect
+            const bulgedX = projectedX * sphereRadius * bulgeFactor;
+            const bulgedY = projectedY * sphereRadius * bulgeFactor;
+            
+            return {
+              x: bulgedX,
+              y: bulgedY,
+              depth: depth, // 0 (far) to 1 (center)
+            };
+          };
           
           return (
             <>
-              {/* Vertical lines - transformed by view rotation & zoom */}
+              {/* Vertical lines curved by spherical projection - 1 ft spacing */}
               {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot;
-                const lineStart: Vector2D = { x: offset, y: -screenHeight };
-                const lineEnd: Vector2D = { x: offset, y: screenHeight * 2 };
+                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET; // 1 foot intervals
                 
-                // Apply view transformation
-                const transformedStart = TensorMath.transformVector(viewTransformTensor, lineStart);
-                const transformedEnd = TensorMath.transformVector(viewTransformTensor, lineEnd);
-                
-                // Calculate rotation angle for the line
-                const dx = transformedEnd.x - transformedStart.x;
-                const dy = transformedEnd.y - transformedStart.y;
-                const lineAngle = Math.atan2(dy, dx) + Math.PI / 2; // Perpendicular
-                const lineLength = Math.sqrt(dx * dx + dy * dy);
-                
-                return (
-                  <View
-                    key={`v-${i}`}
-                    style={{
-                      position: 'absolute',
-                      left: nucleusX + transformedStart.x,
-                      top: nucleusY + transformedStart.y,
-                      width: 0.5,
-                      height: lineLength,
-                      backgroundColor: '#00FF00',
-                      opacity: offset === 0 ? 0.5 : 0.3,
-                      transform: [{ rotate: `${lineAngle}rad` }],
-                      transformOrigin: 'top left',
-                    }}
-                    pointerEvents="none"
-                  />
-                );
+                return Array.from({ length: segmentsPerLine }, (_, seg) => {
+                  const t1 = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
+                  const t2 = ((seg + 1) / segmentsPerLine) * 2 - 1;
+                  
+                  // Extend lines to full screen height for complete background coverage
+                  const y1 = t1 * viewableHeight * 0.6;
+                  const y2 = t2 * viewableHeight * 0.6;
+                  
+                  // Apply cubed sphere projection to create outward bulge
+                  const p1 = projectToSphere(offset, y1);
+                  const p2 = projectToSphere(offset, y2);
+                  
+                  // Apply view transformation (rotation & zoom)
+                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
+                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  
+                  const dx = end.x - start.x;
+                  const dy = end.y - start.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const angle = Math.atan2(dy, dx);
+                  
+                  if (length < 0.5) return null;
+                  
+                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                  const avgDepth = (p1.depth + p2.depth) / 2;
+                  const depthFactor = avgDepth * avgDepth; // Square for contrast
+                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
+                  
+                  return (
+          <View
+                      key={`v-${i}-${seg}`}
+            style={{
+              position: 'absolute',
+                        left: nucleusX + start.x,
+                        top: nucleusY + start.y,
+                        width: length,
+                        height: 1,
+              backgroundColor: '#33AA33',
+                        opacity,
+                        transform: [{ rotate: `${angle}rad` }],
+                        transformOrigin: 'top left',
+                      }}
+                      pointerEvents="none"
+                    />
+                  );
+                });
               })}
               
-              {/* Horizontal lines - transformed by view rotation & zoom */}
+              {/* Horizontal lines curved by spherical projection - 1 ft spacing */}
               {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot;
-                const lineStart: Vector2D = { x: -screenWidth, y: offset };
-                const lineEnd: Vector2D = { x: screenWidth * 2, y: offset };
+                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET; // 1 foot intervals
                 
-                // Apply view transformation
-                const transformedStart = TensorMath.transformVector(viewTransformTensor, lineStart);
-                const transformedEnd = TensorMath.transformVector(viewTransformTensor, lineEnd);
-                
-                // Calculate rotation angle for the line
-                const dx = transformedEnd.x - transformedStart.x;
-                const dy = transformedEnd.y - transformedStart.y;
-                const lineAngle = Math.atan2(dy, dx);
-                const lineLength = Math.sqrt(dx * dx + dy * dy);
-                
-                return (
-                  <View
-                    key={`h-${i}`}
-                    style={{
-                      position: 'absolute',
-                      left: nucleusX + transformedStart.x,
-                      top: nucleusY + transformedStart.y,
-                      width: lineLength,
-                      height: 0.5,
-                      backgroundColor: '#00FF00',
-                      opacity: offset === 0 ? 0.5 : 0.3,
-                      transform: [{ rotate: `${lineAngle}rad` }],
-                      transformOrigin: 'top left',
-                    }}
-                    pointerEvents="none"
-                  />
-                );
+                return Array.from({ length: segmentsPerLine }, (_, seg) => {
+                  const t1 = (seg / segmentsPerLine) * 2 - 1;
+                  const t2 = ((seg + 1) / segmentsPerLine) * 2 - 1;
+                  
+                  // Extend lines to full screen width for complete background coverage
+                  const x1 = t1 * screenWidth * 0.6;
+                  const x2 = t2 * screenWidth * 0.6;
+                  
+                  // Apply cubed sphere projection to create outward bulge
+                  const p1 = projectToSphere(x1, offset);
+                  const p2 = projectToSphere(x2, offset);
+                  
+                  // Apply view transformation (rotation & zoom)
+                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
+                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  
+                  const dx = end.x - start.x;
+                  const dy = end.y - start.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const angle = Math.atan2(dy, dx);
+                  
+                  if (length < 0.5) return null;
+                  
+                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                  const avgDepth = (p1.depth + p2.depth) / 2;
+                  const depthFactor = avgDepth * avgDepth; // Square for contrast
+                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
+                  
+                  return (
+          <View
+                      key={`h-${i}-${seg}`}
+            style={{
+              position: 'absolute',
+                        left: nucleusX + start.x,
+                        top: nucleusY + start.y,
+                        width: length,
+                        height: 1,
+                        backgroundColor: '#33AA33',
+                        opacity,
+                        transform: [{ rotate: `${angle}rad` }],
+                        transformOrigin: 'top left',
+                      }}
+                      pointerEvents="none"
+                    />
+                  );
+                });
               })}
             </>
           );
@@ -1106,10 +1521,10 @@ export default function HomeScreen() {
       <View 
         style={{ 
           position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
           zIndex: 1000,
         }}
         pointerEvents="box-none"
@@ -1121,7 +1536,8 @@ export default function HomeScreen() {
             <DeviceBlip
               key={device.id || device.name}
               device={device}
-              position={position}
+              position={{ x: position.x, y: position.y }}
+              depth={position.z}
               nucleusX={nucleusX}
               nucleusY={nucleusY}
               viewTransform={viewTransformTensor}
@@ -1133,6 +1549,67 @@ export default function HomeScreen() {
             />
           );
         })}
+        
+        {/* Link Markers - for accepted links (no pulsation) */}
+        {linkedDevices.map((device) => {
+          // Use same positioning logic as blips to ensure grid snapping
+          const position = getGridPosition(device as any); // Device has distanceFeet property
+          
+          return (
+            <LinkMarker
+              key={device.id || `link-${device.name}`}
+              device={device}
+              position={{ x: position.x, y: position.y }}
+              depth={position.z}
+              nucleusX={nucleusX}
+              nucleusY={nucleusY}
+              viewTransform={viewTransformTensor}
+              onPress={() => {
+                console.log('✅ Link marker clicked for:', device.name);
+                setSelectedLink(device);
+                setShowLinkModal(true);
+              }}
+            />
+          );
+        })}
+        
+        {/* Empty State - No Nearby Users */}
+        {filteredDevices.length === 0 && linkedDevices.length === 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: '45%',
+              left: 0,
+              right: 0,
+              alignItems: 'center',
+              paddingHorizontal: 40,
+            }}
+            pointerEvents="none"
+          >
+            <MaterialCommunityIcons 
+              name="account-search-outline" 
+              size={56} 
+              color={theme.colors.muted} 
+              style={{ marginBottom: 16, opacity: 0.6 }} 
+            />
+            <Text style={[theme.type.h2, { 
+              textAlign: 'center', 
+              marginBottom: 8, 
+              fontSize: 17,
+              color: theme.colors.text,
+            }]}>
+              No DropLink users nearby
+            </Text>
+            <Text style={[theme.type.muted, { 
+              textAlign: 'center', 
+              fontSize: 14, 
+              lineHeight: 20,
+              opacity: 0.8,
+            }]}>
+              Keep your app open to stay discoverable. New connections will appear as green dots on your grid!
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -1149,23 +1626,23 @@ export default function HomeScreen() {
         scrollEnabled={false}
       >
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: typeof window !== 'undefined' ? window.innerHeight : 800 }}>
-          {/* Background overlay to close expanded cards and quick actions when clicking outside */}
-          {(expandedCardId !== null || activeQuickActionCardId !== null) && (
-            <Pressable
-              onPress={() => {
-                setExpandedCardId(null);
-                setActiveQuickActionCardId(null);
-              }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 5,
-              }}
-            />
-          )}
+        {/* Background overlay to close expanded cards and quick actions when clicking outside */}
+        {(expandedCardId !== null || activeQuickActionCardId !== null) && (
+          <Pressable
+            onPress={() => {
+              setExpandedCardId(null);
+              setActiveQuickActionCardId(null);
+            }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 5,
+            }}
+          />
+        )}
 
         {/* Pinned Profiles Stack - REMOVED */}
         {false && pinnedProfiles.length > 0 && (() => {
@@ -1429,7 +1906,7 @@ export default function HomeScreen() {
           </Animated.View>
           );
         })()}
-        </View>
+          </View>
       </ScrollView>
 
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - Always Visible */}
@@ -1445,28 +1922,28 @@ export default function HomeScreen() {
       >
         <View pointerEvents="auto">
           <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
-          {/* Ripple Effect */}
-          <Animated.View
-            style={{
-              position: 'absolute',
+            {/* Ripple Effect */}
+            <Animated.View
+              style={{
+                position: 'absolute',
               width: 60,
               height: 60,
               borderRadius: 30,
-              borderWidth: 2,
-              borderColor: '#007AFF',
-              opacity: rippleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0, 0.3],
-              }),
-              transform: [{
-                scale: rippleAnim.interpolate({
+                borderWidth: 2,
+                borderColor: '#007AFF',
+                opacity: rippleAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0.5, 1.2],
+                  outputRange: [0, 0.3],
                 }),
-              }],
-            }}
-          />
-          
+                transform: [{
+                  scale: rippleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.5, 1.2],
+                  }),
+                }],
+              }}
+            />
+            
           <View style={{ position: 'relative' }}>
             <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
             
@@ -1491,7 +1968,7 @@ export default function HomeScreen() {
               </Animated.View>
             )}
           </View>
-        </Pressable>
+          </Pressable>
         </View>
       </View>
 
@@ -1519,13 +1996,13 @@ export default function HomeScreen() {
             }}
             style={{
               borderWidth: 1,
-              borderColor: '#00FF00',
+              borderColor: '#007AFF',
               borderRadius: 6,
               paddingHorizontal: 8,
               paddingVertical: 4,
             }}
           >
-            <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+            <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
               Reset View
             </Text>
           </Pressable>
@@ -1543,10 +2020,10 @@ export default function HomeScreen() {
           }}
           pointerEvents="none"
         >
-          <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
             Zoom: {viewScale.toFixed(2)}x
           </Text>
-          <Text style={{ color: '#00FF00', fontSize: 11, fontWeight: '600' }}>
+          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
             Rotate: {(viewRotation * 180 / Math.PI).toFixed(0)}°
           </Text>
         </View>
@@ -1563,36 +2040,36 @@ export default function HomeScreen() {
         pointerEvents="box-none"
       >
         <View style={{ position: 'relative' }} pointerEvents="auto">
-          <Pressable onPress={handleTogglePress}>
-            <View style={{
+              <Pressable onPress={handleTogglePress}>
+                <View style={{
               width: 40,
               height: 22,
               borderRadius: 11,
-              backgroundColor: isDiscoverable ? '#FFE5DC' : '#F0F0F0',
-              padding: 2,
-              justifyContent: 'center',
-            }}>
-              <View style={{
+                  backgroundColor: isDiscoverable ? '#E5F2FF' : '#F0F0F0',
+                  padding: 2,
+                  justifyContent: 'center',
+                }}>
+                  <View style={{
                 width: 18,
                 height: 18,
                 borderRadius: 9,
-                backgroundColor: isDiscoverable ? '#FF6B4A' : '#FFFFFF',
+                    backgroundColor: isDiscoverable ? '#007AFF' : '#FFFFFF',
                 transform: [{ translateX: isDiscoverable ? 18 : 0 }],
-              }} />
-            </View>
-          </Pressable>
-          <View style={{ 
-            position: 'absolute', 
+                  }} />
+                </View>
+              </Pressable>
+              <View style={{ 
+                position: 'absolute', 
             top: 24, 
             left: isDiscoverable ? 18 : 0,
-            alignItems: 'center',
+                alignItems: 'center',
             width: 18,
-          }}>
-            {isDiscoverable ? (
-              <MaterialCommunityIcons name="flash-outline" size={14} color="#FF6B4A" />
-            ) : (
+              }}>
+                {isDiscoverable ? (
+              <MaterialCommunityIcons name="flash-outline" size={14} color="#007AFF" />
+                ) : (
               <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
-            )}
+                )}
           </View>
         </View>
       </View>
@@ -1681,7 +2158,7 @@ export default function HomeScreen() {
                     <LinkIcon size={16} />
                     <Text style={[theme.type.h2, { marginLeft: 6, fontSize: 14, color: '#FF6B4A' }]}>
                       Links
-                    </Text>
+              </Text>
                   </View>
                   {unviewedLinks.map((linkNotif) => (
                     <View
@@ -1756,11 +2233,17 @@ export default function HomeScreen() {
               )}
             
               {incomingDrops.length === 0 && unviewedLinks.length === 0 ? (
-                <Text style={[theme.type.muted, { textAlign: 'center', marginVertical: 20 }]}>
-                  No drops or links yet
+              <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
+                <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
+                <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
+                  All caught up!
                 </Text>
-              ) : (
-                incomingDrops.map((drop, index) => (
+                <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 13, lineHeight: 18 }]}>
+                  No new drops right now. Head to the Drop page to connect with people nearby!
+                </Text>
+              </View>
+            ) : (
+              incomingDrops.map((drop, index) => (
                 <View key={index} style={{
                   backgroundColor: theme.colors.bg,
                   borderRadius: 12,
@@ -2206,8 +2689,152 @@ export default function HomeScreen() {
                 </Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+      </View>
+    </View>
+      </Modal>
+
+      {/* Link Contact Card Modal */}
+      <Modal
+        visible={showLinkModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLinkModal(false)}
+      >
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: 'rgba(0,0,0,0.6)', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          padding: 20 
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 16,
+            padding: 24,
+            width: '100%',
+            maxWidth: 320,
+            borderWidth: 2,
+            borderColor: '#00FF00',
+            shadowColor: '#00FF00',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            elevation: 10,
+          }}>
+            {/* Header */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{
+                width: 70,
+                height: 70,
+                borderRadius: 35,
+                backgroundColor: '#E5FFE5',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 12,
+                borderWidth: 2,
+                borderColor: '#00FF00',
+              }}>
+                <MaterialCommunityIcons 
+                  name="link-variant" 
+                  size={40} 
+                  color="#00FF00" 
+                />
+              </View>
+              <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
+                {selectedLink?.name}
+              </Text>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#E5FFE5',
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 12,
+              }}>
+                <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
+                  {selectedLink?.distanceFeet?.toFixed(1) || '0.0'} ft away
+                </Text>
+              </View>
+            </View>
+
+            {/* Contact Information */}
+            <View style={{ 
+              backgroundColor: '#F5FFF5', 
+              padding: 16, 
+              borderRadius: 12, 
+              marginBottom: 16,
+              borderWidth: 1,
+              borderColor: '#E0FFE0',
+            }}>
+              {selectedLink?.phoneNumber && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <MaterialCommunityIcons name="phone" size={18} color="#00AA00" />
+                  <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
+                    {selectedLink.phoneNumber}
+                  </Text>
+                </View>
+              )}
+              {selectedLink?.email && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <MaterialCommunityIcons name="email" size={18} color="#00AA00" />
+                  <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
+                    {selectedLink.email}
+                  </Text>
+                </View>
+              )}
+              {selectedLink?.bio && (
+                <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 6, textTransform: 'uppercase' }}>
+                    Bio
+                  </Text>
+                  <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
+                    {selectedLink.bio}
+                  </Text>
+                </View>
+              )}
+              {selectedLink?.socialMedia && selectedLink.socialMedia.length > 0 && (
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 8, textTransform: 'uppercase' }}>
+                    Social Media
+                  </Text>
+                  {selectedLink.socialMedia.map((social, index) => {
+                    const iconName = 
+                      social.platform.toLowerCase() === 'instagram' ? 'instagram' :
+                      social.platform.toLowerCase() === 'twitter' ? 'twitter' :
+                      social.platform.toLowerCase() === 'linkedin' ? 'linkedin' :
+                      'link-variant';
+                    
+                    return (
+                      <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <MaterialCommunityIcons name={iconName as any} size={16} color="#00AA00" />
+                        <Text style={{ marginLeft: 8, fontSize: 13, color: theme.colors.text }}>
+                          {social.handle}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+
+            {/* Close Button */}
+            <Pressable
+              onPress={() => setShowLinkModal(false)}
+              style={({ pressed }) => ({
+                paddingVertical: 14,
+                borderRadius: 10,
+                alignItems: 'center',
+                backgroundColor: '#00FF00',
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '700', color: '#000' }}>
+                Close
+              </Text>
+            </Pressable>
+      </View>
+    </View>
       </Modal>
 
       {/* Confirmation Modal */}
@@ -2364,7 +2991,7 @@ export default function HomeScreen() {
             <MaterialCommunityIcons 
               name={pendingDiscoverableState ? 'flash' : 'ghost'} 
               size={28} 
-              color={pendingDiscoverableState ? '#FF6B4A' : '#8E8E93'} 
+              color={pendingDiscoverableState ? '#007AFF' : '#8E8E93'} 
               style={{ marginBottom: 8 }}
             />
             <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
@@ -2396,7 +3023,7 @@ export default function HomeScreen() {
                 onPress={confirmToggleChange}
                 style={{
                   flex: 1,
-                  backgroundColor: pendingDiscoverableState ? '#FF6B4A' : '#8E8E93',
+                  backgroundColor: pendingDiscoverableState ? '#007AFF' : '#8E8E93',
                   paddingVertical: 8,
                   borderRadius: 6,
                 }}

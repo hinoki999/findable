@@ -366,17 +366,40 @@ export default function HistoryScreen() {
             );
           }}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 20 }}>
+            <View style={{ alignItems: 'center', paddingHorizontal: 40, paddingVertical: 60 }}>
               {searchQuery.trim() ? (
                 <>
-                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
-                  <Text style={[theme.type.h2, { marginBottom: 4 }]}>No results found</Text>
-                  <Text style={[theme.type.muted, { textAlign: 'center' }]}>
+                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12, opacity: 0.6 }} />
+                  <Text style={[theme.type.h2, { marginBottom: 8, fontSize: 18, textAlign: 'center' }]}>No results found</Text>
+                  <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
                     Try searching with a different name, email, or phone number
                   </Text>
                 </>
               ) : (
-                <Text style={theme.type.muted}>No links yet. Accepted drops and returned links will appear here.</Text>
+                <>
+                  <MaterialCommunityIcons 
+                    name="link-variant-off" 
+                    size={64} 
+                    color={theme.colors.muted} 
+                    style={{ marginBottom: 20, opacity: 0.6 }} 
+                  />
+                  <Text style={[theme.type.h1, { 
+                    textAlign: 'center', 
+                    marginBottom: 12, 
+                    fontSize: 20,
+                    color: theme.colors.text,
+                  }]}>
+                    No links made yet!
+                  </Text>
+                  <Text style={[theme.type.muted, { 
+                    textAlign: 'center', 
+                    fontSize: 15, 
+                    lineHeight: 22,
+                    opacity: 0.8,
+                  }]}>
+                    Keep making connections and your links will show up here
+                  </Text>
+                </>
               )}
             </View>
           }
