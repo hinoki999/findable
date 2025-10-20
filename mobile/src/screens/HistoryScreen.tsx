@@ -6,6 +6,7 @@ import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
+import NetworkBanner from '../components/NetworkBanner';
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
@@ -41,8 +42,15 @@ export default function HistoryScreen() {
           item.action === 'accepted' || item.action === 'returned'
         );
         setData(filteredItems);
+        setErr(null); // Clear any previous errors
       } catch (e:any) {
-        setErr(e?.message || 'Failed to load');
+        const errorMsg = e?.message || 'Failed to load contacts';
+        setErr(errorMsg);
+        showToast({
+          message: 'Oops! Failed to load your links. Check your connection and try again.',
+          type: 'error',
+          duration: 4000,
+        });
       } finally {
         setLoading(false);
       }
@@ -134,6 +142,11 @@ export default function HistoryScreen() {
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || 'Failed to reload');
+      showToast({
+        message: 'Failed to refresh. Check your connection and try again.',
+        type: 'error',
+        duration: 3000,
+      });
     } finally {
       setRefreshing(false);
     }
@@ -192,11 +205,21 @@ export default function HistoryScreen() {
     },
   ];
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
-  if (err) return <Text style={{ margin: 16, color: 'crimson' }}>{err}</Text>;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+        <NetworkBanner isDarkMode={isDarkMode} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.blue} />
+          <Text style={[theme.type.muted, { marginTop: 16, fontSize: 14 }]}>Loading your links...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <NetworkBanner isDarkMode={isDarkMode} />
       <FlatList
         contentContainerStyle={{ paddingBottom: 16 }}
         data={sortedData}

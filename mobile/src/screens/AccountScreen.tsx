@@ -291,6 +291,78 @@ export default function AccountScreen() {
             </View>
           ))}
         </View>
+
+        {/* Safety & Privacy Section */}
+        <View style={theme.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <MaterialCommunityIcons name="shield-account" size={24} color={theme.colors.blue} style={{ marginRight: 8 }} />
+            <Text style={theme.type.h1}>Safety & Privacy</Text>
+          </View>
+
+          {/* Block List */}
+          <Pressable
+            onPress={() => {/* TODO: Open block list */}}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <MaterialCommunityIcons name="account-cancel" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
+              <View>
+                <Text style={theme.type.body}>Blocked Users</Text>
+                <Text style={[theme.type.muted, { fontSize: 12 }]}>Manage users you've blocked</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+
+          {/* Report Issue */}
+          <Pressable
+            onPress={() => {/* TODO: Open report form */}}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 12,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.colors.border,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <MaterialCommunityIcons name="flag" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
+              <View>
+                <Text style={theme.type.body}>Report an Issue</Text>
+                <Text style={[theme.type.muted, { fontSize: 12 }]}>Flag inappropriate behavior</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+
+          {/* Privacy Zones */}
+          <Pressable
+            onPress={() => {/* TODO: Open privacy zones */}}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingVertical: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <MaterialCommunityIcons name="map-marker-off" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
+              <View>
+                <Text style={theme.type.body}>Privacy Zones</Text>
+                <Text style={[theme.type.muted, { fontSize: 12 }]}>Auto-disable at saved locations</Text>
+              </View>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+        </View>
       </ScrollView>
 
       {/* Edit Modal */}

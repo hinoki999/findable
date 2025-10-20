@@ -9,6 +9,7 @@ import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
+import NetworkBanner from '../components/NetworkBanner';
 
 // Track if scan has been performed in this app session
 let hasScannedThisSession = false;
@@ -38,6 +39,17 @@ export default function DropScreen() {
   
   // Filter devices based on max distance setting
   const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+
+  // Show error toast when BLE scanning fails
+  useEffect(() => {
+    if (error) {
+      showToast({
+        message: 'Oops! Something went wrong. Ensure your Bluetooth is on.',
+        type: 'error',
+        duration: 4000,
+      });
+    }
+  }, [error]);
 
   // Auto-start scanning only on first app launch, not on every page visit
   useEffect(() => {
@@ -276,11 +288,7 @@ export default function DropScreen() {
             <Text style={[theme.type.muted, { fontSize: 11, marginBottom: 12 }]}>
               Showing devices within {maxDistance} ft
             </Text>
-            {error && (
-              <Text style={[theme.type.muted, { color: '#FF6B6B', marginTop: 4, marginBottom: 12, fontSize: 12 }]}>
-                Error: {error}
-              </Text>
-            )}
+            <NetworkBanner isDarkMode={isDarkMode} />
           </>
         }
         refreshControl={
