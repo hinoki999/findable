@@ -83,7 +83,7 @@ const SettingsContext = createContext<{
   maxDistance: number; // in feet
   setMaxDistance: (distance: number) => void;
 }>({
-  maxDistance: 75,
+  maxDistance: 33,
   setMaxDistance: () => {},
 });
 
@@ -155,7 +155,7 @@ export default function App() {
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
   const [nextLinkId, setNextLinkId] = useState(1);
-  const [maxDistance, setMaxDistance] = useState(75); // Default 75 feet
+  const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
   
   useEffect(() => { 
     console.log('APP_BOOT_MARKER', Date.now());
