@@ -5,7 +5,7 @@ import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 
-export default function AccountScreen() {
+export default function AccountScreen({ navigation }: any) {
   const [isPublic, setIsPublic] = useState(true);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
@@ -16,6 +16,7 @@ export default function AccountScreen() {
   const [tempValue, setTempValue] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
+  const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
 
   const theme = getTheme(isDarkMode);
 
@@ -147,9 +148,37 @@ export default function AccountScreen() {
     setValidationError('');
   };
 
+  const handleReportIssue = () => {
+    // TODO: Open report form/modal
+    showToast({
+      message: 'Report feature coming soon',
+      type: 'success',
+      duration: 2000,
+    });
+  };
+
+  const handlePrivacyZonesToggle = () => {
+    if (!privacyZonesEnabled) {
+      // If turning on, navigate to privacy zones to set it up
+      navigation.navigate('PrivacyZones');
+    } else {
+      // If turning off, just toggle it
+      setPrivacyZonesEnabled(false);
+      showToast({
+        message: 'Privacy zones disabled',
+        type: 'success',
+        duration: 2000,
+      });
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <TopBar title="Account" />
+      <TopBar 
+        title="Account" 
+        rightIcon="flag" 
+        onRightIconPress={handleReportIssue}
+      />
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
@@ -181,6 +210,20 @@ export default function AccountScreen() {
               onValueChange={toggleDarkMode}
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
+            />
+          </View>
+        </View>
+
+        {/* Privacy Zones Card */}
+        <View style={theme.card}>
+          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Privacy zones</Text>
+          <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop:10 }}>
+            <Text style={theme.type.muted}>Auto-disable at saved locations</Text>
+            <Switch 
+              value={privacyZonesEnabled} 
+              onValueChange={handlePrivacyZonesToggle}
+              trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
+              thumbColor={privacyZonesEnabled ? theme.colors.blue : theme.colors.muted}
             />
           </View>
         </View>
@@ -292,77 +335,6 @@ export default function AccountScreen() {
           ))}
         </View>
 
-        {/* Safety & Privacy Section */}
-        <View style={theme.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <MaterialCommunityIcons name="shield-account" size={24} color={theme.colors.blue} style={{ marginRight: 8 }} />
-            <Text style={theme.type.h1}>Safety & Privacy</Text>
-          </View>
-
-          {/* Block List */}
-          <Pressable
-            onPress={() => {/* TODO: Open block list */}}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.border,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <MaterialCommunityIcons name="account-cancel" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
-              <View>
-                <Text style={theme.type.body}>Blocked Users</Text>
-                <Text style={[theme.type.muted, { fontSize: 12 }]}>Manage users you've blocked</Text>
-              </View>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
-          </Pressable>
-
-          {/* Report Issue */}
-          <Pressable
-            onPress={() => {/* TODO: Open report form */}}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingVertical: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: theme.colors.border,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <MaterialCommunityIcons name="flag" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
-              <View>
-                <Text style={theme.type.body}>Report an Issue</Text>
-                <Text style={[theme.type.muted, { fontSize: 12 }]}>Flag inappropriate behavior</Text>
-              </View>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
-          </Pressable>
-
-          {/* Privacy Zones */}
-          <Pressable
-            onPress={() => {/* TODO: Open privacy zones */}}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              paddingVertical: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <MaterialCommunityIcons name="map-marker-off" size={20} color={theme.colors.muted} style={{ marginRight: 12 }} />
-              <View>
-                <Text style={theme.type.body}>Privacy Zones</Text>
-                <Text style={[theme.type.muted, { fontSize: 12 }]}>Auto-disable at saved locations</Text>
-              </View>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
-          </Pressable>
-        </View>
       </ScrollView>
 
       {/* Edit Modal */}

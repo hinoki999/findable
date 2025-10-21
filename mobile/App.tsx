@@ -5,6 +5,7 @@ import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { colors, type, getTheme } from './src/theme';
@@ -142,9 +143,11 @@ export default function App() {
   });
 
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
+  const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isFirstLaunch, setIsFirstLaunch] = useState(true);
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
+  const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Persist privacy zones
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
@@ -257,10 +260,22 @@ export default function App() {
     );
   }
 
+  // Simple navigation object
+  const navigation = {
+    navigate: (screen: string) => setSubScreen(screen),
+    goBack: () => setSubScreen(null),
+  };
+
   const Screen = () => {
+    // Show sub-screen if one is active
+    if (subScreen === 'PrivacyZones') {
+      return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
+    }
+
+    // Show main tabs
     if (tab === 'Home') return <HomeScreen />;
     if (tab === 'History') return <HistoryScreen />;
-    if (tab === 'Account') return <AccountScreen />;
+    if (tab === 'Account') return <AccountScreen navigation={navigation} />;
     return <DropScreen />;
   };
 
@@ -283,13 +298,14 @@ export default function App() {
           <Screen />
         </View>
 
-        {/* Bottom nav */}
-        <View style={{
-          flexDirection: 'row',
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          backgroundColor: theme.colors.white
-        }}>
+        {/* Bottom nav - Hide when sub-screen is active */}
+        {!subScreen && (
+          <View style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            backgroundColor: theme.colors.white
+          }}>
            {/* Home */}
            <Pressable
              onPress={() => setTab('Home')}
@@ -351,6 +367,7 @@ export default function App() {
             />
           </Pressable>
         </View>
+        )}
 
         {/* Toast Notification */}
         {toastConfig && (

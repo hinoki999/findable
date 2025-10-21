@@ -7,6 +7,7 @@ import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
+import SwipeableRow from '../components/SwipeableRow';
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
@@ -189,13 +190,13 @@ export default function HistoryScreen() {
       arrow: undefined,
     },
     {
-      message: 'Pin your favorite contacts to quickly access them on the Home screen.',
+      message: 'Swipe right to pin your favorite contacts to the Home screen!',
       position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
       arrow: 'down' as const,
     },
     {
-      message: 'Delete any contact you no longer want to keep.',
-      position: { top: 135, left: screenWidth * 0.35, right: screenWidth * 0.05 },
+      message: 'Swipe left to delete any contact you no longer want to keep.',
+      position: { top: 205, left: screenWidth * 0.35, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {
@@ -331,61 +332,56 @@ export default function HistoryScreen() {
                         };
 
             return (
-              <Pressable 
-                onPress={() => handleContactPress(item)}
-                style={({ pressed }) => ({
-                  ...theme.card,
-                  marginHorizontal: 16,
-                  marginBottom: 12,
-                  opacity: pressed ? 0.8 : 1,
-                })}
+              <SwipeableRow
+                onSwipeRight={() => handleTogglePin(item)}
+                onSwipeLeft={() => handleDeleteClick(item)}
+                isPinned={item.id ? pinnedIds.has(item.id) : false}
+                rightActionColor="#0066FF" // More vibrant blue
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
-                  <Pressable 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleTogglePin(item);
-                    }} 
-                    hitSlop={0}
-                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
-                  >
-                    <MaterialCommunityIcons 
-                      name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
-                      size={11} 
-                      color={theme.colors.blue} 
-                    />
-                    <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
-                      {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
-                    </Text>
-                  </Pressable>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {getActionIcon(item.action)}
-                      <Text style={[theme.type.body, { color: getActionColor(item.action), fontWeight: '500' }]}>
-                        {getActionText(item.action)}
-                      </Text>
-                    </View>
-                    <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
-                      {formatTimestamp(item.timestamp)}
-                    </Text>
+                <Pressable 
+                  onPress={() => handleContactPress(item)}
+                  style={({ pressed }) => ({
+                    ...theme.card,
+                    marginHorizontal: 16,
+                    marginBottom: 12,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
                     <Pressable 
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleDeleteClick(item);
+                        handleTogglePin(item);
                       }} 
                       hitSlop={0}
-                      style={{ marginTop: 4, alignSelf: 'flex-end' }}
+                      style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
                     >
-                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue }]}>
-                        Delete
+                      <MaterialCommunityIcons 
+                        name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
+                        size={11} 
+                        color={theme.colors.blue} 
+                      />
+                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
+                        {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
                       </Text>
                     </Pressable>
-                  </View>
-          </View>
-              </Pressable>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {getActionIcon(item.action)}
+                        <Text style={[theme.type.body, { color: getActionColor(item.action), fontWeight: '500' }]}>
+                          {getActionText(item.action)}
+                        </Text>
+                      </View>
+                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
+                        {formatTimestamp(item.timestamp)}
+                      </Text>
+                    </View>
+            </View>
+                </Pressable>
+              </SwipeableRow>
             );
           }}
           ListEmptyComponent={
