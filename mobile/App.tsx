@@ -6,6 +6,7 @@ import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen';
+import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { colors, type, getTheme } from './src/theme';
@@ -159,6 +160,7 @@ export default function App() {
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
   const [nextLinkId, setNextLinkId] = useState(1);
   const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   
   useEffect(() => { 
     console.log('APP_BOOT_MARKER', Date.now());
@@ -385,11 +387,15 @@ export default function App() {
     if (subScreen === 'PrivacyZones') {
       return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
     }
+    
+    if (subScreen === 'ProfilePhoto') {
+      return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+    }
 
     // Show main tabs
     if (tab === 'Home') return <HomeScreen />;
     if (tab === 'History') return <HistoryScreen />;
-    if (tab === 'Account') return <AccountScreen navigation={navigation} />;
+    if (tab === 'Account') return <AccountScreen navigation={navigation} profilePhotoUri={profilePhotoUri} />;
     return <DropScreen />;
   };
 

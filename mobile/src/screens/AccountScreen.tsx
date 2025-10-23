@@ -1,11 +1,16 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView } from 'react-native';
+import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 
-export default function AccountScreen({ navigation }: any) {
+interface AccountScreenProps {
+  navigation: any;
+  profilePhotoUri?: string | null;
+}
+
+export default function AccountScreen({ navigation, profilePhotoUri }: AccountScreenProps) {
   const [isPublic, setIsPublic] = useState(true);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
@@ -246,9 +251,15 @@ export default function AccountScreen({ navigation }: any) {
                 marginRight: 8,
                 overflow: 'hidden',
               }}>
-                <MaterialCommunityIcons name="account" size={24} color={theme.colors.blue} />
+                {profilePhotoUri ? (
+                  <Image source={{ uri: profilePhotoUri }} style={{ width: 50, height: 50 }} />
+                ) : (
+                  <MaterialCommunityIcons name="account" size={24} color={theme.colors.blue} />
+                )}
               </View>
-              <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
+              <Pressable style={{ padding: 4 }} onPress={() => navigation.navigate('ProfilePhoto')}>
+                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
+              </Pressable>
             </View>
           </View>
 

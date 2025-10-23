@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
@@ -8,6 +8,34 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import SwipeableRow from '../components/SwipeableRow';
+
+// Helper function to get initials from name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+// Helper function to generate consistent color from name
+const getAvatarColor = (name: string): string => {
+  const colors = [
+    '#FF6B4A', // Orange
+    '#4A90FF', // Blue
+    '#FF4A7F', // Pink
+    '#4AFF8C', // Green
+    '#FF4AE8', // Purple
+    '#FFA84A', // Yellow
+    '#4AFFEF', // Cyan
+    '#A84AFF', // Violet
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
@@ -352,6 +380,26 @@ export default function HistoryScreen() {
                   })}
                 >
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    {/* Avatar */}
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: getAvatarColor(item.name),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                      overflow: 'hidden',
+                    }}>
+                      {item.profilePhoto ? (
+                        <Image source={{ uri: item.profilePhoto }} style={{ width: 44, height: 44 }} />
+                      ) : (
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                          {getInitials(item.name)}
+                        </Text>
+                      )}
+                    </View>
+                    
                     <View style={{ flex: 1 }}>
                       <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
                     <Pressable 

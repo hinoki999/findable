@@ -13,6 +13,7 @@ export type Device = {
   email?: string;
   bio?: string;
   socialMedia?: Array<{ platform: string; handle: string }>;
+  profilePhoto?: string;
 };
 
 // --- simple in-memory store for stub mode ---

@@ -1,12 +1,20 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 import sqlite3
 import json
+import os
+import shutil
+from pathlib import Path
 
 app = FastAPI(title="DropLink API")
+
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = Path("uploads/profile_photos")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Enable CORS for React Native app
 app.add_middleware(
@@ -259,19 +267,20 @@ def get_user_profile(user_id: int = 1):
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT name, email, phone, bio FROM user_profiles WHERE user_id = ?
+            SELECT name, email, phone, bio, profile_photo FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
         
         if not row:
-            return {"name": "", "email": "", "phone": "", "bio": ""}
+            return {"name": "", "email": "", "phone": "", "bio": "", "profilePhoto": None}
         
         return {
             "name": row[0],
             "email": row[1],
             "phone": row[2],
-            "bio": row[3]
+            "bio": row[3],
+            "profilePhoto": row[4]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -290,7 +299,8 @@ def save_user_profile(profile: dict, user_id: int = 1):
                 name TEXT,
                 email TEXT,
                 phone TEXT,
-                bio TEXT
+                bio TEXT,
+                profile_photo TEXT
             )
         ''')
         
@@ -301,6 +311,114 @@ def save_user_profile(profile: dict, user_id: int = 1):
         ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio')))
         
         conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Profile Photo endpoints
+@app.post("/user/profile/photo")
+async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
+    """Upload profile photo"""
+    try:
+        # Validate file type
+        if not file.content_type in ["image/jpeg", "image/png", "image/jpg"]:
+            raise HTTPException(status_code=400, detail="Only JPEG and PNG images are allowed")
+        
+        # Create unique filename
+        file_extension = file.filename.split(".")[-1]
+        filename = f"user_{user_id}.{file_extension}"
+        file_path = UPLOAD_DIR / filename
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Update database with photo path
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Create table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                phone TEXT,
+                bio TEXT,
+                profile_photo TEXT
+            )
+        ''')
+        
+        # Update or insert photo path
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_profiles (user_id, profile_photo)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET profile_photo = excluded.profile_photo
+        ''', (user_id, str(filename)))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "filename": filename,
+            "url": f"/user/profile/photo/{user_id}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/user/profile/photo/{user_id}")
+async def get_profile_photo(user_id: int):
+    """Get profile photo"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT profile_photo FROM user_profiles WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row or not row[0]:
+            raise HTTPException(status_code=404, detail="Profile photo not found")
+        
+        file_path = UPLOAD_DIR / row[0]
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Photo file not found")
+        
+        return FileResponse(file_path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/user/profile/photo")
+async def delete_profile_photo(user_id: int = 1):
+    """Delete profile photo"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT profile_photo FROM user_profiles WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        
+        if row and row[0]:
+            # Delete file
+            file_path = UPLOAD_DIR / row[0]
+            if file_path.exists():
+                os.remove(file_path)
+            
+            # Update database
+            cursor.execute('''
+                UPDATE user_profiles SET profile_photo = NULL WHERE user_id = ?
+            ''', (user_id,))
+            conn.commit()
+        
         conn.close()
         return {"success": True}
     except Exception as e:
