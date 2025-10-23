@@ -351,11 +351,21 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
         ''')
         
         # Update or insert photo path
-        cursor.execute('''
-            INSERT OR REPLACE INTO user_profiles (user_id, profile_photo)
-            VALUES (?, ?)
-            ON CONFLICT(user_id) DO UPDATE SET profile_photo = excluded.profile_photo
-        ''', (user_id, str(filename)))
+        # Check if profile exists
+        cursor.execute('SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
+        exists = cursor.fetchone()
+        
+        if exists:
+            # Update existing profile
+            cursor.execute('''
+                UPDATE user_profiles SET profile_photo = ? WHERE user_id = ?
+            ''', (str(filename), user_id))
+        else:
+            # Insert new profile with just photo
+            cursor.execute('''
+                INSERT INTO user_profiles (user_id, profile_photo)
+                VALUES (?, ?)
+            ''', (user_id, str(filename)))
         
         conn.commit()
         conn.close()

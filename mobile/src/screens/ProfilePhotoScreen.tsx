@@ -26,7 +26,6 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   // Image manipulation states
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
-  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [imageScale, setImageScale] = useState(1);
   const [uploading, setUploading] = useState(false);
 
@@ -60,7 +59,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   const handleTakePhoto = async () => {
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8,
       });
@@ -83,7 +82,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   const handleChooseGallery = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: false,
         quality: 0.8,
       });
@@ -108,21 +107,20 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        // Set offset to current position when touch starts
         pan.setOffset({
-          x: imagePosition.x,
-          y: imagePosition.y,
+          x: (pan.x as any)._value,
+          y: (pan.y as any)._value,
         });
+        pan.setValue({ x: 0, y: 0 });
       },
       onPanResponderMove: Animated.event(
         [null, { dx: pan.x, dy: pan.y }],
         { useNativeDriver: false }
       ),
-      onPanResponderRelease: (_, gestureState) => {
+      onPanResponderRelease: () => {
+        // Flatten the offset into the value
         pan.flattenOffset();
-        setImagePosition({
-          x: imagePosition.x + gestureState.dx,
-          y: imagePosition.y + gestureState.dy,
-        });
       },
     })
   ).current;
@@ -139,7 +137,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
   // Zoom out
   const handleZoomOut = () => {
-    const newScale = Math.max(imageScale - 0.1, 0.5);
+    const newScale = Math.max(imageScale - 0.1, 0.3);
     setImageScale(newScale);
     Animated.spring(scale, {
       toValue: newScale,
@@ -213,7 +211,6 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
     if (step === 'edit') {
       setStep('source');
       setSelectedImage(null);
-      setImagePosition({ x: 0, y: 0 });
       setImageScale(1);
       pan.setValue({ x: 0, y: 0 });
       scale.setValue(1);
@@ -272,8 +269,8 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
               onPress={handleTakePhoto}
               style={[styles.button, { backgroundColor: theme.colors.blue }]}
             >
-              <MaterialCommunityIcons name="camera" size={24} color="#FFFFFF" style={{ marginRight: 12 }} />
-              <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Take Photo</Text>
+              <MaterialCommunityIcons name="file-upload" size={24} color="#FFFFFF" style={{ marginRight: 12 }} />
+              <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Upload File</Text>
             </Pressable>
             <Pressable
               onPress={handleChooseGallery}
