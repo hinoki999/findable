@@ -11,9 +11,6 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 
-// Track if scan has been performed in this app session
-let hasScannedThisSession = false;
-
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
   const [incomingDrop, setIncomingDrop] = useState<{ name: string; text: string } | null>(null);
@@ -51,12 +48,10 @@ export default function DropScreen() {
     }
   }, [error]);
 
-  // Auto-start scanning only on first app launch, not on every page visit
+  // Auto-start scanning when Drop page loads
   useEffect(() => {
-    if (!hasScannedThisSession) {
-      startScan();
-      hasScannedThisSession = true;
-    }
+    startScan();
+    return () => stopScan(); // Clean up when leaving page
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
