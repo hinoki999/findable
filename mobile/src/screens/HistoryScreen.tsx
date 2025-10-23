@@ -38,10 +38,12 @@ export default function HistoryScreen() {
     (async () => {
       try {
         const items = await getDevices();
+        console.log('🔍 HISTORY: Fetched items from API:', items?.length, items);
         // Show all connections (dropped, accepted, and returned)
         const filteredItems = (items ?? []).filter(item => 
           item.action === 'accepted' || item.action === 'returned' || item.action === 'dropped'
         );
+        console.log('🔍 HISTORY: Filtered items:', filteredItems?.length, filteredItems);
         setData(filteredItems);
         setErr(null); // Clear any previous errors
       } catch (e:any) {
@@ -177,8 +179,9 @@ export default function HistoryScreen() {
     if (aPin !== bPin) return bPin - aPin; // Pinned first
     
     // Then sort by timestamp (newest first)
-    const aTime = a.timestamp?.getTime() || 0;
-    const bTime = b.timestamp?.getTime() || 0;
+    // Convert string timestamps to Date objects for comparison
+    const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
     return bTime - aTime;
   });
 
@@ -294,10 +297,11 @@ export default function HistoryScreen() {
           />
         }
         renderItem={({ item }) => {
-            const formatTimestamp = (timestamp?: Date) => {
+            const formatTimestamp = (timestamp?: Date | string) => {
               if (!timestamp) return 'Unknown time';
               const now = new Date();
-              const diffMs = now.getTime() - timestamp.getTime();
+              const timestampDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+              const diffMs = now.getTime() - timestampDate.getTime();
               const diffMins = Math.floor(diffMs / (1000 * 60));
               const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
               const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
