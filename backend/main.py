@@ -80,7 +80,7 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
-# POST /devices - Save a new device
+# POST /devices - Save a new device (with deduplication)
 @app.post("/devices", response_model=DeviceResponse)
 def create_device(device: DeviceCreate):
     try:
@@ -90,25 +90,54 @@ def create_device(device: DeviceCreate):
         social_media_json = json.dumps(device.socialMedia) if device.socialMedia else None
         timestamp = device.timestamp or datetime.now().isoformat()
         
+        # Check if device with same name already exists for this user
         cursor.execute('''
-            INSERT INTO devices (name, rssi, distance_feet, action, timestamp, 
-                               phone_number, email, bio, social_media, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            device.name,
-            device.rssi,
-            device.distance,
-            device.action,
-            timestamp,
-            device.phoneNumber,
-            device.email,
-            device.bio,
-            social_media_json,
-            device.user_id
-        ))
+            SELECT id FROM devices WHERE name = ? AND user_id = ?
+        ''', (device.name, device.user_id))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update existing device
+            device_id = existing[0]
+            cursor.execute('''
+                UPDATE devices 
+                SET rssi = ?, distance_feet = ?, action = ?, timestamp = ?,
+                    phone_number = ?, email = ?, bio = ?, social_media = ?
+                WHERE id = ?
+            ''', (
+                device.rssi,
+                device.distance,
+                device.action,
+                timestamp,
+                device.phoneNumber,
+                device.email,
+                device.bio,
+                social_media_json,
+                device_id
+            ))
+            print(f"✅ Updated existing device: {device.name} (ID: {device_id})")
+        else:
+            # Insert new device
+            cursor.execute('''
+                INSERT INTO devices (name, rssi, distance_feet, action, timestamp, 
+                                   phone_number, email, bio, social_media, user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                device.name,
+                device.rssi,
+                device.distance,
+                device.action,
+                timestamp,
+                device.phoneNumber,
+                device.email,
+                device.bio,
+                social_media_json,
+                device.user_id
+            ))
+            device_id = cursor.lastrowid
+            print(f"✅ Created new device: {device.name} (ID: {device_id})")
         
         conn.commit()
-        device_id = cursor.lastrowid
         conn.close()
         
         return DeviceResponse(
