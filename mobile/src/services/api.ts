@@ -1,6 +1,6 @@
 // src/services/api.ts
-export const BASE_URL = "http://example.invalid";
-const USE_STUB = true; // keep true for now
+export const BASE_URL = "https://findable-production.up.railway.app";
+const USE_STUB = false; // Connected to Railway backend!
 
 export type Device = { 
   id?: number; 
