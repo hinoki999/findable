@@ -169,28 +169,142 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
+  // Load all user data from backend on app start
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        console.log('📥 Loading user data from backend...');
+        
+        // Load user profile
+        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+          console.log('✅ Loaded profile:', profileData);
+          setUserProfile({
+            name: profileData.name || 'Your Name',
+            phoneNumber: profileData.phone || '(555) 123-4567',
+            email: profileData.email || 'user@example.com',
+            bio: profileData.bio || 'Optional bio line goes here.',
+            socialMedia: [],
+          });
+        }
+        
+        // Load settings
+        const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
+        if (settingsData) {
+          console.log('✅ Loaded settings:', settingsData);
+          setIsDarkMode(settingsData.darkMode);
+          setMaxDistance(settingsData.maxDistance);
+          // privacyZonesEnabled is handled in PrivacyZones screen
+        }
+        
+        // Load pinned contacts
+        const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
+        if (pinnedData && pinnedData.length > 0) {
+          console.log('✅ Loaded pinned contacts:', pinnedData);
+          setPinnedIds(new Set(pinnedData));
+        }
+        
+        // Load privacy zones
+        const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
+        if (zonesData) {
+          console.log('✅ Loaded privacy zones:', zonesData);
+          setPrivacyZones(zonesData);
+        }
+        
+        console.log('✅ All user data loaded successfully');
+      } catch (error) {
+        console.error('❌ Failed to load user data:', error);
+        // Don't show error to user - just use defaults
+      }
+    };
+    
+    loadUserData();
+  }, []);
+
+  const toggleDarkMode = async () => {
+    const newValue = !isDarkMode;
+    setIsDarkMode(newValue);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserSettings({
+        darkMode: newValue,
+        maxDistance,
+        privacyZonesEnabled: false, // TODO: Get from actual state
+      });
+      console.log('✅ Dark mode saved to backend:', newValue);
+    } catch (error) {
+      console.error('❌ Failed to save dark mode:', error);
+    }
   };
 
-  const togglePin = (id: number) => {
+  const togglePin = async (id: number) => {
+    let wasPinned = false;
     setPinnedIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
+      wasPinned = newSet.has(id);
+      if (wasPinned) {
         newSet.delete(id);
       } else {
         newSet.add(id);
       }
       return newSet;
     });
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      if (wasPinned) {
+        await api.unpinContact(id);
+        console.log('✅ Unpinned contact saved to backend:', id);
+      } else {
+        await api.pinContact(id);
+        console.log('✅ Pinned contact saved to backend:', id);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save pin status:', error);
+    }
   };
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile(prev => ({ ...prev, ...updates }));
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    const newProfile = { ...userProfile, ...updates };
+    setUserProfile(newProfile);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserProfile({
+        name: newProfile.name,
+        email: newProfile.email,
+        phone: newProfile.phoneNumber,
+        bio: newProfile.bio,
+      });
+      console.log('✅ Profile saved to backend:', newProfile);
+    } catch (error) {
+      console.error('❌ Failed to save profile:', error);
+    }
   };
 
   const showToast = (config: ToastConfig) => {
     setToastConfig(config);
+  };
+
+  const updateMaxDistance = async (distance: number) => {
+    setMaxDistance(distance);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserSettings({
+        darkMode: isDarkMode,
+        maxDistance: distance,
+        privacyZonesEnabled: false, // TODO: Get from actual state
+      });
+      console.log('✅ Max distance saved to backend:', distance);
+    } catch (error) {
+      console.error('❌ Failed to save max distance:', error);
+    }
   };
 
   const addLinkNotification = (notification: Omit<LinkNotification, 'id' | 'timestamp' | 'viewed' | 'dismissed'>) => {
@@ -285,7 +399,7 @@ export default function App() {
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
           <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
             <ToastContext.Provider value={{ showToast }}>
-              <SettingsContext.Provider value={{ maxDistance, setMaxDistance }}>
+              <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
                 <LinkNotificationsContext.Provider value={{ 
                   linkNotifications, 
                   addLinkNotification, 

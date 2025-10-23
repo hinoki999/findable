@@ -311,7 +311,7 @@ export default function HistoryScreen() {
               if (diffHours < 24) return `${diffHours}h ago`;
               if (diffDays < 7) return `${diffDays}d ago`;
               
-              return timestamp.toLocaleDateString();
+              return timestampDate.toLocaleDateString();
             };
 
                 const getActionColor = (action?: string) => {

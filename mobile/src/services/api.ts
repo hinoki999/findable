@@ -207,3 +207,139 @@ export async function restoreDevice(device: Device): Promise<void> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
+
+// ==================== USER PROFILE ====================
+export interface UserProfile {
+  name: string;
+  email: string;
+  phone: string;
+  bio: string;
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  if (USE_STUB) {
+    await sleep(100);
+    return { name: '', email: '', phone: '', bio: '' };
+  }
+  const res = await fetch(`${BASE_URL}/user/profile`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function saveUserProfile(profile: UserProfile): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/user/profile`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// ==================== USER SETTINGS ====================
+export interface UserSettings {
+  darkMode: boolean;
+  maxDistance: number;
+  privacyZonesEnabled: boolean;
+}
+
+export async function getUserSettings(): Promise<UserSettings> {
+  if (USE_STUB) {
+    await sleep(100);
+    return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+  }
+  const res = await fetch(`${BASE_URL}/user/settings`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function saveUserSettings(settings: UserSettings): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/user/settings`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// ==================== PRIVACY ZONES ====================
+export interface PrivacyZone {
+  id: number;
+  address: string;
+  radius: number;
+}
+
+export async function getPrivacyZones(): Promise<PrivacyZone[]> {
+  if (USE_STUB) {
+    await sleep(100);
+    return [];
+  }
+  const res = await fetch(`${BASE_URL}/user/privacy-zones`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function savePrivacyZone(zone: { address: string; radius: number }): Promise<PrivacyZone> {
+  if (USE_STUB) {
+    await sleep(100);
+    return { id: Date.now(), ...zone };
+  }
+  const res = await fetch(`${BASE_URL}/user/privacy-zones`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(zone),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function deletePrivacyZone(zoneId: number): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/user/privacy-zones/${zoneId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// ==================== PINNED CONTACTS ====================
+export async function getPinnedContacts(): Promise<number[]> {
+  if (USE_STUB) {
+    await sleep(100);
+    return [];
+  }
+  const res = await fetch(`${BASE_URL}/user/pinned`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function pinContact(deviceId: number): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function unpinContact(deviceId: number): Promise<void> {
+  if (USE_STUB) {
+    await sleep(100);
+    return;
+  }
+  const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}

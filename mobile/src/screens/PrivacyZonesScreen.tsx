@@ -66,7 +66,7 @@ export default function PrivacyZonesScreen({ navigation, zones, setZones }: Priv
     setHasUnsavedChanges(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedAddress) {
       showToast({
         message: 'Please select an address from the suggestions',
@@ -76,45 +76,61 @@ export default function PrivacyZonesScreen({ navigation, zones, setZones }: Priv
       return;
     }
 
-    if (isEditing && editingId) {
-      // Update existing zone
-      const updatedZones = zones.map(zone =>
-        zone.id === editingId
-          ? { ...zone, address: selectedAddress, radius }
-          : zone
-      );
-      setZones(updatedZones);
-      console.log('Updated zones:', updatedZones);
+    try {
+      if (isEditing && editingId) {
+        // Update existing zone (delete old, create new)
+        const api = await import('../services/api');
+        await api.deletePrivacyZone(Number(editingId));
+        const savedZone = await api.savePrivacyZone({ address: selectedAddress, radius });
+        
+        const updatedZones = zones.map(zone =>
+          zone.id === editingId
+            ? { id: savedZone.id.toString(), address: savedZone.address, radius: savedZone.radius }
+            : zone
+        );
+        setZones(updatedZones);
+        console.log('✅ Updated zone in backend:', savedZone);
+        showToast({
+          message: 'Privacy zone updated',
+          type: 'success',
+          duration: 2000,
+        });
+      } else {
+        // Add new zone
+        const api = await import('../services/api');
+        const savedZone = await api.savePrivacyZone({ address: selectedAddress, radius });
+        
+        const newZone: PrivacyZone = {
+          id: savedZone.id.toString(),
+          address: savedZone.address,
+          radius: savedZone.radius,
+        };
+        const updatedZones = [...zones, newZone];
+        setZones(updatedZones);
+        console.log('✅ Added new zone to backend:', savedZone);
+        showToast({
+          message: 'Privacy zone added',
+          type: 'success',
+          duration: 2000,
+        });
+      }
+
+      // Reset form
+      setIsAdding(false);
+      setIsEditing(false);
+      setEditingId(null);
+      setAddressInput('');
+      setSelectedAddress('');
+      setRadius(3);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('❌ Failed to save privacy zone:', error);
       showToast({
-        message: 'Privacy zone updated',
-        type: 'success',
-        duration: 2000,
-      });
-    } else {
-      // Add new zone
-      const newZone: PrivacyZone = {
-        id: Date.now().toString(),
-        address: selectedAddress,
-        radius,
-      };
-      const updatedZones = [...zones, newZone];
-      setZones(updatedZones);
-      console.log('Added new zone, total zones:', updatedZones.length, updatedZones);
-      showToast({
-        message: 'Privacy zone added',
-        type: 'success',
-        duration: 2000,
+        message: 'Failed to save privacy zone',
+        type: 'error',
+        duration: 3000,
       });
     }
-
-    // Reset form
-    setIsAdding(false);
-    setIsEditing(false);
-    setEditingId(null);
-    setAddressInput('');
-    setSelectedAddress('');
-    setRadius(3);
-    setHasUnsavedChanges(false);
   };
 
   const handleCancel = () => {
@@ -132,14 +148,27 @@ export default function PrivacyZonesScreen({ navigation, zones, setZones }: Priv
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deletingId) {
-      setZones(zones.filter(zone => zone.id !== deletingId));
-      showToast({
-        message: 'Privacy zone deleted',
-        type: 'success',
-        duration: 2000,
-      });
+      try {
+        const api = await import('../services/api');
+        await api.deletePrivacyZone(Number(deletingId));
+        
+        setZones(zones.filter(zone => zone.id !== deletingId));
+        console.log('✅ Deleted zone from backend:', deletingId);
+        showToast({
+          message: 'Privacy zone deleted',
+          type: 'success',
+          duration: 2000,
+        });
+      } catch (error) {
+        console.error('❌ Failed to delete privacy zone:', error);
+        showToast({
+          message: 'Failed to delete privacy zone',
+          type: 'error',
+          duration: 3000,
+        });
+      }
     }
     setShowDeleteModal(false);
     setDeletingId(null);
