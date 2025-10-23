@@ -38,9 +38,9 @@ export default function HistoryScreen() {
     (async () => {
       try {
         const items = await getDevices();
-        // Only show accepted and returned (linked) contacts - no unanswered drops
+        // Show all connections (dropped, accepted, and returned)
         const filteredItems = (items ?? []).filter(item => 
-          item.action === 'accepted' || item.action === 'returned'
+          item.action === 'accepted' || item.action === 'returned' || item.action === 'dropped'
         );
         setData(filteredItems);
         setErr(null); // Clear any previous errors
