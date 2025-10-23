@@ -222,5 +222,236 @@ def delete_device(device_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# User Profile endpoints
+@app.get("/user/profile")
+def get_user_profile(user_id: int = 1):
+    """Get user profile"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT name, email, phone, bio FROM user_profiles WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return {"name": "", "email": "", "phone": "", "bio": ""}
+        
+        return {
+            "name": row[0],
+            "email": row[1],
+            "phone": row[2],
+            "bio": row[3]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/user/profile")
+def save_user_profile(profile: dict, user_id: int = 1):
+    """Save user profile"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Create table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_profiles (
+                user_id INTEGER PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                phone TEXT,
+                bio TEXT
+            )
+        ''')
+        
+        # Upsert profile
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio')))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Settings endpoints
+@app.get("/user/settings")
+def get_user_settings(user_id: int = 1):
+    """Get user settings"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT dark_mode, max_distance, privacy_zones_enabled FROM user_settings WHERE user_id = ?
+        ''', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return {"darkMode": False, "maxDistance": 33, "privacyZonesEnabled": False}
+        
+        return {
+            "darkMode": bool(row[0]),
+            "maxDistance": row[1],
+            "privacyZonesEnabled": bool(row[2])
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/user/settings")
+def save_user_settings(settings: dict, user_id: int = 1):
+    """Save user settings"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id INTEGER PRIMARY KEY,
+                dark_mode INTEGER,
+                max_distance INTEGER,
+                privacy_zones_enabled INTEGER
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance, privacy_zones_enabled)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, 
+              1 if settings.get('darkMode') else 0,
+              settings.get('maxDistance', 33),
+              1 if settings.get('privacyZonesEnabled') else 0))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Privacy Zones endpoints
+@app.get("/user/privacy-zones")
+def get_privacy_zones(user_id: int = 1):
+    """Get privacy zones"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, address, radius FROM privacy_zones WHERE user_id = ?
+        ''', (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        zones = []
+        for row in rows:
+            zones.append({
+                "id": row[0],
+                "address": row[1],
+                "radius": row[2]
+            })
+        return zones
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/user/privacy-zones")
+def save_privacy_zone(zone: dict, user_id: int = 1):
+    """Save a privacy zone"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS privacy_zones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                address TEXT,
+                radius INTEGER
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT INTO privacy_zones (user_id, address, radius)
+            VALUES (?, ?, ?)
+        ''', (user_id, zone.get('address'), zone.get('radius')))
+        
+        conn.commit()
+        zone_id = cursor.lastrowid
+        conn.close()
+        return {"id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/user/privacy-zones/{zone_id}")
+def delete_privacy_zone(zone_id: int):
+    """Delete a privacy zone"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Pinned contacts endpoint
+@app.get("/user/pinned")
+def get_pinned_contacts(user_id: int = 1):
+    """Get pinned contact IDs"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT device_id FROM pinned_contacts WHERE user_id = ?
+        ''', (user_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return [row[0] for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/user/pinned/{device_id}")
+def pin_contact(device_id: int, user_id: int = 1):
+    """Pin a contact"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS pinned_contacts (
+                user_id INTEGER,
+                device_id INTEGER,
+                PRIMARY KEY (user_id, device_id)
+            )
+        ''')
+        
+        cursor.execute('''
+            INSERT OR IGNORE INTO pinned_contacts (user_id, device_id)
+            VALUES (?, ?)
+        ''', (user_id, device_id))
+        
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/user/pinned/{device_id}")
+def unpin_contact(device_id: int, user_id: int = 1):
+    """Unpin a contact"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            DELETE FROM pinned_contacts WHERE user_id = ? AND device_id = ?
+        ''', (user_id, device_id))
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Run with: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
