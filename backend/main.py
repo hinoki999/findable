@@ -1008,5 +1008,39 @@ def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# TEMPORARY: Admin endpoint to clear all test data
+@app.delete("/admin/clear-all-data")
+async def clear_all_data(secret: str = Header(None)):
+    """
+    TEMPORARY ADMIN ENDPOINT - Deletes all users and related data
+    Requires secret header for security
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Delete all data from all tables
+        cursor.execute('DELETE FROM pinned_contacts')
+        cursor.execute('DELETE FROM privacy_zones')
+        cursor.execute('DELETE FROM user_settings')
+        cursor.execute('DELETE FROM user_profiles')
+        cursor.execute('DELETE FROM devices')
+        cursor.execute('DELETE FROM users')
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "All user data has been deleted",
+            "deleted_tables": ["users", "devices", "user_profiles", "user_settings", "privacy_zones", "pinned_contacts"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Run with: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
