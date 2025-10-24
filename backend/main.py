@@ -1,16 +1,23 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import json
 import os
 import shutil
 from pathlib import Path
+import jwt
+import bcrypt
 
 app = FastAPI(title="DropLink API")
+
+# JWT Secret Key (in production, use environment variable)
+SECRET_KEY = "your-secret-key-change-in-production-12345"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_DAYS = 30
 
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = Path("uploads/profile_photos")
@@ -29,6 +36,19 @@ app.add_middleware(
 def init_db():
     conn = sqlite3.connect('droplink.db')
     cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Devices table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,6 +64,48 @@ def init_db():
             user_id INTEGER DEFAULT 1
         )
     ''')
+    
+    # User profiles table (if not exists)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_profiles (
+            user_id INTEGER PRIMARY KEY,
+            name TEXT,
+            phone TEXT,
+            email TEXT,
+            bio TEXT,
+            social_media TEXT,
+            profile_photo TEXT
+        )
+    ''')
+    
+    # User settings table (if not exists)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            dark_mode INTEGER DEFAULT 0,
+            max_distance INTEGER DEFAULT 50
+        )
+    ''')
+    
+    # Privacy zones table (if not exists)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS privacy_zones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            address TEXT NOT NULL,
+            radius REAL NOT NULL
+        )
+    ''')
+    
+    # Pinned contacts table (if not exists)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pinned_contacts (
+            user_id INTEGER NOT NULL,
+            device_id INTEGER NOT NULL,
+            PRIMARY KEY (user_id, device_id)
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -73,6 +135,162 @@ class DeviceResponse(BaseModel):
     email: Optional[str] = None
     bio: Optional[str] = None
     socialMedia: Optional[List[dict]] = None
+
+# Auth models
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AuthResponse(BaseModel):
+    token: str
+    user_id: int
+    username: str
+
+# ========== AUTH HELPER FUNCTIONS ==========
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Verify a password against its hash"""
+    return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+
+def create_access_token(user_id: int, username: str) -> str:
+    """Create a JWT access token"""
+    expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "exp": expire
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return token
+
+def verify_token(token: str) -> dict:
+    """Verify and decode a JWT token"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def get_current_user(authorization: str = Header(None)) -> int:
+    """Dependency to get current user from JWT token"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    token = authorization.split(" ")[1]
+    payload = verify_token(token)
+    return payload["user_id"]
+
+# ========== AUTH ENDPOINTS ==========
+
+@app.post("/auth/register", response_model=AuthResponse)
+def register(request: RegisterRequest):
+    """Register a new user"""
+    try:
+        # Validate username (3-20 chars, alphanumeric + underscore)
+        if not request.username or len(request.username) < 3 or len(request.username) > 20:
+            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
+        
+        if not request.username.replace('_', '').isalnum():
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        
+        # Validate password (8+ chars, uppercase, lowercase, number)
+        if len(request.password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        if not any(c.isupper() for c in request.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+        
+        if not any(c.islower() for c in request.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+        
+        if not any(c.isdigit() for c in request.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one number")
+        
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Check if username already exists
+        cursor.execute("SELECT id FROM users WHERE username = ?", (request.username,))
+        existing = cursor.fetchone()
+        if existing:
+            conn.close()
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Hash password and create user
+        password_hash = hash_password(request.password)
+        cursor.execute(
+            "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+            (request.username, password_hash, request.email)
+        )
+        user_id = cursor.lastrowid
+        
+        conn.commit()
+        conn.close()
+        
+        # Create JWT token
+        token = create_access_token(user_id, request.username)
+        
+        return AuthResponse(
+            token=token,
+            user_id=user_id,
+            username=request.username
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(request: LoginRequest):
+    """Login with username and password"""
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Find user by username
+        cursor.execute(
+            "SELECT id, username, password_hash FROM users WHERE username = ?",
+            (request.username,)
+        )
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        user_id, username, password_hash = user
+        
+        # Verify password
+        if not verify_password(request.password, password_hash):
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        
+        # Create JWT token
+        token = create_access_token(user_id, username)
+        
+        return AuthResponse(
+            token=token,
+            user_id=user_id,
+            username=username
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 # Root endpoint
 @app.get("/")
