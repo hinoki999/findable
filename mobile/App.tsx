@@ -7,8 +7,13 @@ import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen';
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import ContactInfoScreen from './src/screens/ContactInfoScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { colors, type, getTheme } from './src/theme';
 
 // Dark Mode Context
@@ -134,7 +139,10 @@ import { useFonts,
   Inter_700Bold
 } from '@expo-google-fonts/inter';
 
-export default function App() {
+// Main App Component (wrapped by AuthProvider)
+function MainApp() {
+  const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
+  
   const [fontsReady] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -143,10 +151,13 @@ export default function App() {
     Inter_700Bold,
   });
 
+  // Auth flow state
+  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login' | 'contactInfo'>('welcome');
+  const [signupEmail, setSignupEmail] = useState<string>(''); // Pass email from signup to contact info
+
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [isFirstLaunch, setIsFirstLaunch] = useState(true);
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
   const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Persist privacy zones
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -161,18 +172,12 @@ export default function App() {
   const [nextLinkId, setNextLinkId] = useState(1);
   const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
-  
-  useEffect(() => { 
-    console.log('APP_BOOT_MARKER', Date.now());
-    // Show welcome screen for 2 seconds on first launch only
-    const timer = setTimeout(() => {
-      setIsFirstLaunch(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
 
-  // Load all user data from backend on app start
+  // Load all user data from backend when authenticated
   useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    
     const loadUserData = async () => {
       try {
         console.log('📥 Loading user data from backend...');
@@ -196,7 +201,6 @@ export default function App() {
           console.log('✅ Loaded settings:', settingsData);
           setIsDarkMode(settingsData.darkMode);
           setMaxDistance(settingsData.maxDistance);
-          // privacyZonesEnabled is handled in PrivacyZones screen
         }
         
         // Load pinned contacts
@@ -216,12 +220,71 @@ export default function App() {
         console.log('✅ All user data loaded successfully');
       } catch (error) {
         console.error('❌ Failed to load user data:', error);
-        // Don't show error to user - just use defaults
       }
     };
     
     loadUserData();
-  }, []);
+  }, [isAuthenticated, userId]);
+
+  // Auth handlers
+  const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
+    console.log('✅ Signup successful:', username);
+    await login(token, userId, username);
+    setSignupEmail(email || '');
+    setIsFirstTimeUser(true);
+    setAuthScreen('contactInfo'); // Go to contact info screen
+  };
+
+  const handleLoginSuccess = async (token: string, userId: number, username: string) => {
+    console.log('✅ Login successful:', username);
+    await login(token, userId, username);
+    // User goes directly to main app
+  };
+
+  const handleContactInfoComplete = async (profile: {
+    name: string;
+    phone: string;
+    email: string;
+    bio: string;
+  }) => {
+    console.log('✅ Contact info completed:', profile);
+    
+    // Save profile to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserProfile({
+        name: profile.name,
+        phone: profile.phone,
+        email: profile.email,
+        bio: profile.bio,
+      });
+      
+      // Update local state
+      setUserProfile({
+        name: profile.name || 'Your Name',
+        phoneNumber: profile.phone || '(555) 123-4567',
+        email: profile.email || 'user@example.com',
+        bio: profile.bio || 'Optional bio line goes here.',
+        socialMedia: [],
+      });
+      
+      console.log('✅ Profile saved successfully');
+      showToast({
+        message: 'Welcome to Droplin!',
+        type: 'success',
+        duration: 3000,
+      });
+      
+      // Now user goes to main app (tutorial will show automatically for first-time users)
+    } catch (error) {
+      console.error('❌ Failed to save profile:', error);
+      showToast({
+        message: 'Failed to save profile. Please try again.',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
 
   const toggleDarkMode = async () => {
     const newValue = !isDarkMode;
@@ -360,19 +423,55 @@ export default function App() {
 
   const theme = getTheme(isDarkMode);
 
-  if (!fontsReady) {
+  // Loading state
+  if (!fontsReady || authLoading) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-        <Text>Loading…</Text>
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
+        <Text style={{ color: theme.colors.text }}>Loading…</Text>
       </View>
     );
   }
 
-  if (isFirstLaunch) {
+  // Auth screens (not authenticated)
+  if (!isAuthenticated) {
+    if (authScreen === 'signup') {
+      return (
+        <SignupScreen
+          onSignupSuccess={(token, userId, username) => {
+            // SignupScreen will pass the email as part of the user state
+            handleSignupSuccess(token, userId, username, signupEmail);
+          }}
+          onLoginPress={() => setAuthScreen('login')}
+          onBack={() => setAuthScreen('welcome')}
+        />
+      );
+    }
+
+    if (authScreen === 'login') {
+      return (
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onSignupPress={() => setAuthScreen('signup')}
+          onBack={() => setAuthScreen('welcome')}
+        />
+      );
+    }
+
+    if (authScreen === 'contactInfo') {
+      return (
+        <ContactInfoScreen
+          email={signupEmail}
+          onComplete={handleContactInfoComplete}
+        />
+      );
+    }
+
+    // Welcome screen (default)
     return (
-      <View style={{ flex:1, backgroundColor: theme.colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={theme.type.h1}>Welcome to DropLink!</Text>
-      </View>
+      <WelcomeScreen
+        onGetStarted={() => setAuthScreen('signup')}
+        onLogin={() => setAuthScreen('login')}
+      />
     );
   }
 
@@ -508,5 +607,14 @@ export default function App() {
       </PinnedProfilesContext.Provider>
     </DarkModeContext.Provider>
     </TutorialProvider>
+  );
+}
+
+// Export App wrapped with AuthProvider
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

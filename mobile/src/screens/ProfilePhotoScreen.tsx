@@ -28,6 +28,13 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   const scale = useRef(new Animated.Value(1)).current;
   const [imageScale, setImageScale] = useState(1);
   const [uploading, setUploading] = useState(false);
+  
+  // Multi-touch gesture tracking
+  const gestureState = useRef({
+    lastScale: 1,
+    lastDistance: 0,
+    touches: [] as any[],
+  });
 
   // Request permission
   const handleAllowAccess = async () => {
@@ -101,47 +108,97 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
     }
   };
 
-  // Pan responder for dragging image
+  // Calculate distance between two touches
+  const getDistance = (touches: any[]) => {
+    if (touches.length < 2) return 0;
+    const [touch1, touch2] = touches;
+    const dx = touch1.pageX - touch2.pageX;
+    const dy = touch1.pageY - touch2.pageY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // Pan responder for dragging and pinch-to-zoom
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        // Set offset to current position when touch starts
-        pan.setOffset({
-          x: (pan.x as any)._value,
-          y: (pan.y as any)._value,
-        });
-        pan.setValue({ x: 0, y: 0 });
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Always respond to touches - more sensitive
+        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2 || evt.nativeEvent.touches.length >= 2;
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pan.x, dy: pan.y }],
-        { useNativeDriver: false }
-      ),
-      onPanResponderRelease: () => {
-        // Flatten the offset into the value
-        pan.flattenOffset();
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        // Store current touches
+        gestureState.current.touches = evt.nativeEvent.touches;
+        
+        // If single touch, prepare for dragging
+        if (evt.nativeEvent.touches.length === 1) {
+          pan.setOffset({
+            x: (pan.x as any)._value,
+            y: (pan.y as any)._value,
+          });
+          pan.setValue({ x: 0, y: 0 });
+        }
+        
+        // If two touches, prepare for pinch zoom
+        if (evt.nativeEvent.touches.length === 2) {
+          gestureState.current.lastDistance = getDistance(evt.nativeEvent.touches);
+          gestureState.current.lastScale = imageScale;
+        }
+      },
+      onPanResponderMove: (evt, gestureState_) => {
+        const touches = evt.nativeEvent.touches;
+        
+        // Pinch to zoom with two fingers
+        if (touches.length === 2) {
+          const currentDistance = getDistance(touches);
+          if (gestureState.current.lastDistance > 0) {
+            const scale_ = currentDistance / gestureState.current.lastDistance;
+            const newScale = Math.max(0.3, Math.min(3, gestureState.current.lastScale * scale_));
+            setImageScale(newScale);
+            scale.setValue(newScale);
+          }
+        }
+        // Single finger drag
+        else if (touches.length === 1) {
+          pan.setValue({ 
+            x: gestureState_.dx, 
+            y: gestureState_.dy 
+          });
+        }
+      },
+      onPanResponderRelease: (evt) => {
+        // Update gesture state
+        gestureState.current.lastScale = imageScale;
+        gestureState.current.lastDistance = 0;
+        
+        // If was dragging, flatten the offset
+        if (evt.nativeEvent.touches.length <= 1) {
+          pan.flattenOffset();
+        }
       },
     })
   ).current;
 
   // Zoom in
   const handleZoomIn = () => {
-    const newScale = Math.min(imageScale + 0.1, 3);
+    const newScale = Math.min(imageScale + 0.2, 3);
     setImageScale(newScale);
     Animated.spring(scale, {
       toValue: newScale,
       useNativeDriver: true,
+      friction: 7,
     }).start();
   };
 
   // Zoom out
   const handleZoomOut = () => {
-    const newScale = Math.max(imageScale - 0.1, 0.3);
+    const newScale = Math.max(imageScale - 0.2, 0.3);
     setImageScale(newScale);
     Animated.spring(scale, {
       toValue: newScale,
       useNativeDriver: true,
+      friction: 7,
     }).start();
   };
 
@@ -327,7 +384,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
           {/* Instructions */}
           <View style={styles.instructions}>
             <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 16 }]}>
-              Drag to reposition • Use buttons to zoom
+              Drag to reposition • Pinch to zoom
             </Text>
             
             {/* Zoom controls */}

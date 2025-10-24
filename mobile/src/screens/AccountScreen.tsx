@@ -1,9 +1,32 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, Image } from 'react-native';
+import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
+import { useAuth } from '../contexts/AuthContext';
+
+// Helper function to get initials from name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+// Helper function to generate consistent color from name
+const getAvatarColor = (name: string): string => {
+  const colors = [
+    '#FF6B4A', '#4A90FF', '#FF4A7F', '#4AFF8C',
+    '#FF4AE8', '#FFA84A', '#4AFFEF', '#A84AFF',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 interface AccountScreenProps {
   navigation: any;
@@ -15,13 +38,17 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
+  const { logout, username } = useAuth();
   const { name, phoneNumber, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-platform' | 'social-handle' | null>(null);
+  const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | null>(null);
   const [tempValue, setTempValue] = useState('');
+  const [tempSocialPlatform, setTempSocialPlatform] = useState('');
+  const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
   const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const theme = getTheme(isDarkMode);
 
@@ -77,7 +104,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     return '';
   };
 
-  const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-platform' | 'social-handle', socialIndex?: number) => {
+  const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media', socialIndex?: number) => {
     setEditingField(field);
     setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
@@ -89,9 +116,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       setTempValue(name);
     } else if (field === 'bio') {
       setTempValue(bio);
-    } else if ((field === 'social-platform' || field === 'social-handle') && socialIndex !== undefined) {
+    } else if (field === 'social-media' && socialIndex !== undefined) {
       setTempSocialIndex(socialIndex);
-      setTempValue(field === 'social-platform' ? socialMedia[socialIndex].platform : socialMedia[socialIndex].handle);
+      setTempSocialPlatform(socialMedia[socialIndex].platform);
+      setTempSocialHandle(socialMedia[socialIndex].handle);
     }
     setEditModalVisible(true);
   };
@@ -122,18 +150,28 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       updateProfile({ name: tempValue });
     } else if (editingField === 'bio') {
       updateProfile({ bio: tempValue });
-    } else if ((editingField === 'social-platform' || editingField === 'social-handle') && tempSocialIndex !== null) {
-      const updatedSocial = [...socialMedia];
-      if (editingField === 'social-platform') {
-        updatedSocial[tempSocialIndex].platform = tempValue;
-      } else {
-        updatedSocial[tempSocialIndex].handle = tempValue;
+    } else if (editingField === 'social-media' && tempSocialIndex !== null) {
+      // Validate social media
+      if (!tempSocialPlatform.trim()) {
+        setValidationError('Platform name is required');
+        return;
       }
+      if (!tempSocialHandle.trim()) {
+        setValidationError('Handle is required');
+        return;
+      }
+      const updatedSocial = [...socialMedia];
+      updatedSocial[tempSocialIndex] = {
+        platform: tempSocialPlatform.trim(),
+        handle: tempSocialHandle.trim(),
+      };
       updateProfile({ socialMedia: updatedSocial });
     }
     setEditModalVisible(false);
     setEditingField(null);
     setTempValue('');
+    setTempSocialPlatform('');
+    setTempSocialHandle('');
     setTempSocialIndex(null);
     setValidationError('');
     
@@ -149,6 +187,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setEditModalVisible(false);
     setEditingField(null);
     setTempValue('');
+    setTempSocialPlatform('');
+    setTempSocialHandle('');
     setTempSocialIndex(null);
     setValidationError('');
   };
@@ -233,9 +273,72 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           </View>
         </View>
 
+        {/* Account Info Card */}
+        <View style={theme.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <MaterialCommunityIcons name="account-circle" size={20} color={theme.colors.blue} />
+            <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Account</Text>
+          </View>
+          <Text style={[theme.type.muted, { marginBottom: 16 }]}>
+            Logged in as @{username || 'user'}
+          </Text>
+          <Pressable
+            onPress={async () => {
+              Alert.alert(
+                'Logout',
+                'Are you sure you want to logout?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await logout();
+                      showToast({
+                        message: 'Logged out successfully',
+                        type: 'success',
+                        duration: 2000,
+                      });
+                    },
+                  },
+                ],
+              );
+            }}
+            style={({ pressed }) => ({
+              backgroundColor: '#FF3B30',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 8,
+              alignItems: 'center',
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600', fontFamily: 'Inter_500Medium' }}>
+              Logout
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Contact Information Card */}
         <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Edit contact information</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Edit contact information</Text>
+            <Pressable
+              onPress={() => setShowPreviewModal(true)}
+              style={{
+                borderRadius: 4,
+                borderWidth: 1,
+                borderColor: theme.colors.blue,
+                backgroundColor: 'transparent',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
+                Preview My Card
+              </Text>
+            </Pressable>
+          </View>
           
           {/* Profile Picture Row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingVertical: 8 }}>
@@ -311,25 +414,22 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             <View key={index} style={{ 
               flexDirection: 'row', 
               alignItems: 'center', 
-              paddingVertical: 4,
+              paddingVertical: 8,
               paddingLeft: 16,
               borderLeftWidth: 2,
               borderLeftColor: theme.colors.border,
               marginBottom: 8
             }}>
-              <Pressable 
-                style={{ flex: 1 }}
-                onPress={() => handleEdit('social-platform', index)}
-              >
-                <Text style={[theme.type.muted, { color: theme.colors.muted }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[theme.type.muted, { color: theme.colors.muted, fontSize: 12 }]}>
                   {social.platform || `Account ${index + 1}`}
                 </Text>
-              </Pressable>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-                <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>
+                <Text style={[theme.type.body, { color: theme.colors.blue, marginTop: 2 }]}>
                   {social.handle || 'Enter handle'}
                 </Text>
-                <Pressable style={{ padding: 4 }} onPress={() => handleEdit('social-handle', index)}>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Pressable style={{ padding: 4 }} onPress={() => handleEdit('social-media', index)}>
                   <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
                 </Pressable>
                 <Pressable 
@@ -368,52 +468,108 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     editingField === 'email' ? 'Email' :
                     editingField === 'name' ? 'Name' :
                     editingField === 'bio' ? 'Bio' :
-                    editingField === 'social-platform' ? `Platform ${(tempSocialIndex || 0) + 1}` :
-                    editingField === 'social-handle' ? `Handle ${(tempSocialIndex || 0) + 1}` : ''}
+                    editingField === 'social-media' ? 'Social Media Account' : ''}
             </Text>
             
-            <TextInput
-              style={{
-                borderWidth: 1,
-                borderColor: validationError ? '#FF6B6B' : theme.colors.border,
-                borderRadius: 8,
-                padding: 12,
-                marginTop: 16,
-                fontSize: 16,
-                fontFamily: 'Inter_400Regular',
-                color: theme.colors.text,
-                backgroundColor: theme.colors.bg,
-                minHeight: editingField === 'bio' ? 80 : 48,
-                textAlignVertical: editingField === 'bio' ? 'top' : 'center',
-              }}
-              value={tempValue}
-              onChangeText={(text) => {
-                if (editingField === 'phone') {
-                  setTempValue(formatPhoneNumber(text));
-                } else if (editingField === 'bio') {
-                  if (text.length <= 50) {
+            {editingField === 'social-media' ? (
+              <>
+                {/* Platform Input */}
+                <Text style={[theme.type.muted, { marginTop: 16, marginBottom: 8, fontSize: 14 }]}>
+                  Platform
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: validationError && !tempSocialPlatform.trim() ? '#FF6B6B' : theme.colors.border,
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16,
+                    fontFamily: 'Inter_400Regular',
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.bg,
+                    minHeight: 48,
+                  }}
+                  value={tempSocialPlatform}
+                  onChangeText={(text) => {
+                    setTempSocialPlatform(text);
+                    if (validationError) {
+                      setValidationError('');
+                    }
+                  }}
+                  placeholder="e.g., Instagram, Twitter, LinkedIn"
+                  placeholderTextColor={theme.colors.muted}
+                  autoFocus={true}
+                />
+                
+                {/* Handle Input */}
+                <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
+                  Username/Handle
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: validationError && !tempSocialHandle.trim() ? '#FF6B6B' : theme.colors.border,
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16,
+                    fontFamily: 'Inter_400Regular',
+                    color: theme.colors.text,
+                    backgroundColor: theme.colors.bg,
+                    minHeight: 48,
+                  }}
+                  value={tempSocialHandle}
+                  onChangeText={(text) => {
+                    setTempSocialHandle(text);
+                    if (validationError) {
+                      setValidationError('');
+                    }
+                  }}
+                  placeholder="e.g., @username"
+                  placeholderTextColor={theme.colors.muted}
+                />
+              </>
+            ) : (
+              <TextInput
+                style={{
+                  borderWidth: 1,
+                  borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                  borderRadius: 8,
+                  padding: 12,
+                  marginTop: 16,
+                  fontSize: 16,
+                  fontFamily: 'Inter_400Regular',
+                  color: theme.colors.text,
+                  backgroundColor: theme.colors.bg,
+                  minHeight: editingField === 'bio' ? 80 : 48,
+                  textAlignVertical: editingField === 'bio' ? 'top' : 'center',
+                }}
+                value={tempValue}
+                onChangeText={(text) => {
+                  if (editingField === 'phone') {
+                    setTempValue(formatPhoneNumber(text));
+                  } else if (editingField === 'bio') {
+                    if (text.length <= 50) {
+                      setTempValue(text);
+                    }
+                  } else {
                     setTempValue(text);
                   }
-                } else {
-                  setTempValue(text);
-                }
-                // Clear validation error when user starts typing
-                if (validationError) {
-                  setValidationError('');
-                }
-              }}
-              placeholder={editingField === 'phone' ? '(555) 555-5555' :
-                          editingField === 'email' ? 'Enter email' :
-                          editingField === 'name' ? 'Enter your name' :
-                          editingField === 'bio' ? 'Enter your bio' :
-                          editingField === 'social-platform' ? 'Enter platform (e.g., Instagram, Twitter)' :
-                          editingField === 'social-handle' ? 'Enter handle (e.g., @username)' : ''}
-              placeholderTextColor={theme.colors.muted}
-              keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
-              multiline={editingField === 'bio'}
-              maxLength={editingField === 'bio' ? 50 : undefined}
-              autoFocus={true}
-            />
+                  // Clear validation error when user starts typing
+                  if (validationError) {
+                    setValidationError('');
+                  }
+                }}
+                placeholder={editingField === 'phone' ? '(555) 555-5555' :
+                            editingField === 'email' ? 'Enter email' :
+                            editingField === 'name' ? 'Enter your name' :
+                            editingField === 'bio' ? 'Enter your bio' : ''}
+                placeholderTextColor={theme.colors.muted}
+                keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
+                multiline={editingField === 'bio'}
+                maxLength={editingField === 'bio' ? 50 : undefined}
+                autoFocus={true}
+              />
+            )}
             
             {validationError && (
               <Text style={{ color: '#FF6B6B', fontSize: 12, marginTop: 4 }}>
@@ -460,6 +616,138 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           </View>
         </View>
       </View>
+      </Modal>
+
+      {/* Preview My Contact Card Modal */}
+      <Modal
+        visible={showPreviewModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPreviewModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 350,
+            overflow: 'hidden',
+          }}>
+            {/* ID Header */}
+            <View style={{
+              backgroundColor: theme.colors.blue,
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              alignItems: 'center',
+            }}>
+              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                {name}
+              </Text>
+            </View>
+
+            {/* ID Content */}
+            <View style={{ padding: 20 }}>
+              {/* Profile Picture */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <View style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 40,
+                  backgroundColor: profilePhotoUri ? theme.colors.blueLight : theme.colors.blue,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}>
+                  {profilePhotoUri ? (
+                    <Image source={{ uri: profilePhotoUri }} style={{ width: 80, height: 80 }} />
+                  ) : (
+                    <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: '600' }}>
+                      {getInitials(name)}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Contact Information */}
+              <View style={{ marginBottom: 16 }}>
+                {/* Phone */}
+                {phoneNumber && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {phoneNumber}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Email */}
+                {email && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {email}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Social Media - Dynamic */}
+                {socialMedia && socialMedia.length > 0 && socialMedia.map((social, index) => (
+                  social.platform && social.handle ? (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <MaterialCommunityIcons
+                        name={social.platform.toLowerCase() as any}
+                        size={16}
+                        color={theme.colors.muted}
+                      />
+                      <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                        {social.handle}
+                      </Text>
+                    </View>
+                  ) : null
+                ))}
+              </View>
+
+              {/* Bio Section */}
+              {bio && (
+                <View style={{
+                  backgroundColor: theme.colors.bg,
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16,
+                }}>
+                  <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                    BIO
+                  </Text>
+                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                    "{bio}"
+                  </Text>
+                </View>
+              )}
+
+              {/* Close Button */}
+              <Pressable
+                onPress={() => setShowPreviewModal(false)}
+                style={{
+                  backgroundColor: theme.colors.blue,
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[theme.type.button, { fontSize: 14 }]}>
+                  Close
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
