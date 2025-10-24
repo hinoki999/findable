@@ -53,6 +53,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   // Privacy Zones feature removed
   // const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -134,6 +139,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     }
     setEditModalVisible(true);
   };
@@ -281,6 +289,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   };
 
   // Flag/Report button removed
@@ -557,80 +568,134 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 <Text style={[theme.type.muted, { marginTop: 16, marginBottom: 8, fontSize: 14 }]}>
                   Current Password
                 </Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: validationError ? '#FF6B6B' : theme.colors.border,
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: 16,
-                    fontFamily: 'Inter_400Regular',
-                    color: theme.colors.text,
-                    backgroundColor: theme.colors.bg,
-                    minHeight: 48,
-                  }}
-                  value={currentPassword}
-                  onChangeText={(text) => {
-                    setCurrentPassword(text);
-                    if (validationError) setValidationError('');
-                  }}
-                  placeholder="Enter current password"
-                  placeholderTextColor={theme.colors.muted}
-                  secureTextEntry={true}
-                  autoFocus={true}
-                />
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={currentPassword}
+                    onChangeText={(text) => {
+                      setCurrentPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Enter current password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showCurrentPassword}
+                    autoFocus={true}
+                  />
+                  <Pressable
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showCurrentPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 
                 {/* New Password */}
                 <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
                   New Password
                 </Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: validationError ? '#FF6B6B' : theme.colors.border,
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: 16,
-                    fontFamily: 'Inter_400Regular',
-                    color: theme.colors.text,
-                    backgroundColor: theme.colors.bg,
-                    minHeight: 48,
-                  }}
-                  value={newPassword}
-                  onChangeText={(text) => {
-                    setNewPassword(text);
-                    if (validationError) setValidationError('');
-                  }}
-                  placeholder="Enter new password"
-                  placeholderTextColor={theme.colors.muted}
-                  secureTextEntry={true}
-                />
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={newPassword}
+                    onChangeText={(text) => {
+                      setNewPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Enter new password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showNewPassword}
+                  />
+                  <Pressable
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showNewPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 
                 {/* Confirm Password */}
                 <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
                   Confirm New Password
                 </Text>
-                <TextInput
-                  style={{
-                    borderWidth: 1,
-                    borderColor: validationError ? '#FF6B6B' : theme.colors.border,
-                    borderRadius: 8,
-                    padding: 12,
-                    fontSize: 16,
-                    fontFamily: 'Inter_400Regular',
-                    color: theme.colors.text,
-                    backgroundColor: theme.colors.bg,
-                    minHeight: 48,
-                  }}
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    if (validationError) setValidationError('');
-                  }}
-                  placeholder="Confirm new password"
-                  placeholderTextColor={theme.colors.muted}
-                  secureTextEntry={true}
-                />
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                      setConfirmPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showConfirmPassword}
+                  />
+                  <Pressable
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
                 
                 <Text style={[theme.type.muted, { marginTop: 12, fontSize: 12, fontStyle: 'italic' }]}>
                   Password must be at least 8 characters with uppercase, lowercase, and a number
