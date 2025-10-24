@@ -105,10 +105,12 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
             style={[
               styles.appName,
               {
-                background: 'linear-gradient(90deg, #FF6B35 0%, #FFA07A 50%, #FFD700 100%)',
+                display: 'inline-block',
+                background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                color: 'transparent',
               } as any
             ]}
           >
@@ -116,7 +118,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
           </Text>
         ) : (
           <LinearGradient
-            colors={['#FF6B35', '#FFA07A', '#FFD700']}
+            colors={['#FF6B35', '#FF8C5A', '#5BA3FF', '#007AFF']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={styles.gradientContainer}
@@ -128,9 +130,12 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
 
       {/* Tagline */}
       <View style={styles.taglineContainer}>
-        <Text style={[styles.tagline, { color: theme.colors.text }]}>
-          Connect with people nearby
-        </Text>
+        <View style={styles.taglineRow}>
+          <Text style={[styles.tagline, { color: theme.colors.text }]}>
+            Connect with people nearby{' '}
+          </Text>
+          <MaterialCommunityIcons name="link-variant" size={18} color="#FF6B35" style={{ marginTop: 2 }} />
+        </View>
       </View>
 
       {/* Buttons */}
@@ -210,6 +215,11 @@ const styles = StyleSheet.create({
   taglineContainer: {
     alignItems: 'center',
     marginBottom: 28,
+  },
+  taglineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tagline: {
     fontSize: 17,
