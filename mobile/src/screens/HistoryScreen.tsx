@@ -1,11 +1,41 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
+import NetworkBanner from '../components/NetworkBanner';
+import SwipeableRow from '../components/SwipeableRow';
+
+// Helper function to get initials from name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+// Helper function to generate consistent color from name
+const getAvatarColor = (name: string): string => {
+  const colors = [
+    '#FF6B4A', // Orange
+    '#4A90FF', // Blue
+    '#FF4A7F', // Pink
+    '#4AFF8C', // Green
+    '#FF4AE8', // Purple
+    '#FFA84A', // Yellow
+    '#4AFFEF', // Cyan
+    '#A84AFF', // Violet
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 export default function HistoryScreen() {
   const [data, setData] = useState<Device[]>([]);
@@ -36,13 +66,22 @@ export default function HistoryScreen() {
     (async () => {
       try {
         const items = await getDevices();
-        // Only show accepted and returned (linked) contacts - no unanswered drops
+        console.log('🔍 HISTORY: Fetched items from API:', items?.length, items);
+        // Show all connections (dropped, accepted, and returned)
         const filteredItems = (items ?? []).filter(item => 
-          item.action === 'accepted' || item.action === 'returned'
+          item.action === 'accepted' || item.action === 'returned' || item.action === 'dropped'
         );
+        console.log('🔍 HISTORY: Filtered items:', filteredItems?.length, filteredItems);
         setData(filteredItems);
+        setErr(null); // Clear any previous errors
       } catch (e:any) {
-        setErr(e?.message || 'Failed to load');
+        const errorMsg = e?.message || 'Failed to load contacts';
+        setErr(errorMsg);
+        showToast({
+          message: 'Oops! Failed to load your links. Check your connection and try again.',
+          type: 'error',
+          duration: 4000,
+        });
       } finally {
         setLoading(false);
       }
@@ -134,6 +173,11 @@ export default function HistoryScreen() {
       setErr(null);
     } catch (e: any) {
       setErr(e?.message || 'Failed to reload');
+      showToast({
+        message: 'Failed to refresh. Check your connection and try again.',
+        type: 'error',
+        duration: 3000,
+      });
     } finally {
       setRefreshing(false);
     }
@@ -163,8 +207,9 @@ export default function HistoryScreen() {
     if (aPin !== bPin) return bPin - aPin; // Pinned first
     
     // Then sort by timestamp (newest first)
-    const aTime = a.timestamp?.getTime() || 0;
-    const bTime = b.timestamp?.getTime() || 0;
+    // Convert string timestamps to Date objects for comparison
+    const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
     return bTime - aTime;
   });
 
@@ -176,13 +221,13 @@ export default function HistoryScreen() {
       arrow: undefined,
     },
     {
-      message: 'Pin your favorite contacts to quickly access them on the Home screen.',
+      message: 'Swipe right to pin your favorite contacts to the Home screen!',
       position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
       arrow: 'down' as const,
     },
     {
-      message: 'Delete any contact you no longer want to keep.',
-      position: { top: 135, left: screenWidth * 0.35, right: screenWidth * 0.05 },
+      message: 'Swipe left to delete any contact you no longer want to keep.',
+      position: { top: 205, left: screenWidth * 0.35, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {
@@ -192,11 +237,21 @@ export default function HistoryScreen() {
     },
   ];
 
-  if (loading) return <ActivityIndicator style={{ marginTop: 40 }} />;
-  if (err) return <Text style={{ margin: 16, color: 'crimson' }}>{err}</Text>;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+        <NetworkBanner isDarkMode={isDarkMode} />
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.blue} />
+          <Text style={[theme.type.muted, { marginTop: 16, fontSize: 14 }]}>Loading your links...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <NetworkBanner isDarkMode={isDarkMode} />
       <FlatList
         contentContainerStyle={{ paddingBottom: 16 }}
         data={sortedData}
@@ -270,10 +325,11 @@ export default function HistoryScreen() {
           />
         }
         renderItem={({ item }) => {
-            const formatTimestamp = (timestamp?: Date) => {
+            const formatTimestamp = (timestamp?: Date | string) => {
               if (!timestamp) return 'Unknown time';
               const now = new Date();
-              const diffMs = now.getTime() - timestamp.getTime();
+              const timestampDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+              const diffMs = now.getTime() - timestampDate.getTime();
               const diffMins = Math.floor(diffMs / (1000 * 60));
               const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
               const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -283,7 +339,7 @@ export default function HistoryScreen() {
               if (diffHours < 24) return `${diffHours}h ago`;
               if (diffDays < 7) return `${diffDays}d ago`;
               
-              return timestamp.toLocaleDateString();
+              return timestampDate.toLocaleDateString();
             };
 
                 const getActionColor = (action?: string) => {
@@ -308,75 +364,113 @@ export default function HistoryScreen() {
                         };
 
             return (
-              <Pressable 
-                onPress={() => handleContactPress(item)}
-                style={({ pressed }) => ({
-                  ...theme.card,
-                  marginHorizontal: 16,
-                  marginBottom: 12,
-                  opacity: pressed ? 0.8 : 1,
-                })}
+              <SwipeableRow
+                onSwipeRight={() => handleTogglePin(item)}
+                onSwipeLeft={() => handleDeleteClick(item)}
+                isPinned={item.id ? pinnedIds.has(item.id) : false}
+                rightActionColor="#0066FF" // More vibrant blue
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
-                  <Pressable 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleTogglePin(item);
-                    }} 
-                    hitSlop={0}
-                    style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
-                  >
-                    <MaterialCommunityIcons 
-                      name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
-                      size={11} 
-                      color={theme.colors.blue} 
-                    />
-                    <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
-                      {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
-                    </Text>
-                  </Pressable>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {getActionIcon(item.action)}
-                      <Text style={[theme.type.body, { color: getActionColor(item.action), fontWeight: '500' }]}>
-                        {getActionText(item.action)}
-                      </Text>
+                <Pressable 
+                  onPress={() => handleContactPress(item)}
+                  style={({ pressed }) => ({
+                    ...theme.card,
+                    marginHorizontal: 16,
+                    marginBottom: 12,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    {/* Avatar */}
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: getAvatarColor(item.name),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                      overflow: 'hidden',
+                    }}>
+                      {item.profilePhoto ? (
+                        <Image source={{ uri: item.profilePhoto }} style={{ width: 44, height: 44 }} />
+                      ) : (
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                          {getInitials(item.name)}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
-                      {formatTimestamp(item.timestamp)}
-                    </Text>
+                    
+                    <View style={{ flex: 1 }}>
+                      <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
                     <Pressable 
                       onPress={(e) => {
                         e.stopPropagation();
-                        handleDeleteClick(item);
+                        handleTogglePin(item);
                       }} 
                       hitSlop={0}
-                      style={{ marginTop: 4, alignSelf: 'flex-end' }}
+                      style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
                     >
-                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue }]}>
-                        Delete
+                      <MaterialCommunityIcons 
+                        name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
+                        size={11} 
+                        color={theme.colors.blue} 
+                      />
+                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
+                        {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
                       </Text>
                     </Pressable>
-                  </View>
-          </View>
-              </Pressable>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        {getActionIcon(item.action)}
+                        <Text style={[theme.type.body, { color: getActionColor(item.action), fontWeight: '500' }]}>
+                          {getActionText(item.action)}
+                        </Text>
+                      </View>
+                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
+                        {formatTimestamp(item.timestamp)}
+                      </Text>
+                    </View>
+            </View>
+                </Pressable>
+              </SwipeableRow>
             );
           }}
           ListEmptyComponent={
-            <View style={{ alignItems: 'center', padding: 20 }}>
+            <View style={{ alignItems: 'center', paddingHorizontal: 40, paddingVertical: 60 }}>
               {searchQuery.trim() ? (
                 <>
-                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
-                  <Text style={[theme.type.h2, { marginBottom: 4 }]}>No results found</Text>
-                  <Text style={[theme.type.muted, { textAlign: 'center' }]}>
+                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12, opacity: 0.6 }} />
+                  <Text style={[theme.type.h2, { marginBottom: 8, fontSize: 18, textAlign: 'center' }]}>No results found</Text>
+                  <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
                     Try searching with a different name, email, or phone number
                   </Text>
                 </>
               ) : (
-                <Text style={theme.type.muted}>No links yet. Accepted drops and returned links will appear here.</Text>
+                <>
+                  <MaterialCommunityIcons 
+                    name="link-variant-off" 
+                    size={64} 
+                    color={theme.colors.muted} 
+                    style={{ marginBottom: 20, opacity: 0.6 }} 
+                  />
+                  <Text style={[theme.type.h1, { 
+                    textAlign: 'center', 
+                    marginBottom: 12, 
+                    fontSize: 20,
+                    color: theme.colors.text,
+                  }]}>
+                    No links made yet!
+                  </Text>
+                  <Text style={[theme.type.muted, { 
+                    textAlign: 'center', 
+                    fontSize: 15, 
+                    lineHeight: 22,
+                    opacity: 0.8,
+                  }]}>
+                    Keep making connections and your links will show up here
+                  </Text>
+                </>
               )}
             </View>
           }

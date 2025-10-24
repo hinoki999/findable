@@ -13,6 +13,7 @@ interface TutorialStep {
     bottom?: number;
   };
   arrow?: 'up' | 'down' | 'left' | 'right';
+  arrowOffset?: number; // Custom arrow offset in pixels (for 'up' arrow, shifts left/right)
 }
 
 interface TutorialOverlayProps {
@@ -50,8 +51,14 @@ export default function TutorialOverlay({
       case 'up':
         iconName = 'arrow-up';
         arrowStyle.top = -30;
-        arrowStyle.left = '50%';
-        arrowStyle.marginLeft = -12;
+        if (step.arrowOffset !== undefined) {
+          // Use custom offset if provided
+          arrowStyle.left = step.arrowOffset;
+        } else {
+          // Default centered position
+          arrowStyle.left = '50%';
+          arrowStyle.marginLeft = -12;
+        }
         break;
       case 'down':
         iconName = 'arrow-down';
@@ -99,8 +106,8 @@ export default function TutorialOverlay({
   };
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Light semi-transparent overlay */}
+    <View style={StyleSheet.absoluteFill} pointerEvents="auto">
+      {/* Light semi-transparent overlay - blocks all clicks behind tutorial */}
       <Pressable 
         style={{
           ...StyleSheet.absoluteFillObject,

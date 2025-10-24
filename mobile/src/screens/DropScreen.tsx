@@ -9,9 +9,7 @@ import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
-
-// Track if scan has been performed in this app session
-let hasScannedThisSession = false;
+import NetworkBanner from '../components/NetworkBanner';
 
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
@@ -36,15 +34,26 @@ export default function DropScreen() {
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
   
-  // Filter devices based on max distance setting
-  const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+  // Filter devices based on max distance setting and sort by distance (closest first)
+  const filteredDevices = devices
+    .filter(device => device.distanceFeet <= maxDistance)
+    .sort((a, b) => a.distanceFeet - b.distanceFeet);
 
-  // Auto-start scanning only on first app launch, not on every page visit
+  // Show error toast when BLE scanning fails
   useEffect(() => {
-    if (!hasScannedThisSession) {
-      startScan();
-      hasScannedThisSession = true;
+    if (error) {
+      showToast({
+        message: 'Oops! Something went wrong. Ensure your Bluetooth is on.',
+        type: 'error',
+        duration: 4000,
+      });
     }
+  }, [error]);
+
+  // Auto-start scanning when Drop page loads
+  useEffect(() => {
+    startScan();
+    return () => stopScan(); // Clean up when leaving page
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
@@ -276,11 +285,7 @@ export default function DropScreen() {
             <Text style={[theme.type.muted, { fontSize: 11, marginBottom: 12 }]}>
               Showing devices within {maxDistance} ft
             </Text>
-            {error && (
-              <Text style={[theme.type.muted, { color: '#FF6B6B', marginTop: 4, marginBottom: 12, fontSize: 12 }]}>
-                Error: {error}
-              </Text>
-            )}
+            <NetworkBanner isDarkMode={isDarkMode} />
           </>
         }
         refreshControl={
@@ -309,7 +314,37 @@ export default function DropScreen() {
             />
           </Pressable>
         )}
-        ListEmptyComponent={null}
+        ListEmptyComponent={
+          <View style={{ 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            paddingVertical: 80,
+            paddingHorizontal: 40,
+          }}>
+            <MaterialCommunityIcons 
+              name="account-search-outline" 
+              size={64} 
+              color={theme.colors.muted} 
+              style={{ marginBottom: 20, opacity: 0.6 }} 
+            />
+            <Text style={[theme.type.h1, { 
+              textAlign: 'center', 
+              marginBottom: 12, 
+              fontSize: 20,
+              color: theme.colors.text,
+            }]}>
+              No DropLink users nearby
+            </Text>
+            <Text style={[theme.type.muted, { 
+              textAlign: 'center', 
+              fontSize: 15, 
+              lineHeight: 22,
+              opacity: 0.8,
+            }]}>
+              Keep your app open to stay discoverable. New connections will appear here when someone is within {maxDistance} feet!
+            </Text>
+          </View>
+        }
       />
 
       {/* Confirmation modal */}

@@ -5,8 +5,15 @@ import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
+// import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
+import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
+import WelcomeScreen from './src/screens/WelcomeScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import LoginScreen from './src/screens/LoginScreen';
+import ContactInfoScreen from './src/screens/ContactInfoScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { colors, type, getTheme } from './src/theme';
 
 // Dark Mode Context
@@ -132,7 +139,10 @@ import { useFonts,
   Inter_700Bold
 } from '@expo-google-fonts/inter';
 
-export default function App() {
+// Main App Component (wrapped by AuthProvider)
+function MainApp() {
+  const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
+  
   const [fontsReady] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -141,10 +151,15 @@ export default function App() {
     Inter_700Bold,
   });
 
+  // Auth flow state
+  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login' | 'contactInfo'>('welcome');
+  const [signupEmail, setSignupEmail] = useState<string>(''); // Pass email from signup to contact info
+
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
+  const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const [isFirstLaunch, setIsFirstLaunch] = useState(true);
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
+  // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
@@ -156,38 +171,229 @@ export default function App() {
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
   const [nextLinkId, setNextLinkId] = useState(1);
   const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
-  
-  useEffect(() => { 
-    console.log('APP_BOOT_MARKER', Date.now());
-    // Show welcome screen for 2 seconds on first launch only
-    const timer = setTimeout(() => {
-      setIsFirstLaunch(false);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
+  const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
+  // Load all user data from backend when authenticated
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    
+    const loadUserData = async () => {
+      try {
+        console.log('📥 Loading user data from backend...');
+        
+        // Load user profile
+        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+          console.log('✅ Loaded profile:', profileData);
+          setUserProfile({
+            name: profileData.name || 'Your Name',
+            phoneNumber: profileData.phone || '(555) 123-4567',
+            email: profileData.email || 'user@example.com',
+            bio: profileData.bio || 'Optional bio line goes here.',
+            socialMedia: [],
+          });
+          
+          // Load profile photo if exists
+          if (profileData.profile_photo) {
+            console.log('✅ Loaded profile photo:', profileData.profile_photo);
+            setProfilePhotoUri(profileData.profile_photo);
+          }
+        }
+        
+        // Load settings
+        const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
+        if (settingsData) {
+          console.log('✅ Loaded settings:', settingsData);
+          setIsDarkMode(settingsData.darkMode);
+          setMaxDistance(settingsData.maxDistance);
+        }
+        
+        // Load pinned contacts
+        const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
+        if (pinnedData && pinnedData.length > 0) {
+          console.log('✅ Loaded pinned contacts:', pinnedData);
+          setPinnedIds(new Set(pinnedData));
+        }
+        
+        // Privacy Zones feature removed
+        // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
+        // if (zonesData) {
+        //   console.log('✅ Loaded privacy zones:', zonesData);
+        //   setPrivacyZones(zonesData);
+        // }
+        
+        console.log('✅ All user data loaded successfully');
+      } catch (error) {
+        console.error('❌ Failed to load user data:', error);
+      }
+    };
+    
+    loadUserData();
+  }, [isAuthenticated, userId]);
+
+  // Auth handlers
+  const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
+    console.log('✅ Signup successful:', username);
+    // DON'T login yet - we need to show ContactInfo screen first
+    // Just save the token temporarily
+    setSignupEmail(email || '');
+    setIsFirstTimeUser(true);
+    setAuthScreen('contactInfo'); // Go to contact info screen
+    
+    // Store signup data temporarily for after contact info
+    (window as any).__signupData = { token, userId, username };
   };
 
-  const togglePin = (id: number) => {
+  const handleLoginSuccess = async (token: string, userId: number, username: string) => {
+    console.log('✅ Login successful:', username);
+    await login(token, userId, username);
+    // User goes directly to main app
+  };
+
+  const handleContactInfoComplete = async (profile: {
+    name: string;
+    phone: string;
+    email: string;
+    bio: string;
+  }) => {
+    console.log('✅ Contact info completed:', profile);
+    
+    // Get the signup data we saved earlier
+    const signupData = (window as any).__signupData;
+    if (!signupData) {
+      console.error('❌ No signup data found!');
+      return;
+    }
+    
+    // Save profile to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserProfile({
+        name: profile.name,
+        phone: profile.phone,
+        email: profile.email,
+        bio: profile.bio,
+      });
+      
+      // Update local state
+      setUserProfile({
+        name: profile.name || 'Your Name',
+        phoneNumber: profile.phone || '(555) 123-4567',
+        email: profile.email || 'user@example.com',
+        bio: profile.bio || 'Optional bio line goes here.',
+        socialMedia: [],
+      });
+      
+      console.log('✅ Profile saved successfully');
+      
+      // NOW log them in (this will set isAuthenticated: true and show main app)
+      await login(signupData.token, signupData.userId, signupData.username);
+      
+      // Clear the temporary signup data
+      delete (window as any).__signupData;
+      
+      showToast({
+        message: 'Welcome to DropLink!',
+        type: 'success',
+        duration: 3000,
+      });
+      
+      // Now user goes to main app (tutorial will show automatically for first-time users)
+    } catch (error) {
+      console.error('❌ Failed to save profile:', error);
+      showToast({
+        message: 'Failed to save profile. Please try again.',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  const toggleDarkMode = async () => {
+    const newValue = !isDarkMode;
+    setIsDarkMode(newValue);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserSettings({
+        darkMode: newValue,
+        maxDistance,
+        privacyZonesEnabled: false, // TODO: Get from actual state
+      });
+      console.log('✅ Dark mode saved to backend:', newValue);
+    } catch (error) {
+      console.error('❌ Failed to save dark mode:', error);
+    }
+  };
+
+  const togglePin = async (id: number) => {
+    let wasPinned = false;
     setPinnedIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(id)) {
+      wasPinned = newSet.has(id);
+      if (wasPinned) {
         newSet.delete(id);
       } else {
         newSet.add(id);
       }
       return newSet;
     });
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      if (wasPinned) {
+        await api.unpinContact(id);
+        console.log('✅ Unpinned contact saved to backend:', id);
+      } else {
+        await api.pinContact(id);
+        console.log('✅ Pinned contact saved to backend:', id);
+      }
+    } catch (error) {
+      console.error('❌ Failed to save pin status:', error);
+    }
   };
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile(prev => ({ ...prev, ...updates }));
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    const newProfile = { ...userProfile, ...updates };
+    setUserProfile(newProfile);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserProfile({
+        name: newProfile.name,
+        email: newProfile.email,
+        phone: newProfile.phoneNumber,
+        bio: newProfile.bio,
+      });
+      console.log('✅ Profile saved to backend:', newProfile);
+    } catch (error) {
+      console.error('❌ Failed to save profile:', error);
+    }
   };
 
   const showToast = (config: ToastConfig) => {
     setToastConfig(config);
+  };
+
+  const updateMaxDistance = async (distance: number) => {
+    setMaxDistance(distance);
+    
+    // Save to backend
+    try {
+      const api = await import('./src/services/api');
+      await api.saveUserSettings({
+        darkMode: isDarkMode,
+        maxDistance: distance,
+        privacyZonesEnabled: false, // TODO: Get from actual state
+      });
+      console.log('✅ Max distance saved to backend:', distance);
+    } catch (error) {
+      console.error('❌ Failed to save max distance:', error);
+    }
   };
 
   const addLinkNotification = (notification: Omit<LinkNotification, 'id' | 'timestamp' | 'viewed' | 'dismissed'>) => {
@@ -241,26 +447,80 @@ export default function App() {
 
   const theme = getTheme(isDarkMode);
 
-  if (!fontsReady) {
+  // Loading state
+  if (!fontsReady || authLoading) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-        <Text>Loading…</Text>
-      </View>
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
+          <Text style={{ color: theme.colors.text }}>Loading…</Text>
+        </View>
+      </DarkModeContext.Provider>
     );
   }
 
-  if (isFirstLaunch) {
+  // Auth screens (not authenticated) - Wrap with DarkModeContext
+  if (!isAuthenticated) {
     return (
-      <View style={{ flex:1, backgroundColor: theme.colors.bg, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={theme.type.h1}>Welcome to DropLink!</Text>
-      </View>
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        {authScreen === 'signup' && (
+          <SignupScreen
+            onSignupSuccess={(token, userId, username) => {
+              // SignupScreen will pass the email as part of the user state
+              handleSignupSuccess(token, userId, username, signupEmail);
+            }}
+            onLoginPress={() => setAuthScreen('login')}
+            onBack={() => setAuthScreen('welcome')}
+          />
+        )}
+
+        {authScreen === 'login' && (
+          <LoginScreen
+            onLoginSuccess={handleLoginSuccess}
+            onSignupPress={() => setAuthScreen('signup')}
+            onBack={() => setAuthScreen('welcome')}
+          />
+        )}
+
+        {authScreen === 'contactInfo' && (
+          <ContactInfoScreen
+            email={signupEmail}
+            onComplete={handleContactInfoComplete}
+          />
+        )}
+
+        {authScreen === 'welcome' && (
+          <WelcomeScreen
+            onGetStarted={() => setAuthScreen('signup')}
+            onLogin={() => setAuthScreen('login')}
+            onGoogleLoginSuccess={handleLoginSuccess}
+            showToast={showToast}
+          />
+        )}
+      </DarkModeContext.Provider>
     );
   }
+
+  // Simple navigation object
+  const navigation = {
+    navigate: (screen: string) => setSubScreen(screen),
+    goBack: () => setSubScreen(null),
+  };
 
   const Screen = () => {
+    // Show sub-screen if one is active
+    // Privacy Zones feature removed
+    // if (subScreen === 'PrivacyZones') {
+    //   return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
+    // }
+    
+    if (subScreen === 'ProfilePhoto') {
+      return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+    }
+
+    // Show main tabs
     if (tab === 'Home') return <HomeScreen />;
     if (tab === 'History') return <HistoryScreen />;
-    if (tab === 'Account') return <AccountScreen />;
+    if (tab === 'Account') return <AccountScreen navigation={navigation} profilePhotoUri={profilePhotoUri} />;
     return <DropScreen />;
   };
 
@@ -270,7 +530,7 @@ export default function App() {
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
           <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
             <ToastContext.Provider value={{ showToast }}>
-              <SettingsContext.Provider value={{ maxDistance, setMaxDistance }}>
+              <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
                 <LinkNotificationsContext.Provider value={{ 
                   linkNotifications, 
                   addLinkNotification, 
@@ -283,13 +543,14 @@ export default function App() {
           <Screen />
         </View>
 
-        {/* Bottom nav */}
-        <View style={{
-          flexDirection: 'row',
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          backgroundColor: theme.colors.white
-        }}>
+        {/* Bottom nav - Hide when sub-screen is active */}
+        {!subScreen && (
+          <View style={{
+            flexDirection: 'row',
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+            backgroundColor: theme.colors.white
+          }}>
            {/* Home */}
            <Pressable
              onPress={() => setTab('Home')}
@@ -351,6 +612,7 @@ export default function App() {
             />
           </Pressable>
         </View>
+        )}
 
         {/* Toast Notification */}
         {toastConfig && (
@@ -371,5 +633,14 @@ export default function App() {
       </PinnedProfilesContext.Provider>
     </DarkModeContext.Provider>
     </TutorialProvider>
+  );
+}
+
+// Export App wrapped with AuthProvider
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }
