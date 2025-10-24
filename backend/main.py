@@ -746,18 +746,17 @@ def get_user_settings(user_id: int = 1):
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT dark_mode, max_distance, privacy_zones_enabled FROM user_settings WHERE user_id = ?
+            SELECT dark_mode, max_distance FROM user_settings WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
         
         if not row:
-            return {"darkMode": False, "maxDistance": 33, "privacyZonesEnabled": False}
+            return {"darkMode": False, "maxDistance": 33}
         
         return {
             "darkMode": bool(row[0]),
-            "maxDistance": row[1],
-            "privacyZonesEnabled": bool(row[2])
+            "maxDistance": row[1]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -773,18 +772,16 @@ def save_user_settings(settings: dict, user_id: int = 1):
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id INTEGER PRIMARY KEY,
                 dark_mode INTEGER,
-                max_distance INTEGER,
-                privacy_zones_enabled INTEGER
+                max_distance INTEGER
             )
         ''')
         
         cursor.execute('''
-            INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance, privacy_zones_enabled)
-            VALUES (?, ?, ?, ?)
+            INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance)
+            VALUES (?, ?, ?)
         ''', (user_id, 
               1 if settings.get('darkMode') else 0,
-              settings.get('maxDistance', 33),
-              1 if settings.get('privacyZonesEnabled') else 0))
+              settings.get('maxDistance', 33)))
         
         conn.commit()
         conn.close()
