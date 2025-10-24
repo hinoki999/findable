@@ -62,13 +62,13 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
         {/* Grid Background */}
         <View style={styles.gridContainer}>
           {/* Vertical grid lines */}
-          {[1, 2, 3, 4].map((i) => (
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
             <View
               key={`v-${i}`}
               style={[
                 styles.gridLine,
                 {
-                  left: i * 25,
+                  left: i * 10,
                   width: 1,
                   height: '100%',
                   backgroundColor: '#33AA33',
@@ -77,13 +77,13 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
             />
           ))}
           {/* Horizontal grid lines */}
-          {[1, 2, 3, 4].map((i) => (
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
             <View
               key={`h-${i}`}
               style={[
                 styles.gridLine,
                 {
-                  top: i * 25,
+                  top: i * 10,
                   height: 1,
                   width: '100%',
                   backgroundColor: '#33AA33',
@@ -154,13 +154,13 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   gridContainer: {
     width: 100,
     height: 100,
     position: 'relative',
-    marginBottom: 16,
+    marginBottom: 12,
     overflow: 'hidden',
   },
   gridLine: {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   taglineContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 28,
   },
   tagline: {
     fontSize: 17,
