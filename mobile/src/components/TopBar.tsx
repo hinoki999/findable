@@ -8,9 +8,10 @@ interface TopBarProps {
   title: string;
   rightIcon?: string;
   onRightIconPress?: () => void;
+  subtitle?: string;
 }
 
-export default function TopBar({ title, rightIcon, onRightIconPress }: TopBarProps) {
+export default function TopBar({ title, rightIcon, onRightIconPress, subtitle }: TopBarProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
   
@@ -25,7 +26,19 @@ export default function TopBar({ title, rightIcon, onRightIconPress }: TopBarPro
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <Text style={{ ...theme.type.title, textAlign:'center' }}>{title}</Text>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={{ ...theme.type.title, textAlign:'center' }}>{title}</Text>
+        {subtitle && (
+          <Text style={{ 
+            fontSize: 11, 
+            color: theme.colors.muted, 
+            fontFamily: 'Inter_400Regular',
+            marginTop: 2,
+          }}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
       
       {rightIcon && onRightIconPress && (
         <Pressable 

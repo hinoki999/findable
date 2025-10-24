@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 interface AuthState {
@@ -17,6 +18,30 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Storage helpers that work on both web and native
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return await SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+    } else {
+      await SecureStore.setItemAsync(key, value);
+    }
+  },
+  async deleteItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+    } else {
+      await SecureStore.deleteItemAsync(key);
+    }
+  },
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
     isAuthenticated: false,
@@ -33,9 +58,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkStoredAuth = async () => {
     try {
-      const token = await SecureStore.getItemAsync('authToken');
-      const userId = await SecureStore.getItemAsync('userId');
-      const username = await SecureStore.getItemAsync('username');
+      const token = await storage.getItem('authToken');
+      const userId = await storage.getItem('userId');
+      const username = await storage.getItem('username');
 
       if (token && userId && username) {
         setState({
@@ -56,9 +81,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (token: string, userId: number, username: string) => {
     try {
-      await SecureStore.setItemAsync('authToken', token);
-      await SecureStore.setItemAsync('userId', userId.toString());
-      await SecureStore.setItemAsync('username', username);
+      await storage.setItem('authToken', token);
+      await storage.setItem('userId', userId.toString());
+      await storage.setItem('username', username);
 
       setState({
         isAuthenticated: true,
@@ -75,9 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await SecureStore.deleteItemAsync('authToken');
-      await SecureStore.deleteItemAsync('userId');
-      await SecureStore.deleteItemAsync('username');
+      await storage.deleteItem('authToken');
+      await storage.deleteItem('userId');
+      await storage.deleteItem('username');
 
       setState({
         isAuthenticated: false,

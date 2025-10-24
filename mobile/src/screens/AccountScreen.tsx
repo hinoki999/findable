@@ -223,6 +223,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         title="Account" 
         rightIcon="flag" 
         onRightIconPress={handleReportIssue}
+        subtitle={`@${username || 'user'}`}
       />
       <ScrollView 
         style={{ flex: 1 }}
@@ -271,52 +272,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               thumbColor={privacyZonesEnabled ? theme.colors.blue : theme.colors.muted}
             />
           </View>
-        </View>
-
-        {/* Account Info Card */}
-        <View style={theme.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <MaterialCommunityIcons name="account-circle" size={20} color={theme.colors.blue} />
-            <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Account</Text>
-          </View>
-          <Text style={[theme.type.muted, { marginBottom: 16 }]}>
-            Logged in as @{username || 'user'}
-          </Text>
-          <Pressable
-            onPress={async () => {
-              Alert.alert(
-                'Logout',
-                'Are you sure you want to logout?',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'Logout',
-                    style: 'destructive',
-                    onPress: async () => {
-                      await logout();
-                      showToast({
-                        message: 'Logged out successfully',
-                        type: 'success',
-                        duration: 2000,
-                      });
-                    },
-                  },
-                ],
-              );
-            }}
-            style={({ pressed }) => ({
-              backgroundColor: '#FF3B30',
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              borderRadius: 8,
-              alignItems: 'center',
-              opacity: pressed ? 0.8 : 1,
-            })}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600', fontFamily: 'Inter_500Medium' }}>
-              Logout
-            </Text>
-          </Pressable>
         </View>
 
         {/* Contact Information Card */}
@@ -444,6 +399,42 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               </View>
             </View>
           ))}
+        </View>
+
+        {/* Logout button - at the very bottom */}
+        <View style={{ marginTop: 32, alignItems: 'center' }}>
+          {/* Gray line above logout */}
+          <View style={{ 
+            width: '100%', 
+            height: 2, 
+            backgroundColor: isDarkMode ? '#444444' : '#CCCCCC',
+            marginBottom: 16,
+          }} />
+          
+          <Pressable
+            onPress={async () => {
+              // Direct logout (Alert doesn't work well on web)
+              await logout();
+              showToast({
+                message: 'Logged out successfully',
+                type: 'success',
+                duration: 2000,
+              });
+            }}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              paddingVertical: 12,
+              opacity: pressed ? 0.5 : 0.4,
+            })}
+          >
+            <Text style={{ 
+              color: theme.colors.muted, 
+              fontSize: 13, 
+              fontFamily: 'Inter_400Regular',
+            }}>
+              Logout
+            </Text>
+          </Pressable>
         </View>
 
       </ScrollView>
