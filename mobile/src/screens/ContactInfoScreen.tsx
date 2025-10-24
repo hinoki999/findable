@@ -103,7 +103,7 @@ export default function ContactInfoScreen({ email: initialEmail = '', onComplete
             Set Up Your Profile
           </Text>
           <Text style={[styles.subtitle, { color: theme.colors.muted }]}>
-            Your contact info will be shared when you drop to nearby users
+            This info will be shared when you connect with nearby users
           </Text>
         </View>
 
@@ -155,29 +155,6 @@ export default function ContactInfoScreen({ email: initialEmail = '', onComplete
             {phoneError ? (
               <Text style={styles.errorText}>{phoneError}</Text>
             ) : null}
-          </View>
-
-          {/* Email (Optional) */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Email <Text style={{ color: theme.colors.muted }}>(optional)</Text>
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="john@example.com"
-                placeholderTextColor={theme.colors.muted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!loading}
-              />
-            </View>
           </View>
 
           {/* Bio (Optional) */}

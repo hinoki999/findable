@@ -5,7 +5,7 @@ import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 
 interface SignupScreenProps {
-  onSignupSuccess: (token: string, userId: number, username: string) => void;
+  onSignupSuccess: (token: string, userId: number, username: string, email?: string) => void;
   onLoginPress: () => void;
   onBack: () => void;
 }
@@ -107,7 +107,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
 
       // Success!
-      onSignupSuccess(data.token, data.user_id, data.username);
+      onSignupSuccess(data.token, data.user_id, data.username, email || undefined);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {

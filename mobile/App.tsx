@@ -464,9 +464,8 @@ function MainApp() {
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         {authScreen === 'signup' && (
           <SignupScreen
-            onSignupSuccess={(token, userId, username) => {
-              // SignupScreen will pass the email as part of the user state
-              handleSignupSuccess(token, userId, username, signupEmail);
+            onSignupSuccess={(token, userId, username, email) => {
+              handleSignupSuccess(token, userId, username, email);
             }}
             onLoginPress={() => setAuthScreen('login')}
             onBack={() => setAuthScreen('welcome')}

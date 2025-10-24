@@ -76,7 +76,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
                 } as any
               ]}
             >
-              DropL<Text style={{ opacity: 0 }}>i</Text>nk
+              DropLınk
             </Text>
           ) : (
             <LinearGradient
@@ -85,12 +85,12 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
               end={{ x: 1, y: 0 }}
               style={styles.gradientContainer}
             >
-              <Text style={styles.appName}>DropL<Text style={{ opacity: 0 }}>i</Text>nk</Text>
+              <Text style={styles.appName}>DropLınk</Text>
             </LinearGradient>
           )}
           {/* Water Drop Icon positioned over 'i' */}
           <View style={styles.dropOverI}>
-            <MaterialCommunityIcons name="water" size={20} color="#007AFF" />
+            <MaterialCommunityIcons name="water" size={12} color="#007AFF" />
           </View>
         </View>
       </View>
@@ -157,9 +157,9 @@ const styles = StyleSheet.create({
   },
   dropOverI: {
     position: 'absolute',
-    top: -8,
+    top: -6,
     left: '50%',
-    marginLeft: 6,
+    marginLeft: 20,
     zIndex: 10,
   },
   appName: {
