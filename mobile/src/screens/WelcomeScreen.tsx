@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 // import { useGoogleAuth, authenticateWithGoogle } from '../services/googleAuth';
@@ -99,24 +100,21 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
           </View>
         </View>
         
-        {Platform.OS === 'web' ? (
-          <Text
-            style={[
-              styles.appName,
-              {
-                // @ts-ignore - web-specific CSS
-                background: 'linear-gradient(90deg, #5BA3FF 0%, #007AFF 50%, #0051D5 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }
-            ]}
+        {/* Gradient Text */}
+        <MaskedView
+          maskElement={
+            <Text style={styles.appName}>DropLink</Text>
+          }
+        >
+          <LinearGradient
+            colors={['#FF6B35', '#FFA07A', '#FFD700']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{ paddingVertical: 4 }}
           >
-            DropLink
-          </Text>
-        ) : (
-          <Text style={[styles.appName, { color: theme.colors.blue }]}>DropLink</Text>
-        )}
+            <Text style={[styles.appName, { opacity: 0 }]}>DropLink</Text>
+          </LinearGradient>
+        </MaskedView>
       </View>
 
       {/* Tagline */}
