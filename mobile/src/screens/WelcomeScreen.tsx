@@ -60,72 +60,39 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {/* Logo/Icon */}
       <View style={styles.logoContainer}>
-        {/* Grid Background */}
-        <View style={styles.gridContainer}>
-          {/* Vertical grid lines */}
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <View
-              key={`v-${i}`}
+        {/* Gradient Text with Drop as dot over 'i' */}
+        <View style={styles.textWithDropContainer}>
+          {Platform.OS === 'web' ? (
+            <Text
               style={[
-                styles.gridLine,
+                styles.appName,
                 {
-                  left: i * 10,
-                  width: 1,
-                  height: '100%',
-                  backgroundColor: '#33AA33',
-                }
+                  display: 'inline-block',
+                  background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                  color: 'transparent',
+                } as any
               ]}
-            />
-          ))}
-          {/* Horizontal grid lines */}
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <View
-              key={`h-${i}`}
-              style={[
-                styles.gridLine,
-                {
-                  top: i * 10,
-                  height: 1,
-                  width: '100%',
-                  backgroundColor: '#33AA33',
-                }
-              ]}
-            />
-          ))}
-          
-          {/* Water Drop Icon */}
-          <View style={styles.dropIconContainer}>
-            <MaterialCommunityIcons name="water" size={25} color="#007AFF" />
+            >
+              DropL<Text style={{ opacity: 0 }}>i</Text>nk
+            </Text>
+          ) : (
+            <LinearGradient
+              colors={['#FF6B35', '#FF8C5A', '#5BA3FF', '#007AFF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.gradientContainer}
+            >
+              <Text style={styles.appName}>DropL<Text style={{ opacity: 0 }}>i</Text>nk</Text>
+            </LinearGradient>
+          )}
+          {/* Water Drop Icon positioned over 'i' */}
+          <View style={styles.dropOverI}>
+            <MaterialCommunityIcons name="water" size={20} color="#007AFF" />
           </View>
         </View>
-        
-        {/* Gradient Text - Web-compatible approach */}
-        {Platform.OS === 'web' ? (
-          <Text
-            style={[
-              styles.appName,
-              {
-                display: 'inline-block',
-                background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                color: 'transparent',
-              } as any
-            ]}
-          >
-            DropLink
-          </Text>
-        ) : (
-          <LinearGradient
-            colors={['#FF6B35', '#FF8C5A', '#5BA3FF', '#007AFF']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.gradientContainer}
-          >
-            <Text style={styles.appName}>DropLink</Text>
-          </LinearGradient>
-        )}
       </View>
 
       {/* Tagline */}
@@ -183,30 +150,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  gridContainer: {
-    width: 100,
-    height: 100,
+  textWithDropContainer: {
     position: 'relative',
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  gridLine: {
-    position: 'absolute',
-  },
-  dropIconContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropOverI: {
+    position: 'absolute',
+    top: -8,
+    left: '50%',
+    marginLeft: 6,
     zIndex: 10,
   },
   appName: {
     fontSize: 32,
-    fontWeight: '600',
-    fontFamily: 'Inter_500Medium',
+    fontWeight: '500',
+    fontFamily: 'Inter_400Regular',
+    letterSpacing: -1,
   },
   gradientContainer: {
     paddingVertical: 4,
