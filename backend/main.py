@@ -397,6 +397,7 @@ def read_root():
 def health_check():
     return {"status": "healthy"}
 
+
 # POST /devices - Save a new device (with deduplication)
 @app.post("/devices", response_model=DeviceResponse)
 def create_device(device: DeviceCreate):
@@ -474,7 +475,7 @@ def create_device(device: DeviceCreate):
 
 # GET /devices - Retrieve all devices
 @app.get("/devices", response_model=List[DeviceResponse])
-def get_devices(user_id: int = 1):
+def get_devices(user_id: int = Depends(get_current_user)):
     try:
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
@@ -570,7 +571,7 @@ def delete_device(device_id: int):
 
 # User Profile endpoints
 @app.get("/user/profile")
-def get_user_profile(user_id: int = 1):
+def get_user_profile(user_id: int = Depends(get_current_user)):
     """Get user profile"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -595,7 +596,7 @@ def get_user_profile(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/profile")
-def save_user_profile(profile: dict, user_id: int = 1):
+def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
     """Save user profile"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -627,7 +628,7 @@ def save_user_profile(profile: dict, user_id: int = 1):
 
 # Profile Photo endpoints
 @app.post("/user/profile/photo")
-async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
+async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depends(get_current_user)):
     """Upload profile photo to Cloudinary"""
     try:
         # Validate file type
@@ -713,7 +714,7 @@ async def get_profile_photo(user_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/profile/photo")
-async def delete_profile_photo(user_id: int = 1):
+async def delete_profile_photo(user_id: int = Depends(get_current_user)):
     """Delete profile photo from Cloudinary"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -743,7 +744,7 @@ async def delete_profile_photo(user_id: int = 1):
 
 # Settings endpoints
 @app.get("/user/settings")
-def get_user_settings(user_id: int = 1):
+def get_user_settings(user_id: int = Depends(get_current_user)):
     """Get user settings"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -765,7 +766,7 @@ def get_user_settings(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/settings")
-def save_user_settings(settings: dict, user_id: int = 1):
+def save_user_settings(settings: dict, user_id: int = Depends(get_current_user)):
     """Save user settings"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -794,7 +795,7 @@ def save_user_settings(settings: dict, user_id: int = 1):
 
 # Privacy Zones endpoints
 @app.get("/user/privacy-zones")
-def get_privacy_zones(user_id: int = 1):
+def get_privacy_zones(user_id: int = Depends(get_current_user)):
     """Get privacy zones"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -817,7 +818,7 @@ def get_privacy_zones(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/privacy-zones")
-def save_privacy_zone(zone: dict, user_id: int = 1):
+def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
     """Save a privacy zone"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -859,7 +860,7 @@ def delete_privacy_zone(zone_id: int):
 
 # Pinned contacts endpoint
 @app.get("/user/pinned")
-def get_pinned_contacts(user_id: int = 1):
+def get_pinned_contacts(user_id: int = Depends(get_current_user)):
     """Get pinned contact IDs"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -874,7 +875,7 @@ def get_pinned_contacts(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/pinned/{device_id}")
-def pin_contact(device_id: int, user_id: int = 1):
+def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Pin a contact"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -900,7 +901,7 @@ def pin_contact(device_id: int, user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/pinned/{device_id}")
-def unpin_contact(device_id: int, user_id: int = 1):
+def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Unpin a contact"""
     try:
         conn = sqlite3.connect('droplink.db')

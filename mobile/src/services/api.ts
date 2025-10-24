@@ -1,6 +1,30 @@
 // src/services/api.ts
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+
 export const BASE_URL = "https://findable-production.up.railway.app";
 const USE_STUB = false; // Connected to Railway backend!
+
+// Helper to get auth token
+async function getAuthToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem('authToken');
+  } else {
+    return await SecureStore.getItemAsync('authToken');
+  }
+}
+
+// Helper to create authorized headers
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 export type Device = { 
   id?: number; 
@@ -154,12 +178,12 @@ export async function saveDevice(d: Device) {
     name: d.name,
     rssi: d.rssi,
     distance: d.distanceFeet, // Backend expects distance in feet
-    user_id: 1, // Default user ID, could be from context later
   };
   
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/devices`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(backendData),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -171,7 +195,8 @@ export async function getDevices(): Promise<Device[]> {
     await sleep(120);
     return _store.slice();
   }
-  const res = await fetch(`${BASE_URL}/devices`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/devices`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -186,8 +211,10 @@ export async function deleteDevice(deviceId: number): Promise<void> {
     }
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/devices/${deviceId}`, {
     method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
@@ -201,9 +228,10 @@ export async function restoreDevice(device: Device): Promise<void> {
     return;
   }
   // For real API, would need to POST it back
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/devices`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(device),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -222,7 +250,8 @@ export async function getUserProfile(): Promise<UserProfile> {
     await sleep(100);
     return { name: '', email: '', phone: '', bio: '' };
   }
-  const res = await fetch(`${BASE_URL}/user/profile`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/user/profile`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -232,9 +261,10 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     await sleep(100);
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/profile`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(profile),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -252,7 +282,8 @@ export async function getUserSettings(): Promise<UserSettings> {
     await sleep(100);
     return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
   }
-  const res = await fetch(`${BASE_URL}/user/settings`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/user/settings`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -262,9 +293,10 @@ export async function saveUserSettings(settings: UserSettings): Promise<void> {
     await sleep(100);
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/settings`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(settings),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -282,7 +314,8 @@ export async function getPrivacyZones(): Promise<PrivacyZone[]> {
     await sleep(100);
     return [];
   }
-  const res = await fetch(`${BASE_URL}/user/privacy-zones`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/user/privacy-zones`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -292,9 +325,10 @@ export async function savePrivacyZone(zone: { address: string; radius: number })
     await sleep(100);
     return { id: Date.now(), ...zone };
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/privacy-zones`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(zone),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -306,8 +340,10 @@ export async function deletePrivacyZone(zoneId: number): Promise<void> {
     await sleep(100);
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/privacy-zones/${zoneId}`, {
     method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
@@ -318,7 +354,8 @@ export async function getPinnedContacts(): Promise<number[]> {
     await sleep(100);
     return [];
   }
-  const res = await fetch(`${BASE_URL}/user/pinned`);
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/user/pinned`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -328,8 +365,10 @@ export async function pinContact(deviceId: number): Promise<void> {
     await sleep(100);
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
     method: "POST",
+    headers,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
@@ -339,8 +378,10 @@ export async function unpinContact(deviceId: number): Promise<void> {
     await sleep(100);
     return;
   }
+  const headers = await getAuthHeaders();
   const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
     method: "DELETE",
+    headers,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }

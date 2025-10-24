@@ -821,7 +821,7 @@ export default function HomeScreen() {
         snappedPosition,
         previousTensor.position,
         deltaTime
-      );
+      );what else can
       
       // Compute acceleration (change in velocity)
       const acceleration = TensorMath.computeVelocity(
