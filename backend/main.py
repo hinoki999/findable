@@ -383,6 +383,99 @@ def google_auth(request: GoogleAuthRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
 
+@app.post("/auth/change-username")
+def change_username(new_username: str, user_id: int = Depends(get_current_user)):
+    """Change username for authenticated user"""
+    try:
+        # Validate new username
+        if not new_username or len(new_username) < 3 or len(new_username) > 20:
+            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
+        
+        if not new_username.replace('_', '').isalnum():
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Check if new username is already taken
+        cursor.execute("SELECT id FROM users WHERE username = ? AND id != ?", (new_username, user_id))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Update username
+        cursor.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
+        conn.commit()
+        conn.close()
+        
+        # Create new JWT token with updated username
+        token = create_access_token(user_id, new_username)
+        
+        return {
+            "success": True,
+            "message": "Username changed successfully",
+            "token": token,
+            "username": new_username
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to change username: {str(e)}")
+
+@app.post("/auth/change-password")
+def change_password(
+    current_password: str,
+    new_password: str,
+    user_id: int = Depends(get_current_user)
+):
+    """Change password for authenticated user"""
+    try:
+        # Validate new password
+        if len(new_password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        if not any(c.isupper() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+        
+        if not any(c.islower() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+        
+        if not any(c.isdigit() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one number")
+        
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Get current password hash
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_hash = user[0]
+        
+        # Verify current password
+        if not verify_password(current_password, current_hash):
+            conn.close()
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        
+        # Hash and update new password
+        new_hash = hash_password(new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Password changed successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+
 # Root endpoint
 @app.get("/")
 def read_root():

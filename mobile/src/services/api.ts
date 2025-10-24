@@ -385,3 +385,29 @@ export async function unpinContact(deviceId: number): Promise<void> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
+
+// ==================== AUTH MANAGEMENT ====================
+export async function changeUsername(newUsername: string): Promise<{ token: string; username: string }> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/auth/change-username?new_username=${encodeURIComponent(newUsername)}`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${BASE_URL}/auth/change-password?current_password=${encodeURIComponent(currentPassword)}&new_password=${encodeURIComponent(newPassword)}`, {
+    method: "POST",
+    headers,
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
+}

@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -38,7 +39,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
-  const { logout, username } = useAuth();
+  const { logout, username, userId, login } = useAuth();
   const { name, phoneNumber, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
@@ -137,7 +138,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setEditModalVisible(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate based on field type
     let error = '';
     if (editingField === 'phone') {
@@ -189,14 +190,24 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Username can only contain letters, numbers, and underscores');
         return;
       }
-      // TODO: Call API to change username
-      showToast({
-        message: 'Username change functionality coming soon!',
-        type: 'info',
-        duration: 2000,
-      });
-      setEditModalVisible(false);
-      return;
+      
+      // Call API to change username
+      try {
+        const result = await api.changeUsername(tempValue.trim());
+        // Update token in storage
+        await login(result.token, userId, result.username);
+        
+        showToast({
+          message: 'Username changed successfully!',
+          type: 'success',
+          duration: 2000,
+        });
+        setEditModalVisible(false);
+        return;
+      } catch (error: any) {
+        setValidationError(error.message || 'Failed to change username');
+        return;
+      }
     } else if (editingField === 'password') {
       // Validate password change
       if (!currentPassword) {
@@ -223,17 +234,25 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Passwords do not match');
         return;
       }
-      // TODO: Call API to change password
-      showToast({
-        message: 'Password change functionality coming soon!',
-        type: 'info',
-        duration: 2000,
-      });
-      setEditModalVisible(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      return;
+      
+      // Call API to change password
+      try {
+        await api.changePassword(currentPassword, newPassword);
+        
+        showToast({
+          message: 'Password changed successfully!',
+          type: 'success',
+          duration: 2000,
+        });
+        setEditModalVisible(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        return;
+      } catch (error: any) {
+        setValidationError(error.message || 'Failed to change password');
+        return;
+      }
     }
     setEditModalVisible(false);
     setEditingField(null);
