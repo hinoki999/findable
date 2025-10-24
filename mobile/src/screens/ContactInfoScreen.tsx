@@ -241,7 +241,7 @@ export default function ContactInfoScreen({ email: initialEmail = '', onComplete
           {/* Skip Link (but phone is required, so this just shows the requirement) */}
           <View style={styles.skipContainer}>
             <Text style={[styles.skipText, { color: theme.colors.muted }]}>
-              * Phone number is required to use Droplin
+              * Phone number is required to use DropLink
             </Text>
           </View>
         </View>

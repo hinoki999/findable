@@ -34,8 +34,10 @@ export default function DropScreen() {
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
   
-  // Filter devices based on max distance setting
-  const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+  // Filter devices based on max distance setting and sort by distance (closest first)
+  const filteredDevices = devices
+    .filter(device => device.distanceFeet <= maxDistance)
+    .sort((a, b) => a.distanceFeet - b.distanceFeet);
 
   // Show error toast when BLE scanning fails
   useEffect(() => {

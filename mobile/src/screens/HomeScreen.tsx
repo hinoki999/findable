@@ -490,7 +490,7 @@ const DeviceBlip: React.FC<{
   );
 };
 
-// Link Marker Component - for accepted links (no pulsation, link icon)
+// Link Marker Component - for accepted and returned links (no pulsation, link icon)
 const LinkMarker: React.FC<{
   device: Device;
   position: { x: number; y: number };
@@ -643,19 +643,29 @@ export default function HomeScreen() {
     return () => stopScan(); // Cleanup on unmount
   }, []);
   
-  // Fetch linked devices (accepted links only) when component mounts
+  // Fetch linked devices (accepted and returned links) when component mounts and periodically
   useEffect(() => {
     const fetchLinkedDevices = async () => {
       try {
         const allDevices = await getDevices();
-        // Filter for accepted links only (not returned drops)
-        const links = (allDevices ?? []).filter(device => device.action === 'accepted');
+        // Filter for accepted and returned links (show all successful connections on map)
+        const links = (allDevices ?? []).filter(device => 
+          device.action === 'accepted' || device.action === 'returned'
+        );
         setLinkedDevices(links);
+        console.log(`✅ Loaded ${links.length} linked contacts on map`);
       } catch (error) {
         console.error('Failed to fetch linked devices:', error);
       }
     };
+    
+    // Load immediately
     fetchLinkedDevices();
+    
+    // Refresh every 5 seconds to catch new links
+    const interval = setInterval(fetchLinkedDevices, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
   
   // Get unviewed and not dismissed link notifications for badge
@@ -1550,7 +1560,7 @@ export default function HomeScreen() {
           );
         })}
         
-        {/* Link Markers - for accepted links (no pulsation) */}
+        {/* Link Markers - for accepted and returned links (no pulsation) */}
         {linkedDevices.map((device) => {
           // Use same positioning logic as blips to ensure grid snapping
           const position = getGridPosition(device as any); // Device has distanceFeet property
@@ -2200,24 +2210,44 @@ export default function HomeScreen() {
                         </View>
                       </View>
 
-                      {/* View Contact Card button */}
-                      <Pressable
-                        onPress={() => {
-                          setSelectedContactCard(linkNotif);
-                        }}
-                        style={({ pressed }) => ({
-                          backgroundColor: '#FF6B4A',
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 20,
-                          alignItems: 'center',
-                          opacity: pressed ? 0.9 : 1,
-                        })}
-                      >
-                        <Text style={[theme.type.button, { fontSize: 12, color: '#000000' }]}>
-                          View Contact Card
-                        </Text>
-                      </Pressable>
+                      {/* Action buttons */}
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                          onPress={() => {
+                            setSelectedContactCard(linkNotif);
+                          }}
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            backgroundColor: '#FF6B4A',
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 20,
+                            alignItems: 'center',
+                            opacity: pressed ? 0.9 : 1,
+                          })}
+                        >
+                          <Text style={[theme.type.button, { fontSize: 12, color: '#000000' }]}>
+                            View Contact Card
+                          </Text>
+                        </Pressable>
+                        
+                        <Pressable
+                          onPress={() => dismissNotification(linkNotif.id)}
+                          style={({ pressed }) => ({
+                            flex: 1,
+                            backgroundColor: theme.colors.border,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 20,
+                            alignItems: 'center',
+                            opacity: pressed ? 0.9 : 1,
+                          })}
+                        >
+                          <Text style={[theme.type.button, { fontSize: 12, color: theme.colors.text }]}>
+                            Dismiss
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
                   ))}
                 </View>

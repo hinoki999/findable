@@ -87,7 +87,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
               { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
             ]}>
               <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={username}
                 onChangeText={(text) => {
                   setUsername(text);
@@ -110,7 +110,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
               { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
             ]}>
               <TextInput
-                style={[styles.input, { color: theme.colors.text, flex: 1 }]}
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);

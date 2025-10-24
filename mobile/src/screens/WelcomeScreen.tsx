@@ -1,28 +1,104 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
+// import { useGoogleAuth, authenticateWithGoogle } from '../services/googleAuth';
 
 const { width, height } = Dimensions.get('window');
 
 interface WelcomeScreenProps {
   onGetStarted: () => void;
   onLogin: () => void;
+  onGoogleLoginSuccess?: (token: string, userId: number, username: string) => void;
+  showToast?: (config: { message: string; type?: 'success' | 'error' | 'info' }) => void;
 }
 
-export default function WelcomeScreen({ onGetStarted, onLogin }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSuccess, showToast }: WelcomeScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  // const { request, response, promptAsync } = useGoogleAuth();
+  const [googleLoading, setGoogleLoading] = React.useState(false);
+
+  // useEffect(() => {
+  //   if (response?.type === 'success') {
+  //     const { id_token } = response.params;
+  //     handleGoogleAuth(id_token);
+  //   }
+  // }, [response]);
+
+  // const handleGoogleAuth = async (idToken: string) => {
+  //   try {
+  //     setGoogleLoading(true);
+  //     const result = await authenticateWithGoogle(idToken);
+  //     
+  //     if (onGoogleLoginSuccess) {
+  //       onGoogleLoginSuccess(result.token, result.user_id, result.username);
+  //     }
+  //   } catch (error: any) {
+  //     console.error('Google auth error:', error);
+  //     Alert.alert('Authentication Failed', error.message || 'Failed to sign in with Google');
+  //   } finally {
+  //     setGoogleLoading(false);
+  //   }
+  // };
+
+  const handleGoogleSignIn = () => {
+    // promptAsync();
+    if (showToast) {
+      showToast({
+        message: 'Google Sign-In coming soon! Please use "Get Started" or "Log In" for now.',
+        type: 'info',
+        duration: 4000,
+      });
+    }
+    console.log('Google Sign-In clicked - feature coming soon');
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {/* Logo/Icon */}
       <View style={styles.logoContainer}>
-        <View style={[styles.iconCircle, { backgroundColor: theme.colors.blue }]}>
-          <MaterialCommunityIcons name="account-multiple" size={60} color="#FFFFFF" />
+        {/* Grid Background */}
+        <View style={styles.gridContainer}>
+          {/* Vertical grid lines */}
+          {[1, 2, 3, 4].map((i) => (
+            <View
+              key={`v-${i}`}
+              style={[
+                styles.gridLine,
+                {
+                  left: i * 25,
+                  width: 1,
+                  height: '100%',
+                  backgroundColor: '#33AA33',
+                }
+              ]}
+            />
+          ))}
+          {/* Horizontal grid lines */}
+          {[1, 2, 3, 4].map((i) => (
+            <View
+              key={`h-${i}`}
+              style={[
+                styles.gridLine,
+                {
+                  top: i * 25,
+                  height: 1,
+                  width: '100%',
+                  backgroundColor: '#33AA33',
+                }
+              ]}
+            />
+          ))}
+          
+          {/* Water Drop Icon */}
+          <View style={styles.dropIconContainer}>
+            <MaterialCommunityIcons name="water" size={50} color="#007AFF" />
+          </View>
         </View>
-        <Text style={[styles.appName, { color: theme.colors.blue }]}>Droplin</Text>
+        
+        <Text style={[styles.appName, { color: theme.colors.blue }]}>DropLink</Text>
       </View>
 
       {/* Tagline */}
@@ -78,30 +154,42 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 60,
+    marginBottom: 32,
   },
-  iconCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  gridContainer: {
+    width: 100,
+    height: 100,
+    position: 'relative',
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  gridLine: {
+    position: 'absolute',
+  },
+  dropIconContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    zIndex: 10,
   },
   appName: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '600',
     fontFamily: 'Inter_500Medium',
   },
   taglineContainer: {
     alignItems: 'center',
-    marginBottom: 80,
+    marginBottom: 40,
   },
   tagline: {
-    fontSize: 20,
+    fontSize: 17,
     fontFamily: 'Inter_400Regular',
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 24,
   },
   buttonContainer: {
     width: '100%',
@@ -112,12 +200,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    marginHorizontal: 16,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 24,
+  },
+  googleButtonText: {
+    color: '#000000',
+    fontSize: 17,
+    fontWeight: '500',
     fontFamily: 'Inter_500Medium',
   },
   loginContainer: {

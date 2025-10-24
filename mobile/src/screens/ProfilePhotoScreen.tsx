@@ -3,6 +3,7 @@ import { View, Text, Pressable, Image, Animated, StyleSheet, Dimensions, PanResp
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
+import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -16,6 +17,7 @@ interface ProfilePhotoScreenProps {
 export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: ProfilePhotoScreenProps) {
   const { isDarkMode } = useDarkMode();
   const { showToast } = useToast();
+  const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
   
   // Screen states
@@ -231,7 +233,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
       // Upload to backend
       const BASE_URL = 'https://findable-production.up.railway.app';
-      const response = await fetch(`${BASE_URL}/user/profile/photo?user_id=1`, {
+      const response = await fetch(`${BASE_URL}/user/profile/photo?user_id=${userId}`, {
         method: 'POST',
         body: formData,
       });

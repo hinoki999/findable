@@ -5,7 +5,7 @@ import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen';
+// import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
@@ -159,7 +159,7 @@ function MainApp() {
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
-  const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Persist privacy zones
+  // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
@@ -193,6 +193,13 @@ function MainApp() {
             bio: profileData.bio || 'Optional bio line goes here.',
             socialMedia: [],
           });
+          
+          // Load profile photo if exists
+          if (profileData.profile_photo) {
+            const photoUrl = `https://findable-production.up.railway.app${profileData.profile_photo}`;
+            console.log('✅ Loaded profile photo:', photoUrl);
+            setProfilePhotoUri(photoUrl);
+          }
         }
         
         // Load settings
@@ -210,12 +217,12 @@ function MainApp() {
           setPinnedIds(new Set(pinnedData));
         }
         
-        // Load privacy zones
-        const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
-        if (zonesData) {
-          console.log('✅ Loaded privacy zones:', zonesData);
-          setPrivacyZones(zonesData);
-        }
+        // Privacy Zones feature removed
+        // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
+        // if (zonesData) {
+        //   console.log('✅ Loaded privacy zones:', zonesData);
+        //   setPrivacyZones(zonesData);
+        // }
         
         console.log('✅ All user data loaded successfully');
       } catch (error) {
@@ -229,10 +236,14 @@ function MainApp() {
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
     console.log('✅ Signup successful:', username);
-    await login(token, userId, username);
+    // DON'T login yet - we need to show ContactInfo screen first
+    // Just save the token temporarily
     setSignupEmail(email || '');
     setIsFirstTimeUser(true);
     setAuthScreen('contactInfo'); // Go to contact info screen
+    
+    // Store signup data temporarily for after contact info
+    (window as any).__signupData = { token, userId, username };
   };
 
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
@@ -248,6 +259,13 @@ function MainApp() {
     bio: string;
   }) => {
     console.log('✅ Contact info completed:', profile);
+    
+    // Get the signup data we saved earlier
+    const signupData = (window as any).__signupData;
+    if (!signupData) {
+      console.error('❌ No signup data found!');
+      return;
+    }
     
     // Save profile to backend
     try {
@@ -269,8 +287,15 @@ function MainApp() {
       });
       
       console.log('✅ Profile saved successfully');
+      
+      // NOW log them in (this will set isAuthenticated: true and show main app)
+      await login(signupData.token, signupData.userId, signupData.username);
+      
+      // Clear the temporary signup data
+      delete (window as any).__signupData;
+      
       showToast({
-        message: 'Welcome to Droplin!',
+        message: 'Welcome to DropLink!',
         type: 'success',
         duration: 3000,
       });
@@ -426,52 +451,53 @@ function MainApp() {
   // Loading state
   if (!fontsReady || authLoading) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
-        <Text style={{ color: theme.colors.text }}>Loading…</Text>
-      </View>
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
+          <Text style={{ color: theme.colors.text }}>Loading…</Text>
+        </View>
+      </DarkModeContext.Provider>
     );
   }
 
-  // Auth screens (not authenticated)
+  // Auth screens (not authenticated) - Wrap with DarkModeContext
   if (!isAuthenticated) {
-    if (authScreen === 'signup') {
-      return (
-        <SignupScreen
-          onSignupSuccess={(token, userId, username) => {
-            // SignupScreen will pass the email as part of the user state
-            handleSignupSuccess(token, userId, username, signupEmail);
-          }}
-          onLoginPress={() => setAuthScreen('login')}
-          onBack={() => setAuthScreen('welcome')}
-        />
-      );
-    }
-
-    if (authScreen === 'login') {
-      return (
-        <LoginScreen
-          onLoginSuccess={handleLoginSuccess}
-          onSignupPress={() => setAuthScreen('signup')}
-          onBack={() => setAuthScreen('welcome')}
-        />
-      );
-    }
-
-    if (authScreen === 'contactInfo') {
-      return (
-        <ContactInfoScreen
-          email={signupEmail}
-          onComplete={handleContactInfoComplete}
-        />
-      );
-    }
-
-    // Welcome screen (default)
     return (
-      <WelcomeScreen
-        onGetStarted={() => setAuthScreen('signup')}
-        onLogin={() => setAuthScreen('login')}
-      />
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        {authScreen === 'signup' && (
+          <SignupScreen
+            onSignupSuccess={(token, userId, username) => {
+              // SignupScreen will pass the email as part of the user state
+              handleSignupSuccess(token, userId, username, signupEmail);
+            }}
+            onLoginPress={() => setAuthScreen('login')}
+            onBack={() => setAuthScreen('welcome')}
+          />
+        )}
+
+        {authScreen === 'login' && (
+          <LoginScreen
+            onLoginSuccess={handleLoginSuccess}
+            onSignupPress={() => setAuthScreen('signup')}
+            onBack={() => setAuthScreen('welcome')}
+          />
+        )}
+
+        {authScreen === 'contactInfo' && (
+          <ContactInfoScreen
+            email={signupEmail}
+            onComplete={handleContactInfoComplete}
+          />
+        )}
+
+        {authScreen === 'welcome' && (
+          <WelcomeScreen
+            onGetStarted={() => setAuthScreen('signup')}
+            onLogin={() => setAuthScreen('login')}
+            onGoogleLoginSuccess={handleLoginSuccess}
+            showToast={showToast}
+          />
+        )}
+      </DarkModeContext.Provider>
     );
   }
 
@@ -483,9 +509,10 @@ function MainApp() {
 
   const Screen = () => {
     // Show sub-screen if one is active
-    if (subScreen === 'PrivacyZones') {
-      return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
-    }
+    // Privacy Zones feature removed
+    // if (subScreen === 'PrivacyZones') {
+    //   return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
+    // }
     
     if (subScreen === 'ProfilePhoto') {
       return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;

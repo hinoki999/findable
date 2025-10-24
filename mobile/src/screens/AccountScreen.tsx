@@ -47,8 +47,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
-  const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
+  // Privacy Zones feature removed
+  // const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const theme = getTheme(isDarkMode);
 
@@ -193,36 +195,28 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setValidationError('');
   };
 
-  const handleReportIssue = () => {
-    // TODO: Open report form/modal
-    showToast({
-      message: 'Report feature coming soon',
-      type: 'success',
-      duration: 2000,
-    });
-  };
+  // Flag/Report button removed
+  // const handleReportIssue = () => {
+  //   showToast({
+  //     message: 'Report feature coming soon',
+  //     type: 'success',
+  //     duration: 2000,
+  //   });
+  // };
 
-  const handlePrivacyZonesToggle = () => {
-    if (!privacyZonesEnabled) {
-      // If turning on, navigate to privacy zones to set it up
-      navigation.navigate('PrivacyZones');
-    } else {
-      // If turning off, just toggle it
-      setPrivacyZonesEnabled(false);
-      showToast({
-        message: 'Privacy zones disabled',
-        type: 'success',
-        duration: 2000,
-      });
-    }
-  };
+  // Privacy Zones feature removed
+  // const handlePrivacyZonesToggle = () => {
+  //   if (!privacyZonesEnabled) {
+  //     navigation.navigate('PrivacyZones');
+  //   } else {
+  //     setPrivacyZonesEnabled(false);
+  //   }
+  // };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <TopBar 
         title="Account" 
-        rightIcon="flag" 
-        onRightIconPress={handleReportIssue}
         subtitle={`@${username || 'user'}`}
       />
       <ScrollView 
@@ -256,20 +250,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               onValueChange={toggleDarkMode}
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
-            />
-          </View>
-        </View>
-
-        {/* Privacy Zones Card */}
-        <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Privacy zones</Text>
-          <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop:10 }}>
-            <Text style={theme.type.muted}>Auto-disable at saved locations</Text>
-            <Switch 
-              value={privacyZonesEnabled} 
-              onValueChange={handlePrivacyZonesToggle}
-              trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
-              thumbColor={privacyZonesEnabled ? theme.colors.blue : theme.colors.muted}
             />
           </View>
         </View>
@@ -412,15 +392,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           }} />
           
           <Pressable
-            onPress={async () => {
-              // Direct logout (Alert doesn't work well on web)
-              await logout();
-              showToast({
-                message: 'Logged out successfully',
-                type: 'success',
-                duration: 2000,
-              });
-            }}
+            onPress={() => setShowLogoutConfirm(true)}
             style={({ pressed }) => ({
               alignItems: 'center',
               paddingVertical: 12,
@@ -734,6 +706,97 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               >
                 <Text style={[theme.type.button, { fontSize: 14 }]}>
                   Close
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutConfirm}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 16,
+            padding: 24,
+            width: '100%',
+            maxWidth: 400,
+          }}>
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '600',
+              fontFamily: 'Inter_500Medium',
+              color: theme.colors.text,
+              marginBottom: 12,
+            }}>
+              Logout
+            </Text>
+            <Text style={{
+              fontSize: 15,
+              fontFamily: 'Inter_400Regular',
+              color: theme.colors.muted,
+              marginBottom: 24,
+            }}>
+              Are you sure you want to logout?
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {/* Cancel Button */}
+              <Pressable
+                onPress={() => setShowLogoutConfirm(false)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: theme.colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  fontFamily: 'Inter_500Medium',
+                  color: theme.colors.text,
+                }}>
+                  Cancel
+                </Text>
+              </Pressable>
+
+              {/* Logout Button */}
+              <Pressable
+                onPress={async () => {
+                  setShowLogoutConfirm(false);
+                  await logout();
+                }}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: '#FF3B30',
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  fontFamily: 'Inter_500Medium',
+                  color: '#FFFFFF',
+                }}>
+                  Logout
                 </Text>
               </Pressable>
             </View>

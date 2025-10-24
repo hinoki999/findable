@@ -11,6 +11,8 @@ import shutil
 from pathlib import Path
 import jwt
 import bcrypt
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 app = FastAPI(title="DropLink API")
 
@@ -18,6 +20,9 @@ app = FastAPI(title="DropLink API")
 SECRET_KEY = "your-secret-key-change-in-production-12345"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
+
+# Google OAuth Client ID (in production, use environment variable)
+GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"  # Will be configured later
 
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = Path("uploads/profile_photos")
@@ -150,6 +155,9 @@ class AuthResponse(BaseModel):
     token: str
     user_id: int
     username: str
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
 
 # ========== AUTH HELPER FUNCTIONS ==========
 
@@ -291,6 +299,84 @@ def login(request: LoginRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@app.post("/auth/google", response_model=AuthResponse)
+def google_auth(request: GoogleAuthRequest):
+    """Authenticate with Google OAuth"""
+    try:
+        # Verify the Google ID token
+        idinfo = id_token.verify_oauth2_token(
+            request.id_token, 
+            google_requests.Request(), 
+            GOOGLE_CLIENT_ID
+        )
+        
+        # Get user info from Google token
+        google_user_id = idinfo['sub']
+        email = idinfo.get('email', '')
+        name = idinfo.get('name', '')
+        
+        # Generate username from email or name
+        username = email.split('@')[0] if email else name.replace(' ', '').lower()
+        
+        # Ensure username is unique
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Check if user with this email already exists
+        cursor.execute(
+            "SELECT id, username FROM users WHERE email = ?",
+            (email,)
+        )
+        existing_user = cursor.fetchone()
+        
+        if existing_user:
+            # User already exists, log them in
+            user_id, username = existing_user
+        else:
+            # Create new user with a dummy password (they'll use Google OAuth)
+            # Make username unique by appending number if needed
+            base_username = username
+            counter = 1
+            while True:
+                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                if not cursor.fetchone():
+                    break
+                username = f"{base_username}{counter}"
+                counter += 1
+            
+            # Insert new user with Google OAuth marker
+            dummy_password_hash = hash_password(f"google_oauth_{google_user_id}")
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+                (username, dummy_password_hash, email)
+            )
+            conn.commit()
+            user_id = cursor.lastrowid
+            
+            # Also create initial user profile
+            cursor.execute(
+                "INSERT OR REPLACE INTO user_profiles (user_id, name, email) VALUES (?, ?, ?)",
+                (user_id, name, email)
+            )
+            conn.commit()
+        
+        conn.close()
+        
+        # Create JWT token
+        token = create_access_token(user_id, username)
+        
+        return AuthResponse(
+            token=token,
+            user_id=user_id,
+            username=username
+        )
+        
+    except ValueError as e:
+        # Invalid token
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
 
 # Root endpoint
 @app.get("/")

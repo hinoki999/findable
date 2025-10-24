@@ -156,7 +156,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               }
             ]}>
               <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={username}
                 onChangeText={validateUsername}
                 placeholder="johndoe"
@@ -182,7 +182,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               }
             ]}>
               <TextInput
-                style={[styles.input, { color: theme.colors.text, flex: 1 }]}
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={password}
                 onChangeText={validatePassword}
                 placeholder="••••••••"
@@ -221,7 +221,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
             ]}>
               <TextInput
-                style={[styles.input, { color: theme.colors.text }]}
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={email}
                 onChangeText={setEmail}
                 placeholder="john@example.com"
