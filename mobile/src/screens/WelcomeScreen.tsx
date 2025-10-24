@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 // import { useGoogleAuth, authenticateWithGoogle } from '../services/googleAuth';
@@ -62,7 +63,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
         {/* Grid Background */}
         <View style={styles.gridContainer}>
           {/* Vertical grid lines */}
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <View
               key={`v-${i}`}
               style={[
@@ -77,7 +78,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
             />
           ))}
           {/* Horizontal grid lines */}
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
             <View
               key={`h-${i}`}
               style={[
@@ -94,20 +95,34 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
           
           {/* Water Drop Icon */}
           <View style={styles.dropIconContainer}>
-            <MaterialCommunityIcons name="water" size={50} color="#007AFF" />
+            <MaterialCommunityIcons name="water" size={25} color="#007AFF" />
           </View>
         </View>
         
-        <Text style={[styles.appName, { color: theme.colors.blue }]}>DropLink</Text>
+        {Platform.OS === 'web' ? (
+          <Text
+            style={[
+              styles.appName,
+              {
+                // @ts-ignore - web-specific CSS
+                background: 'linear-gradient(90deg, #5BA3FF 0%, #007AFF 50%, #0051D5 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }
+            ]}
+          >
+            DropLink
+          </Text>
+        ) : (
+          <Text style={[styles.appName, { color: theme.colors.blue }]}>DropLink</Text>
+        )}
       </View>
 
       {/* Tagline */}
       <View style={styles.taglineContainer}>
         <Text style={[styles.tagline, { color: theme.colors.text }]}>
-          Share contacts with
-        </Text>
-        <Text style={[styles.tagline, { color: theme.colors.text }]}>
-          people nearby 📡
+          Connect with people nearby
         </Text>
       </View>
 
