@@ -13,6 +13,8 @@ import jwt
 import bcrypt
 from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
+import cloudinary
+import cloudinary.uploader
 
 app = FastAPI(title="DropLink API")
 
@@ -24,9 +26,12 @@ ACCESS_TOKEN_EXPIRE_DAYS = 30
 # Google OAuth Client ID (in production, use environment variable)
 GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"  # Will be configured later
 
-# Create uploads directory if it doesn't exist
-UPLOAD_DIR = Path("uploads/profile_photos")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Cloudinary Configuration
+cloudinary.config(
+    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", "ddxxjia44"),
+    api_key=os.environ.get("CLOUDINARY_API_KEY", "213846241467723"),
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
+)
 
 # Enable CORS for React Native app
 app.add_middleware(
@@ -623,22 +628,25 @@ def save_user_profile(profile: dict, user_id: int = 1):
 # Profile Photo endpoints
 @app.post("/user/profile/photo")
 async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
-    """Upload profile photo"""
+    """Upload profile photo to Cloudinary"""
     try:
         # Validate file type
         if not file.content_type in ["image/jpeg", "image/png", "image/jpg"]:
             raise HTTPException(status_code=400, detail="Only JPEG and PNG images are allowed")
         
-        # Create unique filename
-        file_extension = file.filename.split(".")[-1]
-        filename = f"user_{user_id}.{file_extension}"
-        file_path = UPLOAD_DIR / filename
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file.file,
+            folder="droplink/profile_photos",
+            public_id=f"user_{user_id}",
+            overwrite=True,
+            resource_type="image"
+        )
         
-        # Save file
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Get the secure URL from Cloudinary
+        photo_url = upload_result.get("secure_url")
         
-        # Update database with photo path
+        # Update database with photo URL
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
@@ -654,7 +662,7 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
             )
         ''')
         
-        # Update or insert photo path
+        # Update or insert photo URL
         # Check if profile exists
         cursor.execute('SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
         exists = cursor.fetchone()
@@ -663,21 +671,20 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
             # Update existing profile
             cursor.execute('''
                 UPDATE user_profiles SET profile_photo = ? WHERE user_id = ?
-            ''', (str(filename), user_id))
+            ''', (photo_url, user_id))
         else:
             # Insert new profile with just photo
             cursor.execute('''
                 INSERT INTO user_profiles (user_id, profile_photo)
                 VALUES (?, ?)
-            ''', (user_id, str(filename)))
+            ''', (user_id, photo_url))
         
         conn.commit()
         conn.close()
         
         return {
             "success": True,
-            "filename": filename,
-            "url": f"/user/profile/photo/{user_id}"
+            "url": photo_url
         }
     except HTTPException:
         raise
@@ -686,7 +693,7 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
 
 @app.get("/user/profile/photo/{user_id}")
 async def get_profile_photo(user_id: int):
-    """Get profile photo"""
+    """Get profile photo URL from Cloudinary"""
     try:
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
@@ -699,12 +706,7 @@ async def get_profile_photo(user_id: int):
         if not row or not row[0]:
             raise HTTPException(status_code=404, detail="Profile photo not found")
         
-        file_path = UPLOAD_DIR / row[0]
-        
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="Photo file not found")
-        
-        return FileResponse(file_path)
+        return {"url": row[0]}
     except HTTPException:
         raise
     except Exception as e:
@@ -712,7 +714,7 @@ async def get_profile_photo(user_id: int):
 
 @app.delete("/user/profile/photo")
 async def delete_profile_photo(user_id: int = 1):
-    """Delete profile photo"""
+    """Delete profile photo from Cloudinary"""
     try:
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
@@ -722,10 +724,11 @@ async def delete_profile_photo(user_id: int = 1):
         row = cursor.fetchone()
         
         if row and row[0]:
-            # Delete file
-            file_path = UPLOAD_DIR / row[0]
-            if file_path.exists():
-                os.remove(file_path)
+            # Delete from Cloudinary
+            try:
+                cloudinary.uploader.destroy(f"droplink/profile_photos/user_{user_id}")
+            except:
+                pass  # Continue even if Cloudinary delete fails
             
             # Update database
             cursor.execute('''

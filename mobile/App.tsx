@@ -196,9 +196,8 @@ function MainApp() {
           
           // Load profile photo if exists
           if (profileData.profile_photo) {
-            const photoUrl = `https://findable-production.up.railway.app${profileData.profile_photo}`;
-            console.log('✅ Loaded profile photo:', photoUrl);
-            setProfilePhotoUri(photoUrl);
+            console.log('✅ Loaded profile photo:', profileData.profile_photo);
+            setProfilePhotoUri(profileData.profile_photo);
           }
         }
         
