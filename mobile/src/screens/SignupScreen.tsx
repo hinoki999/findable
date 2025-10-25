@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
@@ -35,6 +35,24 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [verificationCode, setVerificationCode] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
 
+  const checkUsernameAvailability = async (username: string) => {
+    try {
+      const response = await fetch('https://findable-production.up.railway.app/auth/check-username', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      
+      const data = await response.json();
+      
+      if (!data.available) {
+        setUsernameError(data.message);
+      }
+    } catch (err) {
+      console.error('Failed to check username:', err);
+    }
+  };
+
   const validateUsername = (text: string) => {
     setUsername(text);
     setUsernameError('');
@@ -54,6 +72,17 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
   };
+
+  // Debounced username availability check
+  useEffect(() => {
+    if (username.length >= 3 && username.length <= 20 && !usernameError) {
+      const timer = setTimeout(() => {
+        checkUsernameAvailability(username);
+      }, 500); // Wait 500ms after user stops typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [username]);
 
   const validatePassword = (text: string) => {
     setPassword(text);

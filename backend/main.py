@@ -185,6 +185,9 @@ class VerifyCodeRequest(BaseModel):
     email: str
     code: str
 
+class CheckUsernameRequest(BaseModel):
+    username: str
+
 # ========== AUTH HELPER FUNCTIONS ==========
 
 def hash_password(password: str) -> str:
@@ -497,6 +500,7 @@ def send_verification_code(request: SendVerificationCodeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send verification code: {str(e)}")
+
 @app.post("/auth/verify-code")
 def verify_code(request: VerifyCodeRequest):
     """Verify the 6-digit code"""
@@ -531,6 +535,34 @@ def verify_code(request: VerifyCodeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to verify code: {str(e)}")
+
+@app.post("/auth/check-username")
+def check_username(request: CheckUsernameRequest):
+    """Check if username is available"""
+    try:
+        username = request.username.strip()
+        
+        # Validate username format
+        if len(username) < 3 or len(username) > 20:
+            return {"available": False, "message": "Username must be 3-20 characters"}
+        
+        if not username.replace('_', '').isalnum():
+            return {"available": False, "message": "Letters, numbers, and underscores only"}
+        
+        # Check if username exists
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+        existing = cursor.fetchone()
+        conn.close()
+        
+        if existing:
+            return {"available": False, "message": "Username already taken"}
+        
+        return {"available": True, "message": "Username available"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check username: {str(e)}")
 
 @app.post("/auth/change-username")
 def change_username(new_username: str, user_id: int = Depends(get_current_user)):
