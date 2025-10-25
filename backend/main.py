@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -15,6 +15,9 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 import cloudinary
 import cloudinary.uploader
+import random
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 app = FastAPI(title="DropLink API")
 
@@ -32,6 +35,14 @@ cloudinary.config(
     api_key=os.environ.get("CLOUDINARY_API_KEY", "213846241467723"),
     api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
 )
+
+# SendGrid Configuration
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@droplinkconnect.com")
+
+# Temporary storage for verification codes (email -> {code, expires_at})
+# In production, use Redis or database
+verification_codes = {}
 
 # Enable CORS for React Native app
 app.add_middleware(
@@ -164,6 +175,16 @@ class AuthResponse(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
 
+class SendVerificationCodeRequest(BaseModel):
+    email: str
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
+class CheckUsernameRequest(BaseModel):
+    username: str
+
 # ========== AUTH HELPER FUNCTIONS ==========
 
 def hash_password(password: str) -> str:
@@ -206,6 +227,62 @@ def get_current_user(authorization: str = Header(None)) -> int:
     payload = verify_token(token)
     return payload["user_id"]
 
+def send_verification_email(email: str, code: str):
+    """Send verification code via email using SendGrid"""
+    try:
+        # HTML email body
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #007AFF;">Welcome to DropLink!</h2>
+                <p>Your verification code is:</p>
+                <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                    <h1 style="color: #007AFF; font-size: 36px; letter-spacing: 8px; margin: 0;">{code}</h1>
+                </div>
+                <p>This code will expire in 10 minutes.</p>
+                <p>If you didn't request this code, please ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px;">DropLink - Share contacts with people near you</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Plain text version
+        plain_content = f"""
+Welcome to DropLink!
+
+Your verification code is: {code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this code, please ignore this email.
+
+---
+DropLink - Share contacts with people near you
+        """
+        
+        # Create SendGrid message
+        message = Mail(
+            from_email=Email(FROM_EMAIL),
+            to_emails=To(email),
+            subject='DropLink - Your Verification Code',
+            plain_text_content=Content("text/plain", plain_content),
+            html_content=Content("text/html", html_content)
+        )
+        
+        # Send via SendGrid
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        
+        print(f"✅ Email sent successfully to {email}. Status: {response.status_code}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to send email: {str(e)}")
+        return False
+
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
@@ -232,6 +309,9 @@ def register(request: RegisterRequest):
         if not any(c.isdigit() for c in request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one number")
         
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in request.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+        
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
@@ -249,6 +329,12 @@ def register(request: RegisterRequest):
             (request.username, password_hash, request.email)
         )
         user_id = cursor.lastrowid
+        
+        # Initialize default settings with dark mode enabled
+        cursor.execute('''
+            INSERT INTO user_settings (user_id, dark_mode, max_distance)
+            VALUES (?, ?, ?)
+        ''', (user_id, 1, 33))
         
         conn.commit()
         conn.close()
@@ -383,6 +469,201 @@ def google_auth(request: GoogleAuthRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
 
+@app.post("/auth/send-verification-code")
+def send_verification_code(request: SendVerificationCodeRequest):
+    """Send a 6-digit verification code to email"""
+    try:
+        email = request.email.lower().strip()
+        
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Generate 6-digit code
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Store code with expiration (10 minutes)
+        expires_at = datetime.now() + timedelta(minutes=10)
+        verification_codes[email] = {
+            'code': code,
+            'expires_at': expires_at
+        }
+        
+        # Send email
+        success = send_verification_email(email, code)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to send verification email. Please check your email address.")
+        
+        return {
+            "success": True,
+            "message": f"Verification code sent to {email}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send verification code: {str(e)}")
+
+@app.post("/auth/verify-code")
+def verify_code(request: VerifyCodeRequest):
+    """Verify the 6-digit code"""
+    try:
+        email = request.email.lower().strip()
+        code = request.code.strip()
+        
+        # Check if code exists for this email
+        if email not in verification_codes:
+            raise HTTPException(status_code=400, detail="No verification code found for this email")
+        
+        stored_data = verification_codes[email]
+        
+        # Check if code has expired
+        if datetime.now() > stored_data['expires_at']:
+            del verification_codes[email]
+            raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+        
+        # Verify code
+        if stored_data['code'] != code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Code is valid, remove it from storage
+        del verification_codes[email]
+        
+        return {
+            "success": True,
+            "message": "Email verified successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to verify code: {str(e)}")
+
+@app.post("/auth/check-username")
+def check_username(request: CheckUsernameRequest):
+    """Check if username is available"""
+    try:
+        username = request.username.strip()
+        
+        # Validate username format
+        if len(username) < 3 or len(username) > 20:
+            return {"available": False, "message": "Username must be 3-20 characters"}
+        
+        if not username.replace('_', '').isalnum():
+            return {"available": False, "message": "Letters, numbers, and underscores only"}
+        
+        # Check if username exists
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+        existing = cursor.fetchone()
+        conn.close()
+        
+        if existing:
+            return {"available": False, "message": "Username already taken"}
+        
+        return {"available": True, "message": "Username available"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check username: {str(e)}")
+
+@app.post("/auth/change-username")
+def change_username(new_username: str, user_id: int = Depends(get_current_user)):
+    """Change username for authenticated user"""
+    try:
+        # Validate new username
+        if not new_username or len(new_username) < 3 or len(new_username) > 20:
+            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
+        
+        if not new_username.replace('_', '').isalnum():
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Check if new username is already taken
+        cursor.execute("SELECT id FROM users WHERE username = ? AND id != ?", (new_username, user_id))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        # Update username
+        cursor.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
+        conn.commit()
+        conn.close()
+        
+        # Create new JWT token with updated username
+        token = create_access_token(user_id, new_username)
+        
+        return {
+            "success": True,
+            "message": "Username changed successfully",
+            "token": token,
+            "username": new_username
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to change username: {str(e)}")
+
+@app.post("/auth/change-password")
+def change_password(
+    current_password: str,
+    new_password: str,
+    user_id: int = Depends(get_current_user)
+):
+    """Change password for authenticated user"""
+    try:
+        # Validate new password
+        if len(new_password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        if not any(c.isupper() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+        
+        if not any(c.islower() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+        
+        if not any(c.isdigit() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one number")
+        
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+        
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Get current password hash
+        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        current_hash = user[0]
+        
+        # Verify current password
+        if not verify_password(current_password, current_hash):
+            conn.close()
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        
+        # Hash and update new password
+        new_hash = hash_password(new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "Password changed successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+
 # Root endpoint
 @app.get("/")
 def read_root():
@@ -396,6 +677,7 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
 
 # POST /devices - Save a new device (with deduplication)
 @app.post("/devices", response_model=DeviceResponse)
@@ -474,7 +756,7 @@ def create_device(device: DeviceCreate):
 
 # GET /devices - Retrieve all devices
 @app.get("/devices", response_model=List[DeviceResponse])
-def get_devices(user_id: int = 1):
+def get_devices(user_id: int = Depends(get_current_user)):
     try:
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
@@ -570,7 +852,7 @@ def delete_device(device_id: int):
 
 # User Profile endpoints
 @app.get("/user/profile")
-def get_user_profile(user_id: int = 1):
+def get_user_profile(user_id: int = Depends(get_current_user)):
     """Get user profile"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -582,20 +864,20 @@ def get_user_profile(user_id: int = 1):
         conn.close()
         
         if not row:
-            return {"name": "", "email": "", "phone": "", "bio": "", "profilePhoto": None}
+            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None}
         
         return {
             "name": row[0],
             "email": row[1],
             "phone": row[2],
             "bio": row[3],
-            "profilePhoto": row[4]
+            "profile_photo": row[4]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/profile")
-def save_user_profile(profile: dict, user_id: int = 1):
+def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
     """Save user profile"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -627,7 +909,7 @@ def save_user_profile(profile: dict, user_id: int = 1):
 
 # Profile Photo endpoints
 @app.post("/user/profile/photo")
-async def upload_profile_photo(file: UploadFile = File(...), user_id: int = 1):
+async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depends(get_current_user)):
     """Upload profile photo to Cloudinary"""
     try:
         # Validate file type
@@ -713,7 +995,7 @@ async def get_profile_photo(user_id: int):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/profile/photo")
-async def delete_profile_photo(user_id: int = 1):
+async def delete_profile_photo(user_id: int = Depends(get_current_user)):
     """Delete profile photo from Cloudinary"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -743,7 +1025,7 @@ async def delete_profile_photo(user_id: int = 1):
 
 # Settings endpoints
 @app.get("/user/settings")
-def get_user_settings(user_id: int = 1):
+def get_user_settings(user_id: int = Depends(get_current_user)):
     """Get user settings"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -755,7 +1037,7 @@ def get_user_settings(user_id: int = 1):
         conn.close()
         
         if not row:
-            return {"darkMode": False, "maxDistance": 33}
+            return {"darkMode": True, "maxDistance": 33}
         
         return {
             "darkMode": bool(row[0]),
@@ -765,7 +1047,7 @@ def get_user_settings(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/settings")
-def save_user_settings(settings: dict, user_id: int = 1):
+def save_user_settings(settings: dict, user_id: int = Depends(get_current_user)):
     """Save user settings"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -794,7 +1076,7 @@ def save_user_settings(settings: dict, user_id: int = 1):
 
 # Privacy Zones endpoints
 @app.get("/user/privacy-zones")
-def get_privacy_zones(user_id: int = 1):
+def get_privacy_zones(user_id: int = Depends(get_current_user)):
     """Get privacy zones"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -817,7 +1099,7 @@ def get_privacy_zones(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/privacy-zones")
-def save_privacy_zone(zone: dict, user_id: int = 1):
+def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
     """Save a privacy zone"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -859,7 +1141,7 @@ def delete_privacy_zone(zone_id: int):
 
 # Pinned contacts endpoint
 @app.get("/user/pinned")
-def get_pinned_contacts(user_id: int = 1):
+def get_pinned_contacts(user_id: int = Depends(get_current_user)):
     """Get pinned contact IDs"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -874,7 +1156,7 @@ def get_pinned_contacts(user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/pinned/{device_id}")
-def pin_contact(device_id: int, user_id: int = 1):
+def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Pin a contact"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -900,7 +1182,7 @@ def pin_contact(device_id: int, user_id: int = 1):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/pinned/{device_id}")
-def unpin_contact(device_id: int, user_id: int = 1):
+def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Unpin a contact"""
     try:
         conn = sqlite3.connect('droplink.db')
@@ -911,6 +1193,270 @@ def unpin_contact(device_id: int, user_id: int = 1):
         conn.commit()
         conn.close()
         return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ADMIN: Get user statistics
+@app.get("/admin/stats")
+async def get_admin_stats(secret: str = Header(None)):
+    """
+    ADMIN ENDPOINT - Get database statistics
+    Requires secret header for security
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Count users
+        cursor.execute('SELECT COUNT(*) FROM users')
+        total_users = cursor.fetchone()[0]
+        
+        # Get list of all usernames with IDs
+        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        users_list = cursor.fetchall()
+        
+        # Count devices
+        cursor.execute('SELECT COUNT(*) FROM devices')
+        total_devices = cursor.fetchone()[0]
+        
+        # Count profiles with photos
+        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        users_with_photos = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            "total_users": total_users,
+            "total_devices": total_devices,
+            "users_with_photos": users_with_photos,
+            "users": [
+                {
+                    "id": user[0],
+                    "username": user[1],
+                    "email": user[2] or "No email"
+                }
+                for user in users_list
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ADMIN: Simple web dashboard
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard():
+    """
+    Simple web dashboard to view user accounts
+    Just open in browser: https://findable-production.up.railway.app/admin/dashboard
+    """
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Get user stats
+        cursor.execute('SELECT COUNT(*) FROM users')
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        users_list = cursor.fetchall()
+        
+        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        users_with_photos = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        # Get current timestamp
+        current_time = datetime.now().strftime("%B %d, %Y at %I:%M:%S %p")
+        
+        # Build HTML
+        users_html = ""
+        if len(users_list) == 0:
+            users_html = """
+            <tr>
+                <td colspan="3" style="padding: 32px; text-align: center; color: #9ca3af;">
+                    <div style="font-size: 48px; margin-bottom: 8px;">📭</div>
+                    <div style="font-weight: 600; color: #6b7280;">No users yet</div>
+                    <div style="font-size: 14px; margin-top: 4px;">Database is empty - accounts will appear here when created</div>
+                </td>
+            </tr>
+            """
+        else:
+            for user in users_list:
+                users_html += f"""
+                <tr>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{user[0]}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{user[1]}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">{user[2] or 'No email'}</td>
+                </tr>
+                """
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>DropLink Admin Dashboard</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: #f9fafb;
+                }}
+                .container {{
+                    max-width: 1000px;
+                    margin: 0 auto;
+                }}
+                h1 {{
+                    color: #111827;
+                    margin-bottom: 8px;
+                }}
+                .subtitle {{
+                    color: #6b7280;
+                    margin-bottom: 32px;
+                }}
+                .stats {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 16px;
+                    margin-bottom: 32px;
+                }}
+                .stat-card {{
+                    background: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }}
+                .stat-value {{
+                    font-size: 36px;
+                    font-weight: 700;
+                    color: #007AFF;
+                    margin-bottom: 4px;
+                }}
+                .stat-label {{
+                    color: #6b7280;
+                    font-size: 14px;
+                }}
+                .users-table {{
+                    background: white;
+                    border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                }}
+                th {{
+                    background: #f9fafb;
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    color: #374151;
+                    font-size: 14px;
+                    border-bottom: 2px solid #e5e7eb;
+                }}
+                .refresh-btn {{
+                    background: #007AFF;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-bottom: 16px;
+                }}
+                .refresh-btn:hover {{
+                    background: #0051D5;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔗 DropLink Admin</h1>
+                <p class="subtitle">Monitor your user accounts</p>
+                
+                <div style="background: #dcfce7; border: 1px solid #86efac; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">✅</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #166534;">Dashboard Connected</div>
+                        <div style="font-size: 13px; color: #15803d;">Last updated: {current_time}</div>
+                    </div>
+                </div>
+                
+                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value">{total_users}</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{users_with_photos}</div>
+                        <div class="stat-label">Users with Photos</div>
+                    </div>
+                </div>
+                
+                <div class="users-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {users_html}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html
+        
+    except Exception as e:
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>"
+
+# TEMPORARY: Admin endpoint to clear all test data
+@app.delete("/admin/clear-all-data")
+async def clear_all_data(secret: str = Header(None)):
+    """
+    TEMPORARY ADMIN ENDPOINT - Deletes all users and related data
+    Requires secret header for security
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Delete all data from all tables
+        cursor.execute('DELETE FROM pinned_contacts')
+        cursor.execute('DELETE FROM privacy_zones')
+        cursor.execute('DELETE FROM user_settings')
+        cursor.execute('DELETE FROM user_profiles')
+        cursor.execute('DELETE FROM devices')
+        cursor.execute('DELETE FROM users')
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "message": "All user data has been deleted",
+            "deleted_tables": ["users", "devices", "user_profiles", "user_settings", "privacy_zones", "pinned_contacts"]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

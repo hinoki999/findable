@@ -5,6 +5,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CIRCLE_SIZE = 280;
@@ -231,10 +232,22 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         } as any);
       }
 
+      // Get auth token
+      const token = Platform.OS === 'web' 
+        ? localStorage.getItem('authToken')
+        : await SecureStore.getItemAsync('authToken');
+      
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
       // Upload to backend
       const BASE_URL = 'https://findable-production.up.railway.app';
-      const response = await fetch(`${BASE_URL}/user/profile/photo?user_id=${userId}`, {
+      const response = await fetch(`${BASE_URL}/user/profile/photo`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 

@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -38,15 +39,25 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
-  const { logout, username } = useAuth();
+  const { logout, username, userId, login } = useAuth();
   const { name, phoneNumber, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | null>(null);
+  const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
   const [tempSocialPlatform, setTempSocialPlatform] = useState('');
   const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
+  
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   // Privacy Zones feature removed
   // const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -106,7 +117,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     return '';
   };
 
-  const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media', socialIndex?: number) => {
+  const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password', socialIndex?: number) => {
     setEditingField(field);
     setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
@@ -122,11 +133,20 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       setTempSocialIndex(socialIndex);
       setTempSocialPlatform(socialMedia[socialIndex].platform);
       setTempSocialHandle(socialMedia[socialIndex].handle);
+    } else if (field === 'username') {
+      setTempValue(username || '');
+    } else if (field === 'password') {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
     }
     setEditModalVisible(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate based on field type
     let error = '';
     if (editingField === 'phone') {
@@ -168,6 +188,79 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         handle: tempSocialHandle.trim(),
       };
       updateProfile({ socialMedia: updatedSocial });
+    } else if (editingField === 'username') {
+      // Validate username
+      if (!tempValue.trim() || tempValue.length < 3 || tempValue.length > 20) {
+        setValidationError('Username must be 3-20 characters');
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(tempValue)) {
+        setValidationError('Username can only contain letters, numbers, and underscores');
+        return;
+      }
+      
+      // Call API to change username
+      try {
+        const result = await api.changeUsername(tempValue.trim());
+        // Update token in storage
+        await login(result.token, userId, result.username);
+        
+        showToast({
+          message: 'Username changed successfully!',
+          type: 'success',
+          duration: 2000,
+        });
+        setEditModalVisible(false);
+        return;
+      } catch (error: any) {
+        setValidationError(error.message || 'Failed to change username');
+        return;
+      }
+    } else if (editingField === 'password') {
+      // Validate password change
+      if (!currentPassword) {
+        setValidationError('Current password is required');
+        return;
+      }
+      if (newPassword.length < 8) {
+        setValidationError('New password must be at least 8 characters');
+        return;
+      }
+      if (!/[A-Z]/.test(newPassword)) {
+        setValidationError('New password must contain at least one uppercase letter');
+        return;
+      }
+      if (!/[a-z]/.test(newPassword)) {
+        setValidationError('New password must contain at least one lowercase letter');
+        return;
+      }
+      if (!/[0-9]/.test(newPassword)) {
+        setValidationError('New password must contain at least one number');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setValidationError('Passwords do not match');
+        return;
+      }
+      
+      // Call API to change password
+      try {
+        await api.changePassword(currentPassword, newPassword);
+        
+        showToast({
+          message: 'Password changed successfully!',
+          type: 'success',
+          duration: 2000,
+        });
+        setEditModalVisible(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        return;
+      } catch (error: any) {
+        setValidationError(error.message || 'Failed to change password');
+        return;
+      }
     }
     setEditModalVisible(false);
     setEditingField(null);
@@ -193,6 +286,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setTempSocialHandle('');
     setTempSocialIndex(null);
     setValidationError('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
   };
 
   // Flag/Report button removed
@@ -381,6 +480,33 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           ))}
         </View>
 
+        {/* Security Settings Card */}
+        <View style={theme.card}>
+          <Text style={[theme.type.h2, { color: theme.colors.blue, marginBottom: 16 }]}>Security Settings</Text>
+          
+          {/* Username Row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={[theme.type.muted, { flex: 1 }]}>Username</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>@{username}</Text>
+              <Pressable style={{ padding: 4 }} onPress={() => handleEdit('username')}>
+                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Password Row */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={[theme.type.muted, { flex: 1 }]}>Password</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>••••••••</Text>
+              <Pressable style={{ padding: 4 }} onPress={() => handleEdit('password')}>
+                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
         {/* Logout button - at the very bottom */}
         <View style={{ marginTop: 32, alignItems: 'center' }}>
           {/* Gray line above logout */}
@@ -427,14 +553,155 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         }}>
           <View style={[theme.card, { width: '100%', maxWidth: 400 }]}>
             <Text style={theme.type.h2}>
-              Edit {editingField === 'phone' ? 'Phone Number' :
-                    editingField === 'email' ? 'Email' :
-                    editingField === 'name' ? 'Name' :
-                    editingField === 'bio' ? 'Bio' :
-                    editingField === 'social-media' ? 'Social Media Account' : ''}
+              {editingField === 'phone' ? 'Edit Phone Number' :
+               editingField === 'email' ? 'Edit Email' :
+               editingField === 'name' ? 'Edit Name' :
+               editingField === 'bio' ? 'Edit Bio' :
+               editingField === 'username' ? 'Change Username' :
+               editingField === 'password' ? 'Change Password' :
+               editingField === 'social-media' ? 'Edit Social Media Account' : ''}
             </Text>
             
-            {editingField === 'social-media' ? (
+            {editingField === 'password' ? (
+              <>
+                {/* Current Password */}
+                <Text style={[theme.type.muted, { marginTop: 16, marginBottom: 8, fontSize: 14 }]}>
+                  Current Password
+                </Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={currentPassword}
+                    onChangeText={(text) => {
+                      setCurrentPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Enter current password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showCurrentPassword}
+                    autoFocus={true}
+                  />
+                  <Pressable
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showCurrentPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+                
+                {/* New Password */}
+                <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
+                  New Password
+                </Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={newPassword}
+                    onChangeText={(text) => {
+                      setNewPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Enter new password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showNewPassword}
+                  />
+                  <Pressable
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showNewPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+                
+                {/* Confirm Password */}
+                <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
+                  Confirm New Password
+                </Text>
+                <View style={{ position: 'relative' }}>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: validationError ? '#FF6B6B' : theme.colors.border,
+                      borderRadius: 8,
+                      padding: 12,
+                      paddingRight: 48,
+                      fontSize: 16,
+                      fontFamily: 'Inter_400Regular',
+                      color: theme.colors.text,
+                      backgroundColor: theme.colors.bg,
+                      minHeight: 48,
+                    }}
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                      setConfirmPassword(text);
+                      if (validationError) setValidationError('');
+                    }}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showConfirmPassword}
+                  />
+                  <Pressable
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={{
+                      position: 'absolute',
+                      right: 12,
+                      top: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+                
+                <Text style={[theme.type.muted, { marginTop: 12, fontSize: 12, fontStyle: 'italic' }]}>
+                  Password must be at least 8 characters with uppercase, lowercase, and a number
+                </Text>
+              </>
+            ) : editingField === 'social-media' ? (
               <>
                 {/* Platform Input */}
                 <Text style={[theme.type.muted, { marginTop: 16, marginBottom: 8, fontSize: 14 }]}>
