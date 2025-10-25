@@ -67,6 +67,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setPasswordError('Need at least one number');
       return;
     }
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(text)) {
+      setPasswordError('Need at least one special character');
+      return;
+    }
   };
 
   const handleSignup = async () => {
@@ -81,8 +85,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
 
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
-      setError('Password must contain uppercase, lowercase, and number');
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      setError('Password must contain uppercase, lowercase, number, and special character');
       return;
     }
 

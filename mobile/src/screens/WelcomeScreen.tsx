@@ -99,7 +99,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
       <View style={styles.taglineContainer}>
         <View style={styles.taglineRow}>
           <Text style={[styles.tagline, { color: theme.colors.text }]}>
-            Connect with people nearby{' '}
+            Connect with people near you{' '}
           </Text>
           <MaterialCommunityIcons name="link-variant" size={18} color="#FF6B35" style={{ marginTop: 2 }} />
         </View>
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   textWithDropContainer: {
     position: 'relative',

@@ -232,6 +232,9 @@ def register(request: RegisterRequest):
         if not any(c.isdigit() for c in request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one number")
         
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in request.password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+        
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
@@ -442,6 +445,9 @@ def change_password(
         
         if not any(c.isdigit() for c in new_password):
             raise HTTPException(status_code=400, detail="Password must contain at least one number")
+        
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
