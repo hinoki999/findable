@@ -16,14 +16,17 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   // Validation states
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const validateUsername = (text: string) => {
     setUsername(text);
@@ -71,6 +74,25 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setPasswordError('Need at least one special character');
       return;
     }
+
+    // Check if confirm password matches
+    if (confirmPassword && text !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match');
+    } else if (confirmPassword) {
+      setConfirmPasswordError('');
+    }
+  };
+
+  const validateConfirmPassword = (text: string) => {
+    setConfirmPassword(text);
+    setConfirmPasswordError('');
+
+    if (text.length === 0) return;
+
+    if (text !== password) {
+      setConfirmPasswordError('Passwords do not match');
+      return;
+    }
   };
 
   const handleSignup = async () => {
@@ -87,6 +109,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
     if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password) || !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
       setError('Password must contain uppercase, lowercase, number, and special character');
+      return;
+    }
+
+    if (!confirmPassword || password !== confirmPassword) {
+      setError('Passwords do not match');
       return;
     }
 
@@ -119,7 +146,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && !usernameError && !passwordError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && !usernameError && !passwordError && !confirmPasswordError;
 
   return (
     <KeyboardAvoidingView
@@ -211,8 +238,45 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               <Text style={styles.errorText}>{passwordError}</Text>
             ) : null}
             <Text style={[styles.hint, { color: theme.colors.muted }]}>
-              8+ chars, uppercase, lowercase, number
+              8+ chars, uppercase, lowercase, number, special character
             </Text>
+          </View>
+
+          {/* Confirm Password */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Confirm Password</Text>
+            <View style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: confirmPasswordError ? '#FF3B30' : theme.colors.border,
+              }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
+                value={confirmPassword}
+                onChangeText={validateConfirmPassword}
+                placeholder="••••••••"
+                placeholderTextColor={theme.colors.muted}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!loading}
+              />
+              <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                {({ pressed }) => (
+                  <MaterialCommunityIcons
+                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    size={20}
+                    color={theme.colors.muted}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
+                  />
+                )}
+              </Pressable>
+            </View>
+            {confirmPasswordError ? (
+              <Text style={styles.errorText}>{confirmPasswordError}</Text>
+            ) : null}
           </View>
 
           {/* Email (Optional) */}

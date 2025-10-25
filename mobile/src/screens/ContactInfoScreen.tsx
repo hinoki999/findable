@@ -109,10 +109,10 @@ export default function ContactInfoScreen({ email: initialEmail = '', onComplete
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Name (Optional) */}
+          {/* Name */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
-              Name <Text style={{ color: theme.colors.muted }}>(optional)</Text>
+              Name
             </Text>
             <View style={[
               styles.inputContainer,
