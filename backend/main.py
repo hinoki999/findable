@@ -497,7 +497,6 @@ def send_verification_code(request: SendVerificationCodeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send verification code: {str(e)}")
-
 @app.post("/auth/verify-code")
 def verify_code(request: VerifyCodeRequest):
     """Verify the 6-digit code"""
@@ -829,14 +828,14 @@ def get_user_profile(user_id: int = Depends(get_current_user)):
         conn.close()
         
         if not row:
-            return {"name": "", "email": "", "phone": "", "bio": "", "profilePhoto": None}
+            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None}
         
         return {
             "name": row[0],
             "email": row[1],
             "phone": row[2],
             "bio": row[3],
-            "profilePhoto": row[4]
+            "profile_photo": row[4]
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
