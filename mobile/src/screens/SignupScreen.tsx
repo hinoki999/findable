@@ -18,6 +18,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -254,6 +257,23 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(data.detail || 'Registration failed');
       }
 
+      // Save profile information
+      if (name || phone || bio) {
+        await fetch('https://findable-production.up.railway.app/user/profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.token}`
+          },
+          body: JSON.stringify({
+            name: name || '',
+            phone: phone || '',
+            email: email,
+            bio: bio || ''
+          }),
+        });
+      }
+
       // Success!
       setShowVerificationModal(false);
       onSignupSuccess(data.token, data.user_id, data.username, email);
@@ -264,7 +284,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 10 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -424,6 +444,70 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             {emailError ? (
               <Text style={styles.errorText}>{emailError}</Text>
             ) : null}
+          </View>
+
+          {/* Name */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
+              Name
+            </Text>
+            <View style={[
+              styles.inputContainer,
+              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
+                value={name}
+                onChangeText={setName}
+                placeholder="John Doe"
+                placeholderTextColor={theme.colors.muted}
+                autoCapitalize="words"
+                editable={!loading}
+              />
+            </View>
+          </View>
+
+          {/* Phone */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
+              Phone
+            </Text>
+            <View style={[
+              styles.inputContainer,
+              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="(555) 123-4567"
+                placeholderTextColor={theme.colors.muted}
+                keyboardType="phone-pad"
+                editable={!loading}
+              />
+            </View>
+          </View>
+
+          {/* Bio (Optional) */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
+              Bio <Text style={{ color: theme.colors.muted }}>(optional)</Text>
+            </Text>
+            <View style={[
+              styles.inputContainer,
+              { backgroundColor: theme.colors.white, borderColor: theme.colors.border, minHeight: 80 }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', height: 70, textAlignVertical: 'top' }]}
+                value={bio}
+                onChangeText={setBio}
+                placeholder="Tell us about yourself..."
+                placeholderTextColor={theme.colors.muted}
+                multiline={true}
+                numberOfLines={3}
+                editable={!loading}
+              />
+            </View>
           </View>
 
           {/* Error Message */}
