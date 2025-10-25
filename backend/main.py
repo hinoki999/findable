@@ -1192,6 +1192,55 @@ def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ADMIN: Get user statistics
+@app.get("/admin/stats")
+async def get_admin_stats(secret: str = Header(None)):
+    """
+    ADMIN ENDPOINT - Get database statistics
+    Requires secret header for security
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Count users
+        cursor.execute('SELECT COUNT(*) FROM users')
+        total_users = cursor.fetchone()[0]
+        
+        # Get list of all usernames with IDs
+        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        users_list = cursor.fetchall()
+        
+        # Count devices
+        cursor.execute('SELECT COUNT(*) FROM devices')
+        total_devices = cursor.fetchone()[0]
+        
+        # Count profiles with photos
+        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        users_with_photos = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            "total_users": total_users,
+            "total_devices": total_devices,
+            "users_with_photos": users_with_photos,
+            "users": [
+                {
+                    "id": user[0],
+                    "username": user[1],
+                    "email": user[2] or "No email"
+                }
+                for user in users_list
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # TEMPORARY: Admin endpoint to clear all test data
 @app.delete("/admin/clear-all-data")
 async def clear_all_data(secret: str = Header(None)):
