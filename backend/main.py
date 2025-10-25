@@ -15,10 +15,9 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 import cloudinary
 import cloudinary.uploader
-import smtplib
 import random
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail, Email, To, Content
 
 app = FastAPI(title="DropLink API")
 
@@ -37,11 +36,9 @@ cloudinary.config(
     api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
 )
 
-# Email Configuration (Gmail SMTP)
-SMTP_SERVER = "smtp.gmail.com"
-SMTP_PORT = 587
-SMTP_EMAIL = os.environ.get("SMTP_EMAIL", "your-email@gmail.com")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "your-app-password")
+# SendGrid Configuration
+SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@droplinkconnect.com")
 
 # Temporary storage for verification codes (email -> {code, expires_at})
 # In production, use Redis or database
@@ -231,16 +228,10 @@ def get_current_user(authorization: str = Header(None)) -> int:
     return payload["user_id"]
 
 def send_verification_email(email: str, code: str):
-    """Send verification code via email"""
+    """Send verification code via email using SendGrid"""
     try:
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['From'] = SMTP_EMAIL
-        msg['To'] = email
-        msg['Subject'] = 'DropLink - Your Verification Code'
-        
-        # Email body
-        html_body = f"""
+        # HTML email body
+        html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
             <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -258,31 +249,38 @@ def send_verification_email(email: str, code: str):
         </html>
         """
         
-        text_body = f"""
-        Welcome to DropLink!
-        
-        Your verification code is: {code}
-        
-        This code will expire in 10 minutes.
-        
-        If you didn't request this code, please ignore this email.
+        # Plain text version
+        plain_content = f"""
+Welcome to DropLink!
+
+Your verification code is: {code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this code, please ignore this email.
+
+---
+DropLink - Share contacts with people near you
         """
         
-        # Attach both plain text and HTML versions
-        part1 = MIMEText(text_body, 'plain')
-        part2 = MIMEText(html_body, 'html')
-        msg.attach(part1)
-        msg.attach(part2)
+        # Create SendGrid message
+        message = Mail(
+            from_email=Email(FROM_EMAIL),
+            to_emails=To(email),
+            subject='DropLink - Your Verification Code',
+            plain_text_content=Content("text/plain", plain_content),
+            html_content=Content("text/html", html_content)
+        )
         
-        # Send email
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.send_message(msg)
-            
+        # Send via SendGrid
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        
+        print(f"✅ Email sent successfully to {email}. Status: {response.status_code}")
         return True
+        
     except Exception as e:
-        print(f"Failed to send email: {str(e)}")
+        print(f"❌ Failed to send email: {str(e)}")
         return False
 
 # ========== AUTH ENDPOINTS ==========
@@ -1264,16 +1262,30 @@ async def admin_dashboard():
         
         conn.close()
         
+        # Get current timestamp
+        current_time = datetime.now().strftime("%B %d, %Y at %I:%M:%S %p")
+        
         # Build HTML
         users_html = ""
-        for user in users_list:
-            users_html += f"""
+        if len(users_list) == 0:
+            users_html = """
             <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{user[0]}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{user[1]}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">{user[2] or 'No email'}</td>
+                <td colspan="3" style="padding: 32px; text-align: center; color: #9ca3af;">
+                    <div style="font-size: 48px; margin-bottom: 8px;">📭</div>
+                    <div style="font-weight: 600; color: #6b7280;">No users yet</div>
+                    <div style="font-size: 14px; margin-top: 4px;">Database is empty - accounts will appear here when created</div>
+                </td>
             </tr>
             """
+        else:
+            for user in users_list:
+                users_html += f"""
+                <tr>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{user[0]}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{user[1]}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">{user[2] or 'No email'}</td>
+                </tr>
+                """
         
         html = f"""
         <!DOCTYPE html>
@@ -1362,6 +1374,14 @@ async def admin_dashboard():
             <div class="container">
                 <h1>🔗 DropLink Admin</h1>
                 <p class="subtitle">Monitor your user accounts</p>
+                
+                <div style="background: #dcfce7; border: 1px solid #86efac; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">✅</span>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #166534;">Dashboard Connected</div>
+                        <div style="font-size: 13px; color: #15803d;">Last updated: {current_time}</div>
+                    </div>
+                </div>
                 
                 <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
                 
