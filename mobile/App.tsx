@@ -10,7 +10,6 @@ import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import ContactInfoScreen from './src/screens/ContactInfoScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -152,8 +151,7 @@ function MainApp() {
   });
 
   // Auth flow state
-  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login' | 'contactInfo'>('welcome');
-  const [signupEmail, setSignupEmail] = useState<string>(''); // Pass email from signup to contact info
+  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login'>('welcome');
 
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
@@ -235,79 +233,21 @@ function MainApp() {
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
     console.log('✅ Signup successful:', username);
-    // DON'T login yet - we need to show ContactInfo screen first
-    // Just save the token temporarily
-    setSignupEmail(email || '');
+    // Profile info is already saved in SignupScreen, just login now
     setIsFirstTimeUser(true);
-    setAuthScreen('contactInfo'); // Go to contact info screen
-    
-    // Store signup data temporarily for after contact info
-    (window as any).__signupData = { token, userId, username };
+    await login(token, userId, username);
+    // User data will be loaded automatically by useEffect when isAuthenticated becomes true
+    showToast({
+      message: 'Welcome to DropLink!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
     // User goes directly to main app
-  };
-
-  const handleContactInfoComplete = async (profile: {
-    name: string;
-    phone: string;
-    email: string;
-    bio: string;
-  }) => {
-    console.log('✅ Contact info completed:', profile);
-    
-    // Get the signup data we saved earlier
-    const signupData = (window as any).__signupData;
-    if (!signupData) {
-      console.error('❌ No signup data found!');
-      return;
-    }
-    
-    // Save profile to backend
-    try {
-      const api = await import('./src/services/api');
-      await api.saveUserProfile({
-        name: profile.name,
-        phone: profile.phone,
-        email: profile.email,
-        bio: profile.bio,
-      });
-      
-      // Update local state
-      setUserProfile({
-        name: profile.name || 'Your Name',
-        phoneNumber: profile.phone || '(555) 123-4567',
-        email: profile.email || 'user@example.com',
-        bio: profile.bio || 'Optional bio line goes here.',
-        socialMedia: [],
-      });
-      
-      console.log('✅ Profile saved successfully');
-      
-      // NOW log them in (this will set isAuthenticated: true and show main app)
-      await login(signupData.token, signupData.userId, signupData.username);
-      
-      // Clear the temporary signup data
-      delete (window as any).__signupData;
-      
-      showToast({
-        message: 'Welcome to DropLink!',
-        type: 'success',
-        duration: 3000,
-      });
-      
-      // Now user goes to main app (tutorial will show automatically for first-time users)
-    } catch (error) {
-      console.error('❌ Failed to save profile:', error);
-      showToast({
-        message: 'Failed to save profile. Please try again.',
-        type: 'error',
-        duration: 3000,
-      });
-    }
   };
 
   const toggleDarkMode = async () => {
@@ -477,13 +417,6 @@ function MainApp() {
             onLoginSuccess={handleLoginSuccess}
             onSignupPress={() => setAuthScreen('signup')}
             onBack={() => setAuthScreen('welcome')}
-          />
-        )}
-
-        {authScreen === 'contactInfo' && (
-          <ContactInfoScreen
-            email={signupEmail}
-            onComplete={handleContactInfoComplete}
           />
         )}
 

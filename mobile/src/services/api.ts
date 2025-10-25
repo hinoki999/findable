@@ -243,6 +243,7 @@ export interface UserProfile {
   email: string;
   phone: string;
   bio: string;
+  profile_photo?: string;
 }
 
 export async function getUserProfile(): Promise<UserProfile> {
