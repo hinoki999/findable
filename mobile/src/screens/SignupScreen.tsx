@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
@@ -27,6 +27,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [emailError, setEmailError] = useState('');
+
+  // Email verification modal
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationStep, setVerificationStep] = useState<'confirm' | 'enter-code'>('confirm');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [sendingCode, setSendingCode] = useState(false);
 
   const validateUsername = (text: string) => {
     setUsername(text);
@@ -95,7 +102,20 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const handleSignup = async () => {
+  const validateEmail = (text: string) => {
+    setEmail(text);
+    setEmailError('');
+
+    if (text.length === 0) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(text)) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+  };
+
+  const handleSignup = () => {
     // Final validation
     if (!username || username.length < 3 || username.length > 20) {
       setError('Please enter a valid username (3-20 characters)');
@@ -117,17 +137,85 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
 
+    // Email validation
+    if (!email || email.trim().length === 0) {
+      setError('Please enter an email address');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    // All validation passed, show verification modal
+    setError('');
+    setVerificationStep('confirm');
+    setShowVerificationModal(true);
+  };
+
+  const handleSendCode = async () => {
+    setSendingCode(true);
+    setError('');
+
+    try {
+      const response = await fetch('https://findable-production.up.railway.app/auth/send-verification-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to send verification code');
+      }
+
+      // Move to code entry step
+      setVerificationStep('enter-code');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send verification code. Please try again.');
+      setShowVerificationModal(false);
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
+  const handleVerifyAndSignup = async () => {
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError('Please enter a 6-digit code');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
+      // First verify the code
+      const verifyResponse = await fetch('https://findable-production.up.railway.app/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          code: verificationCode,
+        }),
+      });
+
+      const verifyData = await verifyResponse.json();
+
+      if (!verifyResponse.ok) {
+        throw new Error(verifyData.detail || 'Invalid verification code');
+      }
+
+      // Code verified, now create the account
       const response = await fetch('https://findable-production.up.railway.app/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           password,
-          email: email || undefined,
+          email,
         }),
       });
 
@@ -138,7 +226,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
 
       // Success!
-      onSignupSuccess(data.token, data.user_id, data.username, email || undefined);
+      setShowVerificationModal(false);
+      onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -146,7 +235,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && !usernameError && !passwordError && !confirmPasswordError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -279,19 +368,22 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             ) : null}
           </View>
 
-          {/* Email (Optional) */}
+          {/* Email */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
-              Email <Text style={{ color: theme.colors.muted }}>(optional)</Text>
+              Email
             </Text>
             <View style={[
               styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: emailError ? '#FF3B30' : theme.colors.border,
+              }
             ]}>
               <TextInput
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={validateEmail}
                 placeholder="john@example.com"
                 placeholderTextColor={theme.colors.muted}
                 keyboardType="email-address"
@@ -300,6 +392,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 editable={!loading}
               />
             </View>
+            {emailError ? (
+              <Text style={styles.errorText}>{emailError}</Text>
+            ) : null}
           </View>
 
           {/* Error Message */}
@@ -347,6 +442,128 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
           </View>
         </View>
       </ScrollView>
+
+      {/* Email Verification Modal */}
+      <Modal
+        visible={showVerificationModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!sendingCode && !loading) {
+            setShowVerificationModal(false);
+            setVerificationStep('confirm');
+            setVerificationCode('');
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+            {verificationStep === 'confirm' ? (
+              <>
+                <MaterialCommunityIcons name="email-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                  Verify Your Email
+                </Text>
+                <Text style={[styles.modalText, { color: theme.colors.muted }]}>
+                  Do you agree to receive a confirmation code at {email} to verify your account?
+                </Text>
+                <View style={styles.modalButtons}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalButton,
+                      styles.modalButtonSecondary,
+                      { opacity: pressed ? 0.6 : 1 }
+                    ]}
+                    onPress={() => {
+                      setShowVerificationModal(false);
+                      setVerificationStep('confirm');
+                    }}
+                    disabled={sendingCode}
+                  >
+                    <Text style={[styles.modalButtonTextSecondary, { color: theme.colors.blue }]}>
+                      Cancel
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.modalButton,
+                      styles.modalButtonPrimary,
+                      { backgroundColor: theme.colors.blue, opacity: pressed || sendingCode ? 0.6 : 1 }
+                    ]}
+                    onPress={handleSendCode}
+                    disabled={sendingCode}
+                  >
+                    {sendingCode ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.modalButtonTextPrimary}>
+                        Send Code
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <MaterialCommunityIcons name="email-check-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                  Enter Verification Code
+                </Text>
+                <Text style={[styles.modalText, { color: theme.colors.muted }]}>
+                  We sent a 6-digit code to {email}
+                </Text>
+                <TextInput
+                  style={[styles.codeInput, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                  value={verificationCode}
+                  onChangeText={(text) => setVerificationCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  placeholderTextColor={theme.colors.muted}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                  editable={!loading}
+                />
+                {error && verificationStep === 'enter-code' ? (
+                  <Text style={styles.modalErrorText}>{error}</Text>
+                ) : null}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.resendButton,
+                    { opacity: pressed || sendingCode ? 0.6 : 1 }
+                  ]}
+                  onPress={handleSendCode}
+                  disabled={sendingCode || loading}
+                >
+                  <Text style={[styles.resendButtonText, { color: theme.colors.blue }]}>
+                    {sendingCode ? 'Sending...' : 'Resend code'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.modalButton,
+                    styles.modalButtonPrimary,
+                    styles.modalButtonFull,
+                    {
+                      backgroundColor: verificationCode.length === 6 && !loading ? theme.colors.blue : theme.colors.muted,
+                      opacity: pressed && verificationCode.length === 6 ? 0.6 : 1
+                    }
+                  ]}
+                  onPress={handleVerifyAndSignup}
+                  disabled={verificationCode.length !== 6 || loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.modalButtonTextPrimary}>
+                      Verify & Create Account
+                    </Text>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -451,6 +668,99 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     fontFamily: 'Inter_500Medium',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonPrimary: {
+    minHeight: 48,
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  modalButtonFull: {
+    width: '100%',
+    marginTop: 16,
+  },
+  modalButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+  },
+  modalButtonTextSecondary: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+  },
+  codeInput: {
+    width: '100%',
+    fontSize: 24,
+    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    textAlign: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 2,
+    borderRadius: 12,
+    marginBottom: 8,
+    letterSpacing: 8,
+  },
+  modalErrorText: {
+    fontSize: 13,
+    color: '#FF3B30',
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  resendButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  resendButtonText: {
+    fontSize: 15,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
   },
 });
 

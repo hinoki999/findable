@@ -15,6 +15,10 @@ from google.oauth2 import id_token
 from google.auth.transport import requests as google_requests
 import cloudinary
 import cloudinary.uploader
+import smtplib
+import random
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 app = FastAPI(title="DropLink API")
 
@@ -32,6 +36,16 @@ cloudinary.config(
     api_key=os.environ.get("CLOUDINARY_API_KEY", "213846241467723"),
     api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
 )
+
+# Email Configuration (Gmail SMTP)
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_EMAIL = os.environ.get("SMTP_EMAIL", "your-email@gmail.com")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "your-app-password")
+
+# Temporary storage for verification codes (email -> {code, expires_at})
+# In production, use Redis or database
+verification_codes = {}
 
 # Enable CORS for React Native app
 app.add_middleware(
@@ -164,6 +178,13 @@ class AuthResponse(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
 
+class SendVerificationCodeRequest(BaseModel):
+    email: str
+
+class VerifyCodeRequest(BaseModel):
+    email: str
+    code: str
+
 # ========== AUTH HELPER FUNCTIONS ==========
 
 def hash_password(password: str) -> str:
@@ -205,6 +226,61 @@ def get_current_user(authorization: str = Header(None)) -> int:
     token = authorization.split(" ")[1]
     payload = verify_token(token)
     return payload["user_id"]
+
+def send_verification_email(email: str, code: str):
+    """Send verification code via email"""
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['From'] = SMTP_EMAIL
+        msg['To'] = email
+        msg['Subject'] = 'DropLink - Your Verification Code'
+        
+        # Email body
+        html_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #007AFF;">Welcome to DropLink!</h2>
+                <p>Your verification code is:</p>
+                <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                    <h1 style="color: #007AFF; font-size: 36px; letter-spacing: 8px; margin: 0;">{code}</h1>
+                </div>
+                <p>This code will expire in 10 minutes.</p>
+                <p>If you didn't request this code, please ignore this email.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px;">DropLink - Share contacts with people near you</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        Welcome to DropLink!
+        
+        Your verification code is: {code}
+        
+        This code will expire in 10 minutes.
+        
+        If you didn't request this code, please ignore this email.
+        """
+        
+        # Attach both plain text and HTML versions
+        part1 = MIMEText(text_body, 'plain')
+        part2 = MIMEText(html_body, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        # Send email
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.send_message(msg)
+            
+        return True
+    except Exception as e:
+        print(f"Failed to send email: {str(e)}")
+        return False
 
 # ========== AUTH ENDPOINTS ==========
 
@@ -385,6 +461,77 @@ def google_auth(request: GoogleAuthRequest):
         raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
+
+@app.post("/auth/send-verification-code")
+def send_verification_code(request: SendVerificationCodeRequest):
+    """Send a 6-digit verification code to email"""
+    try:
+        email = request.email.lower().strip()
+        
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Generate 6-digit code
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Store code with expiration (10 minutes)
+        expires_at = datetime.now() + timedelta(minutes=10)
+        verification_codes[email] = {
+            'code': code,
+            'expires_at': expires_at
+        }
+        
+        # Send email
+        success = send_verification_email(email, code)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to send verification email. Please check your email address.")
+        
+        return {
+            "success": True,
+            "message": f"Verification code sent to {email}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send verification code: {str(e)}")
+
+@app.post("/auth/verify-code")
+def verify_code(request: VerifyCodeRequest):
+    """Verify the 6-digit code"""
+    try:
+        email = request.email.lower().strip()
+        code = request.code.strip()
+        
+        # Check if code exists for this email
+        if email not in verification_codes:
+            raise HTTPException(status_code=400, detail="No verification code found for this email")
+        
+        stored_data = verification_codes[email]
+        
+        # Check if code has expired
+        if datetime.now() > stored_data['expires_at']:
+            del verification_codes[email]
+            raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+        
+        # Verify code
+        if stored_data['code'] != code:
+            raise HTTPException(status_code=400, detail="Invalid verification code")
+        
+        # Code is valid, remove it from storage
+        del verification_codes[email]
+        
+        return {
+            "success": True,
+            "message": "Email verified successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to verify code: {str(e)}")
 
 @app.post("/auth/change-username")
 def change_username(new_username: str, user_id: int = Depends(get_current_user)):
