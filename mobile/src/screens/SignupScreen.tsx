@@ -491,10 +491,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               <>
                 <MaterialCommunityIcons name="email-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                  Verify Your Email
+                  Email verification needed to continue
                 </Text>
                 <Text style={[styles.modalText, { color: theme.colors.muted }]}>
-                  Do you agree to receive a confirmation code at {email} to verify your account?
+                  We'll send a confirmation code to {email}
                 </Text>
                 <View style={styles.modalButtons}>
                   <Pressable
