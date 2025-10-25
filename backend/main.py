@@ -330,6 +330,12 @@ def register(request: RegisterRequest):
         )
         user_id = cursor.lastrowid
         
+        # Initialize default settings with dark mode enabled
+        cursor.execute('''
+            INSERT INTO user_settings (user_id, dark_mode, max_distance)
+            VALUES (?, ?, ?)
+        ''', (user_id, 1, 33))
+        
         conn.commit()
         conn.close()
         
@@ -1031,7 +1037,7 @@ def get_user_settings(user_id: int = Depends(get_current_user)):
         conn.close()
         
         if not row:
-            return {"darkMode": False, "maxDistance": 33}
+            return {"darkMode": True, "maxDistance": 33}
         
         return {
             "darkMode": bool(row[0]),
