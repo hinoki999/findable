@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -1240,6 +1240,165 @@ async def get_admin_stats(secret: str = Header(None)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ADMIN: Simple web dashboard
+@app.get("/admin/dashboard", response_class=HTMLResponse)
+async def admin_dashboard():
+    """
+    Simple web dashboard to view user accounts
+    Just open in browser: https://findable-production.up.railway.app/admin/dashboard
+    """
+    try:
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        # Get user stats
+        cursor.execute('SELECT COUNT(*) FROM users')
+        total_users = cursor.fetchone()[0]
+        
+        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        users_list = cursor.fetchall()
+        
+        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        users_with_photos = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        # Build HTML
+        users_html = ""
+        for user in users_list:
+            users_html += f"""
+            <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">{user[0]}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-weight: 600;">{user[1]}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">{user[2] or 'No email'}</td>
+            </tr>
+            """
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>DropLink Admin Dashboard</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background: #f9fafb;
+                }}
+                .container {{
+                    max-width: 1000px;
+                    margin: 0 auto;
+                }}
+                h1 {{
+                    color: #111827;
+                    margin-bottom: 8px;
+                }}
+                .subtitle {{
+                    color: #6b7280;
+                    margin-bottom: 32px;
+                }}
+                .stats {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 16px;
+                    margin-bottom: 32px;
+                }}
+                .stat-card {{
+                    background: white;
+                    padding: 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                }}
+                .stat-value {{
+                    font-size: 36px;
+                    font-weight: 700;
+                    color: #007AFF;
+                    margin-bottom: 4px;
+                }}
+                .stat-label {{
+                    color: #6b7280;
+                    font-size: 14px;
+                }}
+                .users-table {{
+                    background: white;
+                    border-radius: 12px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                }}
+                th {{
+                    background: #f9fafb;
+                    padding: 12px;
+                    text-align: left;
+                    font-weight: 600;
+                    color: #374151;
+                    font-size: 14px;
+                    border-bottom: 2px solid #e5e7eb;
+                }}
+                .refresh-btn {{
+                    background: #007AFF;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    font-weight: 600;
+                    margin-bottom: 16px;
+                }}
+                .refresh-btn:hover {{
+                    background: #0051D5;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔗 DropLink Admin</h1>
+                <p class="subtitle">Monitor your user accounts</p>
+                
+                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="stat-value">{total_users}</div>
+                        <div class="stat-label">Total Users</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">{users_with_photos}</div>
+                        <div class="stat-label">Users with Photos</div>
+                    </div>
+                </div>
+                
+                <div class="users-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {users_html}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html
+        
+    except Exception as e:
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>"
 
 # TEMPORARY: Admin endpoint to clear all test data
 @app.delete("/admin/clear-all-data")
