@@ -111,13 +111,31 @@ export default function TutorialOverlay({
       <Pressable 
         style={{
           ...StyleSheet.absoluteFillObject,
-          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
         }}
         onPress={onNext}
-      />
+      >
+        {/* Tap anywhere hint */}
+        <View style={{
+          position: 'absolute',
+          bottom: 40,
+          left: 0,
+          right: 0,
+          alignItems: 'center',
+        }}>
+          <Text style={{
+            color: 'rgba(255, 255, 255, 0.7)',
+            fontSize: 12,
+            fontFamily: 'Inter_400Regular',
+          }}>
+            Tap anywhere to continue
+          </Text>
+        </View>
+      </Pressable>
 
       {/* Toast tooltip */}
-      <View
+      <Pressable
+        onPress={onNext}
         style={{
           position: 'absolute',
           ...step.position,
@@ -134,7 +152,6 @@ export default function TutorialOverlay({
           borderWidth: 1,
           borderColor: theme.colors.border,
         }}
-        pointerEvents="box-none"
       >
         {renderArrow()}
         
@@ -194,7 +211,7 @@ export default function TutorialOverlay({
             />
           ))}
         </View>
-      </View>
+      </Pressable>
 
       {/* Skip button */}
       <Pressable
