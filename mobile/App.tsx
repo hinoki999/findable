@@ -283,6 +283,18 @@ function MainApp() {
     setShowProfilePhotoPrompt(false);
     // Load user data to get the new profile photo if uploaded
     await loadUserData();
+    
+    // For first-time users, clear tutorial state to ensure tutorials show
+    if (isFirstTimeUser) {
+      try {
+        const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
+        await AsyncStorage.removeItem('@droplink_tutorial_screens');
+        console.log('✅ Tutorial state cleared for first-time user');
+      } catch (error) {
+        console.error('Failed to clear tutorial state:', error);
+      }
+    }
+    
     showToast({
       message: 'Welcome to DropLink!',
       type: 'success',
