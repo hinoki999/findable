@@ -7,7 +7,6 @@ import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
 // import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
-import ProfilePhotoPromptScreen from './src/screens/ProfilePhotoPromptScreen';
 import SecuritySettingsScreen from './src/screens/SecuritySettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
@@ -492,9 +491,49 @@ function MainApp() {
 
   // Show profile photo prompt after signup (authenticated but before main app)
   if (isAuthenticated && showProfilePhotoPrompt) {
+    const promptNavigation = {
+      navigate: () => {},
+      goBack: handleProfilePhotoPromptComplete,
+    };
+    
     return (
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-        <ProfilePhotoPromptScreen onComplete={handleProfilePhotoPromptComplete} />
+        <View style={{ flex: 1, backgroundColor: getTheme(isDarkMode).colors.bg }}>
+          {/* Header with Skip button */}
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingTop: 60,
+            paddingBottom: 20,
+          }}>
+            <Text style={{ 
+              fontSize: 20, 
+              fontWeight: '600',
+              color: getTheme(isDarkMode).colors.text,
+              fontFamily: 'Inter_600SemiBold',
+            }}>
+              Profile Photo
+            </Text>
+            <Pressable onPress={handleProfilePhotoPromptComplete}>
+              <Text style={{ 
+                color: getTheme(isDarkMode).colors.muted,
+                fontSize: 16,
+                fontFamily: 'Inter_400Regular',
+              }}>
+                Skip
+              </Text>
+            </Pressable>
+          </View>
+          <ProfilePhotoScreen 
+            navigation={promptNavigation} 
+            onPhotoSaved={(uri) => {
+              setProfilePhotoUri(uri);
+              handleProfilePhotoPromptComplete();
+            }} 
+          />
+        </View>
       </DarkModeContext.Provider>
     );
   }
