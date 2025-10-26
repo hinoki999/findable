@@ -510,11 +510,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
           // Prevent accidental closure - user must click Cancel
         }}
       >
-        <View style={styles.modalOverlay}>
-          <Pressable 
-            onPress={() => {}}
-            style={[styles.modalContent, { backgroundColor: theme.colors.white }]}
-          >
+        <Pressable 
+          style={styles.modalOverlay}
+          onPress={() => {
+            // Don't close modal when clicking outside
+          }}
+        >
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
             <MaterialCommunityIcons name="alert-circle" size={48} color="#FF3B30" style={{ marginBottom: 16 }} />
             <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 12, textAlign: 'center' }]}>Delete Account?</Text>
             <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 24 }]}>
@@ -581,8 +583,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
                 <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Delete My Account</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </View>
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
