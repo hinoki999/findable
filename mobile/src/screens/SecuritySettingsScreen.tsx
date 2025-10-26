@@ -1,0 +1,521 @@
+import React, { useState } from 'react';
+import { View, Text, Pressable, TextInput, Modal, ScrollView, Alert, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import TopBar from '../components/TopBar';
+import { getTheme } from '../theme';
+import { useDarkMode, useToast } from '../../App';
+import { useAuth } from '../contexts/AuthContext';
+import * as api from '../services/api';
+
+interface SecuritySettingsScreenProps {
+  navigation: any;
+}
+
+export default function SecuritySettingsScreen({ navigation }: SecuritySettingsScreenProps) {
+  const { isDarkMode } = useDarkMode();
+  const { showToast } = useToast();
+  const { logout, username, login } = useAuth();
+  const theme = getTheme(isDarkMode);
+
+  // Modal states
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingField, setEditingField] = useState<'username' | 'password' | null>(null);
+  const [tempValue, setTempValue] = useState('');
+  
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Confirmation modals
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const handleEdit = (field: 'username' | 'password') => {
+    setEditingField(field);
+    if (field === 'username') {
+      setTempValue(username || '');
+    } else if (field === 'password') {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    setEditModalVisible(true);
+  };
+
+  const validatePassword = (password: string): string => {
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[0-9]/.test(password)) {
+      return 'Password must contain at least one number';
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      return 'Password must contain at least one special character';
+    }
+    return '';
+  };
+
+  const handleSave = async () => {
+    try {
+      if (editingField === 'username') {
+        if (!tempValue || tempValue.length < 3) {
+          showToast({
+            message: 'Username must be at least 3 characters',
+            type: 'error',
+            duration: 3000,
+          });
+          return;
+        }
+
+        const result = await api.changeUsername(tempValue);
+        await login(result.token, 0, result.username);
+        
+        showToast({
+          message: 'Username updated successfully',
+          type: 'success',
+          duration: 3000,
+        });
+        
+        setEditModalVisible(false);
+      } else if (editingField === 'password') {
+        if (!currentPassword || !newPassword || !confirmPassword) {
+          showToast({
+            message: 'Please fill in all password fields',
+            type: 'error',
+            duration: 3000,
+          });
+          return;
+        }
+
+        const passwordError = validatePassword(newPassword);
+        if (passwordError) {
+          showToast({
+            message: passwordError,
+            type: 'error',
+            duration: 4000,
+          });
+          return;
+        }
+
+        if (newPassword !== confirmPassword) {
+          showToast({
+            message: 'New passwords do not match',
+            type: 'error',
+            duration: 3000,
+          });
+          return;
+        }
+
+        await api.changePassword(currentPassword, newPassword);
+        
+        showToast({
+          message: 'Password updated successfully',
+          type: 'success',
+          duration: 3000,
+        });
+        
+        setEditModalVisible(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error: any) {
+      showToast({
+        message: error.message || 'Failed to update',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+    showToast({
+      message: 'Logged out successfully',
+      type: 'success',
+      duration: 2000,
+    });
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.toLowerCase() !== 'delete') {
+      showToast({
+        message: 'Please type "delete" to confirm',
+        type: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    try {
+      // TODO: Add delete account endpoint to backend
+      // await fetch('https://findable-production.up.railway.app/user/delete', {
+      //   method: 'DELETE',
+      //   headers: { 'Content-Type': 'application/json' },
+      // });
+
+      setShowDeleteConfirm(false);
+      logout();
+      
+      showToast({
+        message: 'Account deleted successfully',
+        type: 'success',
+        duration: 3000,
+      });
+    } catch (error) {
+      showToast({
+        message: 'Failed to delete account',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+      <TopBar title="Security Settings" onBack={() => navigation.goBack()} />
+      
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+        {/* Username */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Username</Text>
+          </View>
+          <Pressable
+            onPress={() => handleEdit('username')}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="account" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.text }]}>{username || 'Not set'}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+        </View>
+
+        {/* Password */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Password</Text>
+          </View>
+          <Pressable
+            onPress={() => handleEdit('password')}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="lock" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.text }]}>••••••••</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+        </View>
+
+        {/* Logout */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white, marginTop: 32 }]}>
+          <Pressable
+            onPress={() => setShowLogoutConfirm(true)}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="logout" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.text }]}>Log Out</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
+        </View>
+
+        {/* Delete Account */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white, marginTop: 8 }]}>
+          <Pressable
+            onPress={() => setShowDeleteConfirm(true)}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="delete-forever" size={20} color="#FF3B30" style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: '#FF3B30', fontWeight: '600' }]}>Delete Account</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color="#FF3B30" />
+          </Pressable>
+        </View>
+
+        <Text style={[theme.type.body, { color: theme.colors.muted, fontSize: 13, textAlign: 'center', marginTop: 24, paddingHorizontal: 32 }]}>
+          Deleting your account will permanently remove all your data. This action cannot be undone.
+        </Text>
+      </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal visible={editModalVisible} transparent animationType="fade" onRequestClose={() => setEditModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+            <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 20 }]}>
+              {editingField === 'username' ? 'Change Username' : 'Change Password'}
+            </Text>
+
+            {editingField === 'username' ? (
+              <TextInput
+                value={tempValue}
+                onChangeText={setTempValue}
+                placeholder="Enter new username"
+                placeholderTextColor={theme.colors.muted}
+                style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text }]}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            ) : (
+              <>
+                {/* Current Password */}
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    placeholder="Current password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showCurrentPassword}
+                    style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text, paddingRight: 50 }]}
+                  />
+                  <Pressable
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <MaterialCommunityIcons
+                      name={showCurrentPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+
+                {/* New Password */}
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="New password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showNewPassword}
+                    style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text, paddingRight: 50 }]}
+                  />
+                  <Pressable
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <MaterialCommunityIcons
+                      name={showNewPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+
+                {/* Confirm Password */}
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="Confirm new password"
+                    placeholderTextColor={theme.colors.muted}
+                    secureTextEntry={!showConfirmPassword}
+                    style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text, paddingRight: 50 }]}
+                  />
+                  <Pressable
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <MaterialCommunityIcons
+                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                      size={20}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+              </>
+            )}
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setEditModalVisible(false)}
+                style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border }]}
+              >
+                <Text style={[theme.type.button, { color: theme.colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSave}
+                style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
+              >
+                <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Logout Confirmation Modal */}
+      <Modal visible={showLogoutConfirm} transparent animationType="fade" onRequestClose={() => setShowLogoutConfirm(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+            <MaterialCommunityIcons name="logout" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+            <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 12, textAlign: 'center' }]}>Log Out?</Text>
+            <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 24 }]}>
+              Are you sure you want to log out?
+            </Text>
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => setShowLogoutConfirm(false)}
+                style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border }]}
+              >
+                <Text style={[theme.type.button, { color: theme.colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleLogout}
+                style={[styles.modalButton, { backgroundColor: theme.colors.blue }]}
+              >
+                <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Log Out</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Confirmation Modal */}
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+            <MaterialCommunityIcons name="alert-circle" size={48} color="#FF3B30" style={{ marginBottom: 16 }} />
+            <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 12, textAlign: 'center' }]}>Delete Account?</Text>
+            <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 24 }]}>
+              This will permanently delete your account and all associated data. This action cannot be undone.
+            </Text>
+            <Text style={[theme.type.body, { marginBottom: 8 }]}>Type "delete" to confirm:</Text>
+            <TextInput
+              value={deleteConfirmText}
+              onChangeText={setDeleteConfirmText}
+              placeholder="delete"
+              placeholderTextColor={theme.colors.muted}
+              style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text, marginBottom: 24 }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalButtons}>
+              <Pressable
+                onPress={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteConfirmText('');
+                }}
+                style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border }]}
+              >
+                <Text style={[theme.type.button, { color: theme.colors.text }]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleDeleteAccount}
+                style={[styles.modalButton, { backgroundColor: '#FF3B30' }]}
+              >
+                <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Delete</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  card: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+  },
+  cardHeader: {
+    marginBottom: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  rowIcon: {
+    marginRight: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+  },
+  input: {
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  inputWrapper: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    padding: 4,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+});
+

@@ -203,7 +203,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       try {
         const result = await api.changeUsername(tempValue.trim());
         // Update token in storage
-        await login(result.token, userId, result.username);
+        await login(result.token, userId || 0, result.username);
         
         showToast({
           message: 'Username changed successfully!',
@@ -481,59 +481,21 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         </View>
 
         {/* Security Settings Card */}
-        <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue, marginBottom: 16 }]}>Security Settings</Text>
-          
-          {/* Username Row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={[theme.type.muted, { flex: 1 }]}>Username</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>@{username}</Text>
-              <Pressable style={{ padding: 4 }} onPress={() => handleEdit('username')}>
-                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
-              </Pressable>
+        <Pressable 
+          onPress={() => navigation.navigate('SecuritySettings')}
+          style={({ pressed }) => [
+            theme.card,
+            { opacity: pressed ? 0.7 : 1 }
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <MaterialCommunityIcons name="shield-lock" size={24} color={theme.colors.blue} style={{ marginRight: 12 }} />
+              <Text style={[theme.type.h2, { color: theme.colors.text }]}>Security Settings</Text>
             </View>
+            <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.muted} />
           </View>
-
-          {/* Password Row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={[theme.type.muted, { flex: 1 }]}>Password</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>••••••••</Text>
-              <Pressable style={{ padding: 4 }} onPress={() => handleEdit('password')}>
-                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
-              </Pressable>
-            </View>
-          </View>
-        </View>
-
-        {/* Logout button - at the very bottom */}
-        <View style={{ marginTop: 32, alignItems: 'center' }}>
-          {/* Gray line above logout */}
-          <View style={{ 
-            width: '100%', 
-            height: 2, 
-            backgroundColor: isDarkMode ? '#444444' : '#CCCCCC',
-            marginBottom: 16,
-          }} />
-          
-          <Pressable
-            onPress={() => setShowLogoutConfirm(true)}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              paddingVertical: 12,
-              opacity: pressed ? 0.5 : 0.4,
-            })}
-          >
-            <Text style={{ 
-              color: theme.colors.muted, 
-              fontSize: 13, 
-              fontFamily: 'Inter_400Regular',
-            }}>
-              Logout
-            </Text>
-          </Pressable>
-        </View>
+        </Pressable>
 
       </ScrollView>
 
@@ -980,96 +942,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         </View>
       </Modal>
 
-      {/* Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutConfirm}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowLogoutConfirm(false)}
-      >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 24,
-        }}>
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 16,
-            padding: 24,
-            width: '100%',
-            maxWidth: 400,
-          }}>
-            <Text style={{
-              fontSize: 20,
-              fontWeight: '600',
-              fontFamily: 'Inter_500Medium',
-              color: theme.colors.text,
-              marginBottom: 12,
-            }}>
-              Logout
-            </Text>
-            <Text style={{
-              fontSize: 15,
-              fontFamily: 'Inter_400Regular',
-              color: theme.colors.muted,
-              marginBottom: 24,
-            }}>
-              Are you sure you want to logout?
-            </Text>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              {/* Cancel Button */}
-              <Pressable
-                onPress={() => setShowLogoutConfirm(false)}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  backgroundColor: theme.colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  fontFamily: 'Inter_500Medium',
-                  color: theme.colors.text,
-                }}>
-                  Cancel
-                </Text>
-              </Pressable>
-
-              {/* Logout Button */}
-              <Pressable
-                onPress={async () => {
-                  setShowLogoutConfirm(false);
-                  await logout();
-                }}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 12,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  backgroundColor: '#FF3B30',
-                  opacity: pressed ? 0.8 : 1,
-                })}
-              >
-                <Text style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  fontFamily: 'Inter_500Medium',
-                  color: '#FFFFFF',
-                }}>
-                  Logout
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

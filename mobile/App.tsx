@@ -8,6 +8,7 @@ import HomeScreen from './src/screens/HomeScreen';
 // import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import ProfilePhotoPromptScreen from './src/screens/ProfilePhotoPromptScreen';
+import SecuritySettingsScreen from './src/screens/SecuritySettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -470,6 +471,10 @@ function MainApp() {
     
     if (subScreen === 'ProfilePhoto') {
       return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+    }
+
+    if (subScreen === 'SecuritySettings') {
+      return <SecuritySettingsScreen navigation={navigation} />;
     }
 
     // Show main tabs
