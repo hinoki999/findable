@@ -1038,20 +1038,23 @@ def get_user_profile(user_id: int = Depends(get_current_user)):
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT name, email, phone, bio, profile_photo FROM user_profiles WHERE user_id = ?
+            SELECT name, email, phone, bio, profile_photo, social_media FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
         
         if not row:
-            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None}
+            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None, "socialMedia": []}
+        
+        social_media = json.loads(row[5]) if row[5] else []
         
         return {
             "name": row[0],
             "email": row[1],
             "phone": row[2],
             "bio": row[3],
-            "profile_photo": row[4]
+            "profile_photo": row[4],
+            "socialMedia": social_media
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1071,7 +1074,8 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
                 email TEXT,
                 phone TEXT,
                 bio TEXT,
-                profile_photo TEXT
+                profile_photo TEXT,
+                social_media TEXT
             )
         ''')
         
@@ -1097,11 +1101,14 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
                 conn.close()
                 raise HTTPException(status_code=400, detail="This email is already associated with another account")
         
+        # Prepare social_media JSON
+        social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
+        
         # Upsert profile
         cursor.execute('''
-            INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio')))
+            INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
         
         conn.commit()
         conn.close()

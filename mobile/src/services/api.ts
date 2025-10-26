@@ -244,6 +244,7 @@ export interface UserProfile {
   phone: string;
   bio: string;
   profile_photo?: string;
+  socialMedia?: Array<{ platform: string; handle: string }>;
 }
 
 export async function getUserProfile(): Promise<UserProfile> {

@@ -61,7 +61,7 @@ const UserProfileContext = createContext<{
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Bio will display here once created',
+    bio: 'Bio will display here once created.',
     socialMedia: [],
   },
   updateProfile: () => {},
@@ -190,8 +190,8 @@ function MainApp() {
           name: profileData.name || 'Your Name',
           phoneNumber: profileData.phone || '(555) 123-4567',
           email: profileData.email || 'user@example.com',
-          bio: profileData.bio || 'Optional bio line goes here.',
-          socialMedia: [],
+          bio: profileData.bio || 'Bio will display here once created.',
+          socialMedia: profileData.socialMedia || [],
         });
         
         // Load profile photo if exists
@@ -348,6 +348,7 @@ function MainApp() {
         email: newProfile.email,
         phone: newProfile.phoneNumber,
         bio: newProfile.bio,
+        socialMedia: newProfile.socialMedia,
       });
       console.log('✅ Profile saved to backend:', newProfile);
     } catch (error) {
