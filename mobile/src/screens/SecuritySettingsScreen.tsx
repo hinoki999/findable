@@ -235,20 +235,26 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       //   headers: { 'Content-Type': 'application/json' },
       // });
 
-      setShowDeleteConfirm(false);
-      logout();
-      
+      // Show success toast first
       showToast({
         message: 'Account successfully deleted',
         type: 'success',
         duration: 3000,
       });
+      
+      // Close modal and logout after a brief delay
+      setTimeout(() => {
+        setShowDeleteConfirm(false);
+        setDeleteVerificationCode('');
+        logout();
+      }, 500);
     } catch (error: any) {
       showToast({
         message: error.message || 'Failed to delete account',
         type: 'error',
         duration: 3000,
       });
+      // Don't close the modal on error - let user try again
     }
   };
 
