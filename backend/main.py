@@ -289,11 +289,14 @@ DropLink - Share contacts with people near you
 def register(request: RegisterRequest):
     """Register a new user"""
     try:
+        # Convert username to lowercase for case-insensitive storage
+        username_lower = request.username.lower()
+        
         # Validate username (3-20 chars, alphanumeric + underscore)
-        if not request.username or len(request.username) < 3 or len(request.username) > 20:
+        if not username_lower or len(username_lower) < 3 or len(username_lower) > 20:
             raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
         
-        if not request.username.replace('_', '').isalnum():
+        if not username_lower.replace('_', '').isalnum():
             raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
         
         # Validate password (8+ chars, uppercase, lowercase, number)
@@ -315,18 +318,18 @@ def register(request: RegisterRequest):
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
-        # Check if username already exists
-        cursor.execute("SELECT id FROM users WHERE username = ?", (request.username,))
+        # Check if username already exists (case-insensitive)
+        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ?", (username_lower,))
         existing = cursor.fetchone()
         if existing:
             conn.close()
             raise HTTPException(status_code=400, detail="Username already taken")
         
-        # Hash password and create user
+        # Hash password and create user (store username in lowercase)
         password_hash = hash_password(request.password)
         cursor.execute(
             "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
-            (request.username, password_hash, request.email)
+            (username_lower, password_hash, request.email)
         )
         user_id = cursor.lastrowid
         
@@ -340,12 +343,12 @@ def register(request: RegisterRequest):
         conn.close()
         
         # Create JWT token
-        token = create_access_token(user_id, request.username)
+        token = create_access_token(user_id, username_lower)
         
         return AuthResponse(
             token=token,
             user_id=user_id,
-            username=request.username
+            username=username_lower
         )
         
     except HTTPException:
@@ -357,13 +360,15 @@ def register(request: RegisterRequest):
 def login(request: LoginRequest):
     """Login with username and password"""
     try:
+        username_lower = request.username.lower()  # Convert to lowercase
+        
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
-        # Find user by username
+        # Find user by username (case-insensitive)
         cursor.execute(
-            "SELECT id, username, password_hash FROM users WHERE username = ?",
-            (request.username,)
+            "SELECT id, username, password_hash FROM users WHERE LOWER(username) = ?",
+            (username_lower,)
         )
         user = cursor.fetchone()
         conn.close()
@@ -544,7 +549,7 @@ def verify_code(request: VerifyCodeRequest):
 def check_username(request: CheckUsernameRequest):
     """Check if username is available"""
     try:
-        username = request.username.strip()
+        username = request.username.strip().lower()  # Convert to lowercase
         
         # Validate username format
         if len(username) < 3 or len(username) > 20:
@@ -553,10 +558,10 @@ def check_username(request: CheckUsernameRequest):
         if not username.replace('_', '').isalnum():
             return {"available": False, "message": "Letters, numbers, and underscores only"}
         
-        # Check if username exists
+        # Check if username exists (case-insensitive)
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ?", (username,))
         existing = cursor.fetchone()
         conn.close()
         
@@ -572,35 +577,38 @@ def check_username(request: CheckUsernameRequest):
 def change_username(new_username: str, user_id: int = Depends(get_current_user)):
     """Change username for authenticated user"""
     try:
+        # Convert to lowercase for case-insensitive storage
+        new_username_lower = new_username.lower()
+        
         # Validate new username
-        if not new_username or len(new_username) < 3 or len(new_username) > 20:
+        if not new_username_lower or len(new_username_lower) < 3 or len(new_username_lower) > 20:
             raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
         
-        if not new_username.replace('_', '').isalnum():
+        if not new_username_lower.replace('_', '').isalnum():
             raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
         
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()
         
-        # Check if new username is already taken
-        cursor.execute("SELECT id FROM users WHERE username = ? AND id != ?", (new_username, user_id))
+        # Check if new username is already taken (case-insensitive)
+        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ? AND id != ?", (new_username_lower, user_id))
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="Username already taken")
         
-        # Update username
-        cursor.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
+        # Update username (store in lowercase)
+        cursor.execute("UPDATE users SET username = ? WHERE id = ?", (new_username_lower, user_id))
         conn.commit()
         conn.close()
         
         # Create new JWT token with updated username
-        token = create_access_token(user_id, new_username)
+        token = create_access_token(user_id, new_username_lower)
         
         return {
             "success": True,
             "message": "Username changed successfully",
             "token": token,
-            "username": new_username
+            "username": new_username_lower
         }
     except HTTPException:
         raise

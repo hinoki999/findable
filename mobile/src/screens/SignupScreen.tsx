@@ -314,6 +314,27 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
         {/* Form */}
         <View style={styles.form}>
+          {/* Name */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
+              Name
+            </Text>
+            <View style={[
+              styles.inputContainer,
+              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
+                value={name}
+                onChangeText={setName}
+                placeholder="John Doe"
+                placeholderTextColor={theme.colors.muted}
+                autoCapitalize="words"
+                editable={!loading}
+              />
+            </View>
+          </View>
+
           {/* Username */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>Username</Text>
@@ -446,27 +467,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             ) : null}
           </View>
 
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Name
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={name}
-                onChangeText={setName}
-                placeholder="John Doe"
-                placeholderTextColor={theme.colors.muted}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-          </View>
-
           {/* Phone */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>
@@ -480,9 +480,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={phone}
                 onChangeText={setPhone}
-                placeholder="(555) 123-4567"
+                placeholder="5551234567"
                 placeholderTextColor={theme.colors.muted}
                 keyboardType="phone-pad"
+                maxLength={10}
                 editable={!loading}
               />
             </View>
@@ -571,6 +572,28 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+            {/* Close Button */}
+            <Pressable
+              style={styles.modalCloseButton}
+              onPress={() => {
+                if (!sendingCode && !loading) {
+                  setShowVerificationModal(false);
+                  setVerificationStep('confirm');
+                  setVerificationCode('');
+                }
+              }}
+              disabled={sendingCode || loading}
+            >
+              {({ pressed }) => (
+                <MaterialCommunityIcons
+                  name="close"
+                  size={24}
+                  color={theme.colors.muted}
+                  style={{ opacity: pressed ? 0.6 : 1 }}
+                />
+              )}
+            </Pressable>
+            
             {verificationStep === 'confirm' ? (
               <>
                 <MaterialCommunityIcons name="email-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
@@ -795,6 +818,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 4,
+    zIndex: 1,
   },
   modalTitle: {
     fontSize: 20,
