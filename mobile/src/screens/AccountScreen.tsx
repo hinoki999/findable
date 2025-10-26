@@ -412,7 +412,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
           {/* Social Media Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginTop: 8 }}>
-            <Text style={[theme.type.h2, { color: theme.colors.text, flex: 1 }]}>Social Media</Text>
+            <Text style={[theme.type.muted, { flex: 1 }]}>Social Media</Text>
             <Pressable 
               onPress={() => {
                 const newSocial = [...socialMedia, { platform: '', handle: '' }];
