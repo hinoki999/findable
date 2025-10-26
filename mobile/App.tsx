@@ -208,7 +208,32 @@ function MainApp() {
         setIsDarkMode(settingsData.darkMode);
         setMaxDistance(settingsData.maxDistance);
       }
-      
+
+      // Load linked devices/contacts
+      const devicesData = await import('./src/services/api').then(m => m.getDevices());
+      if (devicesData && devicesData.length > 0) {
+        console.log('✅ Loaded devices:', devicesData.length, 'contacts');
+        
+        // Convert devices to link notifications for accepted/returned contacts
+        const notifications: LinkNotification[] = devicesData
+          .filter(device => device.action === 'accepted' || device.action === 'returned')
+          .map((device, index) => ({
+            id: device.id || index,
+            name: device.name,
+            phoneNumber: device.phoneNumber || '',
+            email: device.email || '',
+            bio: device.bio || '',
+            socialMedia: device.socialMedia || [],
+            timestamp: device.timestamp ? new Date(device.timestamp).getTime() : Date.now(),
+            viewed: true, // Mark as viewed since they're from backend
+            dismissed: false,
+            deviceId: device.id,
+          }));
+        
+        setLinkNotifications(notifications);
+        console.log('✅ Loaded link notifications:', notifications.length);
+      }
+
       // Load pinned contacts
       const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
       if (pinnedData && pinnedData.length > 0) {
