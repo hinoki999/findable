@@ -672,6 +672,170 @@ def change_password(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
 
+@app.post("/auth/send-recovery-code")
+def send_recovery_code(email: str, type: str):
+    """Send recovery code for forgot password/username"""
+    try:
+        email = email.lower().strip()
+        
+        # Validate email format
+        if '@' not in email or '.' not in email:
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check if user with this email exists
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username FROM users WHERE email = ?", (email,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="No account found with this email address")
+        
+        # Generate 6-digit code
+        code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Store code with expiration (10 minutes) and recovery type
+        expires_at = datetime.now() + timedelta(minutes=10)
+        verification_codes[f"recovery_{email}"] = {
+            'code': code,
+            'expires_at': expires_at,
+            'type': type,
+            'username': user[1]
+        }
+        
+        # Send email
+        subject = 'DropLink - Password Reset Code' if type == 'password' else 'DropLink - Username Recovery Code'
+        success = send_verification_email(email, code)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to send recovery code. Please try again.")
+        
+        return {
+            "success": True,
+            "message": f"Recovery code sent to {email}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send recovery code: {str(e)}")
+
+@app.post("/auth/verify-recovery-code")
+def verify_recovery_code(email: str, code: str, type: str):
+    """Verify recovery code and return username if username recovery"""
+    try:
+        email = email.lower().strip()
+        code = code.strip()
+        
+        key = f"recovery_{email}"
+        
+        # Check if code exists for this email
+        if key not in verification_codes:
+            raise HTTPException(status_code=400, detail="No recovery code found for this email")
+        
+        stored_data = verification_codes[key]
+        
+        # Check if code has expired
+        if datetime.now() > stored_data['expires_at']:
+            del verification_codes[key]
+            raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
+        
+        # Verify code
+        if stored_data['code'] != code:
+            raise HTTPException(status_code=400, detail="Invalid recovery code")
+        
+        # Verify type matches
+        if stored_data['type'] != type:
+            raise HTTPException(status_code=400, detail="Invalid recovery type")
+        
+        # For username recovery, return username and delete code
+        if type == 'username':
+            username = stored_data['username']
+            del verification_codes[key]
+            return {
+                "success": True,
+                "username": username,
+                "message": "Username recovered successfully"
+            }
+        
+        # For password recovery, keep code for password reset step
+        return {
+            "success": True,
+            "message": "Code verified successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to verify recovery code: {str(e)}")
+
+@app.post("/auth/reset-password")
+def reset_password(email: str, code: str, new_password: str):
+    """Reset password with verified recovery code"""
+    try:
+        email = email.lower().strip()
+        code = code.strip()
+        
+        key = f"recovery_{email}"
+        
+        # Check if code exists for this email
+        if key not in verification_codes:
+            raise HTTPException(status_code=400, detail="No recovery code found. Please request a new code.")
+        
+        stored_data = verification_codes[key]
+        
+        # Check if code has expired
+        if datetime.now() > stored_data['expires_at']:
+            del verification_codes[key]
+            raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
+        
+        # Verify code
+        if stored_data['code'] != code:
+            raise HTTPException(status_code=400, detail="Invalid recovery code")
+        
+        # Verify type is password
+        if stored_data['type'] != 'password':
+            raise HTTPException(status_code=400, detail="Invalid recovery type")
+        
+        # Validate new password
+        if len(new_password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+        
+        if not any(c.isupper() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+        
+        if not any(c.islower() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
+        
+        if not any(c.isdigit() for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one number")
+        
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
+            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
+        
+        # Update password
+        conn = sqlite3.connect('droplink.db')
+        cursor = conn.cursor()
+        
+        new_hash = hash_password(new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
+        conn.commit()
+        conn.close()
+        
+        # Delete the used code
+        del verification_codes[key]
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
+
 # Root endpoint
 @app.get("/")
 def read_root():
