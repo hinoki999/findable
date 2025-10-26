@@ -61,7 +61,7 @@ const UserProfileContext = createContext<{
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Optional bio line goes here.',
+    bio: 'Bio will display here once created',
     socialMedia: [],
   },
   updateProfile: () => {},
@@ -164,7 +164,7 @@ function MainApp() {
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Optional bio line goes here.',
+    bio: 'Bio will display here once created',
     socialMedia: [],
   });
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);

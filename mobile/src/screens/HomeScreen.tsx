@@ -1851,7 +1851,7 @@ export default function HomeScreen() {
                           BIO
                         </Text>
                         <Text style={[theme.type.body, { fontSize: 7, color: theme.colors.text }]}>
-                          "Optional bio line goes here."
+                          "Bio will display here once created"
                         </Text>
                       </View>
                       </View>
