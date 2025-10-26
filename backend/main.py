@@ -98,10 +98,36 @@ def execute_query(cursor, query, params=None):
         # Convert SQLite ? placeholders to PostgreSQL %s placeholders
         query = query.replace('?', '%s')
     
+    # Convert INSERT OR REPLACE to PostgreSQL ON CONFLICT syntax
+    if USE_POSTGRES and "INSERT OR REPLACE" in query.upper():
+        # This is a simplified conversion - may need refinement for complex cases
+        query = query.replace("INSERT OR REPLACE", "INSERT")
+    
     if params:
         cursor.execute(query, params)
     else:
         cursor.execute(query)
+
+def get_value(row, key_or_index):
+    """
+    Get value from a database row that could be either a dict (PostgreSQL) or tuple (SQLite).
+    """
+    if isinstance(row, dict):
+        return row[key_or_index]
+    else:
+        # For tuple, key_or_index should be an integer index
+        return row[key_or_index]
+
+def get_lastrowid(cursor, conn):
+    """
+    Get the last inserted row ID for both PostgreSQL and SQLite.
+    """
+    if USE_POSTGRES:
+        execute_query(cursor, "SELECT lastval()")
+        result = cursor.fetchone()
+        return get_value(result, 0) if result else None
+    else:
+        return cursor.lastrowid
 
 # Database setup
 def init_db():
@@ -405,12 +431,7 @@ def register(request: RegisterRequest):
         )
         
         # Get the inserted user_id
-        if USE_POSTGRES:
-            execute_query(cursor, "SELECT lastval()")
-            result = cursor.fetchone()
-            user_id = result[0] if isinstance(result, tuple) else result['lastval']
-        else:
-            user_id = cursor.lastrowid
+        user_id = get_lastrowid(cursor, conn)
         
         # Initialize default settings with dark mode enabled
         execute_query(cursor, '''
@@ -499,11 +520,11 @@ def google_auth(request: GoogleAuthRequest):
         username = email.split('@')[0] if email else name.replace(' ', '').lower()
         
         # Ensure username is unique
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Check if user with this email already exists
-        cursor.execute(
+        execute_query(cursor, 
             "SELECT id, username FROM users WHERE email = ?",
             (email,)
         )
@@ -511,14 +532,17 @@ def google_auth(request: GoogleAuthRequest):
         
         if existing_user:
             # User already exists, log them in
-            user_id, username = existing_user
+            if isinstance(existing_user, dict):
+                user_id, username = existing_user['id'], existing_user['username']
+            else:
+                user_id, username = existing_user
         else:
             # Create new user with a dummy password (they'll use Google OAuth)
             # Make username unique by appending number if needed
             base_username = username
             counter = 1
             while True:
-                cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+                execute_query(cursor, "SELECT id FROM users WHERE username = ?", (username,))
                 if not cursor.fetchone():
                     break
                 username = f"{base_username}{counter}"
@@ -526,15 +550,15 @@ def google_auth(request: GoogleAuthRequest):
             
             # Insert new user with Google OAuth marker
             dummy_password_hash = hash_password(f"google_oauth_{google_user_id}")
-            cursor.execute(
+            execute_query(cursor, 
                 "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
                 (username, dummy_password_hash, email)
             )
             conn.commit()
-            user_id = cursor.lastrowid
+            user_id = get_lastrowid(cursor, conn)
             
             # Also create initial user profile
-            cursor.execute(
+            execute_query(cursor, 
                 "INSERT OR REPLACE INTO user_profiles (user_id, name, email) VALUES (?, ?, ?)",
                 (user_id, name, email)
             )
@@ -670,17 +694,17 @@ def change_username(new_username: str, user_id: int = Depends(get_current_user))
         if not new_username_lower.replace('_', '').replace('.', '').isalnum():
             raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
         
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Check if new username is already taken (case-insensitive)
-        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ? AND id != ?", (new_username_lower, user_id))
+        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ? AND id != ?", (new_username_lower, user_id))
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="Username already taken")
         
         # Update username (store in lowercase)
-        cursor.execute("UPDATE users SET username = ? WHERE id = ?", (new_username_lower, user_id))
+        execute_query(cursor, "UPDATE users SET username = ? WHERE id = ?", (new_username_lower, user_id))
         conn.commit()
         conn.close()
         
@@ -722,18 +746,18 @@ def change_password(
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Get current password hash
-        cursor.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        execute_query(cursor, "SELECT password_hash FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
         
         if not user:
             conn.close()
             raise HTTPException(status_code=404, detail="User not found")
         
-        current_hash = user[0]
+        current_hash = get_value(user, 'password_hash') if isinstance(user, dict) else user[0]
         
         # Verify current password
         if not verify_password(current_password, current_hash):
@@ -742,7 +766,7 @@ def change_password(
         
         # Hash and update new password
         new_hash = hash_password(new_password)
-        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        execute_query(cursor, "UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
         conn.commit()
         conn.close()
         
@@ -766,9 +790,9 @@ def send_recovery_code(email: str, type: str):
             raise HTTPException(status_code=400, detail="Invalid email format")
         
         # Check if user with this email exists
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username FROM users WHERE email = ?", (email,))
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, "SELECT id, username FROM users WHERE email = ?", (email,))
         user = cursor.fetchone()
         conn.close()
         
@@ -780,11 +804,12 @@ def send_recovery_code(email: str, type: str):
         
         # Store code with expiration (10 minutes) and recovery type
         expires_at = datetime.now() + timedelta(minutes=10)
+        username_value = get_value(user, 'username') if isinstance(user, dict) else user[1]
         verification_codes[f"recovery_{email}"] = {
             'code': code,
             'expires_at': expires_at,
             'type': type,
-            'username': user[1]
+            'username': username_value
         }
         
         # Send email
@@ -898,11 +923,11 @@ def reset_password(email: str, code: str, new_password: str):
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
         # Update password
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         new_hash = hash_password(new_password)
-        cursor.execute("UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
+        execute_query(cursor, "UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
         conn.commit()
         conn.close()
         
@@ -938,14 +963,14 @@ def health_check():
 @app.post("/devices", response_model=DeviceResponse)
 def create_device(device: DeviceCreate):
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         social_media_json = json.dumps(device.socialMedia) if device.socialMedia else None
         timestamp = device.timestamp or datetime.now().isoformat()
         
         # Check if device with same name already exists for this user
-        cursor.execute('''
+        execute_query(cursor, '''
             SELECT id FROM devices WHERE name = ? AND user_id = ?
         ''', (device.name, device.user_id))
         existing = cursor.fetchone()
@@ -953,7 +978,7 @@ def create_device(device: DeviceCreate):
         if existing:
             # Update existing device
             device_id = existing[0]
-            cursor.execute('''
+            execute_query(cursor, '''
                 UPDATE devices 
                 SET rssi = ?, distance_feet = ?, action = ?, timestamp = ?,
                     phone_number = ?, email = ?, bio = ?, social_media = ?
@@ -972,7 +997,7 @@ def create_device(device: DeviceCreate):
             print(f"✅ Updated existing device: {device.name} (ID: {device_id})")
         else:
             # Insert new device
-            cursor.execute('''
+            execute_query(cursor, '''
                 INSERT INTO devices (name, rssi, distance_feet, action, timestamp, 
                                    phone_number, email, bio, social_media, user_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -988,7 +1013,7 @@ def create_device(device: DeviceCreate):
                 social_media_json,
                 device.user_id
             ))
-            device_id = cursor.lastrowid
+            device_id = get_lastrowid(cursor, conn)
             print(f"✅ Created new device: {device.name} (ID: {device_id})")
         
         conn.commit()
@@ -1013,9 +1038,9 @@ def create_device(device: DeviceCreate):
 @app.get("/devices", response_model=List[DeviceResponse])
 def get_devices(user_id: int = Depends(get_current_user)):
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT id, name, rssi, distance_feet, action, timestamp,
                    phone_number, email, bio, social_media
             FROM devices 
@@ -1050,9 +1075,9 @@ def get_devices(user_id: int = Depends(get_current_user)):
 @app.get("/devices/{device_id}", response_model=DeviceResponse)
 def get_device(device_id: int):
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT id, name, rssi, distance_feet, action, timestamp,
                    phone_number, email, bio, social_media
             FROM devices 
@@ -1088,9 +1113,9 @@ def get_device(device_id: int):
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int):
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM devices WHERE id = ?', (device_id,))
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, 'DELETE FROM devices WHERE id = ?', (device_id,))
         
         if cursor.rowcount == 0:
             conn.close()
@@ -1110,9 +1135,9 @@ def delete_device(device_id: int):
 def get_user_profile(user_id: int = Depends(get_current_user)):
     """Get user profile"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT name, email, phone, bio, profile_photo, social_media FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
@@ -1138,11 +1163,11 @@ def get_user_profile(user_id: int = Depends(get_current_user)):
 def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
     """Save user profile"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Create table if it doesn't exist
-        cursor.execute('''
+        execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS user_profiles (
                 user_id INTEGER PRIMARY KEY,
                 name TEXT,
@@ -1156,7 +1181,7 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         
         # Check if phone number is already used by another user
         if profile.get('phone'):
-            cursor.execute('''
+            execute_query(cursor, '''
                 SELECT user_id FROM user_profiles 
                 WHERE phone = ? AND user_id != ?
             ''', (profile.get('phone'), user_id))
@@ -1167,7 +1192,7 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         
         # Check if email is already used by another user (in users table)
         if profile.get('email'):
-            cursor.execute('''
+            execute_query(cursor, '''
                 SELECT id FROM users 
                 WHERE LOWER(email) = ? AND id != ?
             ''', (profile.get('email').lower(), user_id))
@@ -1180,7 +1205,7 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
         
         # Upsert profile
-        cursor.execute('''
+        execute_query(cursor, '''
             INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
@@ -1215,11 +1240,11 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         photo_url = upload_result.get("secure_url")
         
         # Update database with photo URL
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Create table if it doesn't exist
-        cursor.execute('''
+        execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS user_profiles (
                 user_id INTEGER PRIMARY KEY,
                 name TEXT,
@@ -1232,17 +1257,17 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         
         # Update or insert photo URL
         # Check if profile exists
-        cursor.execute('SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
+        execute_query(cursor, 'SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
         exists = cursor.fetchone()
         
         if exists:
             # Update existing profile
-            cursor.execute('''
+            execute_query(cursor, '''
                 UPDATE user_profiles SET profile_photo = ? WHERE user_id = ?
             ''', (photo_url, user_id))
         else:
             # Insert new profile with just photo
-            cursor.execute('''
+            execute_query(cursor, '''
                 INSERT INTO user_profiles (user_id, profile_photo)
                 VALUES (?, ?)
             ''', (user_id, photo_url))
@@ -1263,9 +1288,9 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
 async def get_profile_photo(user_id: int):
     """Get profile photo URL from Cloudinary"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT profile_photo FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
@@ -1284,9 +1309,9 @@ async def get_profile_photo(user_id: int):
 async def delete_profile_photo(user_id: int = Depends(get_current_user)):
     """Delete profile photo from Cloudinary"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT profile_photo FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
@@ -1299,7 +1324,7 @@ async def delete_profile_photo(user_id: int = Depends(get_current_user)):
                 pass  # Continue even if Cloudinary delete fails
             
             # Update database
-            cursor.execute('''
+            execute_query(cursor, '''
                 UPDATE user_profiles SET profile_photo = NULL WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
@@ -1314,9 +1339,9 @@ async def delete_profile_photo(user_id: int = Depends(get_current_user)):
 def get_user_settings(user_id: int = Depends(get_current_user)):
     """Get user settings"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT dark_mode, max_distance FROM user_settings WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
@@ -1336,10 +1361,10 @@ def get_user_settings(user_id: int = Depends(get_current_user)):
 def save_user_settings(settings: dict, user_id: int = Depends(get_current_user)):
     """Save user settings"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
-        cursor.execute('''
+        execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id INTEGER PRIMARY KEY,
                 dark_mode INTEGER,
@@ -1347,7 +1372,7 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
             )
         ''')
         
-        cursor.execute('''
+        execute_query(cursor, '''
             INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance)
             VALUES (?, ?, ?)
         ''', (user_id, 
@@ -1365,9 +1390,9 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
 def get_privacy_zones(user_id: int = Depends(get_current_user)):
     """Get privacy zones"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT id, address, radius FROM privacy_zones WHERE user_id = ?
         ''', (user_id,))
         rows = cursor.fetchall()
@@ -1388,10 +1413,10 @@ def get_privacy_zones(user_id: int = Depends(get_current_user)):
 def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
     """Save a privacy zone"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
-        cursor.execute('''
+        execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS privacy_zones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -1400,13 +1425,13 @@ def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
             )
         ''')
         
-        cursor.execute('''
+        execute_query(cursor, '''
             INSERT INTO privacy_zones (user_id, address, radius)
             VALUES (?, ?, ?)
         ''', (user_id, zone.get('address'), zone.get('radius')))
         
         conn.commit()
-        zone_id = cursor.lastrowid
+        zone_id = get_lastrowid(cursor, conn)
         conn.close()
         return {"id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')}
     except Exception as e:
@@ -1416,9 +1441,9 @@ def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
 def delete_privacy_zone(zone_id: int):
     """Delete a privacy zone"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, 'DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
         conn.commit()
         conn.close()
         return {"success": True}
@@ -1430,9 +1455,9 @@ def delete_privacy_zone(zone_id: int):
 def get_pinned_contacts(user_id: int = Depends(get_current_user)):
     """Get pinned contact IDs"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             SELECT device_id FROM pinned_contacts WHERE user_id = ?
         ''', (user_id,))
         rows = cursor.fetchall()
@@ -1445,10 +1470,10 @@ def get_pinned_contacts(user_id: int = Depends(get_current_user)):
 def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Pin a contact"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
-        cursor.execute('''
+        execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS pinned_contacts (
                 user_id INTEGER,
                 device_id INTEGER,
@@ -1456,7 +1481,7 @@ def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
             )
         ''')
         
-        cursor.execute('''
+        execute_query(cursor, '''
             INSERT OR IGNORE INTO pinned_contacts (user_id, device_id)
             VALUES (?, ?)
         ''', (user_id, device_id))
@@ -1471,9 +1496,9 @@ def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
 def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Unpin a contact"""
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute('''
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, '''
             DELETE FROM pinned_contacts WHERE user_id = ? AND device_id = ?
         ''', (user_id, device_id))
         conn.commit()
@@ -1494,23 +1519,23 @@ async def get_admin_stats(secret: str = Header(None)):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Count users
-        cursor.execute('SELECT COUNT(*) FROM users')
+        execute_query(cursor, 'SELECT COUNT(*) FROM users')
         total_users = cursor.fetchone()[0]
         
         # Get list of all usernames with IDs
-        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        execute_query(cursor, 'SELECT id, username, email FROM users ORDER BY id')
         users_list = cursor.fetchall()
         
         # Count devices
-        cursor.execute('SELECT COUNT(*) FROM devices')
+        execute_query(cursor, 'SELECT COUNT(*) FROM devices')
         total_devices = cursor.fetchone()[0]
         
         # Count profiles with photos
-        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        execute_query(cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
         users_with_photos = cursor.fetchone()[0]
         
         conn.close()
@@ -1539,17 +1564,17 @@ async def admin_dashboard():
     Just open in browser: https://findable-production.up.railway.app/admin/dashboard
     """
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Get user stats
-        cursor.execute('SELECT COUNT(*) FROM users')
+        execute_query(cursor, 'SELECT COUNT(*) FROM users')
         total_users = cursor.fetchone()[0]
         
-        cursor.execute('SELECT id, username, email FROM users ORDER BY id')
+        execute_query(cursor, 'SELECT id, username, email FROM users ORDER BY id')
         users_list = cursor.fetchall()
         
-        cursor.execute('SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        execute_query(cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
         users_with_photos = cursor.fetchone()[0]
         
         conn.close()
@@ -1724,16 +1749,16 @@ async def clear_all_data(secret: str = Header(None)):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Delete all data from all tables
-        cursor.execute('DELETE FROM pinned_contacts')
-        cursor.execute('DELETE FROM privacy_zones')
-        cursor.execute('DELETE FROM user_settings')
-        cursor.execute('DELETE FROM user_profiles')
-        cursor.execute('DELETE FROM devices')
-        cursor.execute('DELETE FROM users')
+        execute_query(cursor, 'DELETE FROM pinned_contacts')
+        execute_query(cursor, 'DELETE FROM privacy_zones')
+        execute_query(cursor, 'DELETE FROM user_settings')
+        execute_query(cursor, 'DELETE FROM user_profiles')
+        execute_query(cursor, 'DELETE FROM devices')
+        execute_query(cursor, 'DELETE FROM users')
         
         conn.commit()
         conn.close()
