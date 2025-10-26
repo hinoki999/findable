@@ -7,6 +7,7 @@ import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
 // import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
+import ProfilePhotoPromptScreen from './src/screens/ProfilePhotoPromptScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
@@ -171,83 +172,96 @@ function MainApp() {
   const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
+  const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
 
-  // Load all user data from backend when authenticated
-  useEffect(() => {
+  // Function to load all user data from backend
+  const loadUserData = async () => {
     if (!isAuthenticated || !userId) return;
     
-    const loadUserData = async () => {
-      try {
-        console.log('📥 Loading user data from backend...');
+    try {
+      console.log('📥 Loading user data from backend...');
+      
+      // Load user profile
+      const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+      if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+        console.log('✅ Loaded profile:', profileData);
+        setUserProfile({
+          name: profileData.name || 'Your Name',
+          phoneNumber: profileData.phone || '(555) 123-4567',
+          email: profileData.email || 'user@example.com',
+          bio: profileData.bio || 'Optional bio line goes here.',
+          socialMedia: [],
+        });
         
-        // Load user profile
-        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
-          console.log('✅ Loaded profile:', profileData);
-          setUserProfile({
-            name: profileData.name || 'Your Name',
-            phoneNumber: profileData.phone || '(555) 123-4567',
-            email: profileData.email || 'user@example.com',
-            bio: profileData.bio || 'Optional bio line goes here.',
-            socialMedia: [],
-          });
-          
-          // Load profile photo if exists
-          if (profileData.profile_photo) {
-            console.log('✅ Loaded profile photo:', profileData.profile_photo);
-            setProfilePhotoUri(profileData.profile_photo);
-          }
+        // Load profile photo if exists
+        if (profileData.profile_photo) {
+          console.log('✅ Loaded profile photo:', profileData.profile_photo);
+          setProfilePhotoUri(profileData.profile_photo);
         }
-        
-        // Load settings
-        const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
-        if (settingsData) {
-          console.log('✅ Loaded settings:', settingsData);
-          setIsDarkMode(settingsData.darkMode);
-          setMaxDistance(settingsData.maxDistance);
-        }
-        
-        // Load pinned contacts
-        const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
-        if (pinnedData && pinnedData.length > 0) {
-          console.log('✅ Loaded pinned contacts:', pinnedData);
-          setPinnedIds(new Set(pinnedData));
-        }
-        
-        // Privacy Zones feature removed
-        // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
-        // if (zonesData) {
-        //   console.log('✅ Loaded privacy zones:', zonesData);
-        //   setPrivacyZones(zonesData);
-        // }
-        
-        console.log('✅ All user data loaded successfully');
-      } catch (error) {
-        console.error('❌ Failed to load user data:', error);
       }
-    };
-    
-    loadUserData();
+      
+      // Load settings
+      const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
+      if (settingsData) {
+        console.log('✅ Loaded settings:', settingsData);
+        setIsDarkMode(settingsData.darkMode);
+        setMaxDistance(settingsData.maxDistance);
+      }
+      
+      // Load pinned contacts
+      const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
+      if (pinnedData && pinnedData.length > 0) {
+        console.log('✅ Loaded pinned contacts:', pinnedData);
+        setPinnedIds(new Set(pinnedData));
+      }
+      
+      // Privacy Zones feature removed
+      // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
+      // if (zonesData) {
+      //   console.log('✅ Loaded privacy zones:', zonesData);
+      //   setPrivacyZones(zonesData);
+      // }
+      
+      console.log('✅ All user data loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load user data:', error);
+    }
+  };
+
+  // Load user data when authenticated
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      loadUserData();
+    }
   }, [isAuthenticated, userId]);
 
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
     console.log('✅ Signup successful:', username);
-    // Profile info is already saved in SignupScreen, just login now
+    // Profile info is already saved in SignupScreen
+    // Now log them in and show profile photo prompt
     setIsFirstTimeUser(true);
     await login(token, userId, username);
-    // User data will be loaded automatically by useEffect when isAuthenticated becomes true
-    showToast({
-      message: 'Welcome to DropLink!',
-      type: 'success',
-      duration: 3000,
-    });
+    // Show profile photo prompt instead of going directly to main app
+    setShowProfilePhotoPrompt(true);
   };
 
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
     // User goes directly to main app
+  };
+
+  const handleProfilePhotoPromptComplete = async () => {
+    console.log('✅ Profile photo prompt completed');
+    setShowProfilePhotoPrompt(false);
+    // Load user data to get the new profile photo if uploaded
+    await loadUserData();
+    showToast({
+      message: 'Welcome to DropLink!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
   const toggleDarkMode = async () => {
@@ -428,6 +442,15 @@ function MainApp() {
             showToast={showToast}
           />
         )}
+      </DarkModeContext.Provider>
+    );
+  }
+
+  // Show profile photo prompt after signup (authenticated but before main app)
+  if (isAuthenticated && showProfilePhotoPrompt) {
+    return (
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        <ProfilePhotoPromptScreen onComplete={handleProfilePhotoPromptComplete} />
       </DarkModeContext.Provider>
     );
   }
