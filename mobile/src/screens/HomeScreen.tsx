@@ -675,7 +675,7 @@ export default function HomeScreen() {
   // Tutorial steps for Home screen
   const tutorialSteps = [
     {
-      message: 'Welcome to DropLink! This is your home screen.',
+      message: 'Welcome to DropLink! This is your home screen where you\'ll see nearby users.',
       position: {
         top: 80,
         left: 20,
@@ -684,7 +684,7 @@ export default function HomeScreen() {
       arrow: undefined,
     },
     {
-      message: 'Green dots are nearby people within 33 feet. They pulsate faster when closer to you. Tap any dot to connect!',
+      message: 'When people are nearby (within 33 feet), they\'ll appear as green dots. The dots pulsate faster when they\'re closer. Tap any dot to connect!',
       position: {
         top: screenHeight * 0.4,
         left: 20,
@@ -693,7 +693,7 @@ export default function HomeScreen() {
       arrow: undefined,
     },
     {
-      message: 'Toggle your visibility here. Active = Discoverable, Ghost = Invisible.',
+      message: 'Toggle your visibility here. Active = Discoverable, Ghost = Invisible to others.',
       position: {
         top: 70,
         left: 20,
@@ -702,24 +702,16 @@ export default function HomeScreen() {
       arrowOffset: 15, // Position arrow 15px from left to center on toggle button
     },
     {
-      message: 'Use 2-finger pinch to zoom and rotate the grid view.',
+      message: 'Use 2-finger pinch to zoom in/out and rotate the grid view for better visibility.',
       position: {
-        top: 70,
+        top: screenHeight * 0.4,
+        left: 20,
         right: 20,
       },
       arrow: undefined,
     },
     {
-      message: 'Tap Reset View to return to the default view anytime.',
-      position: {
-        top: 70,
-        right: 20,
-      },
-      arrow: 'up' as const,
-      arrowOffset: 65, // Position arrow above the "w" in "View"
-    },
-    {
-      message: 'Tap this to see drop requests and link notifications.',
+      message: 'Tap the notification icon at the bottom to see drop requests and link notifications when you receive them.',
       position: {
         top: screenHeight * 0.54,
         left: screenWidth * 0.15,
@@ -728,7 +720,7 @@ export default function HomeScreen() {
       arrow: 'up' as const,
     },
     {
-      message: "You're all set! Swipe left to explore the Drop page and start connecting with nearby people.",
+      message: "You're all set! Swipe left to explore the Drop page and start connecting with nearby people. Happy dropping!",
       position: {
         bottom: 120,
         left: 20,
