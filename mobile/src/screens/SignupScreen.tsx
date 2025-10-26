@@ -70,8 +70,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setUsernameError('Maximum 20 characters');
       return;
     }
-    if (!text.replace('_', '').match(/^[a-zA-Z0-9_]*$/)) {
-      setUsernameError('Letters, numbers, and underscores only');
+    if (!text.match(/^[a-zA-Z0-9_.]*$/)) {
+      setUsernameError('Letters, numbers, underscores, and periods only');
       return;
     }
   };
