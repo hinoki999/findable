@@ -16,6 +16,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   const { showToast } = useToast();
   const { logout, username, login } = useAuth();
   const theme = getTheme(isDarkMode);
+  const [userEmail, setUserEmail] = useState('');
 
   // Modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -35,7 +36,21 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   // Confirmation modals
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteVerificationCode, setDeleteVerificationCode] = useState('');
+  const [sendingDeleteCode, setSendingDeleteCode] = useState(false);
+
+  // Load user email on mount
+  React.useEffect(() => {
+    const loadUserEmail = async () => {
+      try {
+        const profile = await api.getUserProfile();
+        setUserEmail(profile.email || '');
+      } catch (error) {
+        console.error('Failed to load user email:', error);
+      }
+    };
+    loadUserEmail();
+  }, []);
 
   const handleEdit = (field: 'username' | 'password') => {
     setEditingField(field);
@@ -151,10 +166,48 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
     });
   };
 
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText.toLowerCase() !== 'delete') {
+  const handleSendDeleteCode = async () => {
+    if (!userEmail) {
       showToast({
-        message: 'Please type "delete" to confirm',
+        message: 'No email found. Please add an email to your account.',
+        type: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    setSendingDeleteCode(true);
+    try {
+      const response = await fetch('https://findable-production.up.railway.app/auth/send-verification-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: userEmail }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send code');
+      }
+
+      showToast({
+        message: `Verification code sent to ${userEmail}`,
+        type: 'success',
+        duration: 3000,
+      });
+    } catch (error) {
+      showToast({
+        message: 'Failed to send verification code',
+        type: 'error',
+        duration: 3000,
+      });
+    } finally {
+      setSendingDeleteCode(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deleteVerificationCode || deleteVerificationCode.length !== 6) {
+      showToast({
+        message: 'Please enter the 6-digit verification code',
         type: 'error',
         duration: 3000,
       });
@@ -162,6 +215,20 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
     }
 
     try {
+      // Verify the code
+      const verifyResponse = await fetch('https://findable-production.up.railway.app/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: userEmail,
+          code: deleteVerificationCode,
+        }),
+      });
+
+      if (!verifyResponse.ok) {
+        throw new Error('Invalid verification code');
+      }
+
       // TODO: Add delete account endpoint to backend
       // await fetch('https://findable-production.up.railway.app/user/delete', {
       //   method: 'DELETE',
@@ -176,9 +243,9 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         type: 'success',
         duration: 3000,
       });
-    } catch (error) {
+    } catch (error: any) {
       showToast({
-        message: 'Failed to delete account',
+        message: error.message || 'Failed to delete account',
         type: 'error',
         duration: 3000,
       });
@@ -187,7 +254,14 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
-      <TopBar title="Security Settings" onBack={() => navigation.goBack()} />
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={15}>
+          <MaterialCommunityIcons name="arrow-left" size={28} color={theme.colors.text} />
+        </Pressable>
+        <Text style={[theme.type.h1, { fontSize: 20 }]}>Security Settings</Text>
+        <View style={{ width: 28 }} />
+      </View>
       
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Username */}
@@ -403,7 +477,10 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       </Modal>
 
       {/* Delete Account Confirmation Modal */}
-      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => {
+        setShowDeleteConfirm(false);
+        setDeleteVerificationCode('');
+      }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
             <MaterialCommunityIcons name="alert-circle" size={48} color="#FF3B30" style={{ marginBottom: 16 }} />
@@ -411,21 +488,51 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
             <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 24 }]}>
               This will permanently delete your account and all associated data. This action cannot be undone.
             </Text>
-            <Text style={[theme.type.body, { marginBottom: 8 }]}>Type "delete" to confirm:</Text>
+
+            {/* Email info */}
+            <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 16, fontSize: 14 }]}>
+              We'll send a confirmation code to {userEmail}
+            </Text>
+
+            {/* Send Code Button */}
+            <Pressable
+              onPress={handleSendDeleteCode}
+              disabled={sendingDeleteCode}
+              style={[styles.sendCodeButton, { 
+                backgroundColor: theme.colors.blue,
+                opacity: sendingDeleteCode ? 0.5 : 1,
+                marginBottom: 24
+              }]}
+            >
+              <Text style={[theme.type.button, { color: '#FFFFFF' }]}>
+                {sendingDeleteCode ? 'Sending...' : 'Send Verification Code'}
+              </Text>
+            </Pressable>
+
+            {/* Verification Code Input */}
+            <Text style={[theme.type.body, { marginBottom: 8 }]}>Enter 6-digit code:</Text>
             <TextInput
-              value={deleteConfirmText}
-              onChangeText={setDeleteConfirmText}
-              placeholder="delete"
+              value={deleteVerificationCode}
+              onChangeText={setDeleteVerificationCode}
+              placeholder="000000"
               placeholderTextColor={theme.colors.muted}
-              style={[styles.input, { backgroundColor: theme.colors.bg, color: theme.colors.text, marginBottom: 24 }]}
-              autoCapitalize="none"
-              autoCorrect={false}
+              keyboardType="number-pad"
+              maxLength={6}
+              style={[styles.input, { 
+                backgroundColor: theme.colors.bg, 
+                color: theme.colors.text, 
+                marginBottom: 24,
+                textAlign: 'center',
+                fontSize: 20,
+                letterSpacing: 4
+              }]}
             />
+
             <View style={styles.modalButtons}>
               <Pressable
                 onPress={() => {
                   setShowDeleteConfirm(false);
-                  setDeleteConfirmText('');
+                  setDeleteVerificationCode('');
                 }}
                 style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border }]}
               >
@@ -433,9 +540,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               </Pressable>
               <Pressable
                 onPress={handleDeleteAccount}
-                style={[styles.modalButton, { backgroundColor: '#FF3B30' }]}
+                disabled={deleteVerificationCode.length !== 6}
+                style={[styles.modalButton, { 
+                  backgroundColor: '#FF3B30',
+                  opacity: deleteVerificationCode.length !== 6 ? 0.5 : 1
+                }]}
               >
-                <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Delete</Text>
+                <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Delete My Account</Text>
               </Pressable>
             </View>
           </View>
@@ -448,6 +559,14 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
   },
   content: {
     flex: 1,
@@ -516,6 +635,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  sendCodeButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
