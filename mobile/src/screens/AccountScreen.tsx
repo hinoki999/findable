@@ -317,6 +317,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       <TopBar 
         title="Account" 
         subtitle={`@${username || 'user'}`}
+        rightIcon="shield-lock"
+        onRightIconPress={() => navigation.navigate('SecuritySettings')}
       />
       <ScrollView 
         style={{ flex: 1 }}
@@ -479,23 +481,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             </View>
           ))}
         </View>
-
-        {/* Security Settings Card */}
-        <Pressable 
-          onPress={() => navigation.navigate('SecuritySettings')}
-          style={({ pressed }) => [
-            theme.card,
-            { opacity: pressed ? 0.7 : 1 }
-          ]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <MaterialCommunityIcons name="shield-lock" size={24} color={theme.colors.blue} style={{ marginRight: 12 }} />
-              <Text style={[theme.type.h2, { color: theme.colors.text }]}>Security Settings</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={24} color={theme.colors.muted} />
-          </View>
-        </Pressable>
 
       </ScrollView>
 
