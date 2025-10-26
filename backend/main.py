@@ -325,6 +325,14 @@ def register(request: RegisterRequest):
             conn.close()
             raise HTTPException(status_code=400, detail="Username already taken")
         
+        # Check if email already exists
+        if request.email:
+            cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (request.email.lower(),))
+            existing_email = cursor.fetchone()
+            if existing_email:
+                conn.close()
+                raise HTTPException(status_code=400, detail="An account with this email already exists")
+        
         # Hash password and create user (store username in lowercase)
         password_hash = hash_password(request.password)
         cursor.execute(
@@ -1067,6 +1075,28 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
             )
         ''')
         
+        # Check if phone number is already used by another user
+        if profile.get('phone'):
+            cursor.execute('''
+                SELECT user_id FROM user_profiles 
+                WHERE phone = ? AND user_id != ?
+            ''', (profile.get('phone'), user_id))
+            existing_phone = cursor.fetchone()
+            if existing_phone:
+                conn.close()
+                raise HTTPException(status_code=400, detail="This phone number is already associated with another account")
+        
+        # Check if email is already used by another user (in users table)
+        if profile.get('email'):
+            cursor.execute('''
+                SELECT id FROM users 
+                WHERE LOWER(email) = ? AND id != ?
+            ''', (profile.get('email').lower(), user_id))
+            existing_email = cursor.fetchone()
+            if existing_email:
+                conn.close()
+                raise HTTPException(status_code=400, detail="This email is already associated with another account")
+        
         # Upsert profile
         cursor.execute('''
             INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio)
@@ -1076,6 +1106,8 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         conn.commit()
         conn.close()
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
