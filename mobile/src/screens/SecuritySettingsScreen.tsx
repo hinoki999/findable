@@ -502,12 +502,19 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       </Modal>
 
       {/* Delete Account Confirmation Modal */}
-      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => {
-        setShowDeleteConfirm(false);
-        setDeleteVerificationCode('');
-      }}>
+      <Modal 
+        visible={showDeleteConfirm} 
+        transparent 
+        animationType="fade" 
+        onRequestClose={() => {
+          // Prevent accidental closure - user must click Cancel
+        }}
+      >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
+          <Pressable 
+            onPress={() => {}}
+            style={[styles.modalContent, { backgroundColor: theme.colors.white }]}
+          >
             <MaterialCommunityIcons name="alert-circle" size={48} color="#FF3B30" style={{ marginBottom: 16 }} />
             <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 12, textAlign: 'center' }]}>Delete Account?</Text>
             <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 24 }]}>
@@ -574,7 +581,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
                 <Text style={[theme.type.button, { color: '#FFFFFF' }]}>Delete My Account</Text>
               </Pressable>
             </View>
-          </View>
+          </Pressable>
         </View>
       </Modal>
     </View>
