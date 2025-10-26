@@ -332,10 +332,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       {/* Source Selection Step */}
       {step === 'source' && (
         <View style={styles.centeredContent}>
-          <MaterialCommunityIcons name="camera" size={80} color={theme.colors.blue} style={{ marginBottom: 24 }} />
-          <Text style={[theme.type.h1, { fontSize: 22, marginBottom: 40, textAlign: 'center' }]}>
-            Choose Photo Source
-          </Text>
+          <MaterialCommunityIcons name="camera" size={80} color={theme.colors.blue} style={{ marginBottom: 64 }} />
           <View style={{ width: '100%', paddingHorizontal: 40, gap: 12 }}>
             <Pressable
               onPress={handleTakePhoto}

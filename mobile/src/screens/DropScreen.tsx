@@ -166,12 +166,12 @@ export default function DropScreen() {
   // Drop screen tutorial steps
   const tutorialSteps = [
     {
-      message: `This page shows all people you can drop within ${maxDistance} ft (10m). Track here!`,
+      message: `This page shows nearby people when they're within ${maxDistance} ft (10m). When people appear, you can see them here!`,
       position: { top: screenHeight * 0.28, left: screenWidth * 0.3, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {
-      message: 'Click on a name to send a drop and share your contact card!',
+      message: 'When you see someone, click their name to send a drop and share your contact card!',
       position: { top: screenHeight * 0.38 - 40, left: screenWidth * 0.05, right: screenWidth * 0.3 },
       arrow: 'down' as const,
     },

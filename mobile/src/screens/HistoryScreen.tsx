@@ -216,22 +216,22 @@ export default function HistoryScreen() {
   // History screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'Click on any contact to view their full contact card!',
+      message: 'This is your link history! When you connect with someone, their contact card will appear here. Click any contact to view their full card.',
       position: { top: 150, left: screenWidth * 0.1, right: screenWidth * 0.1 },
       arrow: undefined,
     },
     {
-      message: 'Swipe right to pin your favorite contacts to the Home screen!',
+      message: 'Once you have contacts, swipe right to pin your favorites to the Home screen!',
       position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
       arrow: 'down' as const,
     },
     {
-      message: 'Swipe left to delete any contact you no longer want to keep.',
+      message: 'Swipe left on any contact to delete them when needed.',
       position: { top: 205, left: screenWidth * 0.35, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {
-      message: 'Use the search bar to quickly find your contacts!',
+      message: 'Use the search bar to quickly find your contacts when your list grows!',
       position: { top: 100, left: screenWidth * 0.1, right: screenWidth * 0.1 },
       arrow: 'up' as const,
     },

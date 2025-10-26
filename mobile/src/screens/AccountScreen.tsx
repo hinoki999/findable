@@ -709,7 +709,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 value={tempValue}
                 onChangeText={(text) => {
                   if (editingField === 'phone') {
-                    setTempValue(formatPhoneNumber(text));
+                    // Only allow numeric input
+                    const numericOnly = text.replace(/\D/g, '');
+                    setTempValue(formatPhoneNumber(numericOnly));
                   } else if (editingField === 'bio') {
                     if (text.length <= 50) {
                       setTempValue(text);
