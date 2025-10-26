@@ -127,7 +127,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
         // Always respond to touches - more sensitive
-        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2 || evt.nativeEvent.touches.length >= 2;
+        return Math.abs(gestureState.dx) > 1 || Math.abs(gestureState.dy) > 1 || evt.nativeEvent.touches.length >= 2;
       },
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
@@ -366,14 +366,6 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         <View style={styles.editContainer}>
           {/* Image with circular mask */}
           <View style={styles.imageContainer}>
-            {/* Gray overlay */}
-            <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]} />
-            
-            {/* Circular cutout */}
-            <View style={styles.circleCutout}>
-              <View style={styles.circle} />
-            </View>
-
             {/* Draggable/Zoomable Image */}
             <Animated.View
               {...panResponder.panHandlers}
@@ -394,6 +386,14 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
                 resizeMode="cover"
               />
             </Animated.View>
+
+            {/* Gray overlay */}
+            <View pointerEvents="none" style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]} />
+            
+            {/* Circular cutout */}
+            <View pointerEvents="none" style={styles.circleCutout}>
+              <View style={styles.circle} />
+            </View>
           </View>
 
           {/* Instructions */}
