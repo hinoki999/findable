@@ -293,6 +293,11 @@ function MainApp() {
       } catch (error) {
         console.error('Failed to clear tutorial state:', error);
       }
+      
+      // Reset navigation to Home tab and clear any subScreens
+      setTab('Home');
+      setSubScreen(null);
+      console.log('✅ Navigation reset to Home tab');
     }
     
     showToast({
