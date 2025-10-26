@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
+from starlette.middleware.base import BaseHTTPMiddleware
 import sqlite3
 import json
 import os
@@ -52,6 +53,22 @@ FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@droplinkconnect.com")
 # In production, use Redis or database
 verification_codes = {}
 
+# Security Headers Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # HSTS: Force HTTPS for 1 year
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # Prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        # Prevent MIME type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # XSS Protection (legacy but still good)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # Referrer policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
 # Enable CORS for React Native app
 app.add_middleware(
     CORSMiddleware,
@@ -60,6 +77,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add security headers
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Database Configuration
 DATABASE_URL = os.environ.get("DATABASE_URL", None)
