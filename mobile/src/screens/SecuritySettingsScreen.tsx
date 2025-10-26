@@ -38,6 +38,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteVerificationCode, setDeleteVerificationCode] = useState('');
   const [sendingDeleteCode, setSendingDeleteCode] = useState(false);
+  const [codeSent, setCodeSent] = useState(false);
 
   // Load user email on mount
   React.useEffect(() => {
@@ -188,11 +189,9 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         throw new Error('Failed to send code');
       }
 
-      showToast({
-        message: `Verification code sent to ${userEmail}`,
-        type: 'success',
-        duration: 3000,
-      });
+      // Don't show toast - keep modal open
+      // Code sent successfully, user can now enter it
+      setCodeSent(true);
     } catch (error) {
       showToast({
         message: 'Failed to send verification code',
@@ -349,7 +348,10 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         {/* Delete Account */}
         <View style={[styles.card, { backgroundColor: theme.colors.white, marginTop: 8 }]}>
           <Pressable
-            onPress={() => setShowDeleteConfirm(true)}
+            onPress={() => {
+              setShowDeleteConfirm(true);
+              setCodeSent(false);
+            }}
             style={({ pressed }) => [
               styles.row,
               { opacity: pressed ? 0.7 : 1 }
@@ -531,15 +533,15 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
             {/* Send Code Button */}
             <Pressable
               onPress={handleSendDeleteCode}
-              disabled={sendingDeleteCode}
+              disabled={sendingDeleteCode || codeSent}
               style={[styles.sendCodeButton, { 
-                backgroundColor: theme.colors.blue,
-                opacity: sendingDeleteCode ? 0.5 : 1,
+                backgroundColor: codeSent ? '#4CAF50' : theme.colors.blue,
+                opacity: (sendingDeleteCode || codeSent) ? 0.7 : 1,
                 marginBottom: 24
               }]}
             >
               <Text style={[theme.type.button, { color: '#FFFFFF' }]}>
-                {sendingDeleteCode ? 'Sending...' : 'Send Verification Code'}
+                {sendingDeleteCode ? 'Sending...' : codeSent ? 'Code Sent ✓' : 'Send Verification Code'}
               </Text>
             </Pressable>
 
@@ -567,6 +569,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
                 onPress={() => {
                   setShowDeleteConfirm(false);
                   setDeleteVerificationCode('');
+                  setCodeSent(false);
                 }}
                 style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border }]}
               >
