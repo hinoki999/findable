@@ -296,8 +296,8 @@ def register(request: RegisterRequest):
         if not username_lower or len(username_lower) < 3 or len(username_lower) > 20:
             raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
         
-        if not username_lower.replace('_', '').isalnum():
-            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        if not username_lower.replace('_', '').replace('.', '').isalnum():
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
         
         # Validate password (8+ chars, uppercase, lowercase, number)
         if len(request.password) < 8:
@@ -592,8 +592,8 @@ def change_username(new_username: str, user_id: int = Depends(get_current_user))
         if not new_username_lower or len(new_username_lower) < 3 or len(new_username_lower) > 20:
             raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
         
-        if not new_username_lower.replace('_', '').isalnum():
-            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, and underscores")
+        if not new_username_lower.replace('_', '').replace('.', '').isalnum():
+            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
         
         conn = sqlite3.connect('droplink.db')
         cursor = conn.cursor()

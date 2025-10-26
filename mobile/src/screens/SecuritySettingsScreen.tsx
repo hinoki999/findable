@@ -239,7 +239,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       logout();
       
       showToast({
-        message: 'Account deleted successfully',
+        message: 'Account successfully deleted',
         type: 'success',
         duration: 3000,
       });

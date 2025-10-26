@@ -194,8 +194,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Username must be 3-20 characters');
         return;
       }
-      if (!/^[a-zA-Z0-9_]+$/.test(tempValue)) {
-        setValidationError('Username can only contain letters, numbers, and underscores');
+      if (!/^[a-zA-Z0-9_.]+$/.test(tempValue)) {
+        setValidationError('Username can only contain letters, numbers, underscores, and periods');
         return;
       }
       
