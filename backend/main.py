@@ -19,6 +19,14 @@ import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 
+# PostgreSQL support
+try:
+    import psycopg2
+    import psycopg2.extras
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
+
 app = FastAPI(title="DropLink API")
 
 # JWT Secret Key (in production, use environment variable)
@@ -53,76 +61,132 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database Configuration
+DATABASE_URL = os.environ.get("DATABASE_URL", None)
+USE_POSTGRES = DATABASE_URL is not None and POSTGRES_AVAILABLE
+
+# Database connection helper
+def get_db_connection():
+    """
+    Returns a database connection.
+    Uses PostgreSQL if DATABASE_URL is set (Railway production),
+    otherwise uses SQLite (local development).
+    """
+    if USE_POSTGRES:
+        conn = psycopg2.connect(DATABASE_URL)
+        conn.autocommit = False  # We'll commit manually
+        return conn
+    else:
+        return sqlite3.connect('droplink.db')
+
+def get_cursor(conn):
+    """
+    Returns a cursor for the given connection.
+    Uses RealDictCursor for PostgreSQL to get dict-like results.
+    """
+    if USE_POSTGRES:
+        return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    else:
+        return conn.cursor()
+
+def execute_query(cursor, query, params=None):
+    """
+    Execute a query with proper placeholder syntax for the database type.
+    SQLite uses ? placeholders, PostgreSQL uses %s placeholders.
+    """
+    if USE_POSTGRES and params:
+        # Convert SQLite ? placeholders to PostgreSQL %s placeholders
+        query = query.replace('?', '%s')
+    
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+
 # Database setup
 def init_db():
-    conn = sqlite3.connect('droplink.db')
-    cursor = conn.cursor()
+    conn = get_db_connection()
+    cursor = get_cursor(conn)
+    
+    # SQL type mapping based on database
+    if USE_POSTGRES:
+        auto_id = "SERIAL PRIMARY KEY"
+        integer = "INTEGER"
+        text = "TEXT"
+        real = "DOUBLE PRECISION"
+        timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+    else:
+        auto_id = "INTEGER PRIMARY KEY AUTOINCREMENT"
+        integer = "INTEGER"
+        text = "TEXT"
+        real = "REAL"
+        timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
     
     # Users table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            email TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            id {auto_id},
+            username {text} UNIQUE NOT NULL,
+            password_hash {text} NOT NULL,
+            email {text},
+            created_at {timestamp_default}
         )
     ''')
     
     # Devices table
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS devices (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            rssi INTEGER NOT NULL,
-            distance_feet REAL NOT NULL,
-            action TEXT,
-            timestamp TEXT,
-            phone_number TEXT,
-            email TEXT,
-            bio TEXT,
-            social_media TEXT,
-            user_id INTEGER DEFAULT 1
+            id {auto_id},
+            name {text} NOT NULL,
+            rssi {integer} NOT NULL,
+            distance_feet {real} NOT NULL,
+            action {text},
+            timestamp {text},
+            phone_number {text},
+            email {text},
+            bio {text},
+            social_media {text},
+            user_id {integer} DEFAULT 1
         )
     ''')
     
     # User profiles table (if not exists)
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS user_profiles (
-            user_id INTEGER PRIMARY KEY,
-            name TEXT,
-            phone TEXT,
-            email TEXT,
-            bio TEXT,
-            social_media TEXT,
-            profile_photo TEXT
+            user_id {integer} PRIMARY KEY,
+            name {text},
+            phone {text},
+            email {text},
+            bio {text},
+            social_media {text},
+            profile_photo {text}
         )
     ''')
     
     # User settings table (if not exists)
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS user_settings (
-            user_id INTEGER PRIMARY KEY,
-            dark_mode INTEGER DEFAULT 0,
-            max_distance INTEGER DEFAULT 50
+            user_id {integer} PRIMARY KEY,
+            dark_mode {integer} DEFAULT 0,
+            max_distance {integer} DEFAULT 50
         )
     ''')
     
     # Privacy zones table (if not exists)
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS privacy_zones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            address TEXT NOT NULL,
-            radius REAL NOT NULL
+            id {auto_id},
+            user_id {integer} NOT NULL,
+            address {text} NOT NULL,
+            radius {real} NOT NULL
         )
     ''')
     
     # Pinned contacts table (if not exists)
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS pinned_contacts (
-            user_id INTEGER NOT NULL,
-            device_id INTEGER NOT NULL,
+            user_id {integer} NOT NULL,
+            device_id {integer} NOT NULL,
             PRIMARY KEY (user_id, device_id)
         )
     ''')
@@ -315,11 +379,11 @@ def register(request: RegisterRequest):
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Check if username already exists (case-insensitive)
-        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ?", (username_lower,))
+        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username_lower,))
         existing = cursor.fetchone()
         if existing:
             conn.close()
@@ -327,7 +391,7 @@ def register(request: RegisterRequest):
         
         # Check if email already exists
         if request.email:
-            cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (request.email.lower(),))
+            execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (request.email.lower(),))
             existing_email = cursor.fetchone()
             if existing_email:
                 conn.close()
@@ -335,14 +399,21 @@ def register(request: RegisterRequest):
         
         # Hash password and create user (store username in lowercase)
         password_hash = hash_password(request.password)
-        cursor.execute(
+        execute_query(cursor,
             "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
             (username_lower, password_hash, request.email)
         )
-        user_id = cursor.lastrowid
+        
+        # Get the inserted user_id
+        if USE_POSTGRES:
+            execute_query(cursor, "SELECT lastval()")
+            result = cursor.fetchone()
+            user_id = result[0] if isinstance(result, tuple) else result['lastval']
+        else:
+            user_id = cursor.lastrowid
         
         # Initialize default settings with dark mode enabled
-        cursor.execute('''
+        execute_query(cursor, '''
             INSERT INTO user_settings (user_id, dark_mode, max_distance)
             VALUES (?, ?, ?)
         ''', (user_id, 1, 33))
@@ -370,11 +441,11 @@ def login(request: LoginRequest):
     try:
         username_lower = request.username.lower()  # Convert to lowercase
         
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Find user by username (case-insensitive)
-        cursor.execute(
+        execute_query(cursor,
             "SELECT id, username, password_hash FROM users WHERE LOWER(username) = ?",
             (username_lower,)
         )
@@ -384,7 +455,11 @@ def login(request: LoginRequest):
         if not user:
             raise HTTPException(status_code=401, detail="Invalid username or password")
         
-        user_id, username, password_hash = user
+        # Handle both dict (PostgreSQL) and tuple (SQLite) results
+        if isinstance(user, dict):
+            user_id, username, password_hash = user['id'], user['username'], user['password_hash']
+        else:
+            user_id, username, password_hash = user
         
         # Verify password
         if not verify_password(request.password, password_hash):
@@ -567,9 +642,9 @@ def check_username(request: CheckUsernameRequest):
             return {"available": False, "message": "Letters, numbers, and underscores only"}
         
         # Check if username exists (case-insensitive)
-        conn = sqlite3.connect('droplink.db')
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM users WHERE LOWER(username) = ?", (username,))
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
         existing = cursor.fetchone()
         conn.close()
         
