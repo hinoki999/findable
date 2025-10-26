@@ -1,5 +1,5 @@
 ﻿import React, { useState } from 'react';
-import { View, Text, Switch, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
@@ -317,7 +317,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       <TopBar 
         title="Account" 
         subtitle={`@${username || 'user'}`}
-        rightIcon="shield-lock"
+        rightIcon="cog"
         onRightIconPress={() => navigation.navigate('SecuritySettings')}
       />
       <ScrollView 
@@ -338,20 +338,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             <Pressable onPress={() => handleEdit('bio')} style={{ padding: 4 }}>
               <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
             </Pressable>
-          </View>
-        </View>
-
-        {/* Dark Mode Card */}
-        <View style={theme.card}>
-          <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Dark mode</Text>
-          <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop:10 }}>
-            <Text style={theme.type.muted}>Enable dark mode</Text>
-            <Switch 
-              value={isDarkMode} 
-              onValueChange={toggleDarkMode}
-              trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
-              thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
-            />
           </View>
         </View>
 

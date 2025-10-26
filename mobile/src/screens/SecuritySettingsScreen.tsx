@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, TextInput, Modal, ScrollView, Alert, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, Modal, ScrollView, Alert, StyleSheet, Switch } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
@@ -12,7 +12,7 @@ interface SecuritySettingsScreenProps {
 }
 
 export default function SecuritySettingsScreen({ navigation }: SecuritySettingsScreenProps) {
-  const { isDarkMode } = useDarkMode();
+  const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { showToast } = useToast();
   const { logout, username, login } = useAuth();
   const theme = getTheme(isDarkMode);
@@ -302,6 +302,25 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
           </Pressable>
+        </View>
+
+        {/* Dark Mode */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Appearance</Text>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="theme-light-dark" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.text }]}>Dark Mode</Text>
+            </View>
+            <Switch 
+              value={isDarkMode} 
+              onValueChange={toggleDarkMode}
+              trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
+              thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
+            />
+          </View>
         </View>
 
         {/* Logout */}
