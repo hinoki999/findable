@@ -251,9 +251,22 @@ def init_db():
             username {text} UNIQUE NOT NULL,
             password_hash {text} NOT NULL,
             email {text},
-            created_at {timestamp_default}
+            created_at {timestamp_default},
+            failed_login_attempts {integer} DEFAULT 0,
+            locked_until {text}
         )
     ''')
+    
+    # Add account lockout columns if they don't exist (for existing databases)
+    try:
+        cursor.execute(f'ALTER TABLE users ADD COLUMN failed_login_attempts {integer} DEFAULT 0')
+    except:
+        pass  # Column already exists
+    
+    try:
+        cursor.execute(f'ALTER TABLE users ADD COLUMN locked_until {text}')
+    except:
+        pass  # Column already exists
     
     # Devices table
     cursor.execute(f'''
@@ -809,6 +822,106 @@ DropLink - Share contacts with people near you
         print(f"📧 VERIFICATION CODE for {email}: {code}")
         return False
 
+def send_lockout_notification(email: str, username: str, lockout_minutes: int):
+    """Send account lockout notification via email"""
+    
+    # If SendGrid is not configured, log the notification
+    if not SENDGRID_API_KEY:
+        print(f"⚠️ SendGrid not configured. LOCKOUT NOTIFICATION for {email} (user: {username})")
+        print(f"🔒 Account locked for {lockout_minutes} minutes")
+        return True
+    
+    try:
+        # HTML email body
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #FF3B30;">🔒 Account Locked - DropLink</h2>
+                <p>Hello <strong>{username}</strong>,</p>
+                <p>Your account has been temporarily locked due to multiple failed login attempts.</p>
+                
+                <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Lockout Duration:</strong> {lockout_minutes} minutes</p>
+                    <p style="margin: 10px 0 0 0;">You can try logging in again after this time period.</p>
+                </div>
+                
+                <h3>What happened?</h3>
+                <p>We detected 5 consecutive failed login attempts to your account. To protect your account security, we've temporarily locked it.</p>
+                
+                <h3>What should you do?</h3>
+                <ul>
+                    <li>If this was you, wait {lockout_minutes} minutes and try again with the correct password</li>
+                    <li>If you forgot your password, use the "Forgot Password" feature to reset it</li>
+                    <li>If you didn't try to log in, someone may be attempting to access your account</li>
+                </ul>
+                
+                <div style="background-color: #f8d7da; border-left: 4px solid #f44336; padding: 15px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>⚠️ Security Warning</strong></p>
+                    <p style="margin: 10px 0 0 0;">If you didn't attempt to log in, we recommend changing your password immediately after the lockout period ends.</p>
+                </div>
+                
+                <p>Need help? Contact our support team.</p>
+                
+                <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                <p style="color: #999; font-size: 12px;">
+                    This is an automated security notification from DropLink.<br>
+                    For security reasons, please do not reply to this email.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Plain text version
+        plain_content = f"""
+ACCOUNT LOCKED - DropLink
+
+Hello {username},
+
+Your account has been temporarily locked due to multiple failed login attempts.
+
+LOCKOUT DURATION: {lockout_minutes} minutes
+You can try logging in again after this time period.
+
+WHAT HAPPENED?
+We detected 5 consecutive failed login attempts to your account. To protect your account security, we've temporarily locked it.
+
+WHAT SHOULD YOU DO?
+- If this was you, wait {lockout_minutes} minutes and try again with the correct password
+- If you forgot your password, use the "Forgot Password" feature to reset it
+- If you didn't try to log in, someone may be attempting to access your account
+
+SECURITY WARNING:
+If you didn't attempt to log in, we recommend changing your password immediately after the lockout period ends.
+
+Need help? Contact our support team.
+
+---
+This is an automated security notification from DropLink.
+For security reasons, please do not reply to this email.
+        """
+        
+        # Create SendGrid message
+        message = Mail(
+            from_email=Email(FROM_EMAIL),
+            to_emails=To(email),
+            subject='🔒 Account Locked - DropLink Security Alert',
+            plain_text_content=Content("text/plain", plain_content),
+            html_content=Content("text/html", html_content)
+        )
+        
+        # Send via SendGrid
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        
+        print(f"✅ Lockout notification sent to {email}. Status: {response.status_code}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to send lockout notification: {str(e)}")
+        return False
+
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/check-password-strength")
@@ -951,33 +1064,122 @@ def register(register_request: RegisterRequest):
 
 @app.post("/auth/login", response_model=AuthResponse)
 def login(login_request: LoginRequest):
-    """Login with username and password"""
+    """Login with username and password (with account lockout protection)"""
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
         
         conn = get_db_connection()
         cursor = get_cursor(conn)
         
-        # Find user by username (case-insensitive)
+        # Find user by username (case-insensitive) - include lockout fields
         execute_query(cursor,
-            "SELECT id, username, password_hash FROM users WHERE LOWER(username) = ?",
+            "SELECT id, username, password_hash, email, failed_login_attempts, locked_until FROM users WHERE LOWER(username) = ?",
             (username_lower,)
         )
         user = cursor.fetchone()
-        conn.close()
         
         if not user:
+            conn.close()
             raise HTTPException(status_code=401, detail="Invalid username or password")
         
         # Handle both dict (PostgreSQL) and tuple (SQLite) results
         if isinstance(user, dict):
-            user_id, username, password_hash = user['id'], user['username'], user['password_hash']
+            user_id = user['id']
+            username = user['username']
+            password_hash = user['password_hash']
+            email = user.get('email')
+            failed_attempts = user.get('failed_login_attempts', 0) or 0
+            locked_until_str = user.get('locked_until')
         else:
-            user_id, username, password_hash = user
+            user_id, username, password_hash, email, failed_attempts, locked_until_str = user
+            failed_attempts = failed_attempts or 0
+        
+        # Check if account is locked
+        if locked_until_str:
+            try:
+                locked_until = datetime.fromisoformat(locked_until_str)
+                now = datetime.now()
+                
+                if now < locked_until:
+                    # Account is still locked
+                    remaining_seconds = int((locked_until - now).total_seconds())
+                    remaining_minutes = remaining_seconds // 60
+                    conn.close()
+                    
+                    raise HTTPException(
+                        status_code=423,  # 423 Locked
+                        detail=f"Account locked due to multiple failed login attempts. Try again in {remaining_minutes} minutes.",
+                        headers={"Retry-After": str(remaining_seconds)}
+                    )
+                else:
+                    # Lock period expired, reset lockout
+                    execute_query(cursor,
+                        "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                        (user_id,)
+                    )
+                    conn.commit()
+                    failed_attempts = 0
+            except ValueError:
+                # Invalid timestamp format, reset lockout
+                execute_query(cursor,
+                    "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                    (user_id,)
+                )
+                conn.commit()
+                failed_attempts = 0
         
         # Verify password
         if not verify_password(login_request.password, password_hash):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            # Increment failed login attempts
+            failed_attempts += 1
+            
+            # Lock account after 5 failed attempts
+            if failed_attempts >= 5:
+                lock_duration = timedelta(minutes=15)
+                locked_until = datetime.now() + lock_duration
+                locked_until_str = locked_until.isoformat()
+                
+                execute_query(cursor,
+                    "UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?",
+                    (failed_attempts, locked_until_str, user_id)
+                )
+                conn.commit()
+                conn.close()
+                
+                # Send email notification
+                if email:
+                    try:
+                        send_lockout_notification(email, username, 15)
+                    except:
+                        pass  # Don't fail login if email fails
+                
+                raise HTTPException(
+                    status_code=423,
+                    detail="Account locked due to multiple failed login attempts. Try again in 15 minutes.",
+                    headers={"Retry-After": str(15 * 60)}
+                )
+            else:
+                # Update failed attempts count
+                execute_query(cursor,
+                    "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                    (failed_attempts, user_id)
+                )
+                conn.commit()
+                conn.close()
+                
+                remaining_attempts = 5 - failed_attempts
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Invalid username or password. {remaining_attempts} attempts remaining before account lockout."
+                )
+        
+        # Successful login - reset failed attempts
+        execute_query(cursor,
+            "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+            (user_id,)
+        )
+        conn.commit()
+        conn.close()
         
         # Create JWT token
         token = create_access_token(user_id, username)
@@ -1027,6 +1229,68 @@ def refresh_token(user_id: int = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
+
+@app.post("/auth/unlock-account")
+def unlock_account(data: dict, admin_user_id: int = Depends(get_current_user)):
+    """
+    Manually unlock a locked account (admin only)
+    
+    Request body:
+    {
+        "username": "user_to_unlock"
+    }
+    
+    Note: This is a temporary admin endpoint. In production, implement proper
+    admin role checking. For now, any authenticated user can unlock accounts.
+    """
+    try:
+        username = data.get('username')
+        if not username:
+            raise HTTPException(status_code=400, detail="Username is required")
+        
+        username_lower = username.lower()
+        
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        # Find user
+        execute_query(cursor,
+            "SELECT id, username, locked_until, failed_login_attempts FROM users WHERE LOWER(username) = ?",
+            (username_lower,)
+        )
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Reset lockout
+        if isinstance(user, dict):
+            user_id = user['id']
+            actual_username = user['username']
+        else:
+            user_id = user[0]
+            actual_username = user[1]
+        
+        execute_query(cursor,
+            "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+            (user_id,)
+        )
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Account unlocked for user: {actual_username} (by admin user_id: {admin_user_id})")
+        
+        return {
+            "success": True,
+            "message": f"Account '{actual_username}' has been unlocked successfully",
+            "username": actual_username
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unlock failed: {str(e)}")
 
 @app.post("/auth/google", response_model=AuthResponse)
 def google_auth(request: GoogleAuthRequest):
