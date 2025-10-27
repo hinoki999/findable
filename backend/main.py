@@ -441,11 +441,11 @@ DropLink - Share contacts with people near you
 
 @app.post("/auth/register", response_model=AuthResponse)
 @limiter.limit("3/hour")
-def register(req: Request, request: RegisterRequest):
+def register(request: Request, register_request: RegisterRequest):
     """Register a new user - Rate limited: 3 requests per hour"""
     try:
         # Convert username to lowercase for case-insensitive storage
-        username_lower = request.username.lower()
+        username_lower = register_request.username.lower()
         
         # Validate username (3-20 chars, alphanumeric + underscore)
         if not username_lower or len(username_lower) < 3 or len(username_lower) > 20:
@@ -455,19 +455,19 @@ def register(req: Request, request: RegisterRequest):
             raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
         
         # Validate password (8+ chars, uppercase, lowercase, number)
-        if len(request.password) < 8:
+        if len(register_request.password) < 8:
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
         
-        if not any(c.isupper() for c in request.password):
+        if not any(c.isupper() for c in register_request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
         
-        if not any(c.islower() for c in request.password):
+        if not any(c.islower() for c in register_request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
         
-        if not any(c.isdigit() for c in request.password):
+        if not any(c.isdigit() for c in register_request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one number")
         
-        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in request.password):
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in register_request.password):
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
         conn = get_db_connection()
@@ -481,18 +481,18 @@ def register(req: Request, request: RegisterRequest):
             raise HTTPException(status_code=400, detail="Username already taken")
         
         # Check if email already exists
-        if request.email:
-            execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (request.email.lower(),))
+        if register_request.email:
+            execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
             existing_email = cursor.fetchone()
             if existing_email:
                 conn.close()
                 raise HTTPException(status_code=400, detail="An account with this email already exists")
         
         # Hash password and create user (store username in lowercase)
-        password_hash = hash_password(request.password)
+        password_hash = hash_password(register_request.password)
         execute_query(cursor,
             "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
-            (username_lower, password_hash, request.email)
+            (username_lower, password_hash, register_request.email)
         )
         
         # Get the inserted user_id
@@ -523,10 +523,10 @@ def register(req: Request, request: RegisterRequest):
 
 @app.post("/auth/login", response_model=AuthResponse)
 @limiter.limit("5/minute")
-def login(req: Request, request: LoginRequest):
+def login(request: Request, login_request: LoginRequest):
     """Login with username and password - Rate limited: 5 requests per minute"""
     try:
-        username_lower = request.username.lower()  # Convert to lowercase
+        username_lower = login_request.username.lower()  # Convert to lowercase
         
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -549,7 +549,7 @@ def login(req: Request, request: LoginRequest):
             user_id, username, password_hash = user
         
         # Verify password
-        if not verify_password(request.password, password_hash):
+        if not verify_password(login_request.password, password_hash):
             raise HTTPException(status_code=401, detail="Invalid username or password")
         
         # Create JWT token
@@ -568,7 +568,7 @@ def login(req: Request, request: LoginRequest):
 
 @app.post("/auth/refresh", response_model=AuthResponse)
 @limiter.limit("10/minute")
-def refresh_token(req: Request, user_id: int = Depends(get_current_user)):
+def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
     """Refresh JWT token - Rate limited: 10 requests per minute"""
     try:
         # Get user details from database
