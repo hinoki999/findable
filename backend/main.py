@@ -405,6 +405,150 @@ def validate_username_format(username: str) -> str:
         raise ValueError("Username can only contain letters, numbers, underscores, and periods")
     return username
 
+# Common passwords to block (top 100 most common)
+COMMON_PASSWORDS = [
+    'password', '123456', '12345678', 'qwerty', 'abc123', 'monkey', '1234567', 'letmein',
+    'trustno1', 'dragon', 'baseball', 'iloveyou', 'master', 'sunshine', 'ashley', 'bailey',
+    'shadow', '123123', '654321', 'superman', 'qazwsx', 'michael', 'football', 'password1',
+    'welcome', 'jesus', 'ninja', 'mustang', 'password123', 'admin', 'hello', 'charlie',
+    'access', 'princess', 'starwars', 'whatever', 'login', 'bailey', 'passw0rd', 'master',
+    '123456789', '12345', '1234', '111111', '1234567890', '000000', '1234567', 'password1',
+    'admin123', 'root', 'pass', 'test', 'guest', 'password12', 'welcome123', 'abc12345',
+    'qwerty123', 'password!', 'password@', 'password#', 'letmein123', 'admin1', 'root123',
+    'test123', 'user', 'demo', 'changeme', 'temp', 'temppass', 'welcome1', 'hello123',
+    'sample', 'example', 'default', 'pass123', 'pass1234', 'mypassword', 'secret', 'secret123',
+    'iloveyou1', 'iloveyou123', 'princess1', 'monkey123', 'dragon123', 'football1', 'shadow1',
+    'sunshine1', 'trustno1', 'master123', 'superman1', 'baseball1', 'michael1', 'ashley1',
+    'bailey1', 'charlie1', 'whatever1', 'starwars1', 'ninja1', 'mustang1'
+]
+
+def calculate_password_strength(password: str) -> tuple:
+    """
+    Calculate password strength based on complexity
+    Returns: (strength_level: str, score: int)
+    strength_level: 'weak', 'medium', 'strong', 'very strong'
+    score: 0-100
+    """
+    score = 0
+    
+    # Length scoring (up to 30 points)
+    if len(password) >= 8:
+        score += 10
+    if len(password) >= 12:
+        score += 10
+    if len(password) >= 16:
+        score += 10
+    
+    # Character diversity (up to 40 points)
+    if re.search(r'[a-z]', password):
+        score += 10
+    if re.search(r'[A-Z]', password):
+        score += 10
+    if re.search(r'\d', password):
+        score += 10
+    if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        score += 10
+    
+    # Bonus for mixing character types (up to 20 points)
+    char_types = 0
+    if re.search(r'[a-z]', password):
+        char_types += 1
+    if re.search(r'[A-Z]', password):
+        char_types += 1
+    if re.search(r'\d', password):
+        char_types += 1
+    if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        char_types += 1
+    
+    if char_types == 4:
+        score += 20
+    elif char_types == 3:
+        score += 10
+    
+    # Penalty for common patterns
+    if re.search(r'(.)\1{2,}', password):  # Repeated characters (aaa, 111)
+        score -= 10
+    if re.search(r'(012|123|234|345|456|567|678|789|890|abc|bcd|cde)', password.lower()):
+        score -= 10  # Sequential characters
+    
+    # Bonus for length beyond 16 (up to 10 points)
+    if len(password) > 16:
+        score += min(10, (len(password) - 16) * 2)
+    
+    score = max(0, min(100, score))  # Clamp between 0-100
+    
+    # Determine strength level
+    if score < 40:
+        strength = 'weak'
+    elif score < 60:
+        strength = 'medium'
+    elif score < 80:
+        strength = 'strong'
+    else:
+        strength = 'very strong'
+    
+    return strength, score
+
+def validate_password(password: str, username: str = None) -> dict:
+    """
+    Comprehensive password validation with specific error messages
+    
+    Returns:
+        dict: {
+            'valid': bool,
+            'errors': list of error messages,
+            'strength': str ('weak', 'medium', 'strong', 'very strong'),
+            'score': int (0-100)
+        }
+    """
+    errors = []
+    
+    # Check minimum length
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
+    
+    # Check for uppercase letter
+    if not re.search(r'[A-Z]', password):
+        errors.append("Password must contain at least one uppercase letter (A-Z)")
+    
+    # Check for lowercase letter
+    if not re.search(r'[a-z]', password):
+        errors.append("Password must contain at least one lowercase letter (a-z)")
+    
+    # Check for number
+    if not re.search(r'\d', password):
+        errors.append("Password must contain at least one number (0-9)")
+    
+    # Check for special character
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        errors.append("Password must contain at least one special character (!@#$%^&*)")
+    
+    # Check against common passwords
+    if password.lower() in COMMON_PASSWORDS:
+        errors.append("Password is too common. Please choose a more unique password")
+    
+    # Check if password is same as username
+    if username and password.lower() == username.lower():
+        errors.append("Password cannot be the same as your username")
+    
+    # Check if password contains username
+    if username and len(username) >= 3 and username.lower() in password.lower():
+        errors.append("Password cannot contain your username")
+    
+    # Calculate strength
+    strength, score = calculate_password_strength(password)
+    
+    # Warn if password is weak (even if it meets minimum requirements)
+    if not errors and strength == 'weak':
+        errors.append(f"Password meets minimum requirements but is weak (strength: {score}/100). Consider making it longer or more complex")
+    
+    return {
+        'valid': len(errors) == 0,
+        'errors': errors,
+        'strength': strength,
+        'score': score
+    }
+
 # Pydantic models with validation
 class DeviceCreate(BaseModel):
     name: constr(min_length=1, max_length=100) = Field(..., description="Device name")
@@ -453,31 +597,33 @@ class DeviceResponse(BaseModel):
 # Auth models
 class RegisterRequest(BaseModel):
     username: constr(min_length=3, max_length=20) = Field(..., description="Username (3-20 chars, alphanumeric + underscore/period)")
-    password: constr(min_length=8, max_length=128) = Field(..., description="Password (min 8 chars, must include uppercase, lowercase, number, special char)")
+    password: constr(min_length=8, max_length=128) = Field(..., description="Password (min 8 chars, complex requirements)")
     email: Optional[constr(max_length=100)] = Field(None, description="Email address (optional)")
     
     @validator('username', pre=True)
-    def validate_username(cls, v):
+    def validate_username_field(cls, v):
         return validate_username_format(v)
     
     @validator('email', pre=True)
-    def validate_email(cls, v):
+    def validate_email_field(cls, v):
         if v is None or v == '':
             return None
         return validate_email_format(v)
     
-    @validator('password', pre=True)
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not any(c.islower() for c in v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one number")
-        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in v):
-            raise ValueError("Password must contain at least one special character")
+    @validator('password')
+    def validate_password_field(cls, v, values):
+        """Comprehensive password validation with strength checking"""
+        username = values.get('username', '')
+        
+        # Use the comprehensive password validation function
+        result = validate_password(v, username)
+        
+        if not result['valid']:
+            # Join all errors with newlines for detailed feedback
+            error_message = "; ".join(result['errors'])
+            raise ValueError(error_message)
+        
+        # Password is valid, return it
         return v
 
 class LoginRequest(BaseModel):
@@ -664,6 +810,63 @@ DropLink - Share contacts with people near you
         return False
 
 # ========== AUTH ENDPOINTS ==========
+
+@app.post("/auth/check-password-strength")
+def check_password_strength(data: dict):
+    """
+    Check password strength without creating an account
+    Useful for real-time feedback during registration
+    
+    Request body:
+    {
+        "password": "MyPassword123!",
+        "username": "optional_username"  // optional, to check if password contains username
+    }
+    
+    Response:
+    {
+        "valid": true/false,
+        "strength": "weak" | "medium" | "strong" | "very strong",
+        "score": 0-100,
+        "errors": ["list of error messages"],
+        "requirements": {
+            "min_length": true/false,
+            "uppercase": true/false,
+            "lowercase": true/false,
+            "number": true/false,
+            "special_char": true/false,
+            "not_common": true/false,
+            "not_username": true/false
+        }
+    }
+    """
+    password = data.get('password', '')
+    username = data.get('username', None)
+    
+    if not password:
+        raise HTTPException(status_code=400, detail="Password is required")
+    
+    # Validate password
+    result = validate_password(password, username)
+    
+    # Check individual requirements
+    requirements = {
+        "min_length": len(password) >= 8,
+        "uppercase": bool(re.search(r'[A-Z]', password)),
+        "lowercase": bool(re.search(r'[a-z]', password)),
+        "number": bool(re.search(r'\d', password)),
+        "special_char": bool(re.search(r'[!@#$%^&*(),.?":{}|<>]', password)),
+        "not_common": password.lower() not in COMMON_PASSWORDS,
+        "not_username": not (username and (password.lower() == username.lower() or (len(username) >= 3 and username.lower() in password.lower())))
+    }
+    
+    return {
+        "valid": result['valid'],
+        "strength": result['strength'],
+        "score": result['score'],
+        "errors": result['errors'],
+        "requirements": requirements
+    }
 
 @app.post("/auth/register", response_model=AuthResponse)
 def register(register_request: RegisterRequest):
