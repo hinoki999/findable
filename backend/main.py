@@ -21,9 +21,6 @@ import cloudinary.uploader
 import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 
 # PostgreSQL support
 try:
@@ -34,67 +31,6 @@ except ImportError:
     POSTGRES_AVAILABLE = False
 
 app = FastAPI(title="DropLink API")
-
-# Rate Limiter Configuration
-# Whitelisted IPs (exempt from rate limiting for testing)
-RATE_LIMIT_WHITELIST = [
-    "127.0.0.1",        # localhost
-    "::1",              # localhost IPv6
-    "192.168.12.1",     # Testing IP
-]
-
-def rate_limit_key_func(request: Request) -> str:
-    """
-    Custom key function for rate limiting that exempts whitelisted IPs.
-    Returns a unique key per IP, or a special 'whitelisted' key for exempt IPs.
-    """
-    client_ip = get_remote_address(request)
-    if client_ip in RATE_LIMIT_WHITELIST:
-        # Return a unique key for each whitelisted request to bypass rate limiting
-        import time
-        return f"whitelisted_{client_ip}_{time.time()}"
-    return client_ip
-
-limiter = Limiter(key_func=rate_limit_key_func)
-app.state.limiter = limiter
-
-# Custom rate limit exception handler
-@app.exception_handler(RateLimitExceeded)
-async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Custom handler for rate limit exceeded with clear error messages"""
-    # Extract rate limit info from the exception
-    retry_after = getattr(exc, 'retry_after', 60)
-    
-    # Create user-friendly message based on the endpoint
-    path = request.url.path
-    if '/auth/register' in path:
-        message = "Too many registration attempts. Please try again in 1 hour."
-        limit_info = "3 registrations per hour per IP address"
-    elif '/auth/login' in path:
-        message = "Too many login attempts. Please try again in 1 minute."
-        limit_info = "5 login attempts per minute per IP address"
-    elif '/auth/refresh' in path:
-        message = "Too many token refresh requests. Please try again in 1 minute."
-        limit_info = "10 refresh requests per minute per IP address"
-    else:
-        message = "Rate limit exceeded. Please slow down your requests."
-        limit_info = "Rate limit varies by endpoint"
-    
-    return JSONResponse(
-        status_code=429,
-        content={
-            "error": "Too Many Requests",
-            "message": message,
-            "limit": limit_info,
-            "retry_after": retry_after
-        },
-        headers={
-            "X-RateLimit-Limit": str(getattr(exc, 'limit', 'N/A')),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": str(int(datetime.now().timestamp()) + retry_after),
-            "Retry-After": str(retry_after)
-        }
-    )
 
 # JWT Secret Key (in production, use environment variable)
 SECRET_KEY = "your-secret-key-change-in-production-12345"
@@ -653,9 +589,8 @@ DropLink - Share contacts with people near you
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
-@limiter.limit("3/hour")
-def register(request: Request, register_request: RegisterRequest):
-    """Register a new user - Rate limited: 3 requests per hour (whitelisted IPs exempt)"""
+def register(register_request: RegisterRequest):
+    """Register a new user"""
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = register_request.username.lower()
@@ -735,9 +670,8 @@ def register(request: Request, register_request: RegisterRequest):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
-def login(request: Request, login_request: LoginRequest):
-    """Login with username and password - Rate limited: 5 requests per minute (whitelisted IPs exempt)"""
+def login(login_request: LoginRequest):
+    """Login with username and password"""
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
         
@@ -780,9 +714,8 @@ def login(request: Request, login_request: LoginRequest):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/auth/refresh", response_model=AuthResponse)
-@limiter.limit("10/minute")
-def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
-    """Refresh JWT token - Rate limited: 10 requests per minute (whitelisted IPs exempt)"""
+def refresh_token(user_id: int = Depends(get_current_user)):
+    """Refresh JWT token"""
     try:
         # Get user details from database
         conn = get_db_connection()
@@ -1266,18 +1199,6 @@ def read_root():
         "message": "DropLink API",
         "version": "1.0.0",
         "status": "running"
-    }
-
-@app.get("/debug/my-ip")
-def get_my_ip(request: Request):
-    """Debug endpoint to check your IP address for rate limit whitelisting"""
-    client_ip = get_remote_address(request)
-    is_whitelisted = client_ip in RATE_LIMIT_WHITELIST
-    return {
-        "your_ip": client_ip,
-        "is_whitelisted": is_whitelisted,
-        "whitelist": RATE_LIMIT_WHITELIST,
-        "message": f"Add '{client_ip}' to RATE_LIMIT_WHITELIST in main.py to bypass rate limiting"
     }
 
 # Health check
