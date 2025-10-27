@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -38,8 +38,6 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 
 # Custom rate limit exception handler
-from fastapi.responses import JSONResponse
-
 @app.exception_handler(RateLimitExceeded)
 async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """Custom handler for rate limit exceeded with clear error messages"""
