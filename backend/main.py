@@ -115,12 +115,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 # Enable CORS for React Native app
+# React Native apps don't send traditional Origin headers, so we allow both
+# specific development origins and handle mobile app requests appropriately
+ALLOWED_ORIGINS = [
+    # Development origins
+    "http://localhost:8081",
+    "http://localhost:19006",  # Expo web
+    "http://192.168.1.92:8081",
+    # Production mobile apps send null or no Origin header
+    # Railway backend should be accessed via HTTPS only
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your mobile app domain
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^(http://localhost:\d+|http://192\.168\.\d+\.\d+:\d+)$",  # Allow any local dev
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Content-Length", "Content-Type"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Add security headers
