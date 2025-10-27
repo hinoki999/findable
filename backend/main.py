@@ -38,8 +38,7 @@ app = FastAPI(title="DropLink API")
 RATE_LIMIT_WHITELIST = [
     "127.0.0.1",        # localhost
     "::1",              # localhost IPv6
-    # Add your IP address here during testing
-    # Example: "192.168.1.100", "203.0.113.45"
+    "192.168.12.1",     # Testing IP
 ]
 
 def is_whitelisted_ip(request: Request) -> bool:
