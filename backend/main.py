@@ -264,13 +264,17 @@ def init_db():
     # Add account lockout columns if they don't exist (for existing databases)
     try:
         cursor.execute(f'ALTER TABLE users ADD COLUMN failed_login_attempts {integer} DEFAULT 0')
-    except:
-        pass  # Column already exists
+        conn.commit()
+    except Exception as e:
+        conn.rollback()  # Rollback transaction on error
+        # Column already exists or other error - continue
     
     try:
         cursor.execute(f'ALTER TABLE users ADD COLUMN locked_until {text}')
-    except:
-        pass  # Column already exists
+        conn.commit()
+    except Exception as e:
+        conn.rollback()  # Rollback transaction on error
+        # Column already exists or other error - continue
     
     # Devices table
     cursor.execute(f'''
