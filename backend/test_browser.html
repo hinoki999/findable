@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DropLink API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-box {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #ccc;
+        }
+        .success {
+            border-left-color: #4CAF50;
+        }
+        .error {
+            border-left-color: #f44336;
+        }
+        .info {
+            border-left-color: #2196F3;
+        }
+        button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1976D2;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        input {
+            padding: 8px;
+            width: 300px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔒 DropLink API - JWT Authentication Test</h1>
+    
+    <div class="test-box info">
+        <h3>📍 API URL</h3>
+        <p><strong>https://findable-production.up.railway.app</strong></p>
+    </div>
+
+    <div class="test-box">
+        <h3>Test 1: Check API is Running (Public Endpoint)</h3>
+        <button onclick="testRoot()">Test Root Endpoint</button>
+        <div id="rootResult"></div>
+    </div>
+
+    <div class="test-box">
+        <h3>Test 2: Try Protected Endpoint WITHOUT Token</h3>
+        <p>This should return "Not authenticated" (proves JWT is working!)</p>
+        <button onclick="testWithoutToken()">Test /devices Without Token</button>
+        <div id="withoutTokenResult"></div>
+    </div>
+
+    <div class="test-box">
+        <h3>Test 3: Register a User</h3>
+        <input type="text" id="username" placeholder="Username" value="testuser">
+        <input type="password" id="password" placeholder="Password" value="TestPass123!">
+        <input type="email" id="email" placeholder="Email" value="test@example.com">
+        <br>
+        <button onclick="testRegister()">Register & Get Token</button>
+        <div id="registerResult"></div>
+    </div>
+
+    <div class="test-box">
+        <h3>Test 4: Try Protected Endpoint WITH Token</h3>
+        <p>This should work and return data (empty array or your devices)</p>
+        <button onclick="testWithToken()" id="withTokenBtn" disabled>Test /devices With Token</button>
+        <div id="withTokenResult"></div>
+    </div>
+
+    <script>
+        const BASE_URL = 'https://findable-production.up.railway.app';
+        let authToken = null;
+
+        async function testRoot() {
+            const resultDiv = document.getElementById('rootResult');
+            resultDiv.innerHTML = '<p>⏳ Testing...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/`);
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <p class="status" style="color: green;">✅ SUCCESS - API is Running!</p>
+                    <p>Status: ${response.status}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="status" style="color: red;">❌ FAILED - API not responding</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        async function testWithoutToken() {
+            const resultDiv = document.getElementById('withoutTokenResult');
+            resultDiv.innerHTML = '<p>⏳ Testing...</p>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/devices`);
+                const data = await response.json();
+                
+                if (response.status === 401) {
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: green;">✅ SUCCESS - JWT Protection is Working!</p>
+                        <p>Status: ${response.status} Unauthorized</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p><strong>This is exactly what we want!</strong> The endpoint is protected.</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: red;">❌ WARNING - Endpoint is NOT protected!</p>
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="status" style="color: red;">❌ ERROR</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        async function testRegister() {
+            const resultDiv = document.getElementById('registerResult');
+            resultDiv.innerHTML = '<p>⏳ Registering...</p>';
+            
+            const username = document.getElementById('username').value + Math.floor(Math.random() * 10000);
+            const password = document.getElementById('password').value;
+            const email = document.getElementById('email').value;
+            
+            try {
+                const response = await fetch(`${BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password, email })
+                });
+                
+                const data = await response.json();
+                
+                if (response.status === 200) {
+                    authToken = data.token;
+                    document.getElementById('withTokenBtn').disabled = false;
+                    
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: green;">✅ SUCCESS - User Registered!</p>
+                        <p>Username: ${data.username}</p>
+                        <p>User ID: ${data.user_id}</p>
+                        <p>Token (first 50 chars): ${data.token.substring(0, 50)}...</p>
+                        <p><strong>Now try Test 4!</strong></p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: orange;">⚠️ Registration Failed</p>
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p>Tip: Try changing the username</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="status" style="color: red;">❌ ERROR</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        async function testWithToken() {
+            const resultDiv = document.getElementById('withTokenResult');
+            resultDiv.innerHTML = '<p>⏳ Testing with token...</p>';
+            
+            if (!authToken) {
+                resultDiv.innerHTML = '<p style="color: red;">❌ No token available. Register first!</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${BASE_URL}/devices`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.status === 200) {
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: green;">✅ SUCCESS - Authenticated!</p>
+                        <p>Status: ${response.status} OK</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p><strong>🎉 JWT Authentication is FULLY WORKING!</strong></p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="status" style="color: red;">❌ Authentication Failed</p>
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="status" style="color: red;">❌ ERROR</p>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        // Auto-run first test on load
+        window.onload = () => {
+            testRoot();
+        };
+    </script>
+</body>
+</html>
+

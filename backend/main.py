@@ -19,6 +19,9 @@ import cloudinary.uploader
 import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # PostgreSQL support
 try:
@@ -29,6 +32,50 @@ except ImportError:
     POSTGRES_AVAILABLE = False
 
 app = FastAPI(title="DropLink API")
+
+# Rate Limiter Configuration
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+# Custom rate limit exception handler
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Custom handler for rate limit exceeded with clear error messages"""
+    # Extract rate limit info from the exception
+    retry_after = getattr(exc, 'retry_after', 60)
+    
+    # Create user-friendly message based on the endpoint
+    path = request.url.path
+    if '/auth/register' in path:
+        message = "Too many registration attempts. Please try again in 1 hour."
+        limit_info = "3 registrations per hour per IP address"
+    elif '/auth/login' in path:
+        message = "Too many login attempts. Please try again in 1 minute."
+        limit_info = "5 login attempts per minute per IP address"
+    elif '/auth/refresh' in path:
+        message = "Too many token refresh requests. Please try again in 1 minute."
+        limit_info = "10 refresh requests per minute per IP address"
+    else:
+        message = "Rate limit exceeded. Please slow down your requests."
+        limit_info = "Rate limit varies by endpoint"
+    
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Too Many Requests",
+            "message": message,
+            "limit": limit_info,
+            "retry_after": retry_after
+        },
+        headers={
+            "X-RateLimit-Limit": str(getattr(exc, 'limit', 'N/A')),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": str(int(datetime.now().timestamp()) + retry_after),
+            "Retry-After": str(retry_after)
+        }
+    )
 
 # JWT Secret Key (in production, use environment variable)
 SECRET_KEY = "your-secret-key-change-in-production-12345"
@@ -395,8 +442,9 @@ DropLink - Share contacts with people near you
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
-def register(request: RegisterRequest):
-    """Register a new user"""
+@limiter.limit("3/hour")
+def register(req: Request, request: RegisterRequest):
+    """Register a new user - Rate limited: 3 requests per hour"""
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = request.username.lower()
@@ -476,8 +524,9 @@ def register(request: RegisterRequest):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-def login(request: LoginRequest):
-    """Login with username and password"""
+@limiter.limit("5/minute")
+def login(req: Request, request: LoginRequest):
+    """Login with username and password - Rate limited: 5 requests per minute"""
     try:
         username_lower = request.username.lower()  # Convert to lowercase
         
@@ -518,6 +567,39 @@ def login(request: LoginRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@app.post("/auth/refresh", response_model=AuthResponse)
+@limiter.limit("10/minute")
+def refresh_token(req: Request, user_id: int = Depends(get_current_user)):
+    """Refresh JWT token - Rate limited: 10 requests per minute"""
+    try:
+        # Get user details from database
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        execute_query(cursor, "SELECT username FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Handle both dict (PostgreSQL) and tuple (SQLite) results
+        username = get_value(user, 'username', 0)
+        
+        # Create new JWT token
+        new_token = create_access_token(user_id, username)
+        
+        return AuthResponse(
+            token=new_token,
+            user_id=user_id,
+            username=username
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
 
 @app.post("/auth/google", response_model=AuthResponse)
 def google_auth(request: GoogleAuthRequest):
