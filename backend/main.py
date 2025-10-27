@@ -1,7 +1,8 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field, validator, constr, conint, field_validator
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field, validator, constr, conint, field_validator, ValidationError
 from typing import Optional, List
 from datetime import datetime, timedelta
 import re
@@ -31,6 +32,48 @@ except ImportError:
     POSTGRES_AVAILABLE = False
 
 app = FastAPI(title="DropLink API")
+
+# Custom validation error handler for clear 422 responses
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return clear, user-friendly validation error messages"""
+    errors = []
+    for error in exc.errors():
+        field = " -> ".join(str(x) for x in error['loc'][1:])  # Skip 'body'
+        message = error['msg']
+        
+        # Make error messages more user-friendly
+        if error['type'] == 'value_error':
+            # Custom validator errors (our SQL injection, XSS, etc.)
+            message = str(error['msg'])
+        elif error['type'] == 'string_too_short':
+            message = f"Must be at least {error.get('ctx', {}).get('limit_value', 'required')} characters"
+        elif error['type'] == 'string_too_long':
+            message = f"Must be at most {error.get('ctx', {}).get('limit_value', 'allowed')} characters"
+        elif error['type'] == 'value_error.number.not_ge':
+            message = f"Must be at least {error.get('ctx', {}).get('limit_value', 'minimum')}"
+        elif error['type'] == 'value_error.number.not_le':
+            message = f"Must be at most {error.get('ctx', {}).get('limit_value', 'maximum')}"
+        elif error['type'] == 'type_error.integer':
+            message = "Must be a number"
+        elif error['type'] == 'type_error.boolean':
+            message = "Must be true or false"
+        elif error['type'] == 'value_error.missing':
+            message = "This field is required"
+        
+        errors.append({
+            "field": field,
+            "message": message
+        })
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "Validation Error",
+            "message": "Invalid input provided",
+            "details": errors
+        }
+    )
 
 # JWT Secret Key (in production, use environment variable)
 SECRET_KEY = "your-secret-key-change-in-production-12345"
