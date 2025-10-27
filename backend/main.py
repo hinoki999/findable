@@ -253,7 +253,6 @@ class DeviceCreate(BaseModel):
     email: Optional[str] = None
     bio: Optional[str] = None
     socialMedia: Optional[List[dict]] = None
-    user_id: Optional[int] = 1
 
 class DeviceResponse(BaseModel):
     id: int
@@ -981,7 +980,7 @@ def health_check():
 
 # POST /devices - Save a new device (with deduplication)
 @app.post("/devices", response_model=DeviceResponse)
-def create_device(device: DeviceCreate):
+def create_device(device: DeviceCreate, user_id: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -992,12 +991,12 @@ def create_device(device: DeviceCreate):
         # Check if device with same name already exists for this user
         execute_query(cursor, '''
             SELECT id FROM devices WHERE name = ? AND user_id = ?
-        ''', (device.name, device.user_id))
+        ''', (device.name, user_id))
         existing = cursor.fetchone()
         
         if existing:
             # Update existing device
-            device_id = existing[0]
+            device_id = get_value(existing, 0) if isinstance(existing, dict) else existing[0]
             execute_query(cursor, '''
                 UPDATE devices 
                 SET rssi = ?, distance_feet = ?, action = ?, timestamp = ?,
@@ -1031,7 +1030,7 @@ def create_device(device: DeviceCreate):
                 device.email,
                 device.bio,
                 social_media_json,
-                device.user_id
+                user_id
             ))
             device_id = get_lastrowid(cursor, conn)
             print(f"✅ Created new device: {device.name} (ID: {device_id})")
@@ -1093,13 +1092,13 @@ def get_devices(user_id: int = Depends(get_current_user)):
 
 # GET /devices/{id} - Get specific device
 @app.get("/devices/{device_id}", response_model=DeviceResponse)
-def get_device(device_id: int):
+def get_device(device_id: int, user_id: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
         execute_query(cursor, '''
             SELECT id, name, rssi, distance_feet, action, timestamp,
-                   phone_number, email, bio, social_media
+                   phone_number, email, bio, social_media, user_id
             FROM devices 
             WHERE id = ?
         ''', (device_id,))
@@ -1110,20 +1109,40 @@ def get_device(device_id: int):
         if not row:
             raise HTTPException(status_code=404, detail="Device not found")
         
-        social_media = json.loads(row[9]) if row[9] else None
+        # Verify ownership
+        device_user_id = get_value(row, 10) if isinstance(row, dict) else row[10]
+        if device_user_id != user_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this device")
         
-        return DeviceResponse(
-            id=row[0],
-            name=row[1],
-            rssi=row[2],
-            distanceFeet=row[3],
-            action=row[4],
-            timestamp=row[5],
-            phoneNumber=row[6],
-            email=row[7],
-            bio=row[8],
-            socialMedia=social_media
-        )
+        # Handle dict (PostgreSQL) or tuple (SQLite) results
+        if isinstance(row, dict):
+            social_media = json.loads(row['social_media']) if row.get('social_media') else None
+            return DeviceResponse(
+                id=row['id'],
+                name=row['name'],
+                rssi=row['rssi'],
+                distanceFeet=row['distance_feet'],
+                action=row['action'],
+                timestamp=row['timestamp'],
+                phoneNumber=row['phone_number'],
+                email=row['email'],
+                bio=row['bio'],
+                socialMedia=social_media
+            )
+        else:
+            social_media = json.loads(row[9]) if row[9] else None
+            return DeviceResponse(
+                id=row[0],
+                name=row[1],
+                rssi=row[2],
+                distanceFeet=row[3],
+                action=row[4],
+                timestamp=row[5],
+                phoneNumber=row[6],
+                email=row[7],
+                bio=row[8],
+                socialMedia=social_media
+            )
     except HTTPException:
         raise
     except Exception as e:
@@ -1131,16 +1150,25 @@ def get_device(device_id: int):
 
 # DELETE /devices/{id} - Delete a device
 @app.delete("/devices/{device_id}")
-def delete_device(device_id: int):
+def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        execute_query(cursor, 'DELETE FROM devices WHERE id = ?', (device_id,))
         
-        if cursor.rowcount == 0:
+        # Verify ownership before deleting
+        execute_query(cursor, 'SELECT user_id FROM devices WHERE id = ?', (device_id,))
+        row = cursor.fetchone()
+        
+        if not row:
             conn.close()
             raise HTTPException(status_code=404, detail="Device not found")
         
+        device_user_id = get_value(row, 0) if isinstance(row, dict) else row[0]
+        if device_user_id != user_id:
+            conn.close()
+            raise HTTPException(status_code=403, detail="Not authorized to delete this device")
+        
+        execute_query(cursor, 'DELETE FROM devices WHERE id = ?', (device_id,))
         conn.commit()
         conn.close()
         
@@ -1304,8 +1332,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/user/profile/photo/{user_id}")
-async def get_profile_photo(user_id: int):
+@app.get("/user/profile/photo")
+async def get_profile_photo(user_id: int = Depends(get_current_user)):
     """Get profile photo URL from Cloudinary"""
     try:
         conn = get_db_connection()
@@ -1316,10 +1344,14 @@ async def get_profile_photo(user_id: int):
         row = cursor.fetchone()
         conn.close()
         
-        if not row or not row[0]:
+        if not row:
             raise HTTPException(status_code=404, detail="Profile photo not found")
         
-        return {"url": row[0]}
+        photo_url = get_value(row, 0) if isinstance(row, dict) else row[0]
+        if not photo_url:
+            raise HTTPException(status_code=404, detail="Profile photo not found")
+        
+        return {"url": photo_url}
     except HTTPException:
         raise
     except Exception as e:
@@ -1458,11 +1490,25 @@ def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/privacy-zones/{zone_id}")
-def delete_privacy_zone(zone_id: int):
+def delete_privacy_zone(zone_id: int, user_id: int = Depends(get_current_user)):
     """Delete a privacy zone"""
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
+        
+        # Verify ownership before deleting
+        execute_query(cursor, 'SELECT user_id FROM privacy_zones WHERE id = ?', (zone_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Privacy zone not found")
+        
+        zone_user_id = get_value(row, 0) if isinstance(row, dict) else row[0]
+        if zone_user_id != user_id:
+            conn.close()
+            raise HTTPException(status_code=403, detail="Not authorized to delete this privacy zone")
+        
         execute_query(cursor, 'DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
         conn.commit()
         conn.close()
