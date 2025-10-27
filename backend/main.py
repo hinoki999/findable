@@ -356,18 +356,21 @@ def validate_email_format(email: str) -> str:
     return email
 
 def validate_phone_format(phone: str) -> str:
-    """Validate phone format (numbers, spaces, dashes, parentheses only)"""
+    """Validate and format phone number to (XXX) XXX-XXXX format"""
     if not phone:
         return phone
     phone = phone.strip()
-    # Allow numbers, spaces, dashes, parentheses, and + for international
-    if not re.match(r'^[\d\s\-\(\)\+]+$', phone):
-        raise ValueError("Phone number can only contain numbers, spaces, dashes, and parentheses")
-    # Remove formatting to check length
-    digits_only = re.sub(r'[\s\-\(\)\+]', '', phone)
-    if len(digits_only) < 10 or len(digits_only) > 15:
-        raise ValueError("Phone number must contain 10-15 digits")
-    return phone
+    
+    # Extract only digits
+    digits_only = re.sub(r'\D', '', phone)
+    
+    # Must be exactly 10 digits for US phone numbers
+    if len(digits_only) != 10:
+        raise ValueError("Phone number must be exactly 10 digits")
+    
+    # Format as (XXX) XXX-XXXX
+    formatted = f"({digits_only[0:3]}) {digits_only[3:6]}-{digits_only[6:10]}"
+    return formatted
 
 def validate_username_format(username: str) -> str:
     """Validate username format"""
@@ -387,7 +390,7 @@ class DeviceCreate(BaseModel):
     distance: float = Field(..., ge=0, le=1000, description="Distance in feet")
     action: Optional[str] = Field(default="dropped", max_length=50)
     timestamp: Optional[str] = Field(default=None, max_length=50)
-    phoneNumber: Optional[constr(min_length=10, max_length=20)] = None
+    phoneNumber: Optional[str] = Field(None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
     email: Optional[constr(max_length=100)] = None
     bio: Optional[constr(max_length=500)] = None
     socialMedia: Optional[List[dict]] = None
@@ -489,7 +492,7 @@ class CheckUsernameRequest(BaseModel):
 class ProfileRequest(BaseModel):
     name: Optional[constr(max_length=100)] = Field(None, description="Full name")
     email: Optional[constr(max_length=100)] = Field(None, description="Email address")
-    phone: Optional[constr(max_length=20)] = Field(None, description="Phone number")
+    phone: Optional[str] = Field(None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
     bio: Optional[constr(max_length=500)] = Field(None, description="Biography")
     socialMedia: Optional[List[dict]] = Field(None, description="Social media links")
     
