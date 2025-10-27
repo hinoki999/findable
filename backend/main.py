@@ -190,7 +190,8 @@ def get_lastrowid(cursor, conn):
     if USE_POSTGRES:
         execute_query(cursor, "SELECT lastval()")
         result = cursor.fetchone()
-        return get_value(result, 0) if result else None
+        # PostgreSQL with RealDictCursor returns {'lastval': id}
+        return result['lastval'] if result else None
     else:
         return cursor.lastrowid
 
