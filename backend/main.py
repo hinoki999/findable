@@ -1,9 +1,11 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Header, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator, constr, conint, field_validator
 from typing import Optional, List
 from datetime import datetime, timedelta
+import re
+import html
 from starlette.middleware.base import BaseHTTPMiddleware
 import sqlite3
 import json
@@ -308,17 +310,122 @@ def init_db():
 
 init_db()
 
-# Pydantic models
+# ========== INPUT VALIDATION & SANITIZATION ==========
+
+# Security patterns to detect malicious input
+SQL_INJECTION_PATTERNS = [
+    r"(\bOR\b|\bAND\b).*=.*",
+    r"(UNION|SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\s",
+    r"--",
+    r"/\*.*\*/",
+    r";\s*(DROP|DELETE|INSERT|UPDATE)",
+    r"(exec|execute)\s*\(",
+]
+
+XSS_PATTERNS = [
+    r"<script[^>]*>.*?</script>",
+    r"javascript:",
+    r"on\w+\s*=",
+    r"<iframe",
+    r"<object",
+    r"<embed",
+]
+
+def sanitize_string(value: str) -> str:
+    """Sanitize string input by removing HTML tags and trimming whitespace"""
+    if not value:
+        return value
+    # Strip HTML tags
+    value = re.sub(r'<[^>]+>', '', value)
+    # Decode HTML entities
+    value = html.unescape(value)
+    # Trim whitespace
+    value = value.strip()
+    return value
+
+def check_sql_injection(value: str) -> None:
+    """Check for SQL injection patterns"""
+    if not value:
+        return
+    for pattern in SQL_INJECTION_PATTERNS:
+        if re.search(pattern, value, re.IGNORECASE):
+            raise ValueError("Input contains potentially malicious SQL patterns")
+
+def check_xss(value: str) -> None:
+    """Check for XSS patterns"""
+    if not value:
+        return
+    for pattern in XSS_PATTERNS:
+        if re.search(pattern, value, re.IGNORECASE):
+            raise ValueError("Input contains potentially malicious script patterns")
+
+def validate_email_format(email: str) -> str:
+    """Validate email format"""
+    if not email:
+        return email
+    email = email.strip().lower()
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_regex, email):
+        raise ValueError("Invalid email format")
+    return email
+
+def validate_phone_format(phone: str) -> str:
+    """Validate phone format (numbers, spaces, dashes, parentheses only)"""
+    if not phone:
+        return phone
+    phone = phone.strip()
+    # Allow numbers, spaces, dashes, parentheses, and + for international
+    if not re.match(r'^[\d\s\-\(\)\+]+$', phone):
+        raise ValueError("Phone number can only contain numbers, spaces, dashes, and parentheses")
+    # Remove formatting to check length
+    digits_only = re.sub(r'[\s\-\(\)\+]', '', phone)
+    if len(digits_only) < 10 or len(digits_only) > 15:
+        raise ValueError("Phone number must contain 10-15 digits")
+    return phone
+
+def validate_username_format(username: str) -> str:
+    """Validate username format"""
+    if not username:
+        raise ValueError("Username is required")
+    username = username.strip().lower()
+    if len(username) < 3 or len(username) > 20:
+        raise ValueError("Username must be 3-20 characters")
+    if not re.match(r'^[a-z0-9_.]+$', username):
+        raise ValueError("Username can only contain letters, numbers, underscores, and periods")
+    return username
+
+# Pydantic models with validation
 class DeviceCreate(BaseModel):
-    name: str
-    rssi: int
-    distance: float  # Frontend sends distanceFeet as "distance"
-    action: Optional[str] = "dropped"
-    timestamp: Optional[str] = None
-    phoneNumber: Optional[str] = None
-    email: Optional[str] = None
-    bio: Optional[str] = None
+    name: constr(min_length=1, max_length=100) = Field(..., description="Device name")
+    rssi: int = Field(..., description="Signal strength")
+    distance: float = Field(..., ge=0, le=1000, description="Distance in feet")
+    action: Optional[str] = Field(default="dropped", max_length=50)
+    timestamp: Optional[str] = Field(default=None, max_length=50)
+    phoneNumber: Optional[constr(min_length=10, max_length=20)] = None
+    email: Optional[constr(max_length=100)] = None
+    bio: Optional[constr(max_length=500)] = None
     socialMedia: Optional[List[dict]] = None
+    
+    @validator('name', 'bio', 'action', pre=True)
+    def sanitize_strings(cls, v):
+        if v is None:
+            return v
+        v = sanitize_string(str(v))
+        check_sql_injection(v)
+        check_xss(v)
+        return v
+    
+    @validator('email', pre=True)
+    def validate_email(cls, v):
+        if v is None or v == '':
+            return None
+        return validate_email_format(v)
+    
+    @validator('phoneNumber', pre=True)
+    def validate_phone(cls, v):
+        if v is None or v == '':
+            return None
+        return validate_phone_format(v)
 
 class DeviceResponse(BaseModel):
     id: int
@@ -334,13 +441,41 @@ class DeviceResponse(BaseModel):
 
 # Auth models
 class RegisterRequest(BaseModel):
-    username: str
-    password: str
-    email: Optional[str] = None
+    username: constr(min_length=3, max_length=20) = Field(..., description="Username (3-20 chars, alphanumeric + underscore/period)")
+    password: constr(min_length=8, max_length=128) = Field(..., description="Password (min 8 chars, must include uppercase, lowercase, number, special char)")
+    email: Optional[constr(max_length=100)] = Field(None, description="Email address (optional)")
+    
+    @validator('username', pre=True)
+    def validate_username(cls, v):
+        return validate_username_format(v)
+    
+    @validator('email', pre=True)
+    def validate_email(cls, v):
+        if v is None or v == '':
+            return None
+        return validate_email_format(v)
+    
+    @validator('password', pre=True)
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one number")
+        if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in v):
+            raise ValueError("Password must contain at least one special character")
+        return v
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: constr(min_length=3, max_length=20) = Field(..., description="Username")
+    password: constr(min_length=1, max_length=128) = Field(..., description="Password")
+    
+    @validator('username', pre=True)
+    def sanitize_username(cls, v):
+        return v.strip().lower() if v else v
 
 class AuthResponse(BaseModel):
     token: str
@@ -358,7 +493,57 @@ class VerifyCodeRequest(BaseModel):
     code: str
 
 class CheckUsernameRequest(BaseModel):
-    username: str
+    username: constr(min_length=3, max_length=20) = Field(..., description="Username to check")
+    
+    @validator('username', pre=True)
+    def validate_username(cls, v):
+        return validate_username_format(v)
+
+# Additional validated models
+class ProfileRequest(BaseModel):
+    name: Optional[constr(max_length=100)] = Field(None, description="Full name")
+    email: Optional[constr(max_length=100)] = Field(None, description="Email address")
+    phone: Optional[constr(max_length=20)] = Field(None, description="Phone number")
+    bio: Optional[constr(max_length=500)] = Field(None, description="Biography")
+    socialMedia: Optional[List[dict]] = Field(None, description="Social media links")
+    
+    @validator('name', 'bio', pre=True)
+    def sanitize_text_fields(cls, v):
+        if v is None or v == '':
+            return None
+        v = sanitize_string(v)
+        check_sql_injection(v)
+        check_xss(v)
+        return v
+    
+    @validator('email', pre=True)
+    def validate_email(cls, v):
+        if v is None or v == '':
+            return None
+        return validate_email_format(v)
+    
+    @validator('phone', pre=True)
+    def validate_phone(cls, v):
+        if v is None or v == '':
+            return None
+        return validate_phone_format(v)
+
+class PrivacyZoneRequest(BaseModel):
+    address: constr(min_length=1, max_length=200) = Field(..., description="Address for privacy zone")
+    radius: conint(ge=1, le=10000) = Field(..., description="Radius in meters (1-10000)")
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude")
+    
+    @validator('address', pre=True)
+    def sanitize_address(cls, v):
+        v = sanitize_string(v)
+        check_sql_injection(v)
+        check_xss(v)
+        return v
+
+class SettingsRequest(BaseModel):
+    darkMode: bool = Field(..., description="Dark mode enabled")
+    maxDistance: conint(ge=1, le=100) = Field(..., description="Maximum distance (1-100 feet)")
 
 # ========== AUTH HELPER FUNCTIONS ==========
 
