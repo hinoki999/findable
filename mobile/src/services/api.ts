@@ -1,9 +1,10 @@
 // src/services/api.ts
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { ENV } from '../config/environment';
 
-export const BASE_URL = "https://findable-production.up.railway.app";
-const USE_STUB = false; // Connected to Railway backend!
+export const BASE_URL = ENV.BASE_URL;
+const USE_STUB = false; // Connected to backend!
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 3;
 
@@ -56,10 +57,10 @@ export async function secureFetch(
   options: RequestInit = {},
   retries = MAX_RETRIES
 ): Promise<Response> {
-  // Ensure URL uses HTTPS
-  if (!url.startsWith('https://')) {
+  // Only enforce HTTPS in production (Railway)
+  if (ENV.ENFORCE_HTTPS && !url.startsWith('https://')) {
     const httpsUrl = url.replace('http://', 'https://');
-    console.warn(`⚠️ Non-HTTPS URL detected, redirecting to: ${httpsUrl}`);
+    console.warn(`⚠️ Non-HTTPS URL detected in production, redirecting to: ${httpsUrl}`);
     url = httpsUrl;
   }
 
@@ -78,11 +79,14 @@ export async function secureFetch(
     // Handle HTTP -> HTTPS redirects (301, 302, 307, 308)
     if ([301, 302, 307, 308].includes(response.status)) {
       const location = response.headers.get('Location');
-      if (location && location.startsWith('https://')) {
-        console.log('🔒 Following HTTPS redirect...');
+      if (location) {
+        // In production, only follow HTTPS redirects
+        if (ENV.ENFORCE_HTTPS && !location.startsWith('https://')) {
+          throw new HTTPSRedirectError('Redirect to non-HTTPS URL blocked for security');
+        }
+        console.log('🔀 Following redirect...');
         return secureFetch(location, options, retries - 1);
       }
-      throw new HTTPSRedirectError('Redirect to non-HTTPS URL blocked for security');
     }
 
     return response;
