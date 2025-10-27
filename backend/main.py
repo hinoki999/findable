@@ -22,6 +22,10 @@ import cloudinary.uploader
 import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # PostgreSQL support
 try:
@@ -75,10 +79,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# JWT Secret Key (in production, use environment variable)
-SECRET_KEY = "your-secret-key-change-in-production-12345"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 30
+# JWT Configuration from environment variables
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
+
+# Warn if using default JWT secret (security risk)
+if SECRET_KEY == "your-secret-key-change-in-production-12345":
+    print("⚠️  WARNING: Using default JWT_SECRET_KEY! Set JWT_SECRET_KEY environment variable in production.")
 
 # Google OAuth Client ID (in production, use environment variable)
 GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"  # Will be configured later
