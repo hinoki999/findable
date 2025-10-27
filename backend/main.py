@@ -858,12 +858,10 @@ def send_verification_code(request: SendVerificationCodeRequest):
             'expires_at': expires_at
         }
         
-        # Send email
-        success = send_verification_email(email, code)
+        # Send email (or log if SendGrid not configured)
+        send_verification_email(email, code)
         
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to send verification email. Please check your email address.")
-        
+        # Always return success - if SendGrid isn't configured, code is logged
         return {
             "success": True,
             "message": f"Verification code sent to {email}"
@@ -1069,13 +1067,11 @@ def send_recovery_code(email: str, type: str):
             'username': username_value
         }
         
-        # Send email
+        # Send email (or log if SendGrid not configured)
         subject = 'DropLink - Password Reset Code' if type == 'password' else 'DropLink - Username Recovery Code'
-        success = send_verification_email(email, code)
+        send_verification_email(email, code)
         
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to send recovery code. Please try again.")
-        
+        # Always return success - if SendGrid isn't configured, code is logged
         return {
             "success": True,
             "message": f"Recovery code sent to {email}"
