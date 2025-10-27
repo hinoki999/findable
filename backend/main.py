@@ -781,7 +781,7 @@ def verify_token(token: str, check_activity: bool = True) -> dict:
             remember_me = payload.get('remember_me', False)
             
             if last_activity:
-                last_activity_time = datetime.fromtimestamp(last_activity)
+                last_activity_time = datetime.utcfromtimestamp(last_activity)
                 now = datetime.utcnow()
                 time_since_activity = now - last_activity_time
                 
