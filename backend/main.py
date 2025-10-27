@@ -34,8 +34,13 @@ except ImportError:
 app = FastAPI(title="DropLink API")
 
 # Rate Limiter Configuration
+# For testing: Dramatically increased limits to effectively disable rate limiting
+# In production, reduce these to stricter limits
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
+
+# Exempt email for testing (unlimited requests)
+RATE_LIMIT_EXEMPT_EMAIL = "caitie690@gmail.com"
 
 # Custom rate limit exception handler
 @app.exception_handler(RateLimitExceeded)
@@ -441,9 +446,9 @@ DropLink - Share contacts with people near you
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
-@limiter.limit("3/hour")
+@limiter.limit("100/hour")  # Increased for testing
 def register(request: Request, register_request: RegisterRequest):
-    """Register a new user - Rate limited: 3 requests per hour"""
+    """Register a new user - Rate limited: 100 requests per hour (testing mode)"""
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = register_request.username.lower()
@@ -523,9 +528,9 @@ def register(request: Request, register_request: RegisterRequest):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
+@limiter.limit("100/minute")  # Increased for testing
 def login(request: Request, login_request: LoginRequest):
-    """Login with username and password - Rate limited: 5 requests per minute"""
+    """Login with username and password - Rate limited: 100 requests per minute (testing mode)"""
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
         
@@ -568,9 +573,9 @@ def login(request: Request, login_request: LoginRequest):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/auth/refresh", response_model=AuthResponse)
-@limiter.limit("10/minute")
+@limiter.limit("1000/minute")  # Increased for testing
 def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
-    """Refresh JWT token - Rate limited: 10 requests per minute"""
+    """Refresh JWT token - Rate limited: 1000 requests per minute (testing mode)"""
     try:
         # Get user details from database
         conn = get_db_connection()
