@@ -176,10 +176,18 @@ def execute_query(cursor, query, params=None):
         # Convert SQLite ? placeholders to PostgreSQL %s placeholders
         query = query.replace('?', '%s')
     
-    # Convert INSERT OR REPLACE to PostgreSQL ON CONFLICT syntax
+    # Convert INSERT OR REPLACE to PostgreSQL ON CONFLICT DO NOTHING
+    # Note: For proper upsert, use INSERT ... ON CONFLICT (column) DO UPDATE in the query
     if USE_POSTGRES and "INSERT OR REPLACE" in query.upper():
-        # This is a simplified conversion - may need refinement for complex cases
+        # Convert to INSERT ... ON CONFLICT DO NOTHING (ignore duplicates)
+        # For actual updates, the query should explicitly use ON CONFLICT DO UPDATE
         query = query.replace("INSERT OR REPLACE", "INSERT")
+        # Add ON CONFLICT DO NOTHING if not already present
+        if "ON CONFLICT" not in query.upper():
+            # Find the VALUES clause and add ON CONFLICT after it
+            if "VALUES" in query.upper():
+                # Simple approach: add at the end
+                query = query.rstrip(';') + " ON CONFLICT DO NOTHING"
     
     if params:
         cursor.execute(query, params)
@@ -597,7 +605,10 @@ def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User not found")
         
         # Handle both dict (PostgreSQL) and tuple (SQLite) results
-        username = get_value(user, 'username', 0)
+        if isinstance(user, dict):
+            username = user['username']
+        else:
+            username = user[0]
         
         # Create new JWT token
         new_token = create_access_token(user_id, username)
@@ -1358,11 +1369,23 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         # Prepare social_media JSON
         social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
         
-        # Upsert profile
-        execute_query(cursor, '''
-            INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
+        # Upsert profile - works for both SQLite and PostgreSQL
+        if USE_POSTGRES:
+            execute_query(cursor, '''
+                INSERT INTO user_profiles (user_id, name, email, phone, bio, social_media)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    email = EXCLUDED.email,
+                    phone = EXCLUDED.phone,
+                    bio = EXCLUDED.bio,
+                    social_media = EXCLUDED.social_media
+            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
+        else:
+            execute_query(cursor, '''
+                INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
         
         conn.commit()
         conn.close()
@@ -1530,12 +1553,24 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
             )
         ''')
         
-        execute_query(cursor, '''
-            INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance)
-            VALUES (?, ?, ?)
-        ''', (user_id, 
-              1 if settings.get('darkMode') else 0,
-              settings.get('maxDistance', 33)))
+        # Upsert settings - works for both SQLite and PostgreSQL
+        if USE_POSTGRES:
+            execute_query(cursor, '''
+                INSERT INTO user_settings (user_id, dark_mode, max_distance)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE SET
+                    dark_mode = EXCLUDED.dark_mode,
+                    max_distance = EXCLUDED.max_distance
+            ''', (user_id, 
+                  1 if settings.get('darkMode') else 0,
+                  settings.get('maxDistance', 33)))
+        else:
+            execute_query(cursor, '''
+                INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance)
+                VALUES (?, ?, ?)
+            ''', (user_id, 
+                  1 if settings.get('darkMode') else 0,
+                  settings.get('maxDistance', 33)))
         
         conn.commit()
         conn.close()
