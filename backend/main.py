@@ -532,6 +532,13 @@ def get_current_user(authorization: str = Header(None)) -> int:
 
 def send_verification_email(email: str, code: str):
     """Send verification code via email using SendGrid"""
+    
+    # If SendGrid is not configured, log the code for testing
+    if not SENDGRID_API_KEY:
+        print(f"⚠️ SendGrid not configured. VERIFICATION CODE for {email}: {code}")
+        print(f"📧 Code expires in 10 minutes")
+        return True  # Return success so testing can continue
+    
     try:
         # HTML email body
         html_content = f"""
@@ -584,6 +591,8 @@ DropLink - Share contacts with people near you
         
     except Exception as e:
         print(f"❌ Failed to send email: {str(e)}")
+        # Also log the code so user can still test
+        print(f"📧 VERIFICATION CODE for {email}: {code}")
         return False
 
 # ========== AUTH ENDPOINTS ==========
