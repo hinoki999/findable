@@ -43,12 +43,19 @@ RATE_LIMIT_WHITELIST = [
     "192.168.12.1",     # Testing IP
 ]
 
-def is_whitelisted_ip(request: Request) -> bool:
-    """Check if the request IP is whitelisted"""
+def rate_limit_key_func(request: Request) -> str:
+    """
+    Custom key function for rate limiting that exempts whitelisted IPs.
+    Returns a unique key per IP, or a special 'whitelisted' key for exempt IPs.
+    """
     client_ip = get_remote_address(request)
-    return client_ip in RATE_LIMIT_WHITELIST
+    if client_ip in RATE_LIMIT_WHITELIST:
+        # Return a unique key for each whitelisted request to bypass rate limiting
+        import time
+        return f"whitelisted_{client_ip}_{time.time()}"
+    return client_ip
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=rate_limit_key_func)
 app.state.limiter = limiter
 
 # Custom rate limit exception handler
@@ -646,7 +653,7 @@ DropLink - Share contacts with people near you
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
-@limiter.limit("3/hour", exempt_when=is_whitelisted_ip)
+@limiter.limit("3/hour")
 def register(request: Request, register_request: RegisterRequest):
     """Register a new user - Rate limited: 3 requests per hour (whitelisted IPs exempt)"""
     try:
@@ -728,7 +735,7 @@ def register(request: Request, register_request: RegisterRequest):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-@limiter.limit("5/minute", exempt_when=is_whitelisted_ip)
+@limiter.limit("5/minute")
 def login(request: Request, login_request: LoginRequest):
     """Login with username and password - Rate limited: 5 requests per minute (whitelisted IPs exempt)"""
     try:
@@ -773,7 +780,7 @@ def login(request: Request, login_request: LoginRequest):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/auth/refresh", response_model=AuthResponse)
-@limiter.limit("10/minute", exempt_when=is_whitelisted_ip)
+@limiter.limit("10/minute")
 def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
     """Refresh JWT token - Rate limited: 10 requests per minute (whitelisted IPs exempt)"""
     try:
