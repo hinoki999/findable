@@ -4,6 +4,30 @@ import { Platform } from 'react-native';
 
 export const BASE_URL = "https://findable-production.up.railway.app";
 const USE_STUB = false; // Connected to Railway backend!
+const REQUEST_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 3;
+
+// Custom error types for better error handling
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+export class HTTPSRedirectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HTTPSRedirectError';
+  }
+}
+
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
 
 // Helper to get auth token
 async function getAuthToken(): Promise<string | null> {
@@ -24,6 +48,70 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     headers['Authorization'] = `Bearer ${token}`;
   }
   return headers;
+}
+
+// Enhanced fetch with timeout, retry, and HTTPS handling (exported for auth screens)
+export async function secureFetch(
+  url: string,
+  options: RequestInit = {},
+  retries = MAX_RETRIES
+): Promise<Response> {
+  // Ensure URL uses HTTPS
+  if (!url.startsWith('https://')) {
+    const httpsUrl = url.replace('http://', 'https://');
+    console.warn(`⚠️ Non-HTTPS URL detected, redirecting to: ${httpsUrl}`);
+    url = httpsUrl;
+  }
+
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // Handle HTTP -> HTTPS redirects (301, 302, 307, 308)
+    if ([301, 302, 307, 308].includes(response.status)) {
+      const location = response.headers.get('Location');
+      if (location && location.startsWith('https://')) {
+        console.log('🔒 Following HTTPS redirect...');
+        return secureFetch(location, options, retries - 1);
+      }
+      throw new HTTPSRedirectError('Redirect to non-HTTPS URL blocked for security');
+    }
+
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+
+    // Handle abort (timeout)
+    if (error.name === 'AbortError') {
+      if (retries > 0) {
+        console.log(`⏱️ Request timeout, retrying... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        return secureFetch(url, options, retries - 1);
+      }
+      throw new TimeoutError('Request timed out after 30 seconds');
+    }
+
+    // Handle network errors
+    if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
+      if (retries > 0) {
+        console.log(`🌐 Network error, retrying... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        return secureFetch(url, options, retries - 1);
+      }
+      throw new NetworkError('Unable to connect to server. Please check your internet connection.');
+    }
+
+    // Rethrow other errors
+    throw error;
+  }
 }
 
 export type Device = { 
@@ -181,12 +269,15 @@ export async function saveDevice(d: Device) {
   };
   
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/devices`, {
+  const res = await secureFetch(`${BASE_URL}/devices`, {
     method: "POST",
     headers,
     body: JSON.stringify(backendData),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -196,7 +287,7 @@ export async function getDevices(): Promise<Device[]> {
     return _store.slice();
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/devices`, { headers });
+  const res = await secureFetch(`${BASE_URL}/devices`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -212,7 +303,7 @@ export async function deleteDevice(deviceId: number): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/devices/${deviceId}`, {
+  const res = await secureFetch(`${BASE_URL}/devices/${deviceId}`, {
     method: "DELETE",
     headers,
   });
@@ -229,7 +320,7 @@ export async function restoreDevice(device: Device): Promise<void> {
   }
   // For real API, would need to POST it back
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/devices`, {
+  const res = await secureFetch(`${BASE_URL}/devices`, {
     method: "POST",
     headers,
     body: JSON.stringify(device),
@@ -253,7 +344,7 @@ export async function getUserProfile(): Promise<UserProfile> {
     return { name: '', email: '', phone: '', bio: '' };
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/profile`, { headers });
+  const res = await secureFetch(`${BASE_URL}/user/profile`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -264,7 +355,7 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/profile`, {
+  const res = await secureFetch(`${BASE_URL}/user/profile`, {
     method: "POST",
     headers,
     body: JSON.stringify(profile),
@@ -285,7 +376,7 @@ export async function getUserSettings(): Promise<UserSettings> {
     return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/settings`, { headers });
+  const res = await secureFetch(`${BASE_URL}/user/settings`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -296,7 +387,7 @@ export async function saveUserSettings(settings: UserSettings): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/settings`, {
+  const res = await secureFetch(`${BASE_URL}/user/settings`, {
     method: "POST",
     headers,
     body: JSON.stringify(settings),
@@ -317,7 +408,7 @@ export async function getPrivacyZones(): Promise<PrivacyZone[]> {
     return [];
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/privacy-zones`, { headers });
+  const res = await secureFetch(`${BASE_URL}/user/privacy-zones`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -328,7 +419,7 @@ export async function savePrivacyZone(zone: { address: string; radius: number })
     return { id: Date.now(), ...zone };
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/privacy-zones`, {
+  const res = await secureFetch(`${BASE_URL}/user/privacy-zones`, {
     method: "POST",
     headers,
     body: JSON.stringify(zone),
@@ -343,7 +434,7 @@ export async function deletePrivacyZone(zoneId: number): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/privacy-zones/${zoneId}`, {
+  const res = await secureFetch(`${BASE_URL}/user/privacy-zones/${zoneId}`, {
     method: "DELETE",
     headers,
   });
@@ -357,7 +448,7 @@ export async function getPinnedContacts(): Promise<number[]> {
     return [];
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/pinned`, { headers });
+  const res = await secureFetch(`${BASE_URL}/user/pinned`, { headers });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -368,7 +459,7 @@ export async function pinContact(deviceId: number): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
+  const res = await secureFetch(`${BASE_URL}/user/pinned/${deviceId}`, {
     method: "POST",
     headers,
   });
@@ -381,7 +472,7 @@ export async function unpinContact(deviceId: number): Promise<void> {
     return;
   }
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/user/pinned/${deviceId}`, {
+  const res = await secureFetch(`${BASE_URL}/user/pinned/${deviceId}`, {
     method: "DELETE",
     headers,
   });
@@ -391,7 +482,7 @@ export async function unpinContact(deviceId: number): Promise<void> {
 // ==================== AUTH MANAGEMENT ====================
 export async function changeUsername(newUsername: string): Promise<{ token: string; username: string }> {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/auth/change-username?new_username=${encodeURIComponent(newUsername)}`, {
+  const res = await secureFetch(`${BASE_URL}/auth/change-username?new_username=${encodeURIComponent(newUsername)}`, {
     method: "POST",
     headers,
   });
@@ -404,7 +495,7 @@ export async function changeUsername(newUsername: string): Promise<{ token: stri
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${BASE_URL}/auth/change-password?current_password=${encodeURIComponent(currentPassword)}&new_password=${encodeURIComponent(newPassword)}`, {
+  const res = await secureFetch(`${BASE_URL}/auth/change-password?current_password=${encodeURIComponent(currentPassword)}&new_password=${encodeURIComponent(newPassword)}`, {
     method: "POST",
     headers,
   });

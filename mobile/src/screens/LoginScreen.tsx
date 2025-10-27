@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
+import { BASE_URL, secureFetch } from '../services/api';
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, userId: number, username: string) => void;
@@ -44,7 +45,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setError('');
 
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/login', {
+      const response = await secureFetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -96,7 +97,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/send-recovery-code', {
+      const response = await secureFetch(`${BASE_URL}/auth/send-recovery-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail, type: forgotType }),
@@ -126,7 +127,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/verify-recovery-code', {
+      const response = await secureFetch(`${BASE_URL}/auth/verify-recovery-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -170,7 +171,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/reset-password', {
+      const response = await secureFetch(`${BASE_URL}/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

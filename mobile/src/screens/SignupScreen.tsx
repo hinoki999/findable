@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
+import { BASE_URL, secureFetch } from '../services/api';
 
 interface SignupScreenProps {
   onSignupSuccess: (token: string, userId: number, username: string, email?: string) => void;
@@ -40,7 +41,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const checkUsernameAvailability = async (username: string) => {
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/check-username', {
+      const response = await secureFetch(`${BASE_URL}/auth/check-username`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
@@ -192,7 +193,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setError('');
 
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/send-verification-code', {
+      const response = await secureFetch(`${BASE_URL}/auth/send-verification-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -225,7 +226,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
     try {
       // First verify the code
-      const verifyResponse = await fetch('https://findable-production.up.railway.app/auth/verify-code', {
+      const verifyResponse = await secureFetch(`${BASE_URL}/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -241,7 +242,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
 
       // Code verified, now create the account
-      const response = await fetch('https://findable-production.up.railway.app/auth/register', {
+      const response = await secureFetch(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
