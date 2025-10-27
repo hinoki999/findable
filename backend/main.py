@@ -1908,12 +1908,21 @@ async def clear_all_data(secret: str = Header(None)):
         execute_query(cursor, 'DELETE FROM devices')
         execute_query(cursor, 'DELETE FROM users')
         
+        # Reset sequences if using PostgreSQL
+        if USE_POSTGRES:
+            try:
+                execute_query(cursor, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
+                execute_query(cursor, "ALTER SEQUENCE devices_id_seq RESTART WITH 1")
+                execute_query(cursor, "ALTER SEQUENCE privacy_zones_id_seq RESTART WITH 1")
+            except Exception as seq_error:
+                print(f"Warning: Could not reset sequences: {seq_error}")
+        
         conn.commit()
         conn.close()
         
         return {
             "success": True,
-            "message": "All user data has been deleted",
+            "message": "All user data has been deleted and sequences reset",
             "deleted_tables": ["users", "devices", "user_profiles", "user_settings", "privacy_zones", "pinned_contacts"]
         }
     except Exception as e:
