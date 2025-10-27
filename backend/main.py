@@ -34,13 +34,21 @@ except ImportError:
 app = FastAPI(title="DropLink API")
 
 # Rate Limiter Configuration
-# For testing: Dramatically increased limits to effectively disable rate limiting
-# In production, reduce these to stricter limits
+# Whitelisted IPs (exempt from rate limiting for testing)
+RATE_LIMIT_WHITELIST = [
+    "127.0.0.1",        # localhost
+    "::1",              # localhost IPv6
+    # Add your IP address here during testing
+    # Example: "192.168.1.100", "203.0.113.45"
+]
+
+def is_whitelisted_ip(request: Request) -> bool:
+    """Check if the request IP is whitelisted"""
+    client_ip = get_remote_address(request)
+    return client_ip in RATE_LIMIT_WHITELIST
+
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-
-# Exempt email for testing (unlimited requests)
-RATE_LIMIT_EXEMPT_EMAIL = "caitie690@gmail.com"
 
 # Custom rate limit exception handler
 @app.exception_handler(RateLimitExceeded)
@@ -446,9 +454,9 @@ DropLink - Share contacts with people near you
 # ========== AUTH ENDPOINTS ==========
 
 @app.post("/auth/register", response_model=AuthResponse)
-@limiter.limit("100/hour")  # Increased for testing
+@limiter.limit("3/hour", exempt_when=is_whitelisted_ip)
 def register(request: Request, register_request: RegisterRequest):
-    """Register a new user - Rate limited: 100 requests per hour (testing mode)"""
+    """Register a new user - Rate limited: 3 requests per hour (whitelisted IPs exempt)"""
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = register_request.username.lower()
@@ -528,9 +536,9 @@ def register(request: Request, register_request: RegisterRequest):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-@limiter.limit("100/minute")  # Increased for testing
+@limiter.limit("5/minute", exempt_when=is_whitelisted_ip)
 def login(request: Request, login_request: LoginRequest):
-    """Login with username and password - Rate limited: 100 requests per minute (testing mode)"""
+    """Login with username and password - Rate limited: 5 requests per minute (whitelisted IPs exempt)"""
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
         
@@ -573,9 +581,9 @@ def login(request: Request, login_request: LoginRequest):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/auth/refresh", response_model=AuthResponse)
-@limiter.limit("1000/minute")  # Increased for testing
+@limiter.limit("10/minute", exempt_when=is_whitelisted_ip)
 def refresh_token(request: Request, user_id: int = Depends(get_current_user)):
-    """Refresh JWT token - Rate limited: 1000 requests per minute (testing mode)"""
+    """Refresh JWT token - Rate limited: 10 requests per minute (whitelisted IPs exempt)"""
     try:
         # Get user details from database
         conn = get_db_connection()
@@ -1056,6 +1064,18 @@ def read_root():
         "message": "DropLink API",
         "version": "1.0.0",
         "status": "running"
+    }
+
+@app.get("/debug/my-ip")
+def get_my_ip(request: Request):
+    """Debug endpoint to check your IP address for rate limit whitelisting"""
+    client_ip = get_remote_address(request)
+    is_whitelisted = client_ip in RATE_LIMIT_WHITELIST
+    return {
+        "your_ip": client_ip,
+        "is_whitelisted": is_whitelisted,
+        "whitelist": RATE_LIMIT_WHITELIST,
+        "message": f"Add '{client_ip}' to RATE_LIMIT_WHITELIST in main.py to bypass rate limiting"
     }
 
 # Health check
