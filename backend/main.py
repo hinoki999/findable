@@ -84,6 +84,10 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-1
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 
+# Session activity timeout configuration
+ACTIVITY_TIMEOUT_MINUTES = int(os.getenv("ACTIVITY_TIMEOUT_MINUTES", "30"))  # Standard timeout
+REMEMBER_ME_TIMEOUT_DAYS = int(os.getenv("REMEMBER_ME_TIMEOUT_DAYS", "30"))  # "Remember Me" extended timeout
+
 # Warn if using default JWT secret (security risk)
 if SECRET_KEY == "your-secret-key-change-in-production-12345":
     print("⚠️  WARNING: Using default JWT_SECRET_KEY! Set JWT_SECRET_KEY environment variable in production.")
@@ -642,6 +646,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: constr(min_length=3, max_length=20) = Field(..., description="Username")
     password: constr(min_length=1, max_length=128) = Field(..., description="Password")
+    remember_me: bool = Field(default=False, description="Keep me logged in (30 days inactivity timeout instead of 30 minutes)")
     
     @validator('username', pre=True)
     def sanitize_username(cls, v):
@@ -727,22 +732,76 @@ def verify_password(password: str, password_hash: str) -> bool:
     """Verify a password against its hash"""
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
-def create_access_token(user_id: int, username: str) -> str:
-    """Create a JWT access token"""
+def create_access_token(user_id: int, username: str, remember_me: bool = False) -> str:
+    """
+    Create a JWT access token with activity tracking
+    
+    Args:
+        user_id: User ID
+        username: Username
+        remember_me: If True, uses extended timeout (30 days inactivity). If False, uses standard timeout (30 minutes)
+    
+    Returns:
+        JWT token string
+    """
     expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    now = datetime.utcnow()
+    
     payload = {
         "user_id": user_id,
         "username": username,
-        "exp": expire
+        "exp": expire,
+        "iat": now.timestamp(),  # Issued at
+        "last_activity": now.timestamp(),  # Last activity timestamp
+        "remember_me": remember_me  # Remember me flag
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
-def verify_token(token: str) -> dict:
-    """Verify and decode a JWT token"""
+def verify_token(token: str, check_activity: bool = True) -> dict:
+    """
+    Verify and decode a JWT token with activity timeout checking
+    
+    Args:
+        token: JWT token string
+        check_activity: If True, checks for activity timeout
+    
+    Returns:
+        Decoded token payload
+    
+    Raises:
+        HTTPException: If token is invalid, expired, or inactive
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        # Check activity timeout if enabled
+        if check_activity:
+            last_activity = payload.get('last_activity')
+            remember_me = payload.get('remember_me', False)
+            
+            if last_activity:
+                last_activity_time = datetime.fromtimestamp(last_activity)
+                now = datetime.utcnow()
+                time_since_activity = now - last_activity_time
+                
+                # Determine timeout based on remember_me flag
+                if remember_me:
+                    timeout = timedelta(days=REMEMBER_ME_TIMEOUT_DAYS)
+                    timeout_msg = f"{REMEMBER_ME_TIMEOUT_DAYS} days"
+                else:
+                    timeout = timedelta(minutes=ACTIVITY_TIMEOUT_MINUTES)
+                    timeout_msg = f"{ACTIVITY_TIMEOUT_MINUTES} minutes"
+                
+                # Check if session has been inactive too long
+                if time_since_activity > timeout:
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Session expired due to inactivity (timeout: {timeout_msg}). Please log in again."
+                    )
+        
         return payload
+        
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
@@ -1181,8 +1240,8 @@ def login(login_request: LoginRequest):
         conn.commit()
         conn.close()
         
-        # Create JWT token
-        token = create_access_token(user_id, username)
+        # Create JWT token with remember_me flag
+        token = create_access_token(user_id, username, remember_me=login_request.remember_me)
         
         return AuthResponse(
             token=token,
@@ -1196,9 +1255,29 @@ def login(login_request: LoginRequest):
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @app.post("/auth/refresh", response_model=AuthResponse)
-def refresh_token(user_id: int = Depends(get_current_user)):
-    """Refresh JWT token"""
+def refresh_token(authorization: str = Header(None)):
+    """
+    Refresh JWT token with updated last_activity timestamp
+    
+    This endpoint should be called periodically (e.g., every 5-10 minutes) 
+    to extend the session and prevent timeout.
+    
+    Returns a new token with:
+    - Same user_id, username, remember_me settings
+    - Updated last_activity timestamp
+    - New expiration time
+    """
     try:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        token = authorization.split(" ")[1]
+        
+        # Verify token and get payload (this checks activity timeout)
+        payload = verify_token(token, check_activity=True)
+        user_id = payload["user_id"]
+        remember_me = payload.get("remember_me", False)
+        
         # Get user details from database
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -1216,8 +1295,9 @@ def refresh_token(user_id: int = Depends(get_current_user)):
         else:
             username = user[0]
         
-        # Create new JWT token
-        new_token = create_access_token(user_id, username)
+        # Create new JWT token with updated activity timestamp
+        # Preserve remember_me setting from original token
+        new_token = create_access_token(user_id, username, remember_me=remember_me)
         
         return AuthResponse(
             token=new_token,
