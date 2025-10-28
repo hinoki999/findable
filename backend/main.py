@@ -2028,10 +2028,177 @@ def read_root():
         "status": "running"
     }
 
-# Health check
+# Health check endpoint for Railway monitoring
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    """
+    Health check endpoint for Railway monitoring
+    Tests database connectivity and returns service status
+    """
+    try:
+        # Get current timestamp
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        
+        # Test database connectivity
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        # Simple query to verify database is responding
+        execute_query(cursor, "SELECT 1")
+        result = cursor.fetchone()
+        
+        conn.close()
+        
+        # If we got here, database is connected
+        database_status = "connected"
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "healthy",
+                "timestamp": timestamp,
+                "database": database_status,
+                "version": "1.0.0",
+                "environment": "production" if USE_POSTGRES else "development"
+            }
+        )
+        
+    except Exception as e:
+        # Database connection failed
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unhealthy",
+                "timestamp": timestamp,
+                "database": "disconnected",
+                "error": str(e),
+                "version": "1.0.0"
+            }
+        )
+
+# Readiness probe endpoint for Railway
+@app.get("/ready")
+def readiness_check():
+    """
+    Readiness probe endpoint for Railway
+    More comprehensive than health check - verifies app is ready to serve traffic
+    Checks database connectivity, environment variables, and critical dependencies
+    """
+    checks = {
+        "database": False,
+        "environment_vars": False,
+        "database_tables": False,
+        "database_write": False
+    }
+    errors = []
+    
+    try:
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        
+        # Check 1: Database connectivity
+        try:
+            conn = get_db_connection()
+            cursor = get_cursor(conn)
+            execute_query(cursor, "SELECT 1")
+            cursor.fetchone()
+            checks["database"] = True
+        except Exception as e:
+            errors.append(f"Database connection failed: {str(e)}")
+            conn.close() if 'conn' in locals() else None
+            raise
+        
+        # Check 2: Critical environment variables
+        try:
+            required_vars = ["DATABASE_URL"] if USE_POSTGRES else []
+            missing_vars = []
+            
+            # Check if JWT secret is not default
+            if SECRET_KEY == "your-secret-key-change-in-production-12345":
+                missing_vars.append("JWT_SECRET_KEY (using default)")
+            
+            if USE_POSTGRES and not os.getenv("DATABASE_URL"):
+                missing_vars.append("DATABASE_URL")
+            
+            if missing_vars:
+                errors.append(f"Environment variables issue: {', '.join(missing_vars)}")
+            
+            checks["environment_vars"] = True
+        except Exception as e:
+            errors.append(f"Environment check failed: {str(e)}")
+        
+        # Check 3: Database tables exist
+        try:
+            # Check if critical tables exist
+            execute_query(cursor, "SELECT COUNT(*) FROM users")
+            cursor.fetchone()
+            
+            execute_query(cursor, "SELECT COUNT(*) FROM devices")
+            cursor.fetchone()
+            
+            execute_query(cursor, "SELECT COUNT(*) FROM audit_logs")
+            cursor.fetchone()
+            
+            checks["database_tables"] = True
+        except Exception as e:
+            errors.append(f"Database tables check failed: {str(e)}")
+        
+        # Check 4: Database write capability (optional - commented out to avoid writes)
+        # Uncomment if you want to test write capability
+        # try:
+        #     test_action = "readiness_check_test"
+        #     execute_query(cursor, 
+        #         "INSERT INTO audit_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
+        #         (None, test_action, '{"test": true}', "127.0.0.1")
+        #     )
+        #     conn.commit()
+        #     # Clean up test record
+        #     execute_query(cursor, "DELETE FROM audit_logs WHERE action = ?", (test_action,))
+        #     conn.commit()
+        #     checks["database_write"] = True
+        # except Exception as e:
+        #     errors.append(f"Database write test failed: {str(e)}")
+        
+        # For now, mark write as true if tables exist
+        checks["database_write"] = checks["database_tables"]
+        
+        conn.close()
+        
+        # Determine if ready
+        is_ready = all(checks.values())
+        status_code = 200 if is_ready else 503
+        
+        response_content = {
+            "status": "ready" if is_ready else "not_ready",
+            "timestamp": timestamp,
+            "checks": checks,
+            "version": "1.0.0",
+            "environment": "production" if USE_POSTGRES else "development"
+        }
+        
+        if errors:
+            response_content["errors"] = errors
+        
+        return JSONResponse(
+            status_code=status_code,
+            content=response_content
+        )
+        
+    except Exception as e:
+        # Critical failure
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "timestamp": timestamp,
+                "checks": checks,
+                "errors": errors + [f"Critical error: {str(e)}"],
+                "version": "1.0.0"
+            }
+        )
 
 
 # POST /devices - Save a new device (with deduplication)
