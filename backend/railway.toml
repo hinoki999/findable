@@ -1,0 +1,27 @@
+# Railway Configuration for Droplin Backend
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# Start command
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+# Health checks
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+
+# Restart policy
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Horizontal scaling - set to 2 or more replicas
+numReplicas = 2
+
+# Note: Each replica will:
+# - Run independently
+# - Share the same PostgreSQL database
+# - Share the same Cloudinary storage
+# - Use stateless JWT authentication
+# - Be load-balanced by Railway automatically
+
