@@ -81,8 +81,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # JWT Configuration from environment variables
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+PREVIOUS_SECRET_KEY = os.getenv("PREVIOUS_JWT_SECRET_KEY", None)  # For key rotation grace period
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
+
+# Key rotation version (incremented when keys are rotated)
+# This is stored in environment and compared against user's key_version in database
+CURRENT_KEY_VERSION = int(os.getenv("JWT_KEY_VERSION", "1"))
 
 # Session activity timeout configuration
 ACTIVITY_TIMEOUT_MINUTES = int(os.getenv("ACTIVITY_TIMEOUT_MINUTES", "30"))  # Standard timeout
@@ -91,6 +96,8 @@ REMEMBER_ME_TIMEOUT_DAYS = int(os.getenv("REMEMBER_ME_TIMEOUT_DAYS", "30"))  # "
 # Warn if using default JWT secret (security risk)
 if SECRET_KEY == "your-secret-key-change-in-production-12345":
     print("⚠️  WARNING: Using default JWT_SECRET_KEY! Set JWT_SECRET_KEY environment variable in production.")
+
+print(f"✓ JWT Key Version: {CURRENT_KEY_VERSION}")
 
 # Google OAuth Client ID (in production, use environment variable)
 GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"  # Will be configured later
@@ -257,7 +264,8 @@ def init_db():
             email {text},
             created_at {timestamp_default},
             failed_login_attempts {integer} DEFAULT 0,
-            locked_until {text}
+            locked_until {text},
+            key_version {integer} DEFAULT 1
         )
     ''')
     
@@ -271,6 +279,13 @@ def init_db():
     
     try:
         cursor.execute(f'ALTER TABLE users ADD COLUMN locked_until {text}')
+        conn.commit()
+    except Exception as e:
+        conn.rollback()  # Rollback transaction on error
+        # Column already exists or other error - continue
+    
+    try:
+        cursor.execute(f'ALTER TABLE users ADD COLUMN key_version {integer} DEFAULT 1')
         conn.commit()
     except Exception as e:
         conn.rollback()  # Rollback transaction on error
@@ -757,59 +772,93 @@ def create_access_token(user_id: int, username: str, remember_me: bool = False) 
         "exp": expire,
         "iat": now.timestamp(),  # Issued at
         "last_activity": now.timestamp(),  # Last activity timestamp
-        "remember_me": remember_me  # Remember me flag
+        "remember_me": remember_me,  # Remember me flag
+        "key_version": CURRENT_KEY_VERSION  # Key rotation version
     }
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
-def verify_token(token: str, check_activity: bool = True) -> dict:
+def verify_token(token: str, check_activity: bool = True, check_key_version: bool = True) -> dict:
     """
-    Verify and decode a JWT token with activity timeout checking
+    Verify and decode a JWT token with activity timeout checking and key rotation support
     
     Args:
         token: JWT token string
         check_activity: If True, checks for activity timeout
+        check_key_version: If True, checks that token key_version is valid
     
     Returns:
         Decoded token payload
     
     Raises:
-        HTTPException: If token is invalid, expired, or inactive
+        HTTPException: If token is invalid, expired, inactive, or has wrong key version
     """
+    payload = None
+    used_previous_key = False
+    
+    # Try decoding with current key first
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # Check activity timeout if enabled
-        if check_activity:
-            last_activity = payload.get('last_activity')
-            remember_me = payload.get('remember_me', False)
-            
-            if last_activity:
-                last_activity_time = datetime.utcfromtimestamp(last_activity)
-                now = datetime.utcnow()
-                time_since_activity = now - last_activity_time
-                
-                # Determine timeout based on remember_me flag
-                if remember_me:
-                    timeout = timedelta(days=REMEMBER_ME_TIMEOUT_DAYS)
-                    timeout_msg = f"{REMEMBER_ME_TIMEOUT_DAYS} days"
-                else:
-                    timeout = timedelta(minutes=ACTIVITY_TIMEOUT_MINUTES)
-                    timeout_msg = f"{ACTIVITY_TIMEOUT_MINUTES} minutes"
-                
-                # Check if session has been inactive too long
-                if time_since_activity > timeout:
-                    raise HTTPException(
-                        status_code=401,
-                        detail=f"Session expired due to inactivity (timeout: {timeout_msg}). Please log in again."
-                    )
-        
-        return payload
-        
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        # If current key fails and we have a previous key, try that (grace period)
+        if PREVIOUS_SECRET_KEY:
+            try:
+                payload = jwt.decode(token, PREVIOUS_SECRET_KEY, algorithms=[ALGORITHM])
+                used_previous_key = True
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=401, detail="Token has expired")
+            except jwt.InvalidTokenError:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        else:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Check key version
+    if check_key_version and payload:
+        token_key_version = payload.get('key_version', 1)
+        
+        # Token must match current key version, or be from previous version during grace period
+        if token_key_version == CURRENT_KEY_VERSION:
+            # Valid - current version
+            pass
+        elif used_previous_key and token_key_version == CURRENT_KEY_VERSION - 1:
+            # Valid - previous version during grace period
+            # Log that user should refresh their token
+            print(f"⚠️  User {payload.get('username')} using old key version {token_key_version}. Should refresh token.")
+        else:
+            # Invalid - token is too old or has been rotated
+            raise HTTPException(
+                status_code=401,
+                detail="Token has been invalidated. Please log in again."
+            )
+    
+    # Check activity timeout if enabled
+    if check_activity and payload:
+        last_activity = payload.get('last_activity')
+        remember_me = payload.get('remember_me', False)
+        
+        if last_activity:
+            last_activity_time = datetime.utcfromtimestamp(last_activity)
+            now = datetime.utcnow()
+            time_since_activity = now - last_activity_time
+            
+            # Determine timeout based on remember_me flag
+            if remember_me:
+                timeout = timedelta(days=REMEMBER_ME_TIMEOUT_DAYS)
+                timeout_msg = f"{REMEMBER_ME_TIMEOUT_DAYS} days"
+            else:
+                timeout = timedelta(minutes=ACTIVITY_TIMEOUT_MINUTES)
+                timeout_msg = f"{ACTIVITY_TIMEOUT_MINUTES} minutes"
+            
+            # Check if session has been inactive too long
+            if time_since_activity > timeout:
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Session expired due to inactivity (timeout: {timeout_msg}). Please log in again."
+                )
+    
+    return payload
 
 def get_current_user(authorization: str = Header(None)) -> int:
     """Dependency to get current user from JWT token"""
@@ -1375,6 +1424,62 @@ def unlock_account(data: dict, admin_user_id: int = Depends(get_current_user)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unlock failed: {str(e)}")
+
+@app.post("/admin/rotate-keys")
+def rotate_jwt_keys(admin_user_id: int = Depends(get_current_user)):
+    """
+    Rotate JWT keys and invalidate all existing tokens (admin only)
+    
+    WARNING: This will log out ALL users immediately!
+    
+    Process:
+    1. Generate a new JWT secret
+    2. Move current secret to PREVIOUS_JWT_SECRET_KEY (grace period)
+    3. Increment JWT_KEY_VERSION
+    4. All users must log in again with new keys
+    
+    Returns:
+        - new_jwt_secret: The new JWT secret to set in environment
+        - previous_jwt_secret: The old secret (for grace period)
+        - new_key_version: The new version number
+        - instructions: How to update Railway environment variables
+    
+    Note: This is a temporary admin endpoint. In production, implement proper
+    admin role checking. For now, any authenticated user can rotate keys.
+    """
+    try:
+        import secrets
+        
+        # Generate new JWT secret (256-bit)
+        new_secret = secrets.token_urlsafe(32)
+        new_key_version = CURRENT_KEY_VERSION + 1
+        
+        print(f"🔄 JWT Key Rotation initiated by admin user_id: {admin_user_id}")
+        print(f"📌 Current Key Version: {CURRENT_KEY_VERSION}")
+        print(f"📌 New Key Version: {new_key_version}")
+        print(f"🔑 New JWT Secret Generated: {new_secret[:10]}...")
+        
+        return {
+            "success": True,
+            "message": "Key rotation prepared. Update environment variables to complete rotation.",
+            "current_key_version": CURRENT_KEY_VERSION,
+            "new_key_version": new_key_version,
+            "new_jwt_secret": new_secret,
+            "previous_jwt_secret": SECRET_KEY,
+            "instructions": {
+                "step_1": "Go to Railway Dashboard → Backend Service → Variables",
+                "step_2": f"Update JWT_SECRET_KEY to: {new_secret}",
+                "step_3": f"Set PREVIOUS_JWT_SECRET_KEY to: {SECRET_KEY} (grace period)",
+                "step_4": f"Set JWT_KEY_VERSION to: {new_key_version}",
+                "step_5": "Railway will redeploy automatically",
+                "step_6": "After 24 hours, remove PREVIOUS_JWT_SECRET_KEY (end grace period)",
+                "warning": "All users will need to log in again after rotation completes"
+            },
+            "grace_period_note": "Tokens signed with old key will work during grace period (24-48 hours recommended)"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Key rotation failed: {str(e)}")
 
 @app.post("/auth/google", response_model=AuthResponse)
 def google_auth(request: GoogleAuthRequest):
