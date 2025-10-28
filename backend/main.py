@@ -345,6 +345,19 @@ def init_db():
         )
     ''')
     
+    # Audit logs table (if not exists)
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id {auto_id},
+            user_id {integer},
+            action {text} NOT NULL,
+            details {text},
+            ip_address {text},
+            user_agent {text},
+            timestamp {timestamp_default}
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -580,6 +593,65 @@ def validate_password(password: str, username: str = None) -> dict:
         'strength': strength,
         'score': score
     }
+
+# Audit logging helper
+def log_audit_event(
+    action: str,
+    user_id: Optional[int] = None,
+    details: Optional[dict] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None
+):
+    """
+    Log an audit event to the audit_logs table
+    
+    Args:
+        action: The action being performed (e.g., 'user_registration', 'login_success')
+        user_id: The user ID performing the action (None for anonymous actions)
+        details: Additional details about the action (stored as JSON)
+        ip_address: The IP address of the request
+        user_agent: The user agent string from the request
+    """
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        # Convert details dict to JSON string
+        details_json = json.dumps(details) if details else None
+        
+        execute_query(
+            cursor,
+            "INSERT INTO audit_logs (user_id, action, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)",
+            (user_id, action, details_json, ip_address, user_agent)
+        )
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        # Don't fail the main operation if audit logging fails
+        print(f"⚠️  Audit logging failed: {str(e)}")
+
+def get_client_ip(request: Request) -> str:
+    """
+    Extract the client IP address from the request
+    Handles X-Forwarded-For header for proxies (like Railway)
+    """
+    # Check for X-Forwarded-For header (used by proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # X-Forwarded-For can contain multiple IPs, take the first one
+        return forwarded_for.split(",")[0].strip()
+    
+    # Check for X-Real-IP header
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback to direct client host
+    if request.client:
+        return request.client.host
+    
+    return "unknown"
 
 # Pydantic models with validation
 class DeviceCreate(BaseModel):
@@ -1087,33 +1159,78 @@ def check_password_strength(data: dict):
     }
 
 @app.post("/auth/register", response_model=AuthResponse)
-def register(register_request: RegisterRequest):
+def register(register_request: RegisterRequest, request: Request):
     """Register a new user"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+    
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = register_request.username.lower()
         
         # Validate username (3-20 chars, alphanumeric + underscore)
         if not username_lower or len(username_lower) < 3 or len(username_lower) > 20:
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "invalid_username_length"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
         
         if not username_lower.replace('_', '').replace('.', '').isalnum():
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "invalid_username_chars"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
         
         # Validate password (8+ chars, uppercase, lowercase, number)
         if len(register_request.password) < 8:
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "password_too_short"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
         
         if not any(c.isupper() for c in register_request.password):
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "password_no_uppercase"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
         
         if not any(c.islower() for c in register_request.password):
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "password_no_lowercase"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
         
         if not any(c.isdigit() for c in register_request.password):
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "password_no_digit"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Password must contain at least one number")
         
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in register_request.password):
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "password_no_special_char"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
         conn = get_db_connection()
@@ -1124,6 +1241,12 @@ def register(register_request: RegisterRequest):
         existing = cursor.fetchone()
         if existing:
             conn.close()
+            log_audit_event(
+                action="registration_failed",
+                details={"username": username_lower, "reason": "username_taken"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=400, detail="Username already taken")
         
         # Check if email already exists
@@ -1132,6 +1255,12 @@ def register(register_request: RegisterRequest):
             existing_email = cursor.fetchone()
             if existing_email:
                 conn.close()
+                log_audit_event(
+                    action="registration_failed",
+                    details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
                 raise HTTPException(status_code=400, detail="An account with this email already exists")
         
         # Hash password and create user (store username in lowercase)
@@ -1153,6 +1282,15 @@ def register(register_request: RegisterRequest):
         conn.commit()
         conn.close()
         
+        # Log successful registration
+        log_audit_event(
+            action="user_registration",
+            user_id=user_id,
+            details={"username": username_lower, "email": register_request.email},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
         # Create JWT token
         token = create_access_token(user_id, username_lower)
         
@@ -1165,11 +1303,20 @@ def register(register_request: RegisterRequest):
     except HTTPException:
         raise
     except Exception as e:
+        log_audit_event(
+            action="registration_error",
+            details={"error": str(e)},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=AuthResponse)
-def login(login_request: LoginRequest):
+def login(login_request: LoginRequest, request: Request):
     """Login with username and password (with account lockout protection)"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+    
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
         
@@ -1185,6 +1332,12 @@ def login(login_request: LoginRequest):
         
         if not user:
             conn.close()
+            log_audit_event(
+                action="login_failed",
+                details={"username": username_lower, "reason": "user_not_found"},
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
             raise HTTPException(status_code=401, detail="Invalid username or password")
         
         # Handle both dict (PostgreSQL) and tuple (SQLite) results
@@ -1210,6 +1363,14 @@ def login(login_request: LoginRequest):
                     remaining_seconds = int((locked_until - now).total_seconds())
                     remaining_minutes = remaining_seconds // 60
                     conn.close()
+                    
+                    log_audit_event(
+                        action="login_failed",
+                        user_id=user_id,
+                        details={"username": username_lower, "reason": "account_locked", "remaining_minutes": remaining_minutes},
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
                     
                     raise HTTPException(
                         status_code=423,  # 423 Locked
@@ -1258,6 +1419,14 @@ def login(login_request: LoginRequest):
                     except:
                         pass  # Don't fail login if email fails
                 
+                log_audit_event(
+                    action="account_locked",
+                    user_id=user_id,
+                    details={"username": username_lower, "failed_attempts": failed_attempts, "lock_duration_minutes": 15},
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                
                 raise HTTPException(
                     status_code=423,
                     detail="Account locked due to multiple failed login attempts. Try again in 15 minutes.",
@@ -1272,6 +1441,14 @@ def login(login_request: LoginRequest):
                 conn.commit()
                 conn.close()
                 
+                log_audit_event(
+                    action="login_failed",
+                    user_id=user_id,
+                    details={"username": username_lower, "reason": "invalid_password", "failed_attempts": failed_attempts},
+                    ip_address=ip_address,
+                    user_agent=user_agent
+                )
+                
                 remaining_attempts = 5 - failed_attempts
                 raise HTTPException(
                     status_code=401,
@@ -1285,6 +1462,15 @@ def login(login_request: LoginRequest):
         )
         conn.commit()
         conn.close()
+        
+        # Log successful login
+        log_audit_event(
+            action="login_success",
+            user_id=user_id,
+            details={"username": username_lower, "remember_me": login_request.remember_me},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
         
         # Create JWT token with remember_me flag
         token = create_access_token(user_id, username, remember_me=login_request.remember_me)
@@ -2078,8 +2264,11 @@ def get_user_profile(user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/profile")
-def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
+def save_user_profile(profile: dict, request: Request, user_id: int = Depends(get_current_user)):
     """Save user profile"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+    
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -2142,6 +2331,16 @@ def save_user_profile(profile: dict, user_id: int = Depends(get_current_user)):
         
         conn.commit()
         conn.close()
+        
+        # Log profile update
+        log_audit_event(
+            action="profile_update",
+            user_id=user_id,
+            details={"fields_updated": list(profile.keys())},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
         return {"success": True}
     except HTTPException:
         raise
@@ -2356,8 +2555,11 @@ def get_privacy_zones(user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/user/privacy-zones")
-def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
+def save_privacy_zone(zone: dict, request: Request, user_id: int = Depends(get_current_user)):
     """Save a privacy zone"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+    
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -2379,13 +2581,26 @@ def save_privacy_zone(zone: dict, user_id: int = Depends(get_current_user)):
         conn.commit()
         zone_id = get_lastrowid(cursor, conn)
         conn.close()
+        
+        # Log privacy zone creation
+        log_audit_event(
+            action="privacy_zone_created",
+            user_id=user_id,
+            details={"zone_id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
         return {"id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/user/privacy-zones/{zone_id}")
-def delete_privacy_zone(zone_id: int, user_id: int = Depends(get_current_user)):
+def delete_privacy_zone(zone_id: int, request: Request, user_id: int = Depends(get_current_user)):
     """Delete a privacy zone"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+    
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
@@ -2406,6 +2621,16 @@ def delete_privacy_zone(zone_id: int, user_id: int = Depends(get_current_user)):
         execute_query(cursor, 'DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
         conn.commit()
         conn.close()
+        
+        # Log privacy zone deletion
+        log_audit_event(
+            action="privacy_zone_deleted",
+            user_id=user_id,
+            details={"zone_id": zone_id},
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2512,6 +2737,184 @@ async def get_admin_stats(secret: str = Header(None)):
                 }
                 for user in users_list
             ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/admin/audit-logs")
+async def get_audit_logs(
+    secret: str = Header(None),
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """
+    ADMIN ENDPOINT - Get audit logs with filtering
+    Requires secret header for security
+    
+    Query parameters:
+    - user_id: Filter by user ID
+    - action: Filter by action type (e.g., 'user_registration', 'login_success')
+    - ip_address: Filter by IP address
+    - limit: Maximum number of records to return (default: 100, max: 1000)
+    - offset: Number of records to skip for pagination (default: 0)
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    # Limit validation
+    if limit > 1000:
+        limit = 1000
+    if limit < 1:
+        limit = 100
+    
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        # Build query with filters
+        query = "SELECT id, user_id, action, details, ip_address, user_agent, timestamp FROM audit_logs WHERE 1=1"
+        params = []
+        
+        if user_id is not None:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        
+        if action:
+            query += " AND action = ?"
+            params.append(action)
+        
+        if ip_address:
+            query += " AND ip_address = ?"
+            params.append(ip_address)
+        
+        # Add ordering and pagination
+        query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        execute_query(cursor, query, tuple(params))
+        rows = cursor.fetchall()
+        
+        # Get total count (without pagination)
+        count_query = "SELECT COUNT(*) FROM audit_logs WHERE 1=1"
+        count_params = []
+        
+        if user_id is not None:
+            count_query += " AND user_id = ?"
+            count_params.append(user_id)
+        
+        if action:
+            count_query += " AND action = ?"
+            count_params.append(action)
+        
+        if ip_address:
+            count_query += " AND ip_address = ?"
+            count_params.append(ip_address)
+        
+        execute_query(cursor, count_query, tuple(count_params))
+        total_count = cursor.fetchone()[0] if cursor.fetchone() else 0
+        
+        conn.close()
+        
+        # Format results
+        logs = []
+        for row in rows:
+            if isinstance(row, dict):
+                log_entry = {
+                    "id": row['id'],
+                    "user_id": row['user_id'],
+                    "action": row['action'],
+                    "details": json.loads(row['details']) if row['details'] else None,
+                    "ip_address": row['ip_address'],
+                    "user_agent": row['user_agent'],
+                    "timestamp": row['timestamp']
+                }
+            else:
+                log_entry = {
+                    "id": row[0],
+                    "user_id": row[1],
+                    "action": row[2],
+                    "details": json.loads(row[3]) if row[3] else None,
+                    "ip_address": row[4],
+                    "user_agent": row[5],
+                    "timestamp": row[6]
+                }
+            logs.append(log_entry)
+        
+        return {
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "logs": logs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def cleanup_old_audit_logs(days: int = 90):
+    """
+    Delete audit logs older than the specified number of days
+    Returns the number of logs deleted
+    """
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        # Calculate cutoff date
+        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_timestamp = cutoff_date.isoformat()
+        
+        # Count logs to be deleted
+        execute_query(cursor, 
+            "SELECT COUNT(*) FROM audit_logs WHERE timestamp < ?",
+            (cutoff_timestamp,)
+        )
+        count_result = cursor.fetchone()
+        count = count_result[0] if count_result else 0
+        
+        # Delete old logs
+        execute_query(cursor,
+            "DELETE FROM audit_logs WHERE timestamp < ?",
+            (cutoff_timestamp,)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return count
+    except Exception as e:
+        print(f"⚠️  Audit log cleanup failed: {str(e)}")
+        return 0
+
+@app.post("/admin/cleanup-audit-logs")
+async def cleanup_audit_logs_endpoint(
+    secret: str = Header(None),
+    days: int = 90
+):
+    """
+    ADMIN ENDPOINT - Delete audit logs older than specified days
+    Requires secret header for security
+    
+    Query parameters:
+    - days: Number of days to retain logs (default: 90)
+    """
+    # Simple security check
+    if secret != "delete-all-profiles-2024":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    if days < 1:
+        raise HTTPException(status_code=400, detail="Days must be at least 1")
+    
+    try:
+        deleted_count = cleanup_old_audit_logs(days)
+        
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "retention_days": days,
+            "message": f"Deleted {deleted_count} audit log(s) older than {days} days"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
