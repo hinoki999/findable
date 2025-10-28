@@ -15,8 +15,6 @@ import shutil
 from pathlib import Path
 import jwt
 import bcrypt
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
 import cloudinary
 import cloudinary.uploader
 import random
@@ -99,8 +97,6 @@ if SECRET_KEY == "your-secret-key-change-in-production-12345":
 
 print(f"✓ JWT Key Version: {CURRENT_KEY_VERSION}")
 
-# Google OAuth Client ID (in production, use environment variable)
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID_HERE"  # Will be configured later
 
 # Cloudinary Configuration
 cloudinary.config(
@@ -675,9 +671,6 @@ class AuthResponse(BaseModel):
     token: str
     user_id: int
     username: str
-
-class GoogleAuthRequest(BaseModel):
-    id_token: str
 
 class SendVerificationCodeRequest(BaseModel):
     email: str
@@ -1480,87 +1473,6 @@ def rotate_jwt_keys(admin_user_id: int = Depends(get_current_user)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Key rotation failed: {str(e)}")
-
-@app.post("/auth/google", response_model=AuthResponse)
-def google_auth(request: GoogleAuthRequest):
-    """Authenticate with Google OAuth"""
-    try:
-        # Verify the Google ID token
-        idinfo = id_token.verify_oauth2_token(
-            request.id_token, 
-            google_requests.Request(), 
-            GOOGLE_CLIENT_ID
-        )
-        
-        # Get user info from Google token
-        google_user_id = idinfo['sub']
-        email = idinfo.get('email', '')
-        name = idinfo.get('name', '')
-        
-        # Generate username from email or name
-        username = email.split('@')[0] if email else name.replace(' ', '').lower()
-        
-        # Ensure username is unique
-        conn = get_db_connection()
-        cursor = get_cursor(conn)
-        
-        # Check if user with this email already exists
-        execute_query(cursor, 
-            "SELECT id, username FROM users WHERE email = ?",
-            (email,)
-        )
-        existing_user = cursor.fetchone()
-        
-        if existing_user:
-            # User already exists, log them in
-            if isinstance(existing_user, dict):
-                user_id, username = existing_user['id'], existing_user['username']
-            else:
-                user_id, username = existing_user
-        else:
-            # Create new user with a dummy password (they'll use Google OAuth)
-            # Make username unique by appending number if needed
-            base_username = username
-            counter = 1
-            while True:
-                execute_query(cursor, "SELECT id FROM users WHERE username = ?", (username,))
-                if not cursor.fetchone():
-                    break
-                username = f"{base_username}{counter}"
-                counter += 1
-            
-            # Insert new user with Google OAuth marker
-            dummy_password_hash = hash_password(f"google_oauth_{google_user_id}")
-            execute_query(cursor, 
-                "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
-                (username, dummy_password_hash, email)
-            )
-            conn.commit()
-            user_id = get_lastrowid(cursor, conn)
-            
-            # Also create initial user profile
-            execute_query(cursor, 
-                "INSERT OR REPLACE INTO user_profiles (user_id, name, email) VALUES (?, ?, ?)",
-                (user_id, name, email)
-            )
-            conn.commit()
-        
-        conn.close()
-        
-        # Create JWT token
-        token = create_access_token(user_id, username)
-        
-        return AuthResponse(
-            token=token,
-            user_id=user_id,
-            username=username
-        )
-        
-    except ValueError as e:
-        # Invalid token
-        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Google authentication failed: {str(e)}")
 
 @app.post("/auth/send-verification-code")
 def send_verification_code(request: SendVerificationCodeRequest):
