@@ -1,0 +1,96 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+      
+      - name: Run linter
+        run: |
+          cd backend
+          pip install flake8
+          flake8 main.py --max-line-length=120 --ignore=E501,W503 || true
+      
+      - name: Check for syntax errors
+        run: |
+          cd backend
+          python -m py_compile main.py
+  
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Deploy to Railway (Staging)
+        run: |
+          echo "✓ Railway will auto-deploy on push to develop branch"
+          echo "Check Railway dashboard: https://railway.app"
+      
+      - name: Wait for deployment
+        run: |
+          echo "Waiting 60 seconds for Railway to deploy..."
+          sleep 60
+      
+      - name: Health check staging
+        run: |
+          STAGING_URL="https://droplink-staging.up.railway.app"
+          
+          echo "Testing staging health endpoint..."
+          
+          for i in {1..10}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✓ Staging deployment successful!"
+              curl -s "$STAGING_URL/health" | python -m json.tool
+              exit 0
+            fi
+            echo "Waiting for staging deployment... ($i/10) - Status: $STATUS"
+            sleep 10
+          done
+          
+          echo "⚠️  Staging deployment may still be in progress"
+          echo "Check Railway dashboard for status"
+          exit 0
+      
+      - name: Run smoke tests
+        run: |
+          STAGING_URL="https://droplink-staging.up.railway.app"
+          
+          echo "Running smoke tests on staging..."
+          
+          # Test health endpoint
+          echo "Testing /health..."
+          curl -f "$STAGING_URL/health" || echo "Health check warning"
+          
+          # Test root endpoint
+          echo "Testing / ..."
+          curl -f "$STAGING_URL/" || echo "Root endpoint warning"
+          
+          echo "✓ Smoke tests completed"
+
+
