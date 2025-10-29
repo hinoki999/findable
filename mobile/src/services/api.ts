@@ -1,7 +1,6 @@
 // src/services/api.ts
-import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
+import { storage } from './storage';
 
 export const BASE_URL = ENV.BASE_URL;
 const USE_STUB = false; // Connected to backend!
@@ -32,11 +31,7 @@ export class TimeoutError extends Error {
 
 // Helper to get auth token
 async function getAuthToken(): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('authToken');
-  } else {
-    return await SecureStore.getItemAsync('authToken');
-  }
+  return await storage.getItem('authToken');
 }
 
 // Helper to create authorized headers

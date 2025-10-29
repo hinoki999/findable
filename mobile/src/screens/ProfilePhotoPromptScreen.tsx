@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../services/storage';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProfilePhotoPromptScreenProps {
@@ -51,12 +51,7 @@ export default function ProfilePhotoPromptScreen({ onComplete }: ProfilePhotoPro
     setUploading(true);
     try {
       // Get auth token
-      let token: string | null = null;
-      if (Platform.OS === 'web') {
-        token = localStorage.getItem('authToken');
-      } else {
-        token = await SecureStore.getItemAsync('authToken');
-      }
+      const token = await storage.getItem('authToken');
 
       // Prepare form data
       const formData = new FormData();
