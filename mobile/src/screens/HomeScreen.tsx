@@ -1627,7 +1627,7 @@ export default function HomeScreen() {
         }
         scrollEnabled={false}
       >
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: typeof window !== 'undefined' ? window.innerHeight : 800 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: Dimensions.get('window').height || 800 }}>
         {/* Background overlay to close expanded cards and quick actions when clicking outside */}
         {(expandedCardId !== null || activeQuickActionCardId !== null) && (
           <Pressable
