@@ -7,10 +7,10 @@ import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
 // import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
+import SecuritySettingsScreen from './src/screens/SecuritySettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import ContactInfoScreen from './src/screens/ContactInfoScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -60,7 +60,7 @@ const UserProfileContext = createContext<{
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Optional bio line goes here.',
+    bio: 'Bio will display here once created.',
     socialMedia: [],
   },
   updateProfile: () => {},
@@ -152,8 +152,7 @@ function MainApp() {
   });
 
   // Auth flow state
-  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login' | 'contactInfo'>('welcome');
-  const [signupEmail, setSignupEmail] = useState<string>(''); // Pass email from signup to contact info
+  const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login'>('welcome');
 
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
@@ -164,7 +163,7 @@ function MainApp() {
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Optional bio line goes here.',
+    bio: 'Bio will display here once created',
     socialMedia: [],
   });
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
@@ -173,76 +172,103 @@ function MainApp() {
   const [maxDistance, setMaxDistance] = useState(33); // Default 33 feet (10m)
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
+  const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
 
-  // Load all user data from backend when authenticated
-  useEffect(() => {
+  // Function to load all user data from backend
+  const loadUserData = async () => {
     if (!isAuthenticated || !userId) return;
     
-    const loadUserData = async () => {
-      try {
-        console.log('📥 Loading user data from backend...');
+    try {
+      console.log('📥 Loading user data from backend...');
+      
+      // Load user profile
+      const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+      if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+        console.log('✅ Loaded profile:', profileData);
+        setUserProfile({
+          name: profileData.name || 'Your Name',
+          phoneNumber: profileData.phone || '(555) 123-4567',
+          email: profileData.email || 'user@example.com',
+          bio: profileData.bio || 'Bio will display here once created.',
+          socialMedia: profileData.socialMedia || [],
+        });
         
-        // Load user profile
-        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
-          console.log('✅ Loaded profile:', profileData);
-          setUserProfile({
-            name: profileData.name || 'Your Name',
-            phoneNumber: profileData.phone || '(555) 123-4567',
-            email: profileData.email || 'user@example.com',
-            bio: profileData.bio || 'Optional bio line goes here.',
-            socialMedia: [],
-          });
-          
-          // Load profile photo if exists
-          if (profileData.profile_photo) {
-            console.log('✅ Loaded profile photo:', profileData.profile_photo);
-            setProfilePhotoUri(profileData.profile_photo);
-          }
+        // Load profile photo if exists
+        if (profileData.profile_photo) {
+          console.log('✅ Loaded profile photo:', profileData.profile_photo);
+          setProfilePhotoUri(profileData.profile_photo);
         }
-        
-        // Load settings
-        const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
-        if (settingsData) {
-          console.log('✅ Loaded settings:', settingsData);
-          setIsDarkMode(settingsData.darkMode);
-          setMaxDistance(settingsData.maxDistance);
-        }
-        
-        // Load pinned contacts
-        const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
-        if (pinnedData && pinnedData.length > 0) {
-          console.log('✅ Loaded pinned contacts:', pinnedData);
-          setPinnedIds(new Set(pinnedData));
-        }
-        
-        // Privacy Zones feature removed
-        // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
-        // if (zonesData) {
-        //   console.log('✅ Loaded privacy zones:', zonesData);
-        //   setPrivacyZones(zonesData);
-        // }
-        
-        console.log('✅ All user data loaded successfully');
-      } catch (error) {
-        console.error('❌ Failed to load user data:', error);
       }
-    };
-    
-    loadUserData();
+      
+      // Load settings
+      const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
+      if (settingsData) {
+        console.log('✅ Loaded settings:', settingsData);
+        setIsDarkMode(settingsData.darkMode);
+        setMaxDistance(settingsData.maxDistance);
+      }
+
+      // Load linked devices/contacts
+      const devicesData = await import('./src/services/api').then(m => m.getDevices());
+      if (devicesData && devicesData.length > 0) {
+        console.log('✅ Loaded devices:', devicesData.length, 'contacts');
+        
+        // Convert devices to link notifications for accepted/returned contacts
+        const notifications: LinkNotification[] = devicesData
+          .filter(device => device.action === 'accepted' || device.action === 'returned')
+          .map((device, index) => ({
+            id: device.id || index,
+            name: device.name,
+            phoneNumber: device.phoneNumber || '',
+            email: device.email || '',
+            bio: device.bio || '',
+            socialMedia: device.socialMedia || [],
+            timestamp: device.timestamp ? new Date(device.timestamp).getTime() : Date.now(),
+            viewed: true, // Mark as viewed since they're from backend
+            dismissed: false,
+            deviceId: device.id,
+          }));
+        
+        setLinkNotifications(notifications);
+        console.log('✅ Loaded link notifications:', notifications.length);
+      }
+
+      // Load pinned contacts
+      const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
+      if (pinnedData && pinnedData.length > 0) {
+        console.log('✅ Loaded pinned contacts:', pinnedData);
+        setPinnedIds(new Set(pinnedData));
+      }
+      
+      // Privacy Zones feature removed
+      // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
+      // if (zonesData) {
+      //   console.log('✅ Loaded privacy zones:', zonesData);
+      //   setPrivacyZones(zonesData);
+      // }
+      
+      console.log('✅ All user data loaded successfully');
+    } catch (error) {
+      console.error('❌ Failed to load user data:', error);
+    }
+  };
+
+  // Load user data when authenticated
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      loadUserData();
+    }
   }, [isAuthenticated, userId]);
 
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
     console.log('✅ Signup successful:', username);
-    // DON'T login yet - we need to show ContactInfo screen first
-    // Just save the token temporarily
-    setSignupEmail(email || '');
+    // Profile info is already saved in SignupScreen
+    // Now log them in and show profile photo prompt
     setIsFirstTimeUser(true);
-    setAuthScreen('contactInfo'); // Go to contact info screen
-    
-    // Store signup data temporarily for after contact info
-    (window as any).__signupData = { token, userId, username };
+    await login(token, userId, username);
+    // Show profile photo prompt instead of going directly to main app
+    setShowProfilePhotoPrompt(true);
   };
 
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
@@ -251,63 +277,33 @@ function MainApp() {
     // User goes directly to main app
   };
 
-  const handleContactInfoComplete = async (profile: {
-    name: string;
-    phone: string;
-    email: string;
-    bio: string;
-  }) => {
-    console.log('✅ Contact info completed:', profile);
+  const handleProfilePhotoPromptComplete = async () => {
+    console.log('✅ Profile photo prompt completed');
+    setShowProfilePhotoPrompt(false);
+    // Load user data to get the new profile photo if uploaded
+    await loadUserData();
     
-    // Get the signup data we saved earlier
-    const signupData = (window as any).__signupData;
-    if (!signupData) {
-      console.error('❌ No signup data found!');
-      return;
+    // For first-time users, clear tutorial state to ensure tutorials show
+    if (isFirstTimeUser) {
+      try {
+        const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
+        await AsyncStorage.removeItem('@droplink_tutorial_screens');
+        console.log('✅ Tutorial state cleared for first-time user');
+      } catch (error) {
+        console.error('Failed to clear tutorial state:', error);
+      }
+      
+      // Reset navigation to Home tab and clear any subScreens
+      setTab('Home');
+      setSubScreen(null);
+      console.log('✅ Navigation reset to Home tab');
     }
     
-    // Save profile to backend
-    try {
-      const api = await import('./src/services/api');
-      await api.saveUserProfile({
-        name: profile.name,
-        phone: profile.phone,
-        email: profile.email,
-        bio: profile.bio,
-      });
-      
-      // Update local state
-      setUserProfile({
-        name: profile.name || 'Your Name',
-        phoneNumber: profile.phone || '(555) 123-4567',
-        email: profile.email || 'user@example.com',
-        bio: profile.bio || 'Optional bio line goes here.',
-        socialMedia: [],
-      });
-      
-      console.log('✅ Profile saved successfully');
-      
-      // NOW log them in (this will set isAuthenticated: true and show main app)
-      await login(signupData.token, signupData.userId, signupData.username);
-      
-      // Clear the temporary signup data
-      delete (window as any).__signupData;
-      
-      showToast({
-        message: 'Welcome to DropLink!',
-        type: 'success',
-        duration: 3000,
-      });
-      
-      // Now user goes to main app (tutorial will show automatically for first-time users)
-    } catch (error) {
-      console.error('❌ Failed to save profile:', error);
-      showToast({
-        message: 'Failed to save profile. Please try again.',
-        type: 'error',
-        duration: 3000,
-      });
-    }
+    showToast({
+      message: 'Welcome to DropLink!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
   const toggleDarkMode = async () => {
@@ -368,6 +364,7 @@ function MainApp() {
         email: newProfile.email,
         phone: newProfile.phoneNumber,
         bio: newProfile.bio,
+        socialMedia: newProfile.socialMedia,
       });
       console.log('✅ Profile saved to backend:', newProfile);
     } catch (error) {
@@ -464,9 +461,8 @@ function MainApp() {
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         {authScreen === 'signup' && (
           <SignupScreen
-            onSignupSuccess={(token, userId, username) => {
-              // SignupScreen will pass the email as part of the user state
-              handleSignupSuccess(token, userId, username, signupEmail);
+            onSignupSuccess={(token, userId, username, email) => {
+              handleSignupSuccess(token, userId, username, email);
             }}
             onLoginPress={() => setAuthScreen('login')}
             onBack={() => setAuthScreen('welcome')}
@@ -481,13 +477,6 @@ function MainApp() {
           />
         )}
 
-        {authScreen === 'contactInfo' && (
-          <ContactInfoScreen
-            email={signupEmail}
-            onComplete={handleContactInfoComplete}
-          />
-        )}
-
         {authScreen === 'welcome' && (
           <WelcomeScreen
             onGetStarted={() => setAuthScreen('signup')}
@@ -496,6 +485,55 @@ function MainApp() {
             showToast={showToast}
           />
         )}
+      </DarkModeContext.Provider>
+    );
+  }
+
+  // Show profile photo prompt after signup (authenticated but before main app)
+  if (isAuthenticated && showProfilePhotoPrompt) {
+    const promptNavigation = {
+      navigate: () => {},
+      goBack: handleProfilePhotoPromptComplete,
+    };
+    
+    return (
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        <View style={{ flex: 1, backgroundColor: getTheme(isDarkMode).colors.bg }}>
+          {/* Header with Skip button */}
+          <View style={{ 
+            flexDirection: 'row', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            paddingHorizontal: 20,
+            paddingTop: 60,
+            paddingBottom: 20,
+          }}>
+            <Text style={{ 
+              fontSize: 20, 
+              fontWeight: '600',
+              color: getTheme(isDarkMode).colors.text,
+              fontFamily: 'Inter_600SemiBold',
+            }}>
+              Profile Photo
+            </Text>
+            <Pressable onPress={handleProfilePhotoPromptComplete}>
+              <Text style={{ 
+                color: getTheme(isDarkMode).colors.muted,
+                fontSize: 16,
+                fontFamily: 'Inter_400Regular',
+              }}>
+                Skip
+              </Text>
+            </Pressable>
+          </View>
+          <ProfilePhotoScreen 
+            navigation={promptNavigation} 
+            onPhotoSaved={(uri) => {
+              setProfilePhotoUri(uri);
+              handleProfilePhotoPromptComplete();
+            }} 
+          />
+        </View>
       </DarkModeContext.Provider>
     );
   }
@@ -515,6 +553,10 @@ function MainApp() {
     
     if (subScreen === 'ProfilePhoto') {
       return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+    }
+
+    if (subScreen === 'SecuritySettings') {
+      return <SecuritySettingsScreen navigation={navigation} />;
     }
 
     // Show main tabs

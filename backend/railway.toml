@@ -1,0 +1,47 @@
+# Railway Configuration for Droplin Backend
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+# Start command with workers and connection limits
+# Workers formula: (2 x CPU cores) + 1
+# For Railway's default 2 vCPU: 4 workers is optimal
+# --limit-concurrency: Max concurrent requests per replica
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT --workers 4 --limit-concurrency 1000"
+
+# Health checks
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+
+# Restart policy
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Horizontal scaling
+# Railway doesn't support CPU-based auto-scaling yet
+# Set fixed replicas based on expected traffic:
+# - Low traffic (< 100 req/min): 2 replicas
+# - Medium traffic (100-500 req/min): 4 replicas
+# - High traffic (500-2000 req/min): 6-8 replicas
+# - Very high traffic (> 2000 req/min): 10 replicas
+numReplicas = 2
+
+# Resource allocation per replica:
+# Railway auto-assigns based on plan:
+# - Hobby: Up to 512MB RAM, 0.25 vCPU
+# - Pro: Up to 8GB RAM, 2 vCPU (default)
+# - Team: Configurable limits
+
+# Each replica capacity (with 4 workers, 1000 limit):
+# - ~1000 concurrent connections per replica
+# - ~200 req/sec per replica (typical FastAPI performance)
+# - With 2 replicas: ~2000 concurrent, ~400 req/sec total
+
+# Notes:
+# - All replicas share the same PostgreSQL database
+# - All replicas use the same Cloudinary storage
+# - JWT tokens are stateless (work across all replicas)
+# - Railway load balances traffic automatically
+# - Railway health checks remove unhealthy replicas
+

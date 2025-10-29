@@ -5,6 +5,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
+import * as SecureStore from 'expo-secure-store';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CIRCLE_SIZE = 280;
@@ -126,7 +127,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: (evt, gestureState) => {
         // Always respond to touches - more sensitive
-        return Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2 || evt.nativeEvent.touches.length >= 2;
+        return Math.abs(gestureState.dx) > 1 || Math.abs(gestureState.dy) > 1 || evt.nativeEvent.touches.length >= 2;
       },
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
@@ -231,10 +232,22 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         } as any);
       }
 
+      // Get auth token
+      const token = Platform.OS === 'web' 
+        ? localStorage.getItem('authToken')
+        : await SecureStore.getItemAsync('authToken');
+      
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
       // Upload to backend
       const BASE_URL = 'https://findable-production.up.railway.app';
-      const response = await fetch(`${BASE_URL}/user/profile/photo?user_id=${userId}`, {
+      const response = await fetch(`${BASE_URL}/user/profile/photo`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -319,10 +332,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       {/* Source Selection Step */}
       {step === 'source' && (
         <View style={styles.centeredContent}>
-          <MaterialCommunityIcons name="camera" size={80} color={theme.colors.blue} style={{ marginBottom: 24 }} />
-          <Text style={[theme.type.h1, { fontSize: 22, marginBottom: 40, textAlign: 'center' }]}>
-            Choose Photo Source
-          </Text>
+          <MaterialCommunityIcons name="camera" size={80} color={theme.colors.blue} style={{ marginBottom: 64 }} />
           <View style={{ width: '100%', paddingHorizontal: 40, gap: 12 }}>
             <Pressable
               onPress={handleTakePhoto}
@@ -353,14 +363,6 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         <View style={styles.editContainer}>
           {/* Image with circular mask */}
           <View style={styles.imageContainer}>
-            {/* Gray overlay */}
-            <View style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]} />
-            
-            {/* Circular cutout */}
-            <View style={styles.circleCutout}>
-              <View style={styles.circle} />
-            </View>
-
             {/* Draggable/Zoomable Image */}
             <Animated.View
               {...panResponder.panHandlers}
@@ -381,6 +383,14 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
                 resizeMode="cover"
               />
             </Animated.View>
+
+            {/* Gray overlay */}
+            <View pointerEvents="none" style={[styles.overlay, { backgroundColor: 'rgba(0, 0, 0, 0.7)' }]} />
+            
+            {/* Circular cutout */}
+            <View pointerEvents="none" style={styles.circleCutout}>
+              <View style={styles.circle} />
+            </View>
           </View>
 
           {/* Instructions */}
