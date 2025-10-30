@@ -355,16 +355,22 @@ def init_db():
     ''')
     
     # Verification codes table (for email/SMS verification codes)
-    cursor.execute(f'''
-        CREATE TABLE IF NOT EXISTS verification_codes (
-            id {auto_id},
-            email {text} NOT NULL,
-            code {text} NOT NULL,
-            code_type {text} NOT NULL,
-            expires_at {text} NOT NULL,
-            created_at {timestamp_default}
-        )
-    ''')
+    try:
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS verification_codes (
+                id {auto_id},
+                email {text} NOT NULL,
+                code {text} NOT NULL,
+                code_type {text} NOT NULL,
+                expires_at {text} NOT NULL,
+                created_at {timestamp_default}
+            )
+        ''')
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        # Table/type already exists - this is fine
+        print(f"verification_codes table creation skipped (may already exist): {e}")
     
     conn.commit()
     conn.close()
