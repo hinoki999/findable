@@ -2010,24 +2010,53 @@ export default function HomeScreen() {
           </Pressable>
         </View>
         
-        {/* Zoom & Rotation Display */}
+        {/* Zoom & Rotation Indicators (visual feedback only) */}
         <View 
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 12,
             flexDirection: 'row',
-            gap: 12,
+            gap: 8,
           }}
           pointerEvents="none"
         >
-          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
-            Zoom: {viewScale.toFixed(2)}x
-          </Text>
-          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
-            Rotate: {(viewRotation * 180 / Math.PI).toFixed(0)}°
-          </Text>
+          {/* Zoom Indicator - illuminates when zoom is NOT 1x */}
+          <View 
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: Math.abs(viewScale - 1) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.3)',
+            }}
+          >
+            <Text style={{ 
+              color: Math.abs(viewScale - 1) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.5)', 
+              fontSize: 11, 
+              fontWeight: '600' 
+            }}>
+              Zoom
+            </Text>
+          </View>
+
+          {/* Rotate Indicator - illuminates when rotation is NOT 0° */}
+          <View 
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: Math.abs(viewRotation) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.3)',
+            }}
+          >
+            <Text style={{ 
+              color: Math.abs(viewRotation) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.5)', 
+              fontSize: 11, 
+              fontWeight: '600' 
+            }}>
+              Rotate
+            </Text>
+          </View>
         </View>
       </View>
 
