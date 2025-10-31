@@ -288,7 +288,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         // Strip phone formatting before sending to backend
         const phoneDigitsOnly = phone.replace(/\D/g, '');
         
-        await fetch('https://findable-production.up.railway.app/user/profile', {
+        const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -301,6 +301,14 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             bio: bio || ''
           }),
         });
+
+        const profileData = await profileResponse.json();
+        
+        if (!profileResponse.ok) {
+          throw new Error(profileData.detail || 'Failed to save profile information');
+        }
+        
+        console.log('✅ Profile saved successfully');
       }
 
       // Success!
