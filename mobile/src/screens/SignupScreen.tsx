@@ -148,6 +148,31 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
+  // Phone number formatting: (555) 123-4567
+  const formatPhoneNumber = (text: string) => {
+    // Remove all non-digit characters
+    const cleaned = text.replace(/\D/g, '');
+    
+    // Limit to 10 digits
+    const limited = cleaned.slice(0, 10);
+    
+    // Apply formatting
+    if (limited.length === 0) {
+      return '';
+    } else if (limited.length <= 3) {
+      return `(${limited}`;
+    } else if (limited.length <= 6) {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
+    } else {
+      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
+    }
+  };
+
+  const handlePhoneChange = (text: string) => {
+    const formatted = formatPhoneNumber(text);
+    setPhone(formatted);
+  };
+
   const handleSignup = () => {
     // Final validation
     if (!username || username.length < 3 || username.length > 20) {
@@ -260,6 +285,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
       // Save profile information
       if (name || phone || bio) {
+        // Strip phone formatting before sending to backend
+        const phoneDigitsOnly = phone.replace(/\D/g, '');
+        
         await fetch('https://findable-production.up.railway.app/user/profile', {
           method: 'POST',
           headers: {
@@ -268,7 +296,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
           },
           body: JSON.stringify({
             name: name || '',
-            phone: phone || '',
+            phone: phoneDigitsOnly || '',
             email: email,
             bio: bio || ''
           }),
@@ -285,7 +313,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 10 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 14 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -328,7 +356,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={name}
                 onChangeText={setName}
-                placeholder="John Doe"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="words"
                 editable={!loading}
@@ -350,7 +378,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={username}
                 onChangeText={validateUsername}
-                placeholder="johndoe"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -455,7 +483,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={email}
                 onChangeText={validateEmail}
-                placeholder="john@example.com"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -480,11 +508,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               <TextInput
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={phone}
-                onChangeText={setPhone}
-                placeholder="5551234567"
+                onChangeText={handlePhoneChange}
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 keyboardType="phone-pad"
-                maxLength={10}
+                maxLength={14}
                 editable={!loading}
               />
             </View>
