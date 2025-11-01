@@ -42,46 +42,46 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
                   color: '#FF6B4A',
                   letterSpacing: -0.5,
                 }}>D</Text>
-                {/* r - Orange to red-orange */}
+                {/* r - Orange */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#FF6855',
+                  color: '#FF8A6E',
                   letterSpacing: -0.5,
                 }}>r</Text>
-                {/* o - Orange-purple transition */}
+                {/* o - Light orange/peach */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#E8649E',
+                  color: '#FFA892',
                   letterSpacing: -0.5,
                 }}>o</Text>
-                {/* p - Purple transition */}
+                {/* p - Very light/whitish */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#B975D5',
+                  color: '#C8BFD6',
                   letterSpacing: -0.5,
                 }}>p</Text>
-                {/* L - Blue-purple */}
+                {/* L - Light blue */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#8082E8',
+                  color: '#92AAE8',
                   letterSpacing: -0.5,
                 }}>L</Text>
-                {/* i - Light blue */}
+                {/* i - Blue */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#6589EE',
+                  color: '#6B9DFF',
                   letterSpacing: -0.5,
                 }}>i</Text>
                 {/* n - Blue */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#578CF4',
+                  color: '#5A94FF',
                   letterSpacing: -0.5,
                 }}>n</Text>
                 {/* k - Full blue */}
