@@ -254,7 +254,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                   setUsername(text);
                   setError('');
                 }}
-                placeholder="johndoe"
+                placeholder="Username"
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="none"
                 autoCorrect={false}
