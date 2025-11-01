@@ -288,7 +288,17 @@ function MainApp() {
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
-    // User goes directly to main app
+    
+    // Navigate to Home tab
+    setTab('Home');
+    setSubScreen(null);
+    
+    // Show success message
+    showToast({
+      message: 'Successfully logged in!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
   const handleProfilePhotoPromptComplete = async () => {
@@ -297,20 +307,12 @@ function MainApp() {
     // Load user data to get the new profile photo if uploaded
     await loadUserData();
     
-    // For first-time users, clear tutorial state to ensure tutorials show
+    // For first-time users, navigate to Home tab
+    // Tutorials will automatically show since AsyncStorage has no completion data yet
     if (isFirstTimeUser) {
-      try {
-        const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
-        await AsyncStorage.removeItem('@droplink_tutorial_screens');
-        console.log('✅ Tutorial state cleared for first-time user');
-      } catch (error) {
-        console.error('Failed to clear tutorial state:', error);
-      }
-      
-      // Reset navigation to Home tab and clear any subScreens
       setTab('Home');
       setSubScreen(null);
-      console.log('✅ Navigation reset to Home tab');
+      console.log('✅ Navigation reset to Home tab for first-time user');
     }
     
     showToast({
