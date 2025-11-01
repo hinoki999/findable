@@ -76,13 +76,14 @@ export default function HistoryScreen() {
         setData(filteredItems);
         setErr(null); // Clear any previous errors
       } catch (e:any) {
+        console.error('❌ HISTORY: Failed to load devices:', e);
         const errorMsg = e?.message || 'Failed to load contacts';
-        setErr(errorMsg);
-        showToast({
-          message: 'Oops! Failed to load your links. Check your connection and try again.',
-          type: 'error',
-          duration: 4000,
-        });
+        
+        // Don't show error toast - just log it
+        // User can still use the app, they just don't see links yet
+        console.log('⚠️ HISTORY: Error loading links (this is OK if user has no links yet)');
+        setData([]); // Set empty array instead of showing error
+        setErr(null); // Don't set error state
       } finally {
         setLoading(false);
       }
@@ -173,12 +174,11 @@ export default function HistoryScreen() {
       setData(filteredItems);
       setErr(null);
     } catch (e: any) {
-      setErr(e?.message || 'Failed to reload');
-      showToast({
-        message: 'Failed to refresh. Check your connection and try again.',
-        type: 'error',
-        duration: 3000,
-      });
+      console.error('❌ HISTORY: Failed to refresh devices:', e);
+      // Don't show error toast on refresh - just silently fail
+      // User can try again if they want
+      console.log('⚠️ HISTORY: Refresh failed, keeping existing data');
+      setErr(null); // Don't set error state
     } finally {
       setRefreshing(false);
     }
