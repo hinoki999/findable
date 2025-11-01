@@ -321,15 +321,8 @@ export default function DropScreen() {
             paddingVertical: 80,
             paddingHorizontal: 40,
           }}>
-            <MaterialCommunityIcons 
-              name="account-search-outline" 
-              size={64} 
-              color={theme.colors.muted} 
-              style={{ marginBottom: 20, opacity: 0.6 }} 
-            />
             <Text style={[theme.type.h1, { 
               textAlign: 'center', 
-              marginBottom: 12, 
               fontSize: 20,
               color: theme.colors.text,
             }]}>
