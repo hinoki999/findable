@@ -521,8 +521,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setCurrentPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Enter current password"
-                    placeholderTextColor={theme.colors.muted}
+                  placeholder=""
+                  placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showCurrentPassword}
                     autoFocus={true}
                   />
@@ -566,8 +566,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setNewPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Enter new password"
-                    placeholderTextColor={theme.colors.muted}
+                  placeholder=""
+                  placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showNewPassword}
                   />
                   <Pressable
@@ -610,8 +610,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setConfirmPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Confirm new password"
-                    placeholderTextColor={theme.colors.muted}
+                  placeholder=""
+                  placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showConfirmPassword}
                   />
                   <Pressable
@@ -660,7 +660,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setValidationError('');
                     }
                   }}
-                  placeholder="e.g., Instagram, Twitter, LinkedIn"
+                  placeholder=""
                   placeholderTextColor={theme.colors.muted}
                   autoFocus={true}
                 />
@@ -688,7 +688,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setValidationError('');
                     }
                   }}
-                  placeholder="e.g., @username"
+                  placeholder=""
                   placeholderTextColor={theme.colors.muted}
                 />
               </>
@@ -725,10 +725,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     setValidationError('');
                   }
                 }}
-                placeholder={editingField === 'phone' ? '(555) 555-5555' :
-                            editingField === 'email' ? 'Enter email' :
-                            editingField === 'name' ? 'Enter your name' :
-                            editingField === 'bio' ? 'Enter your bio' : ''}
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
                 multiline={editingField === 'bio'}
