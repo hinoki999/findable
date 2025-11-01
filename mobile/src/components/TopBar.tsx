@@ -97,7 +97,7 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
                 <MaterialCommunityIcons 
                   name={logoIcon as any} 
                   size={24} 
-                  color="#FF6B4A"
+                  color={logoIcon === 'link-variant' ? '#FF6B4A' : theme.colors.blue}
                 />
               )}
             </View>
