@@ -755,8 +755,8 @@ export default function HomeScreen() {
   // Spatial tensor tracking for all devices (position, velocity, acceleration)
   const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
 
-  // Map device to 2D position with ACCURATE grid snapping (1 ft intervals)
-  const GRID_SPACING_FEET = 1; // Must match grid configuration
+  // Map device to 2D position with ACCURATE grid snapping (1.5 ft intervals)
+  const GRID_SPACING_FEET = 1.5; // Must match grid configuration
   
   const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
@@ -1369,8 +1369,8 @@ export default function HomeScreen() {
           // Sphere radius extended to cover entire screen for full background grid
           const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Full screen coverage
           
-          // Grid Configuration - 1 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
-          const GRID_SPACING_FEET = 1; // Grid every 1 foot for precise distance mapping
+          // Grid Configuration - 1.5 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
+          const GRID_SPACING_FEET = 1.5; // Grid every 1.5 feet for precise distance mapping
           const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
           const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
           const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
@@ -1451,7 +1451,7 @@ export default function HomeScreen() {
                         top: nucleusY + start.y,
                         width: length,
                         height: 1,
-              backgroundColor: '#5BA3FF',
+              backgroundColor: theme.colors.blue,
                         opacity,
                         transform: [{ rotate: `${angle}rad` }],
                         transformOrigin: 'top left',
@@ -1504,7 +1504,7 @@ export default function HomeScreen() {
                         top: nucleusY + start.y,
                         width: length,
                         height: 1,
-                        backgroundColor: '#5BA3FF',
+                        backgroundColor: theme.colors.blue,
                         opacity,
                         transform: [{ rotate: `${angle}rad` }],
                         transformOrigin: 'top left',
@@ -1932,7 +1932,7 @@ export default function HomeScreen() {
               height: 60,
               borderRadius: 30,
                 borderWidth: 2,
-                borderColor: '#007AFF',
+                borderColor: theme.colors.green,
                 opacity: rippleAnim.interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, 0.3],
@@ -1947,7 +1947,7 @@ export default function HomeScreen() {
             />
             
           <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
+            <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
             
             {/* Link notification badge */}
             {hasUnviewedLinks && (
@@ -1998,13 +1998,13 @@ export default function HomeScreen() {
             }}
             style={{
               borderWidth: 1,
-              borderColor: '#007AFF',
+              borderColor: theme.colors.green,
               borderRadius: 6,
               paddingHorizontal: 8,
               paddingVertical: 4,
             }}
           >
-            <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
+            <Text style={{ color: theme.colors.green, fontSize: 11, fontWeight: '600' }}>
               Reset View
             </Text>
           </Pressable>
@@ -2026,11 +2026,11 @@ export default function HomeScreen() {
               paddingVertical: 6,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: Math.abs(viewScale - 1) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.3)',
+              borderColor: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
             }}
           >
             <Text style={{ 
-              color: Math.abs(viewScale - 1) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.5)', 
+              color: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
               fontSize: 11, 
               fontWeight: '600' 
             }}>
@@ -2046,11 +2046,11 @@ export default function HomeScreen() {
               paddingVertical: 6,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: Math.abs(viewRotation) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.3)',
+              borderColor: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
             }}
           >
             <Text style={{ 
-              color: Math.abs(viewRotation) > 0.01 ? '#007AFF' : 'rgba(128, 128, 128, 0.5)', 
+              color: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
               fontSize: 11, 
               fontWeight: '600' 
             }}>
@@ -2076,7 +2076,7 @@ export default function HomeScreen() {
               width: 40,
               height: 22,
               borderRadius: 11,
-                  backgroundColor: isDiscoverable ? '#E5F2FF' : '#F0F0F0',
+                  backgroundColor: isDiscoverable ? theme.colors.greenLight : '#F0F0F0',
                   padding: 2,
                   justifyContent: 'center',
                 }}>
@@ -2084,7 +2084,7 @@ export default function HomeScreen() {
                 width: 18,
                 height: 18,
                 borderRadius: 9,
-                    backgroundColor: isDiscoverable ? '#007AFF' : '#FFFFFF',
+                    backgroundColor: isDiscoverable ? theme.colors.green : '#FFFFFF',
                 transform: [{ translateX: isDiscoverable ? 18 : 0 }],
                   }} />
                 </View>
@@ -2097,7 +2097,7 @@ export default function HomeScreen() {
             width: 18,
               }}>
                 {isDiscoverable ? (
-              <MaterialCommunityIcons name="flash-outline" size={14} color="#007AFF" />
+              <MaterialCommunityIcons name="flash-outline" size={14} color={theme.colors.green} />
                 ) : (
               <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
                 )}
@@ -2277,7 +2277,7 @@ export default function HomeScreen() {
               {/* Incoming Drops Section */}
               {incomingDrops.length > 0 && (
                 <View style={{ marginBottom: 10 }}>
-                  <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: '#007AFF' }]}>
+                  <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
                     💧 Incoming Drops
                   </Text>
                 </View>
@@ -3042,7 +3042,7 @@ export default function HomeScreen() {
             <MaterialCommunityIcons 
               name={pendingDiscoverableState ? 'flash' : 'ghost'} 
               size={28} 
-              color={pendingDiscoverableState ? '#007AFF' : '#8E8E93'} 
+              color={pendingDiscoverableState ? theme.colors.green : '#8E8E93'} 
               style={{ marginBottom: 8 }}
             />
             <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
@@ -3074,7 +3074,7 @@ export default function HomeScreen() {
                 onPress={confirmToggleChange}
                 style={{
                   flex: 1,
-                  backgroundColor: pendingDiscoverableState ? '#007AFF' : '#8E8E93',
+                  backgroundColor: pendingDiscoverableState ? theme.colors.green : '#8E8E93',
                   paddingVertical: 8,
                   borderRadius: 6,
                 }}
