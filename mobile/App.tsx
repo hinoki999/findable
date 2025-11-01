@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
@@ -60,7 +61,7 @@ const UserProfileContext = createContext<{
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Bio will display here once created.',
+    bio: 'Add bio',
     socialMedia: [],
   },
   updateProfile: () => {},
@@ -163,7 +164,7 @@ function MainApp() {
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Bio will display here once created',
+    bio: 'Add bio',
     socialMedia: [],
   });
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
@@ -182,22 +183,43 @@ function MainApp() {
       console.log('📥 Loading user data from backend...');
       
       // Load user profile
-      const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-      if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
-        console.log('✅ Loaded profile:', profileData);
-        setUserProfile({
-          name: profileData.name || 'Your Name',
-          phoneNumber: profileData.phone || '(555) 123-4567',
-          email: profileData.email || 'user@example.com',
-          bio: profileData.bio || 'Bio will display here once created.',
-          socialMedia: profileData.socialMedia || [],
-        });
+      try {
+        console.log('🔍 Attempting to load profile data...');
+        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+        console.log('📦 Profile response:', profileData);
         
-        // Load profile photo if exists
-        if (profileData.profile_photo) {
-          console.log('✅ Loaded profile photo:', profileData.profile_photo);
-          setProfilePhotoUri(profileData.profile_photo);
+        if (profileData) {
+          console.log('✅ Setting profile state with:', {
+            name: profileData.name,
+            phone: profileData.phone,
+            email: profileData.email,
+            bio: profileData.bio,
+            profile_photo: profileData.profile_photo
+          });
+          
+          // Always set profile data, even if fields are empty
+          // This allows the backend to be the single source of truth
+          setUserProfile({
+            name: profileData.name || 'Your Name',
+            phoneNumber: profileData.phone || '(555) 123-4567',
+            email: profileData.email || 'user@example.com',
+            bio: profileData.bio || 'Add bio',
+            socialMedia: profileData.socialMedia || [],
+          });
+          
+          // Load profile photo if exists (moved outside conditional)
+          if (profileData.profile_photo) {
+            console.log('✅ Loaded profile photo:', profileData.profile_photo);
+            setProfilePhotoUri(profileData.profile_photo);
+          } else {
+            console.log('ℹ️ No profile photo found');
+            setProfilePhotoUri(null);
+          }
+        } else {
+          console.log('⚠️ Profile response was null/undefined');
         }
+      } catch (error) {
+        console.error('❌ Failed to load profile:', error);
       }
       
       // Load settings
@@ -274,7 +296,17 @@ function MainApp() {
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
-    // User goes directly to main app
+    
+    // Navigate to Home tab
+    setTab('Home');
+    setSubScreen(null);
+    
+    // Show success message
+    showToast({
+      message: 'Successfully logged in!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
   const handleProfilePhotoPromptComplete = async () => {
@@ -283,20 +315,12 @@ function MainApp() {
     // Load user data to get the new profile photo if uploaded
     await loadUserData();
     
-    // For first-time users, clear tutorial state to ensure tutorials show
+    // For first-time users, navigate to Home tab
+    // Tutorials will automatically show since AsyncStorage has no completion data yet
     if (isFirstTimeUser) {
-      try {
-        const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
-        await AsyncStorage.removeItem('@droplink_tutorial_screens');
-        console.log('✅ Tutorial state cleared for first-time user');
-      } catch (error) {
-        console.error('Failed to clear tutorial state:', error);
-      }
-      
-      // Reset navigation to Home tab and clear any subScreens
       setTab('Home');
       setSubScreen(null);
-      console.log('✅ Navigation reset to Home tab');
+      console.log('✅ Navigation reset to Home tab for first-time user');
     }
     
     showToast({
@@ -367,8 +391,10 @@ function MainApp() {
         socialMedia: newProfile.socialMedia,
       });
       console.log('✅ Profile saved to backend:', newProfile);
+      showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
     } catch (error) {
       console.error('❌ Failed to save profile:', error);
+      showToast({ message: 'Failed to save profile', type: 'error', duration: 3000 });
     }
   };
 
@@ -681,8 +707,10 @@ function MainApp() {
 // Export App wrapped with AuthProvider
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

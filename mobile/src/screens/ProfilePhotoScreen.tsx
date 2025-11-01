@@ -5,7 +5,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../services/storage';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CIRCLE_SIZE = 280;
@@ -233,9 +233,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       }
 
       // Get auth token
-      const token = Platform.OS === 'web' 
-        ? localStorage.getItem('authToken')
-        : await SecureStore.getItemAsync('authToken');
+      const token = await storage.getItem('authToken');
       
       if (!token) {
         throw new Error('Not authenticated');

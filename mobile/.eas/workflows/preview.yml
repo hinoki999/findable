@@ -1,0 +1,38 @@
+# EAS Workflow: Auto-build Android preview on any branch push
+# This workflow automatically triggers an Android preview build whenever
+# code is pushed to ANY branch, generating a QR code for testing
+
+# Workflow name (displayed in Expo dashboard)
+name: Preview Build on Any Branch
+
+# Trigger: Run this workflow when code is pushed to any branch
+on:
+  push:
+    branches:
+      - '**'
+
+# Jobs: Define what builds to run
+jobs:
+  # Build job for Android preview
+  build:
+    # Job name shown in dashboard
+    name: Build Android Preview
+    
+    # Build type: creates installable app
+    type: build
+    
+    # Platform: Android only (iOS excluded for faster builds)
+    platform: android
+    
+    # Profile: Uses "preview" profile from eas.json
+    # This profile has "distribution": "internal" for testing
+    profile: preview
+    
+    # Auto-submit: false (manual testing via QR code)
+    autoSubmit: false
+    
+    # Notifications: EAS sends email notifications by default
+    # - Build started
+    # - Build completed successfully (with QR code)
+    # - Build failed (with error details)
+

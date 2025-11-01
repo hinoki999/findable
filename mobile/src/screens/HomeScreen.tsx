@@ -1,5 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
+import { PinchGestureHandler, RotationGestureHandler, State } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
@@ -554,10 +556,7 @@ export default function HomeScreen() {
   const [flashAnim] = useState(new Animated.Value(0));
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
-  const [incomingDrops, setIncomingDrops] = useState<{ name: string; text: string }[]>([
-    { name: 'Sarah Chen', text: 'just sent you a drop' },
-    { name: 'Alex Rivera', text: 'just sent you a drop' },
-  ]);
+  const [incomingDrops, setIncomingDrops] = useState<{ name: string; text: string }[]>([]);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
@@ -580,10 +579,8 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Gesture tracking for multi-touch
+  // Gesture tracking for pinch and rotation
   const gestureState = useRef({
-    initialDistance: 0,
-    initialRotation: 0,
     initialScale: 1,
     initialAngle: 0,
   }).current;
@@ -596,6 +593,9 @@ export default function HomeScreen() {
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
+  // Safe area insets for Android/iOS system UI
+  const insets = useSafeAreaInsets();
+  
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan } = useBLEScanner();
 
@@ -606,6 +606,10 @@ export default function HomeScreen() {
   });
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
+  
+  // Calculate available space after accounting for system UI
+  const availableHeight = screenHeight - insets.top - insets.bottom;
+  const availableWidth = screenWidth - insets.left - insets.right;
 
   // Listen for orientation changes and update dimensions
   useEffect(() => {
@@ -616,21 +620,30 @@ export default function HomeScreen() {
     return () => subscription?.remove();
   }, []);
   
-  // MATHEMATICAL CONSTANTS FOR NUCLEUS POSITIONING
-  const BOTTOM_NAV_HEIGHT = 60; // Height of bottom navigation bar (pixels)
+  // MATHEMATICAL CONSTANTS FOR UI LAYOUT
+  const TOP_CONTROLS_HEIGHT = 80; // Height of top controls (discoverability toggle, reset view, etc.)
+  const BOTTOM_TABS_HEIGHT = 60; // Height of bottom navigation tabs
   const DROP_ICON_SIZE = 30; // Size of water drop icon (pixels)
   const MAX_RADIUS_FEET = 33; // Maximum radius in feet
+  const UI_PADDING = 16; // Padding for UI elements
   
-  // Calculate the viewable area (screen minus bottom nav)
-  const viewableHeight = screenHeight - BOTTOM_NAV_HEIGHT;
+  // Calculate radar size (square, scaled to fit available space)
+  const radarAvailableHeight = availableHeight - TOP_CONTROLS_HEIGHT - BOTTOM_TABS_HEIGHT - (UI_PADDING * 2);
+  const radarSize = Math.min(radarAvailableHeight, availableWidth - (UI_PADDING * 2));
   
-  // Calculate the NUCLEUS (origin point 0,0) - center of viewable area
+  // Calculate the viewable area for backwards compatibility
+  const viewableHeight = screenHeight - BOTTOM_TABS_HEIGHT;
+  
+  // Calculate the NUCLEUS (origin point 0,0) - center of radar area
   const nucleusX = screenWidth / 2; // Exact horizontal center
-  const nucleusY = viewableHeight / 2; // Exact vertical center of viewable area
+  const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
   const iconOffsetY = DROP_ICON_SIZE / 2; // 15 pixels
+  
+  // Update grid spacing to scale with radar size
+  const PIXELS_PER_FOOT = radarSize / (MAX_RADIUS_FEET * 2);
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
@@ -677,56 +690,50 @@ export default function HomeScreen() {
     {
       message: 'Welcome to DropLink! This is your home screen where you\'ll see nearby users.',
       position: {
-        top: 80,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
       message: 'When people are nearby (within 33 feet), they\'ll appear as green dots. The dots pulsate faster when they\'re closer. Tap any dot to connect!',
       position: {
-        top: screenHeight * 0.4,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
-      message: 'Toggle your visibility here. Active = Discoverable, Ghost = Invisible to others.',
+      message: 'This toggle controls your visibility mode. When active (green), you\'re discoverable and others can see you on their radar. When off (ghost mode), you\'re invisible to everyone nearby.',
       position: {
-        top: 70,
-        left: 20,
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30,
       },
-      arrow: 'up' as const,
-      arrowOffset: 15, // Position arrow 15px from left to center on toggle button
     },
     {
       message: 'Use 2-finger pinch to zoom in/out and rotate the grid view for better visibility.',
       position: {
-        top: screenHeight * 0.4,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
       message: 'Tap the notification icon at the bottom to see drop requests and link notifications when you receive them.',
       position: {
-        top: screenHeight * 0.54,
-        left: screenWidth * 0.15,
-        right: screenWidth * 0.15,
+        top: screenHeight * 0.45,
+        left: 30,
+        right: 30,
       },
-      arrow: 'up' as const,
     },
     {
       message: "You're all set! Swipe left to explore the Drop page and start connecting with nearby people. Happy dropping!",
       position: {
-        bottom: 120,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: 'right' as const,
     },
   ];
 
@@ -755,8 +762,8 @@ export default function HomeScreen() {
   // Spatial tensor tracking for all devices (position, velocity, acceleration)
   const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
 
-  // Map device to 2D position with ACCURATE grid snapping (1 ft intervals)
-  const GRID_SPACING_FEET = 1; // Must match grid configuration
+  // Map device to 2D position with ACCURATE grid snapping (1.5 ft intervals)
+  const GRID_SPACING_FEET = 1.5; // Must match grid configuration
   
   const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
@@ -976,67 +983,39 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== MULTI-TOUCH GESTURE HANDLER (ROTATION & ZOOM) ==========
+  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  // Helper: Calculate distance between two touch points
-  const getTouchDistance = (touches: any[]) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].pageX - touches[1].pageX;
-    const dy = touches[0].pageY - touches[1].pageY;
-    return Math.sqrt(dx * dx + dy * dy);
+  // Pinch gesture handler - for zoom
+  const onPinchGestureEvent = (event: any) => {
+    const scale = event.nativeEvent.scale * gestureState.initialScale;
+    
+    // Constrain zoom: 0.5x to 3x
+    const constrainedScale = Math.max(0.5, Math.min(3, scale));
+    setViewScale(constrainedScale);
+    scaleAnimValue.setValue(constrainedScale);
   };
-
-  // Helper: Calculate angle between two touch points
-  const getTouchAngle = (touches: any[]) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[1].pageX - touches[0].pageX;
-    const dy = touches[1].pageY - touches[0].pageY;
-    return Math.atan2(dy, dx);
+  
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      gestureState.initialScale = viewScale;
+    }
   };
-
-  // Multi-touch gesture responder (pinch zoom + rotation)
-  const gestureResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
-      onMoveShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
-      
-      onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          gestureState.initialDistance = getTouchDistance(touches);
-          gestureState.initialRotation = getTouchAngle(touches);
-          gestureState.initialScale = viewScale;
-          gestureState.initialAngle = viewRotation;
-        }
-      },
-      
-      onPanResponderMove: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          // Calculate pinch zoom
-          const currentDistance = getTouchDistance(touches);
-          const scale = (currentDistance / gestureState.initialDistance) * gestureState.initialScale;
-          
-          // Constrain zoom: 0.5x to 3x
-          const constrainedScale = Math.max(0.5, Math.min(3, scale));
-          setViewScale(constrainedScale);
-          scaleAnimValue.setValue(constrainedScale);
-          
-          // Calculate rotation
-          const currentAngle = getTouchAngle(touches);
-          const rotation = currentAngle - gestureState.initialRotation + gestureState.initialAngle;
-          setViewRotation(rotation);
-          rotationAnimValue.setValue(rotation);
-        }
-      },
-      
-      onPanResponderRelease: () => {
-        // Optionally snap to nearest 45° angle
-        // const snappedRotation = Math.round(viewRotation / (Math.PI / 4)) * (Math.PI / 4);
-        // setViewRotation(snappedRotation);
-      },
-    })
-  ).current;
+  
+  // Rotation gesture handler
+  const onRotationGestureEvent = (event: any) => {
+    const rotation = event.nativeEvent.rotation + gestureState.initialAngle;
+    setViewRotation(rotation);
+    rotationAnimValue.setValue(rotation);
+  };
+  
+  const onRotationHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      gestureState.initialAngle = viewRotation;
+    } else if (event.nativeEvent.state === State.END) {
+      // Update initial angle for next gesture
+      gestureState.initialAngle = viewRotation;
+    }
+  };
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -1349,18 +1328,25 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <View 
-        {...gestureResponder.panHandlers}
-        style={{ 
-        position: 'absolute', 
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-        }}
-        pointerEvents="box-none"
+      <RotationGestureHandler
+        onGestureEvent={onRotationGestureEvent}
+        onHandlerStateChange={onRotationHandlerStateChange}
       >
+        <PinchGestureHandler
+          onGestureEvent={onPinchGestureEvent}
+          onHandlerStateChange={onPinchHandlerStateChange}
+        >
+          <Animated.View 
+            style={{ 
+            position: 'absolute', 
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 0,
+            }}
+            pointerEvents="box-none"
+          >
         {(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
@@ -1369,8 +1355,8 @@ export default function HomeScreen() {
           // Sphere radius extended to cover entire screen for full background grid
           const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Full screen coverage
           
-          // Grid Configuration - 1 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
-          const GRID_SPACING_FEET = 1; // Grid every 1 foot for precise distance mapping
+          // Grid Configuration - 1.5 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
+          const GRID_SPACING_FEET = 1.5; // Grid every 1.5 feet for precise distance mapping
           const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
           const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
           const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
@@ -1451,7 +1437,7 @@ export default function HomeScreen() {
                         top: nucleusY + start.y,
                         width: length,
                         height: 1,
-              backgroundColor: '#5BA3FF',
+              backgroundColor: '#00D4FF',
                         opacity,
                         transform: [{ rotate: `${angle}rad` }],
                         transformOrigin: 'top left',
@@ -1504,7 +1490,7 @@ export default function HomeScreen() {
                         top: nucleusY + start.y,
                         width: length,
                         height: 1,
-                        backgroundColor: '#5BA3FF',
+                        backgroundColor: '#00D4FF',
                         opacity,
                         transform: [{ rotate: `${angle}rad` }],
                         transformOrigin: 'top left',
@@ -1517,7 +1503,9 @@ export default function HomeScreen() {
             </>
           );
         })()}
-      </View>
+          </Animated.View>
+        </PinchGestureHandler>
+      </RotationGestureHandler>
 
       {/* Pulsating Blips for Nearby Devices - Outside grid container for better touch handling */}
       <View 
@@ -1584,31 +1572,14 @@ export default function HomeScreen() {
               left: 0,
               right: 0,
               alignItems: 'center',
-              paddingHorizontal: 40,
             }}
             pointerEvents="none"
           >
-            <MaterialCommunityIcons 
-              name="account-search-outline" 
-              size={56} 
-              color={theme.colors.muted} 
-              style={{ marginBottom: 16, opacity: 0.6 }} 
-            />
-            <Text style={[theme.type.h2, { 
-              textAlign: 'center', 
-              marginBottom: 8, 
-              fontSize: 17,
-              color: theme.colors.text,
-            }]}>
-              No DropLink users nearby
-            </Text>
             <Text style={[theme.type.muted, { 
               textAlign: 'center', 
-              fontSize: 14, 
-              lineHeight: 20,
-              opacity: 0.8,
+              fontSize: 15,
             }]}>
-              Keep your app open to stay discoverable. New connections will appear as green dots on your grid!
+              No drops nearby
             </Text>
           </View>
         )}
@@ -1627,7 +1598,7 @@ export default function HomeScreen() {
         }
         scrollEnabled={false}
       >
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: typeof window !== 'undefined' ? window.innerHeight : 800 }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: Dimensions.get('window').height || 800 }}>
         {/* Background overlay to close expanded cards and quick actions when clicking outside */}
         {(expandedCardId !== null || activeQuickActionCardId !== null) && (
           <Pressable
@@ -1932,7 +1903,7 @@ export default function HomeScreen() {
               height: 60,
               borderRadius: 30,
                 borderWidth: 2,
-                borderColor: '#007AFF',
+                borderColor: theme.colors.green,
                 opacity: rippleAnim.interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, 0.3],
@@ -1947,7 +1918,7 @@ export default function HomeScreen() {
             />
             
           <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons name="water" size={30} color="#007AFF" />
+            <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
             
             {/* Link notification badge */}
             {hasUnviewedLinks && (
@@ -1978,7 +1949,7 @@ export default function HomeScreen() {
       <View 
         style={{
           position: 'absolute',
-          top: 20,
+          top: insets.top + 8,
           right: 8,
           zIndex: 999,
           flexDirection: 'row',
@@ -1998,36 +1969,65 @@ export default function HomeScreen() {
             }}
             style={{
               borderWidth: 1,
-              borderColor: '#007AFF',
+              borderColor: theme.colors.green,
               borderRadius: 6,
               paddingHorizontal: 8,
               paddingVertical: 4,
             }}
           >
-            <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
+            <Text style={{ color: theme.colors.green, fontSize: 11, fontWeight: '600' }}>
               Reset View
             </Text>
           </Pressable>
         </View>
         
-        {/* Zoom & Rotation Display */}
+        {/* Zoom & Rotation Indicators (visual feedback only) */}
         <View 
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            paddingHorizontal: 10,
-            paddingVertical: 6,
-            borderRadius: 12,
             flexDirection: 'row',
-            gap: 12,
+            gap: 8,
           }}
           pointerEvents="none"
         >
-          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
-            Zoom: {viewScale.toFixed(2)}x
-          </Text>
-          <Text style={{ color: '#007AFF', fontSize: 11, fontWeight: '600' }}>
-            Rotate: {(viewRotation * 180 / Math.PI).toFixed(0)}°
-          </Text>
+          {/* Zoom Indicator - illuminates when zoom is NOT 1x */}
+          <View 
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
+            }}
+          >
+            <Text style={{ 
+              color: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
+              fontSize: 11, 
+              fontWeight: '600' 
+            }}>
+              Zoom
+            </Text>
+          </View>
+
+          {/* Rotate Indicator - illuminates when rotation is NOT 0° */}
+          <View 
+            style={{
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
+            }}
+          >
+            <Text style={{ 
+              color: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
+              fontSize: 11, 
+              fontWeight: '600' 
+            }}>
+              Rotate
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -2035,7 +2035,7 @@ export default function HomeScreen() {
       <View 
         style={{ 
           position: 'absolute',
-          top: 20,
+          top: insets.top + 8,
           left: 20,
           zIndex: 999,
         }}
@@ -2047,7 +2047,7 @@ export default function HomeScreen() {
               width: 40,
               height: 22,
               borderRadius: 11,
-                  backgroundColor: isDiscoverable ? '#E5F2FF' : '#F0F0F0',
+                  backgroundColor: isDiscoverable ? theme.colors.greenLight : '#F0F0F0',
                   padding: 2,
                   justifyContent: 'center',
                 }}>
@@ -2055,7 +2055,7 @@ export default function HomeScreen() {
                 width: 18,
                 height: 18,
                 borderRadius: 9,
-                    backgroundColor: isDiscoverable ? '#007AFF' : '#FFFFFF',
+                    backgroundColor: isDiscoverable ? theme.colors.green : '#FFFFFF',
                 transform: [{ translateX: isDiscoverable ? 18 : 0 }],
                   }} />
                 </View>
@@ -2068,7 +2068,7 @@ export default function HomeScreen() {
             width: 18,
               }}>
                 {isDiscoverable ? (
-              <MaterialCommunityIcons name="flash-outline" size={14} color="#007AFF" />
+              <MaterialCommunityIcons name="flash-outline" size={14} color={theme.colors.green} />
                 ) : (
               <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
                 )}
@@ -2248,7 +2248,7 @@ export default function HomeScreen() {
               {/* Incoming Drops Section */}
               {incomingDrops.length > 0 && (
                 <View style={{ marginBottom: 10 }}>
-                  <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: '#007AFF' }]}>
+                  <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
                     💧 Incoming Drops
                   </Text>
                 </View>
@@ -3013,7 +3013,7 @@ export default function HomeScreen() {
             <MaterialCommunityIcons 
               name={pendingDiscoverableState ? 'flash' : 'ghost'} 
               size={28} 
-              color={pendingDiscoverableState ? '#007AFF' : '#8E8E93'} 
+              color={pendingDiscoverableState ? theme.colors.green : '#8E8E93'} 
               style={{ marginBottom: 8 }}
             />
             <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
@@ -3045,7 +3045,7 @@ export default function HomeScreen() {
                 onPress={confirmToggleChange}
                 style={{
                   flex: 1,
-                  backgroundColor: pendingDiscoverableState ? '#007AFF' : '#8E8E93',
+                  backgroundColor: pendingDiscoverableState ? theme.colors.green : '#8E8E93',
                   paddingVertical: 8,
                   borderRadius: 6,
                 }}
@@ -3061,14 +3061,16 @@ export default function HomeScreen() {
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
-        <TutorialOverlay
-          step={tutorialSteps[currentStep - 1]}
-          currentStepNumber={currentStep}
-          totalSteps={totalSteps}
-          onNext={nextStep}
-          onBack={prevStep}
-          onSkip={skipTutorial}
-        />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} pointerEvents="box-none">
+          <TutorialOverlay
+            step={tutorialSteps[currentStep - 1]}
+            currentStepNumber={currentStep}
+            totalSteps={totalSteps}
+            onNext={nextStep}
+            onBack={prevStep}
+            onSkip={skipTutorial}
+          />
+        </View>
       )}
     </Animated.View>
   );

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 
 export interface NetworkState {
   isConnected: boolean;
   isInternetReachable: boolean | null;
 }
 
-// Simple network detection hook
+// Network detection hook with platform-specific implementations
 export function useNetworkStatus(): NetworkState {
   const [networkState, setNetworkState] = useState<NetworkState>({
     isConnected: true,
@@ -45,9 +46,27 @@ export function useNetworkStatus(): NetworkState {
       };
     }
 
-    // For native, would use @react-native-community/netinfo
-    // For now, assume connected on native
-    return () => {};
+    // For native platforms (iOS/Android), use NetInfo
+    // Fetch initial network state
+    NetInfo.fetch().then(state => {
+      setNetworkState({
+        isConnected: state.isConnected ?? false,
+        isInternetReachable: state.isInternetReachable ?? null,
+      });
+    });
+
+    // Subscribe to network state changes
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setNetworkState({
+        isConnected: state.isConnected ?? false,
+        isInternetReachable: state.isInternetReachable ?? null,
+      });
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   return networkState;

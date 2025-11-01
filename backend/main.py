@@ -109,10 +109,6 @@ cloudinary.config(
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@droplinkconnect.com")
 
-# Temporary storage for verification codes (email -> {code, expires_at})
-# In production, use Redis or database
-verification_codes = {}
-
 # Security Headers Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -357,6 +353,24 @@ def init_db():
             timestamp {timestamp_default}
         )
     ''')
+    
+    # Verification codes table (for email/SMS verification codes)
+    try:
+        cursor.execute(f'''
+            CREATE TABLE IF NOT EXISTS verification_codes (
+                id {auto_id},
+                email {text} NOT NULL,
+                code {text} NOT NULL,
+                code_type {text} NOT NULL,
+                expires_at {text} NOT NULL,
+                created_at {timestamp_default}
+            )
+        ''')
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        # Table/type already exists - this is fine
+        print(f"verification_codes table creation skipped (may already exist): {e}")
     
     conn.commit()
     conn.close()
@@ -1249,19 +1263,21 @@ def register(register_request: RegisterRequest, request: Request):
             )
             raise HTTPException(status_code=400, detail="Username already taken")
         
-        # Check if email already exists
+        # Check if email already exists (skip for testing email)
         if register_request.email:
-            execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
-            existing_email = cursor.fetchone()
-            if existing_email:
-                conn.close()
-                log_audit_event(
-                    action="registration_failed",
-                    details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
-                    ip_address=ip_address,
-                    user_agent=user_agent
-                )
-                raise HTTPException(status_code=400, detail="An account with this email already exists")
+            # Allow testing email to be reused infinitely
+            if register_request.email.lower() != "caitie690@gmail.com":
+                execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
+                existing_email = cursor.fetchone()
+                if existing_email:
+                    conn.close()
+                    log_audit_event(
+                        action="registration_failed",
+                        details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+                    raise HTTPException(status_code=400, detail="An account with this email already exists")
         
         # Hash password and create user (store username in lowercase)
         password_hash = hash_password(register_request.password)
@@ -1673,12 +1689,24 @@ def send_verification_code(request: SendVerificationCodeRequest):
         # Generate 6-digit code
         code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         
-        # Store code with expiration (10 minutes)
-        expires_at = datetime.now() + timedelta(minutes=10)
-        verification_codes[email] = {
-            'code': code,
-            'expires_at': expires_at
-        }
+        # Store code in database with expiration (10 minutes)
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
+        
+        # Delete any existing codes for this email
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ?", (email,))
+        
+        # Insert new code
+        execute_query(
+            cursor,
+            "INSERT INTO verification_codes (email, code, code_type, expires_at) VALUES (?, ?, ?, ?)",
+            (email, code, 'registration', expires_at)
+        )
+        
+        conn.commit()
+        conn.close()
         
         # Send email (or log if SendGrid not configured)
         send_verification_email(email, code)
@@ -1701,23 +1729,43 @@ def verify_code(request: VerifyCodeRequest):
         email = request.email.lower().strip()
         code = request.code.strip()
         
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
         # Check if code exists for this email
-        if email not in verification_codes:
+        execute_query(
+            cursor,
+            "SELECT code, expires_at FROM verification_codes WHERE email = ? AND code_type = ? ORDER BY created_at DESC LIMIT 1",
+            (email, 'registration')
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
             raise HTTPException(status_code=400, detail="No verification code found for this email")
         
-        stored_data = verification_codes[email]
+        stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
+        expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
+        
+        # Parse expiration time
+        expires_at = datetime.fromisoformat(expires_at_str)
         
         # Check if code has expired
-        if datetime.now() > stored_data['expires_at']:
-            del verification_codes[email]
+        if datetime.now() > expires_at:
+            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'registration'))
+            conn.commit()
+            conn.close()
             raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
         
         # Verify code
-        if stored_data['code'] != code:
+        if stored_code != code:
+            conn.close()
             raise HTTPException(status_code=400, detail="Invalid verification code")
         
-        # Code is valid, remove it from storage
-        del verification_codes[email]
+        # Code is valid, remove it from database
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'registration'))
+        conn.commit()
+        conn.close()
         
         return {
             "success": True,
@@ -1879,15 +1927,25 @@ def send_recovery_code(email: str, type: str):
         # Generate 6-digit code
         code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
         
-        # Store code with expiration (10 minutes) and recovery type
-        expires_at = datetime.now() + timedelta(minutes=10)
+        # Store code in database with expiration (10 minutes) and recovery type
+        conn2 = get_db_connection()
+        cursor2 = get_cursor(conn2)
+        
+        expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
         username_value = get_value(user, 'username') if isinstance(user, dict) else user[1]
-        verification_codes[f"recovery_{email}"] = {
-            'code': code,
-            'expires_at': expires_at,
-            'type': type,
-            'username': username_value
-        }
+        
+        # Delete any existing recovery codes for this email
+        execute_query(cursor2, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+        
+        # Insert new code (store username in email field for later retrieval)
+        execute_query(
+            cursor2,
+            "INSERT INTO verification_codes (email, code, code_type, expires_at) VALUES (?, ?, ?, ?)",
+            (email, code, f'recovery_{type}', expires_at)
+        )
+        
+        conn2.commit()
+        conn2.close()
         
         # Send email (or log if SendGrid not configured)
         subject = 'DropLink - Password Reset Code' if type == 'password' else 'DropLink - Username Recovery Code'
@@ -1911,31 +1969,55 @@ def verify_recovery_code(email: str, code: str, type: str):
         email = email.lower().strip()
         code = code.strip()
         
-        key = f"recovery_{email}"
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Check if code exists for this email
-        if key not in verification_codes:
+        execute_query(
+            cursor,
+            "SELECT code, expires_at FROM verification_codes WHERE email = ? AND code_type = ? ORDER BY created_at DESC LIMIT 1",
+            (email, f'recovery_{type}')
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
             raise HTTPException(status_code=400, detail="No recovery code found for this email")
         
-        stored_data = verification_codes[key]
+        stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
+        expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
+        
+        # Parse expiration time
+        expires_at = datetime.fromisoformat(expires_at_str)
         
         # Check if code has expired
-        if datetime.now() > stored_data['expires_at']:
-            del verification_codes[key]
+        if datetime.now() > expires_at:
+            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+            conn.commit()
+            conn.close()
             raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
         
         # Verify code
-        if stored_data['code'] != code:
+        if stored_code != code:
+            conn.close()
             raise HTTPException(status_code=400, detail="Invalid recovery code")
         
-        # Verify type matches
-        if stored_data['type'] != type:
-            raise HTTPException(status_code=400, detail="Invalid recovery type")
-        
-        # For username recovery, return username and delete code
+        # For username recovery, get username and delete code
         if type == 'username':
-            username = stored_data['username']
-            del verification_codes[key]
+            # Get username from users table
+            execute_query(cursor, "SELECT username FROM users WHERE email = ?", (email,))
+            user_row = cursor.fetchone()
+            if not user_row:
+                conn.close()
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            username = get_value(user_row, 'username' if USE_POSTGRES else 0)
+            
+            # Delete code
+            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+            conn.commit()
+            conn.close()
+            
             return {
                 "success": True,
                 "username": username,
@@ -1943,6 +2025,7 @@ def verify_recovery_code(email: str, code: str, type: str):
             }
         
         # For password recovery, keep code for password reset step
+        conn.close()
         return {
             "success": True,
             "message": "Code verified successfully"
@@ -1960,26 +2043,38 @@ def reset_password(email: str, code: str, new_password: str):
         email = email.lower().strip()
         code = code.strip()
         
-        key = f"recovery_{email}"
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
         
         # Check if code exists for this email
-        if key not in verification_codes:
+        execute_query(
+            cursor,
+            "SELECT code, expires_at FROM verification_codes WHERE email = ? AND code_type = ? ORDER BY created_at DESC LIMIT 1",
+            (email, 'recovery_password')
+        )
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
             raise HTTPException(status_code=400, detail="No recovery code found. Please request a new code.")
         
-        stored_data = verification_codes[key]
+        stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
+        expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
+        
+        # Parse expiration time
+        expires_at = datetime.fromisoformat(expires_at_str)
         
         # Check if code has expired
-        if datetime.now() > stored_data['expires_at']:
-            del verification_codes[key]
+        if datetime.now() > expires_at:
+            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'recovery_password'))
+            conn.commit()
+            conn.close()
             raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
         
         # Verify code
-        if stored_data['code'] != code:
+        if stored_code != code:
+            conn.close()
             raise HTTPException(status_code=400, detail="Invalid recovery code")
-        
-        # Verify type is password
-        if stored_data['type'] != 'password':
-            raise HTTPException(status_code=400, detail="Invalid recovery type")
         
         # Validate new password
         if len(new_password) < 8:
@@ -1998,16 +2093,14 @@ def reset_password(email: str, code: str, new_password: str):
             raise HTTPException(status_code=400, detail="Password must contain at least one special character")
         
         # Update password
-        conn = get_db_connection()
-        cursor = get_cursor(conn)
-        
         new_hash = hash_password(new_password)
         execute_query(cursor, "UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
+        
+        # Delete the used code from database
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'recovery_password'))
+        
         conn.commit()
         conn.close()
-        
-        # Delete the used code
-        del verification_codes[key]
         
         return {
             "success": True,
@@ -2453,6 +2546,18 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
             )
         ''')
         
+        # Clean up phone number - strip all non-numeric characters
+        # Frontend may send: "(555) 123-4567" -> convert to: "5551234567"
+        if profile.get('phone'):
+            import re
+            phone_cleaned = re.sub(r'\D', '', profile.get('phone'))
+            profile['phone'] = phone_cleaned if phone_cleaned else None
+        
+        # Clean up bio - convert placeholder text to empty string
+        # Frontend may send: "Add bio" -> convert to: ""
+        if profile.get('bio') == 'Add bio':
+            profile['bio'] = ''
+        
         # Check if phone number is already used by another user
         if profile.get('phone'):
             execute_query(cursor, '''
@@ -2464,16 +2569,18 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 conn.close()
                 raise HTTPException(status_code=400, detail="This phone number is already associated with another account")
         
-        # Check if email is already used by another user (in users table)
+        # Check if email is already used by another user (in users table, skip for testing email)
         if profile.get('email'):
-            execute_query(cursor, '''
-                SELECT id FROM users 
-                WHERE LOWER(email) = ? AND id != ?
-            ''', (profile.get('email').lower(), user_id))
-            existing_email = cursor.fetchone()
-            if existing_email:
-                conn.close()
-                raise HTTPException(status_code=400, detail="This email is already associated with another account")
+            # Allow testing email to be reused infinitely
+            if profile.get('email').lower() != "caitie690@gmail.com":
+                execute_query(cursor, '''
+                    SELECT id FROM users 
+                    WHERE LOWER(email) = ? AND id != ?
+                ''', (profile.get('email').lower(), user_id))
+                existing_email = cursor.fetchone()
+                if existing_email:
+                    conn.close()
+                    raise HTTPException(status_code=400, detail="This email is already associated with another account")
         
         # Prepare social_media JSON
         social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
