@@ -3070,14 +3070,16 @@ export default function HomeScreen() {
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
-        <TutorialOverlay
-          step={tutorialSteps[currentStep - 1]}
-          currentStepNumber={currentStep}
-          totalSteps={totalSteps}
-          onNext={nextStep}
-          onBack={prevStep}
-          onSkip={skipTutorial}
-        />
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} pointerEvents="box-none">
+          <TutorialOverlay
+            step={tutorialSteps[currentStep - 1]}
+            currentStepNumber={currentStep}
+            totalSteps={totalSteps}
+            onNext={nextStep}
+            onBack={prevStep}
+            onSkip={skipTutorial}
+          />
+        </View>
       )}
     </Animated.View>
   );
