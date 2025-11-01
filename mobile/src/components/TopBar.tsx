@@ -5,13 +5,15 @@ import { colors, type, getTheme } from '../theme';
 import { useDarkMode } from '../../App';
 
 interface TopBarProps {
-  title: string;
-  rightIcon?: string;
+  title?: string;
+  rightIcon?: any;
   onRightIconPress?: () => void;
   subtitle?: string;
+  logoMode?: boolean; // If true, displays "Drop" in orange + "Link" in blue
+  logoIcon?: any; // Icon to display next to logo (e.g., "water-outline", "link-variant", "account-outline")
 }
 
-export default function TopBar({ title, rightIcon, onRightIconPress, subtitle }: TopBarProps) {
+export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, logoMode, logoIcon }: TopBarProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
   
@@ -26,17 +28,63 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle }:
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <View style={{ alignItems: 'center' }}>
-        <Text style={{ ...theme.type.title, textAlign:'center' }}>{title}</Text>
-        {subtitle && (
-          <Text style={{ 
-            fontSize: 11, 
-            color: theme.colors.muted, 
-            fontFamily: 'Inter_400Regular',
-            marginTop: 2,
-          }}>
-            {subtitle}
-          </Text>
+      <View style={{ alignItems: 'center', flexDirection: 'column', gap: 2 }}>
+        {logoMode ? (
+          <>
+            {/* DropLink Logo with Icon */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#FF6B4A', // Orange
+                  letterSpacing: -0.5,
+                }}>
+                  Drop
+                </Text>
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#4A90FF', // Blue
+                  letterSpacing: -0.5,
+                }}>
+                  Link
+                </Text>
+              </View>
+              {/* Logo Icon */}
+              {logoIcon && (
+                <MaterialCommunityIcons 
+                  name={logoIcon as any} 
+                  size={24} 
+                  color={theme.colors.blue} 
+                />
+              )}
+            </View>
+            {/* Subtitle below logo */}
+            {subtitle && (
+              <Text style={{ 
+                fontSize: 11, 
+                color: theme.colors.muted, 
+                fontFamily: 'Inter_400Regular',
+              }}>
+                {subtitle}
+              </Text>
+            )}
+          </>
+        ) : (
+          <>
+            <Text style={{ ...theme.type.title, textAlign:'center' }}>{title}</Text>
+            {subtitle && (
+              <Text style={{ 
+                fontSize: 11, 
+                color: theme.colors.muted, 
+                fontFamily: 'Inter_400Regular',
+                marginTop: 2,
+              }}>
+                {subtitle}
+              </Text>
+            )}
+          </>
         )}
       </View>
       

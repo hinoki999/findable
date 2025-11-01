@@ -155,7 +155,7 @@ export default function DropScreen() {
 
   return (
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
-      <TopBar title="Drop" />
+      <TopBar logoMode={true} logoIcon="water-outline" />
       
       {/* Floating Contact Card Notification */}
       {incomingDrop && (

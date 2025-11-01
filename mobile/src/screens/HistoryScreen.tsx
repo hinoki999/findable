@@ -8,6 +8,7 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import SwipeableRow from '../components/SwipeableRow';
+import TopBar from '../components/TopBar';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -251,6 +252,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <TopBar logoMode={true} logoIcon="link-variant" />
       <NetworkBanner isDarkMode={isDarkMode} />
       <FlatList
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -258,14 +260,6 @@ export default function HistoryScreen() {
         keyExtractor={(item, i) => String(item.id ?? i)}
         ListHeaderComponent={
           <>
-            <View style={{ alignItems: 'center', paddingVertical: 8, paddingTop: 16 }}>
-              <MaterialCommunityIcons
-                name="link-variant"
-                size={28}
-                color="#FF6B4A"
-              />
-            </View>
-            
             {/* Search Bar */}
             <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
               <View style={{

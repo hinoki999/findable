@@ -315,7 +315,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <TopBar 
-        title="Account" 
+        logoMode={true}
+        logoIcon="account-outline"
         subtitle={`@${username || 'user'}`}
         rightIcon="cog"
         onRightIconPress={() => navigation.navigate('SecuritySettings')}
