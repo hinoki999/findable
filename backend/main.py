@@ -2546,6 +2546,18 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
             )
         ''')
         
+        # Clean up phone number - strip all non-numeric characters
+        # Frontend may send: "(555) 123-4567" -> convert to: "5551234567"
+        if profile.get('phone'):
+            import re
+            phone_cleaned = re.sub(r'\D', '', profile.get('phone'))
+            profile['phone'] = phone_cleaned if phone_cleaned else None
+        
+        # Clean up bio - convert placeholder text to empty string
+        # Frontend may send: "Add bio" -> convert to: ""
+        if profile.get('bio') == 'Add bio':
+            profile['bio'] = ''
+        
         # Check if phone number is already used by another user
         if profile.get('phone'):
             execute_query(cursor, '''

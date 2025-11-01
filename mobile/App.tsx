@@ -391,8 +391,10 @@ function MainApp() {
         socialMedia: newProfile.socialMedia,
       });
       console.log('✅ Profile saved to backend:', newProfile);
+      showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
     } catch (error) {
       console.error('❌ Failed to save profile:', error);
+      showToast({ message: 'Failed to save profile', type: 'error', duration: 3000 });
     }
   };
 
