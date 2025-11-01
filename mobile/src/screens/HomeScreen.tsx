@@ -1,6 +1,7 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { PinchGestureHandler, RotationGestureHandler, State } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
@@ -595,6 +596,9 @@ export default function HomeScreen() {
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
+  // Safe area insets for Android/iOS system UI
+  const insets = useSafeAreaInsets();
+  
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan } = useBLEScanner();
 
@@ -605,6 +609,10 @@ export default function HomeScreen() {
   });
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
+  
+  // Calculate available space after accounting for system UI
+  const availableHeight = screenHeight - insets.top - insets.bottom;
+  const availableWidth = screenWidth - insets.left - insets.right;
 
   // Listen for orientation changes and update dimensions
   useEffect(() => {
@@ -615,21 +623,30 @@ export default function HomeScreen() {
     return () => subscription?.remove();
   }, []);
   
-  // MATHEMATICAL CONSTANTS FOR NUCLEUS POSITIONING
-  const BOTTOM_NAV_HEIGHT = 60; // Height of bottom navigation bar (pixels)
+  // MATHEMATICAL CONSTANTS FOR UI LAYOUT
+  const TOP_CONTROLS_HEIGHT = 80; // Height of top controls (discoverability toggle, reset view, etc.)
+  const BOTTOM_TABS_HEIGHT = 60; // Height of bottom navigation tabs
   const DROP_ICON_SIZE = 30; // Size of water drop icon (pixels)
   const MAX_RADIUS_FEET = 33; // Maximum radius in feet
+  const UI_PADDING = 16; // Padding for UI elements
   
-  // Calculate the viewable area (screen minus bottom nav)
-  const viewableHeight = screenHeight - BOTTOM_NAV_HEIGHT;
+  // Calculate radar size (square, scaled to fit available space)
+  const radarAvailableHeight = availableHeight - TOP_CONTROLS_HEIGHT - BOTTOM_TABS_HEIGHT - (UI_PADDING * 2);
+  const radarSize = Math.min(radarAvailableHeight, availableWidth - (UI_PADDING * 2));
   
-  // Calculate the NUCLEUS (origin point 0,0) - center of viewable area
+  // Calculate the viewable area for backwards compatibility
+  const viewableHeight = screenHeight - BOTTOM_TABS_HEIGHT;
+  
+  // Calculate the NUCLEUS (origin point 0,0) - center of radar area
   const nucleusX = screenWidth / 2; // Exact horizontal center
-  const nucleusY = viewableHeight / 2; // Exact vertical center of viewable area
+  const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
   const iconOffsetY = DROP_ICON_SIZE / 2; // 15 pixels
+  
+  // Update grid spacing to scale with radar size
+  const PIXELS_PER_FOOT = radarSize / (MAX_RADIUS_FEET * 2);
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
@@ -1941,7 +1958,7 @@ export default function HomeScreen() {
       <View 
         style={{
           position: 'absolute',
-          top: 20,
+          top: insets.top + 8,
           right: 8,
           zIndex: 999,
           flexDirection: 'row',
@@ -2027,7 +2044,7 @@ export default function HomeScreen() {
       <View 
         style={{ 
           position: 'absolute',
-          top: 20,
+          top: insets.top + 8,
           left: 20,
           zIndex: 999,
         }}

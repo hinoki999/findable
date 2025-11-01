@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
@@ -694,8 +695,10 @@ function MainApp() {
 // Export App wrapped with AuthProvider
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

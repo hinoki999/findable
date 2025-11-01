@@ -1263,19 +1263,21 @@ def register(register_request: RegisterRequest, request: Request):
             )
             raise HTTPException(status_code=400, detail="Username already taken")
         
-        # Check if email already exists
+        # Check if email already exists (skip for testing email)
         if register_request.email:
-            execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
-            existing_email = cursor.fetchone()
-            if existing_email:
-                conn.close()
-                log_audit_event(
-                    action="registration_failed",
-                    details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
-                    ip_address=ip_address,
-                    user_agent=user_agent
-                )
-                raise HTTPException(status_code=400, detail="An account with this email already exists")
+            # Allow testing email to be reused infinitely
+            if register_request.email.lower() != "caitie690@gmail.com":
+                execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
+                existing_email = cursor.fetchone()
+                if existing_email:
+                    conn.close()
+                    log_audit_event(
+                        action="registration_failed",
+                        details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
+                        ip_address=ip_address,
+                        user_agent=user_agent
+                    )
+                    raise HTTPException(status_code=400, detail="An account with this email already exists")
         
         # Hash password and create user (store username in lowercase)
         password_hash = hash_password(register_request.password)
@@ -2555,16 +2557,18 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 conn.close()
                 raise HTTPException(status_code=400, detail="This phone number is already associated with another account")
         
-        # Check if email is already used by another user (in users table)
+        # Check if email is already used by another user (in users table, skip for testing email)
         if profile.get('email'):
-            execute_query(cursor, '''
-                SELECT id FROM users 
-                WHERE LOWER(email) = ? AND id != ?
-            ''', (profile.get('email').lower(), user_id))
-            existing_email = cursor.fetchone()
-            if existing_email:
-                conn.close()
-                raise HTTPException(status_code=400, detail="This email is already associated with another account")
+            # Allow testing email to be reused infinitely
+            if profile.get('email').lower() != "caitie690@gmail.com":
+                execute_query(cursor, '''
+                    SELECT id FROM users 
+                    WHERE LOWER(email) = ? AND id != ?
+                ''', (profile.get('email').lower(), user_id))
+                existing_email = cursor.fetchone()
+                if existing_email:
+                    conn.close()
+                    raise HTTPException(status_code=400, detail="This email is already associated with another account")
         
         # Prepare social_media JSON
         social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
