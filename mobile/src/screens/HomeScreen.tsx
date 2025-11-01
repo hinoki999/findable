@@ -556,10 +556,7 @@ export default function HomeScreen() {
   const [flashAnim] = useState(new Animated.Value(0));
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
-  const [incomingDrops, setIncomingDrops] = useState<{ name: string; text: string }[]>([
-    { name: 'Sarah Chen', text: 'just sent you a drop' },
-    { name: 'Alex Rivera', text: 'just sent you a drop' },
-  ]);
+  const [incomingDrops, setIncomingDrops] = useState<{ name: string; text: string }[]>([]);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
