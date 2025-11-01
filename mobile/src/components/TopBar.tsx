@@ -1,6 +1,7 @@
 ﻿import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, type, getTheme } from '../theme';
 import { useDarkMode } from '../../App';
 
@@ -31,25 +32,65 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
       <View style={{ alignItems: 'center', flexDirection: 'column', gap: 2 }}>
         {logoMode ? (
           <>
-            {/* DropLink Logo with Icon */}
+            {/* DropLink Logo with Gradient Effect */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* D - Full orange */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#FF6B4A', // Orange
+                  color: '#FF6B4A',
                   letterSpacing: -0.5,
-                }}>
-                  Drop
-                </Text>
+                }}>D</Text>
+                {/* r - Orange to red-orange */}
                 <Text style={{ 
                   fontSize: 22, 
                   fontFamily: 'Inter_600SemiBold', 
-                  color: '#4A90FF', // Blue
+                  color: '#FF6855',
                   letterSpacing: -0.5,
-                }}>
-                  Link
-                </Text>
+                }}>r</Text>
+                {/* o - Orange-purple transition */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#E8649E',
+                  letterSpacing: -0.5,
+                }}>o</Text>
+                {/* p - Purple transition */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#B975D5',
+                  letterSpacing: -0.5,
+                }}>p</Text>
+                {/* L - Blue-purple */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#8082E8',
+                  letterSpacing: -0.5,
+                }}>L</Text>
+                {/* i - Light blue */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#6589EE',
+                  letterSpacing: -0.5,
+                }}>i</Text>
+                {/* n - Blue */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#578CF4',
+                  letterSpacing: -0.5,
+                }}>n</Text>
+                {/* k - Full blue */}
+                <Text style={{ 
+                  fontSize: 22, 
+                  fontFamily: 'Inter_600SemiBold', 
+                  color: '#4A90FF',
+                  letterSpacing: -0.5,
+                }}>k</Text>
               </View>
               {/* Logo Icon */}
               {logoIcon && (
