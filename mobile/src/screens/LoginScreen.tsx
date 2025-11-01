@@ -254,7 +254,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                   setUsername(text);
                   setError('');
                 }}
-                placeholder="Username"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -277,7 +277,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                   setPassword(text);
                   setError('');
                 }}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -522,7 +522,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                     style={[styles.modalInput, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    placeholder="New password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showNewPassword}
                     autoCapitalize="none"
@@ -547,7 +547,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                     style={[styles.modalInput, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
                     value={confirmNewPassword}
                     onChangeText={setConfirmNewPassword}
-                    placeholder="Confirm password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showConfirmNewPassword}
                     autoCapitalize="none"

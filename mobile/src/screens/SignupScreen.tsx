@@ -412,7 +412,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={password}
                 onChangeText={validatePassword}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -452,7 +452,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={confirmPassword}
                 onChangeText={validateConfirmPassword}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
