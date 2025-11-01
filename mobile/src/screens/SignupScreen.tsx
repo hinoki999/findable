@@ -283,33 +283,39 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(data.detail || 'Registration failed');
       }
 
-      // Save profile information
-      if (name || phone || bio) {
-        // Strip phone formatting before sending to backend
-        const phoneDigitsOnly = phone.replace(/\D/g, '');
-        
-        const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.token}`
-          },
-          body: JSON.stringify({
-            name: name || '',
-            phone: phoneDigitsOnly || '',
-            email: email,
-            bio: bio || ''
-          }),
-        });
+      // Save profile information (always save, even if fields are empty)
+      // This ensures the profile record exists in the backend
+      const phoneDigitsOnly = phone.replace(/\D/g, '');
+      
+      console.log('💾 Saving profile data:', {
+        name: name || '',
+        phone: phoneDigitsOnly || '',
+        email: email,
+        bio: bio || ''
+      });
+      
+      const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.token}`
+        },
+        body: JSON.stringify({
+          name: name || '',
+          phone: phoneDigitsOnly || '',
+          email: email,
+          bio: bio || ''
+        }),
+      });
 
-        const profileData = await profileResponse.json();
-        
-        if (!profileResponse.ok) {
-          throw new Error(profileData.detail || 'Failed to save profile information');
-        }
-        
-        console.log('✅ Profile saved successfully');
+      const profileData = await profileResponse.json();
+      
+      if (!profileResponse.ok) {
+        console.error('❌ Profile save failed:', profileData);
+        throw new Error(profileData.detail || 'Failed to save profile information');
       }
+      
+      console.log('✅ Profile saved successfully:', profileData);
 
       // Success!
       setShowVerificationModal(false);

@@ -187,15 +187,18 @@ function MainApp() {
         console.log('🔍 Attempting to load profile data...');
         const profileData = await import('./src/services/api').then(m => m.getUserProfile());
         console.log('📦 Profile response:', profileData);
-        console.log('📦 Profile has data:', profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio));
         
-        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+        if (profileData) {
           console.log('✅ Setting profile state with:', {
             name: profileData.name,
             phone: profileData.phone,
             email: profileData.email,
-            bio: profileData.bio
+            bio: profileData.bio,
+            profile_photo: profileData.profile_photo
           });
+          
+          // Always set profile data, even if fields are empty
+          // This allows the backend to be the single source of truth
           setUserProfile({
             name: profileData.name || 'Your Name',
             phoneNumber: profileData.phone || '(555) 123-4567',
@@ -204,11 +207,16 @@ function MainApp() {
             socialMedia: profileData.socialMedia || [],
           });
           
-          // Load profile photo if exists
+          // Load profile photo if exists (moved outside conditional)
           if (profileData.profile_photo) {
             console.log('✅ Loaded profile photo:', profileData.profile_photo);
             setProfilePhotoUri(profileData.profile_photo);
+          } else {
+            console.log('ℹ️ No profile photo found');
+            setProfilePhotoUri(null);
           }
+        } else {
+          console.log('⚠️ Profile response was null/undefined');
         }
       } catch (error) {
         console.error('❌ Failed to load profile:', error);
