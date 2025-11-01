@@ -117,30 +117,6 @@ export default function DropScreen() {
     }
   };
 
-  // Simulate receiving a drop (you can trigger this manually for testing)
-  const simulateIncomingDrop = () => {
-    const mockDrops = [
-      { name: 'Sarah Chen', text: 'Wants to share their contact card.' },
-      { name: 'Alex Rivera', text: 'Interested in networking.' },
-      { name: 'Jordan Kim', text: 'Looking to connect professionally.' },
-    ];
-    const randomDrop = mockDrops[Math.floor(Math.random() * mockDrops.length)];
-    setIncomingDrop(randomDrop);
-    
-    // Trigger bounce animation
-    Animated.sequence([
-      Animated.timing(bounceAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(bounceAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
 
   const handleIncomingAction = async (action: 'accepted' | 'returned' | 'declined') => {
     if (incomingDrop) {
