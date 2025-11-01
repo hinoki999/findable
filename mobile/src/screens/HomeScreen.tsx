@@ -1564,31 +1564,14 @@ export default function HomeScreen() {
               left: 0,
               right: 0,
               alignItems: 'center',
-              paddingHorizontal: 40,
             }}
             pointerEvents="none"
           >
-            <MaterialCommunityIcons 
-              name="account-search-outline" 
-              size={56} 
-              color={theme.colors.muted} 
-              style={{ marginBottom: 16, opacity: 0.6 }} 
-            />
-            <Text style={[theme.type.h2, { 
-              textAlign: 'center', 
-              marginBottom: 8, 
-              fontSize: 17,
-              color: theme.colors.text,
-            }]}>
-              No DropLink users nearby
-            </Text>
             <Text style={[theme.type.muted, { 
               textAlign: 'center', 
-              fontSize: 14, 
-              lineHeight: 20,
-              opacity: 0.8,
+              fontSize: 15,
             }]}>
-              Keep your app open to stay discoverable. New connections will appear as green dots on your grid!
+              No drops nearby
             </Text>
           </View>
         )}
