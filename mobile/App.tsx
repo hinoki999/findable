@@ -182,22 +182,35 @@ function MainApp() {
       console.log('📥 Loading user data from backend...');
       
       // Load user profile
-      const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-      if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
-        console.log('✅ Loaded profile:', profileData);
-        setUserProfile({
-          name: profileData.name || 'Your Name',
-          phoneNumber: profileData.phone || '(555) 123-4567',
-          email: profileData.email || 'user@example.com',
-          bio: profileData.bio || 'Bio will display here once created.',
-          socialMedia: profileData.socialMedia || [],
-        });
+      try {
+        console.log('🔍 Attempting to load profile data...');
+        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+        console.log('📦 Profile response:', profileData);
+        console.log('📦 Profile has data:', profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio));
         
-        // Load profile photo if exists
-        if (profileData.profile_photo) {
-          console.log('✅ Loaded profile photo:', profileData.profile_photo);
-          setProfilePhotoUri(profileData.profile_photo);
+        if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
+          console.log('✅ Setting profile state with:', {
+            name: profileData.name,
+            phone: profileData.phone,
+            email: profileData.email,
+            bio: profileData.bio
+          });
+          setUserProfile({
+            name: profileData.name || 'Your Name',
+            phoneNumber: profileData.phone || '(555) 123-4567',
+            email: profileData.email || 'user@example.com',
+            bio: profileData.bio || 'Bio will display here once created.',
+            socialMedia: profileData.socialMedia || [],
+          });
+          
+          // Load profile photo if exists
+          if (profileData.profile_photo) {
+            console.log('✅ Loaded profile photo:', profileData.profile_photo);
+            setProfilePhotoUri(profileData.profile_photo);
+          }
         }
+      } catch (error) {
+        console.error('❌ Failed to load profile:', error);
       }
       
       // Load settings
