@@ -36,84 +36,17 @@ export default function TutorialOverlay({
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
 
-  const renderArrow = () => {
-    if (!step.arrow) return null;
-
-    const arrowStyle: any = {
-      position: 'absolute',
-      flexDirection: 'row',
-      alignItems: 'center',
-    };
-
-    let iconName = '';
-    
-    switch (step.arrow) {
-      case 'up':
-        iconName = 'arrow-up';
-        arrowStyle.top = -30;
-        if (step.arrowOffset !== undefined) {
-          // Use custom offset if provided
-          arrowStyle.left = step.arrowOffset;
-        } else {
-          // Default centered position
-          arrowStyle.left = '50%';
-          arrowStyle.marginLeft = -12;
-        }
-        break;
-      case 'down':
-        iconName = 'arrow-down';
-        arrowStyle.bottom = -30;
-        // Check arrow positioning based on toast position
-        if (step.position.right !== undefined && step.position.left !== undefined) {
-          // If both left and right are defined, check which side it's aligned to
-          if (step.position.left < step.position.right) {
-            // Left-aligned toast - arrow at bottom left
-            arrowStyle.left = 15;
-          } else {
-            // Right-aligned toast - arrow at bottom right
-            arrowStyle.right = 15;
-          }
-        } else if (step.position.right !== undefined && step.position.left === undefined) {
-          // Only right defined - arrow at bottom right
-          arrowStyle.right = 15;
-        } else {
-          // Centered arrow
-          arrowStyle.left = '50%';
-          arrowStyle.marginLeft = -12;
-        }
-        break;
-      case 'left':
-        iconName = 'arrow-left';
-        arrowStyle.left = -30;
-        arrowStyle.top = 20;
-        break;
-      case 'right':
-        iconName = 'arrow-right';
-        arrowStyle.right = -30;
-        arrowStyle.top = 20;
-        break;
-    }
-
-    return (
-      <View style={arrowStyle}>
-        <MaterialCommunityIcons 
-          name={iconName as any} 
-          size={24} 
-          color={theme.colors.blue} 
-        />
-      </View>
-    );
-  };
+  // Directional arrows removed - only navigation arrows remain
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="auto">
-      {/* Light semi-transparent overlay - blocks all clicks behind tutorial */}
-      <Pressable 
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      {/* Light semi-transparent overlay - visual only, does not block UI */}
+      <View 
         style={{
           ...StyleSheet.absoluteFillObject,
           backgroundColor: 'rgba(0, 0, 0, 0.4)',
         }}
-        onPress={onNext}
+        pointerEvents="none"
       >
         {/* Tap anywhere hint */}
         <View style={{
@@ -131,7 +64,7 @@ export default function TutorialOverlay({
             Tap anywhere to continue
           </Text>
         </View>
-      </Pressable>
+      </View>
 
       {/* Toast tooltip */}
       <Pressable
@@ -141,9 +74,9 @@ export default function TutorialOverlay({
           ...step.position,
           backgroundColor: theme.colors.white,
           borderRadius: 12,
-          padding: 12,
-          paddingRight: 16,
-          maxWidth: 280,
+          padding: 16,
+          paddingRight: 20,
+          maxWidth: 392,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.15,
@@ -152,16 +85,16 @@ export default function TutorialOverlay({
           borderWidth: 1,
           borderColor: theme.colors.border,
         }}
+        pointerEvents="auto"
       >
-        {renderArrow()}
         
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           {/* Message */}
           <Text style={{
             flex: 1,
-            fontSize: 13,
+            fontSize: 16,
             color: theme.colors.text,
-            lineHeight: 18,
+            lineHeight: 24,
             fontFamily: 'Inter_400Regular',
           }}>
             {step.message}
@@ -198,14 +131,14 @@ export default function TutorialOverlay({
         </View>
 
         {/* Progress dots */}
-        <View style={{ flexDirection: 'row', marginTop: 8, gap: 4 }}>
+        <View style={{ flexDirection: 'row', marginTop: 12, gap: 6 }}>
           {Array.from({ length: totalSteps }).map((_, i) => (
             <View
               key={i}
               style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
                 backgroundColor: i === currentStepNumber - 1 ? theme.colors.blue : theme.colors.border,
               }}
             />
@@ -220,21 +153,27 @@ export default function TutorialOverlay({
           position: 'absolute',
           top: 50,
           right: 20,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
           backgroundColor: theme.colors.white,
-          borderRadius: 16,
+          borderRadius: 20,
           borderWidth: 1,
           borderColor: theme.colors.border,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 2,
+          elevation: 2,
         }}
+        pointerEvents="auto"
       >
         <Text style={{
-          color: theme.colors.muted,
-          fontSize: 12,
-          fontWeight: '500',
-          fontFamily: 'Inter_500Medium',
+          color: theme.colors.text,
+          fontSize: 14,
+          fontWeight: '600',
+          fontFamily: 'Inter_600SemiBold',
         }}>
-          Skip
+          Skip Tutorial
         </Text>
       </Pressable>
     </View>

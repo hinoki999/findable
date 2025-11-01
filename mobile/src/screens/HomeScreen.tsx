@@ -690,56 +690,50 @@ export default function HomeScreen() {
     {
       message: 'Welcome to DropLink! This is your home screen where you\'ll see nearby users.',
       position: {
-        top: 80,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
       message: 'When people are nearby (within 33 feet), they\'ll appear as green dots. The dots pulsate faster when they\'re closer. Tap any dot to connect!',
       position: {
-        top: screenHeight * 0.4,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
-      message: 'Toggle your visibility here. Active = Discoverable, Ghost = Invisible to others.',
+      message: 'This toggle controls your visibility mode. When active (green), you\'re discoverable and others can see you on their radar. When off (ghost mode), you\'re invisible to everyone nearby.',
       position: {
-        top: 70,
-        left: 20,
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30,
       },
-      arrow: 'up' as const,
-      arrowOffset: 15, // Position arrow 15px from left to center on toggle button
     },
     {
       message: 'Use 2-finger pinch to zoom in/out and rotate the grid view for better visibility.',
       position: {
-        top: screenHeight * 0.4,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: undefined,
     },
     {
       message: 'Tap the notification icon at the bottom to see drop requests and link notifications when you receive them.',
       position: {
-        top: screenHeight * 0.54,
-        left: screenWidth * 0.15,
-        right: screenWidth * 0.15,
+        top: screenHeight * 0.45,
+        left: 30,
+        right: 30,
       },
-      arrow: 'up' as const,
     },
     {
       message: "You're all set! Swipe left to explore the Drop page and start connecting with nearby people. Happy dropping!",
       position: {
-        bottom: 120,
-        left: 20,
-        right: 20,
+        top: screenHeight * 0.40,
+        left: 30,
+        right: 30,
       },
-      arrow: 'right' as const,
     },
   ];
 
