@@ -1,5 +1,6 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
+import { PinchGestureHandler, RotationGestureHandler, State } from 'react-native-gesture-handler';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
@@ -580,10 +581,8 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Gesture tracking for multi-touch
+  // Gesture tracking for pinch and rotation
   const gestureState = useRef({
-    initialDistance: 0,
-    initialRotation: 0,
     initialScale: 1,
     initialAngle: 0,
   }).current;
@@ -976,67 +975,39 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== MULTI-TOUCH GESTURE HANDLER (ROTATION & ZOOM) ==========
+  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  // Helper: Calculate distance between two touch points
-  const getTouchDistance = (touches: any[]) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[0].pageX - touches[1].pageX;
-    const dy = touches[0].pageY - touches[1].pageY;
-    return Math.sqrt(dx * dx + dy * dy);
+  // Pinch gesture handler - for zoom
+  const onPinchGestureEvent = (event: any) => {
+    const scale = event.nativeEvent.scale * gestureState.initialScale;
+    
+    // Constrain zoom: 0.5x to 3x
+    const constrainedScale = Math.max(0.5, Math.min(3, scale));
+    setViewScale(constrainedScale);
+    scaleAnimValue.setValue(constrainedScale);
   };
-
-  // Helper: Calculate angle between two touch points
-  const getTouchAngle = (touches: any[]) => {
-    if (touches.length < 2) return 0;
-    const dx = touches[1].pageX - touches[0].pageX;
-    const dy = touches[1].pageY - touches[0].pageY;
-    return Math.atan2(dy, dx);
+  
+  const onPinchHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      gestureState.initialScale = viewScale;
+    }
   };
-
-  // Multi-touch gesture responder (pinch zoom + rotation)
-  const gestureResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
-      onMoveShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
-      
-      onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          gestureState.initialDistance = getTouchDistance(touches);
-          gestureState.initialRotation = getTouchAngle(touches);
-          gestureState.initialScale = viewScale;
-          gestureState.initialAngle = viewRotation;
-        }
-      },
-      
-      onPanResponderMove: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          // Calculate pinch zoom
-          const currentDistance = getTouchDistance(touches);
-          const scale = (currentDistance / gestureState.initialDistance) * gestureState.initialScale;
-          
-          // Constrain zoom: 0.5x to 3x
-          const constrainedScale = Math.max(0.5, Math.min(3, scale));
-          setViewScale(constrainedScale);
-          scaleAnimValue.setValue(constrainedScale);
-          
-          // Calculate rotation
-          const currentAngle = getTouchAngle(touches);
-          const rotation = currentAngle - gestureState.initialRotation + gestureState.initialAngle;
-          setViewRotation(rotation);
-          rotationAnimValue.setValue(rotation);
-        }
-      },
-      
-      onPanResponderRelease: () => {
-        // Optionally snap to nearest 45° angle
-        // const snappedRotation = Math.round(viewRotation / (Math.PI / 4)) * (Math.PI / 4);
-        // setViewRotation(snappedRotation);
-      },
-    })
-  ).current;
+  
+  // Rotation gesture handler
+  const onRotationGestureEvent = (event: any) => {
+    const rotation = event.nativeEvent.rotation + gestureState.initialAngle;
+    setViewRotation(rotation);
+    rotationAnimValue.setValue(rotation);
+  };
+  
+  const onRotationHandlerStateChange = (event: any) => {
+    if (event.nativeEvent.state === State.BEGAN) {
+      gestureState.initialAngle = viewRotation;
+    } else if (event.nativeEvent.state === State.END) {
+      // Update initial angle for next gesture
+      gestureState.initialAngle = viewRotation;
+    }
+  };
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -1349,18 +1320,25 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <View 
-        {...gestureResponder.panHandlers}
-        style={{ 
-        position: 'absolute', 
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-        }}
-        pointerEvents="box-none"
+      <RotationGestureHandler
+        onGestureEvent={onRotationGestureEvent}
+        onHandlerStateChange={onRotationHandlerStateChange}
       >
+        <PinchGestureHandler
+          onGestureEvent={onPinchGestureEvent}
+          onHandlerStateChange={onPinchHandlerStateChange}
+        >
+          <Animated.View 
+            style={{ 
+            position: 'absolute', 
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 0,
+            }}
+            pointerEvents="box-none"
+          >
         {(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
@@ -1517,7 +1495,9 @@ export default function HomeScreen() {
             </>
           );
         })()}
-      </View>
+          </Animated.View>
+        </PinchGestureHandler>
+      </RotationGestureHandler>
 
       {/* Pulsating Blips for Nearby Devices - Outside grid container for better touch handling */}
       <View 
