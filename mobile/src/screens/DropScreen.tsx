@@ -335,14 +335,6 @@ export default function DropScreen() {
             }]}>
               No DropLink users nearby
             </Text>
-            <Text style={[theme.type.muted, { 
-              textAlign: 'center', 
-              fontSize: 15, 
-              lineHeight: 22,
-              opacity: 0.8,
-            }]}>
-              Keep your app open to stay discoverable. New connections will appear here when someone is within {maxDistance} feet!
-            </Text>
           </View>
         }
       />
