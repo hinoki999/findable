@@ -765,6 +765,15 @@ class VerifyCodeRequest(BaseModel):
     email: str
     code: str
 
+class SendRecoveryCodeRequest(BaseModel):
+    email: str
+    type: str  # 'username' or 'password'
+
+class VerifyRecoveryCodeRequest(BaseModel):
+    email: str
+    code: str
+    type: str  # 'username' or 'password'
+
 class CheckUsernameRequest(BaseModel):
     username: constr(min_length=3, max_length=20) = Field(..., description="Username to check")
     
@@ -1905,10 +1914,11 @@ def change_password(
         raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
 
 @app.post("/auth/send-recovery-code")
-def send_recovery_code(email: str, type: str):
+def send_recovery_code(request: SendRecoveryCodeRequest):
     """Send recovery code for forgot password/username"""
     try:
-        email = email.lower().strip()
+        email = request.email.lower().strip()
+        type = request.type
         
         # Validate email format
         if '@' not in email or '.' not in email:
@@ -1963,11 +1973,12 @@ def send_recovery_code(email: str, type: str):
         raise HTTPException(status_code=500, detail=f"Failed to send recovery code: {str(e)}")
 
 @app.post("/auth/verify-recovery-code")
-def verify_recovery_code(email: str, code: str, type: str):
+def verify_recovery_code(request: VerifyRecoveryCodeRequest):
     """Verify recovery code and return username if username recovery"""
     try:
-        email = email.lower().strip()
-        code = code.strip()
+        email = request.email.lower().strip()
+        code = request.code.strip()
+        type = request.type
         
         conn = get_db_connection()
         cursor = get_cursor(conn)
