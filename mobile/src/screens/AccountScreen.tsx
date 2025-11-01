@@ -128,7 +128,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     } else if (field === 'name') {
       setTempValue(name);
     } else if (field === 'bio') {
-      setTempValue(bio);
+      // If bio is the placeholder text, start with empty string
+      setTempValue(bio === 'Add bio' ? '' : bio);
     } else if (field === 'social-media' && socialIndex !== undefined) {
       setTempSocialIndex(socialIndex);
       setTempSocialPlatform(socialMedia[socialIndex].platform);

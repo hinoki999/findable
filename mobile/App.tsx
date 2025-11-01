@@ -61,7 +61,7 @@ const UserProfileContext = createContext<{
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: '',
+    bio: 'Add bio',
     socialMedia: [],
   },
   updateProfile: () => {},
@@ -164,7 +164,7 @@ function MainApp() {
     name: 'Your Name',
     phoneNumber: '(555) 123-4567',
     email: 'user@example.com',
-    bio: '',
+    bio: 'Add bio',
     socialMedia: [],
   });
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
@@ -203,7 +203,7 @@ function MainApp() {
             name: profileData.name || 'Your Name',
             phoneNumber: profileData.phone || '(555) 123-4567',
             email: profileData.email || 'user@example.com',
-            bio: profileData.bio || '',
+            bio: profileData.bio || 'Add bio',
             socialMedia: profileData.socialMedia || [],
           });
           
