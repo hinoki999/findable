@@ -241,10 +241,48 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+        <TopBar logoMode={true} logoIcon="link-variant" />
         <NetworkBanner isDarkMode={isDarkMode} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.blue} />
-          <Text style={[theme.type.muted, { marginTop: 16, fontSize: 14 }]}>Loading your links...</Text>
+        <View style={{ 
+          flex: 1, 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          paddingHorizontal: 40,
+        }}>
+          {/* Smooth Loading Spinner */}
+          <View style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: theme.colors.blueLight,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 24,
+            shadowColor: theme.colors.blue,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+            elevation: 8,
+          }}>
+            <ActivityIndicator size="large" color={theme.colors.blue} />
+          </View>
+          
+          {/* Loading Text */}
+          <Text style={[theme.type.h2, { 
+            textAlign: 'center',
+            marginBottom: 8,
+            fontSize: 18,
+            color: theme.colors.text,
+          }]}>
+            Loading your links
+          </Text>
+          <Text style={[theme.type.muted, { 
+            textAlign: 'center',
+            fontSize: 14,
+            opacity: 0.7,
+          }]}>
+            Just a moment...
+          </Text>
         </View>
       </View>
     );
