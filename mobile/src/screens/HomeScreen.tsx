@@ -584,6 +584,8 @@ export default function HomeScreen() {
     initialScale: 1,
     initialAngle: 0,
   }).current;
+  const pinchRef = useRef(null);
+  const rotationRef = useRef(null);
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -1087,8 +1089,8 @@ export default function HomeScreen() {
         return Math.abs(gestureState.dy) > 10 && gestureState.dy > 0;
       },
       onMoveShouldSetPanResponderCapture: (_, gestureState) => {
-        // Capture movement if it's a clear downward drag
-        return Math.abs(gestureState.dy) > 10 && gestureState.dy > 0;
+        // Don't capture to allow gesture handlers to work
+        return false;
       },
       onPanResponderGrant: () => {
         setIsDragging(true);
@@ -1329,12 +1331,16 @@ export default function HomeScreen() {
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <RotationGestureHandler
+        ref={rotationRef}
         onGestureEvent={onRotationGestureEvent}
         onHandlerStateChange={onRotationHandlerStateChange}
+        simultaneousHandlers={pinchRef}
       >
         <PinchGestureHandler
+          ref={pinchRef}
           onGestureEvent={onPinchGestureEvent}
           onHandlerStateChange={onPinchHandlerStateChange}
+          simultaneousHandlers={rotationRef}
         >
           <Animated.View 
             style={{ 
@@ -1344,8 +1350,12 @@ export default function HomeScreen() {
             right: 0,
             bottom: 0,
             zIndex: 0,
+            transform: [
+              { scale: scaleAnimValue },
+              { rotate: rotationAnimValue }
+            ],
             }}
-            pointerEvents="box-none"
+            pointerEvents="auto"
           >
         {(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
