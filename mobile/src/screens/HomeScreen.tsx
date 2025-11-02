@@ -1357,8 +1357,9 @@ export default function HomeScreen() {
             }}
             pointerEvents="auto"
           >
-        {(() => {
+        {false && (() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
+          // TEMPORARILY DISABLED FOR GESTURE TESTING
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
           
@@ -1513,6 +1514,12 @@ export default function HomeScreen() {
             </>
           );
         })()}
+        
+        {/* SIMPLE TEST VIEW FOR GESTURE TESTING */}
+        <View style={{ flex: 1, backgroundColor: 'rgba(255,0,0,0.1)' }}>
+          <Text style={{ color: 'white', fontSize: 30, margin: 50 }}>TEST - Try pinching</Text>
+        </View>
+        
           </Animated.View>
         </PinchGestureHandler>
       </RotationGestureHandler>
