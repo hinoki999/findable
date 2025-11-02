@@ -1385,12 +1385,12 @@ export default function HomeScreen() {
           // Sphere radius extended to cover entire screen for full background grid
           const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Full screen coverage
           
-          // Grid Configuration - 1.5 FOOT INTERVALS for accuracy (extends beyond 33 ft for visual fill)
-          const GRID_SPACING_FEET = 1.5; // Grid every 1.5 feet for precise distance mapping
+          // Grid Configuration - 3 FOOT INTERVALS for better performance (extends beyond 33 ft for visual fill)
+          const GRID_SPACING_FEET = 3; // Wider spacing = fewer lines = better performance
           const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
           const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
           const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
-          const segmentsPerLine = 50; // Smooth curves, optimized for mobile performance
+          const segmentsPerLine = 20; // Fewer segments = better performance
           
           // Helper: Cubed Sphere Projection - (x, y, 1) / √(x² + y² + 1)
           // Optimized for 33 ft visible range with dramatic curvature
