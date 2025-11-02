@@ -1,7 +1,7 @@
 ﻿import 'react-native-gesture-handler';
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
@@ -159,6 +159,7 @@ function MainApp() {
   const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const insets = useSafeAreaInsets();
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
   // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -618,7 +619,8 @@ function MainApp() {
             flexDirection: 'row',
             borderTopWidth: 1,
             borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.white
+            backgroundColor: theme.colors.white,
+            paddingBottom: insets.bottom
           }}>
            {/* Home */}
            <Pressable

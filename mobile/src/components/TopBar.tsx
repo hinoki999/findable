@@ -2,6 +2,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, type, getTheme } from '../theme';
 import { useDarkMode } from '../../App';
 
@@ -17,13 +18,15 @@ interface TopBarProps {
 export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, logoMode, logoIcon }: TopBarProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  const insets = useSafeAreaInsets();
   
   return (
     <View style={{ 
       backgroundColor: theme.colors.bg, 
       borderBottomColor: theme.colors.border, 
       borderBottomWidth: 1, 
-      paddingVertical: 10,
+      paddingTop: insets.top + 10,
+      paddingBottom: 10,
       position: 'relative',
       flexDirection: 'row',
       alignItems: 'center',
