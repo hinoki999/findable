@@ -1516,7 +1516,7 @@ export default function HomeScreen() {
           );
         })()}
         
-        {/* OBVIOUS TEST PATTERN FOR GESTURE TESTING */}
+        {/* OBVIOUS TEST PATTERN FOR GESTURE TESTING - INSIDE TRANSFORM */}
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           {/* Colored Corner Squares */}
           <View style={{ position: 'absolute', top: 50, left: 50, width: 100, height: 100, backgroundColor: 'red' }} />
@@ -1529,7 +1529,70 @@ export default function HomeScreen() {
           <Text style={{ fontSize: 30, color: 'white', marginTop: 20 }}>Rotate with 2 fingers</Text>
         </View>
         
-          </Animated.View>
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - MOVED INSIDE TRANSFORM */}
+      <View 
+        style={{ 
+          position: 'absolute',
+          top: nucleusY,
+          left: nucleusX,
+          transform: [{ translateX: -iconOffsetX }, { translateY: -iconOffsetY }],
+          zIndex: 999,
+        }}
+        pointerEvents="box-none"
+      >
+        <View pointerEvents="auto">
+          <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
+            {/* Ripple Effect */}
+            <Animated.View
+              style={{
+                position: 'absolute',
+              width: 60,
+              height: 60,
+              borderRadius: 30,
+                borderWidth: 2,
+                borderColor: theme.colors.green,
+                opacity: rippleAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.3],
+                }),
+                transform: [{
+                  scale: rippleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.5, 1.2],
+                  }),
+                }],
+              }}
+            />
+            
+          <View style={{ position: 'relative' }}>
+            <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
+            
+            {/* Link notification badge */}
+            {hasUnviewedLinks && (
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -6,
+                  opacity: flashAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.4, 1],
+                  }),
+                }}
+              >
+                <MaterialCommunityIcons 
+                  name="link-variant" 
+                  size={14} 
+                  color="#FF6B4A" 
+                />
+              </Animated.View>
+            )}
+          </View>
+          </Pressable>
+        </View>
+      </View>
+        
+          </Animated.View>  {/* ← This Animated.View has the transform - test pattern AND drop icon now INSIDE */}
 
       {/* Pulsating Blips for Nearby Devices - Now inside gesture handlers for full-screen gesture detection */}
       <View 
@@ -1906,69 +1969,6 @@ export default function HomeScreen() {
           </View>
       </ScrollView>
 
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - Always Visible */}
-      <View 
-        style={{ 
-          position: 'absolute',
-          top: nucleusY,
-          left: nucleusX,
-          transform: [{ translateX: -iconOffsetX }, { translateY: -iconOffsetY }],
-          zIndex: 999,
-        }}
-        pointerEvents="box-none"
-      >
-        <View pointerEvents="auto">
-          <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
-            {/* Ripple Effect */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-                borderWidth: 2,
-                borderColor: theme.colors.green,
-                opacity: rippleAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.3],
-                }),
-                transform: [{
-                  scale: rippleAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1.2],
-                  }),
-                }],
-              }}
-            />
-            
-          <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
-            
-            {/* Link notification badge */}
-            {hasUnviewedLinks && (
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -6,
-                  opacity: flashAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.4, 1],
-                  }),
-                }}
-              >
-                <MaterialCommunityIcons 
-                  name="link-variant" 
-                  size={14} 
-                  color="#FF6B4A" 
-                />
-              </Animated.View>
-            )}
-          </View>
-          </Pressable>
-        </View>
-      </View>
-
       {/* View Transform Controls - Top Right Corner - Always Visible */}
       <View 
         style={{
@@ -1977,7 +1977,7 @@ export default function HomeScreen() {
           right: 8,
           zIndex: 999,
           flexDirection: 'row',
-          alignItems: 'center',
+            alignItems: 'center',
           gap: 8,
         }}
         pointerEvents="box-none"
@@ -2003,8 +2003,8 @@ export default function HomeScreen() {
               Reset View
             </Text>
           </Pressable>
-        </View>
-        
+          </View>
+
         {/* Zoom & Rotation Indicators (visual feedback only) */}
         <View 
           style={{
@@ -2030,8 +2030,8 @@ export default function HomeScreen() {
               fontWeight: '600' 
             }}>
               Zoom
-            </Text>
-          </View>
+                </Text>
+              </View>
 
           {/* Rotate Indicator - illuminates when rotation is NOT 0° */}
           <View 
@@ -2050,15 +2050,15 @@ export default function HomeScreen() {
               fontWeight: '600' 
             }}>
               Rotate
-            </Text>
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
 
       {/* Discoverability Toggle - Top Left Corner - Always Visible */}
       <View 
-        style={{ 
-          position: 'absolute',
+              style={{
+                position: 'absolute',
           top: insets.top + 8,
           left: 20,
           zIndex: 999,
