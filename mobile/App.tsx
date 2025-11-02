@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, createContext, useContext } from 'react';
+﻿import 'react-native-gesture-handler';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
