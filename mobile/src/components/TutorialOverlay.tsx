@@ -40,7 +40,7 @@ export default function TutorialOverlay({
   // Directional arrows removed - only navigation arrows remain
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <Pressable style={StyleSheet.absoluteFill} onPress={onNext}>
       {/* Darker semi-transparent overlay - creates clear visual separation */}
       <View 
         style={{
@@ -192,7 +192,7 @@ export default function TutorialOverlay({
           Skip Tutorial
         </Text>
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 
