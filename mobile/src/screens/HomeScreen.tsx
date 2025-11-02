@@ -989,6 +989,7 @@ export default function HomeScreen() {
   
   // Pinch gesture handler - for zoom
   const onPinchGestureEvent = (event: any) => {
+    console.log('🔍 PINCH GESTURE DETECTED:', event.nativeEvent.scale);
     const scale = event.nativeEvent.scale * gestureState.initialScale;
     
     // Constrain zoom: 0.5x to 3x
@@ -998,6 +999,7 @@ export default function HomeScreen() {
   };
   
   const onPinchHandlerStateChange = (event: any) => {
+    console.log('🔍 PINCH STATE CHANGE:', event.nativeEvent.state);
     if (event.nativeEvent.state === State.BEGAN) {
       gestureState.initialScale = viewScale;
     }
@@ -1005,12 +1007,14 @@ export default function HomeScreen() {
   
   // Rotation gesture handler
   const onRotationGestureEvent = (event: any) => {
+    console.log('🔍 ROTATION GESTURE DETECTED:', event.nativeEvent.rotation);
     const rotation = event.nativeEvent.rotation + gestureState.initialAngle;
     setViewRotation(rotation);
     rotationAnimValue.setValue(rotation);
   };
   
   const onRotationHandlerStateChange = (event: any) => {
+    console.log('🔍 ROTATION STATE CHANGE:', event.nativeEvent.state);
     if (event.nativeEvent.state === State.BEGAN) {
       gestureState.initialAngle = viewRotation;
     } else if (event.nativeEvent.state === State.END) {
@@ -1342,7 +1346,7 @@ export default function HomeScreen() {
           onHandlerStateChange={onPinchHandlerStateChange}
           simultaneousHandlers={rotationRef}
         >
-          <Animated.View style={{ flex: 1 }} pointerEvents="box-none">
+          <Animated.View style={{ flex: 1 }} pointerEvents="auto">
           <Animated.View 
             style={{ 
         position: 'absolute', 
