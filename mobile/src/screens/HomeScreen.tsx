@@ -1,6 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
-import { PinchGestureHandler, RotationGestureHandler, State } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -583,9 +582,10 @@ export default function HomeScreen() {
   const gestureState = useRef({
     initialScale: 1,
     initialAngle: 0,
+    initialDistance: 0,
+    startAngle: 0,
   }).current;
-  const pinchRef = useRef(null);
-  const rotationRef = useRef(null);
+  const touchPositions = useRef<{ [key: string]: { x: number; y: number } }>({});
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -985,42 +985,64 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
+  // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  // Pinch gesture handler - for zoom
-  const onPinchGestureEvent = (event: any) => {
-    console.log('🔍 PINCH GESTURE DETECTED:', event.nativeEvent.scale);
-    const scale = event.nativeEvent.scale * gestureState.initialScale;
+  const handleTouchStart = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    touches.forEach((touch: any) => {
+      touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
+    });
     
-    // Constrain zoom: 0.5x to 3x
-    const constrainedScale = Math.max(0.5, Math.min(3, scale));
-    setViewScale(constrainedScale);
-    scaleAnimValue.setValue(constrainedScale);
-  };
-  
-  const onPinchHandlerStateChange = (event: any) => {
-    console.log('🔍 PINCH STATE CHANGE:', event.nativeEvent.state);
-    if (event.nativeEvent.state === State.BEGAN) {
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
       gestureState.initialScale = viewScale;
+      gestureState.initialDistance = distance;
+      
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      gestureState.initialAngle = viewRotation;
+      gestureState.startAngle = angle;
+      
+      console.log('🔍 TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
     }
   };
-  
-  // Rotation gesture handler
-  const onRotationGestureEvent = (event: any) => {
-    console.log('🔍 ROTATION GESTURE DETECTED:', event.nativeEvent.rotation);
-    const rotation = event.nativeEvent.rotation + gestureState.initialAngle;
-    setViewRotation(rotation);
-    rotationAnimValue.setValue(rotation);
-  };
-  
-  const onRotationHandlerStateChange = (event: any) => {
-    console.log('🔍 ROTATION STATE CHANGE:', event.nativeEvent.state);
-    if (event.nativeEvent.state === State.BEGAN) {
-      gestureState.initialAngle = viewRotation;
-    } else if (event.nativeEvent.state === State.END) {
-      // Update initial angle for next gesture
-      gestureState.initialAngle = viewRotation;
+
+  const handleTouchMove = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      
+      // PINCH (zoom)
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
+      if (gestureState.initialDistance) {
+        const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
+        const constrainedScale = Math.max(0.5, Math.min(3, scale));
+        setViewScale(constrainedScale);
+        scaleAnimValue.setValue(constrainedScale);
+        console.log('🔍 PINCH DETECTED - Scale:', constrainedScale);
+      }
+      
+      // ROTATION
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      if (gestureState.startAngle !== undefined) {
+        const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
+        setViewRotation(rotation);
+        rotationAnimValue.setValue(rotation);
+        console.log('🔍 ROTATION DETECTED - Angle:', rotation);
+      }
     }
+  };
+
+  const handleTouchEnd = () => {
+    touchPositions.current = {};
+    console.log('🔍 TOUCH END - Reset');
   };
 
   // Stack drag animation
@@ -1334,19 +1356,12 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <RotationGestureHandler
-        ref={rotationRef}
-        onGestureEvent={onRotationGestureEvent}
-        onHandlerStateChange={onRotationHandlerStateChange}
-        simultaneousHandlers={pinchRef}
+      <View 
+        style={{ flex: 1 }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        <PinchGestureHandler
-          ref={pinchRef}
-          onGestureEvent={onPinchGestureEvent}
-          onHandlerStateChange={onPinchHandlerStateChange}
-          simultaneousHandlers={rotationRef}
-        >
-          <Animated.View style={{ flex: 1 }} pointerEvents="auto">
           <Animated.View 
             style={{ 
         position: 'absolute', 
@@ -3087,9 +3102,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-          </Animated.View>
-        </PinchGestureHandler>
-      </RotationGestureHandler>
+      </View>
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
