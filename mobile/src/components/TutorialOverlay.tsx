@@ -40,11 +40,11 @@ export default function TutorialOverlay({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {/* Light semi-transparent overlay - visual only, does not block UI */}
+      {/* Darker semi-transparent overlay - creates clear visual separation */}
       <View 
         style={{
           ...StyleSheet.absoluteFillObject,
-          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
         }}
         pointerEvents="none"
       >
@@ -66,51 +66,50 @@ export default function TutorialOverlay({
         </View>
       </View>
 
-      {/* Toast tooltip */}
-      <Pressable
-        onPress={onNext}
-        style={{
-          position: 'absolute',
-          ...step.position,
-          backgroundColor: theme.colors.white,
-          borderRadius: 12,
-          padding: 16,
-          paddingRight: 20,
-          maxWidth: 392,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.15,
-          shadowRadius: 4,
-          elevation: 4,
-          borderWidth: 1,
-          borderColor: theme.colors.border,
-        }}
-        pointerEvents="auto"
-      >
+      {/* Centered tutorial box - bigger, bubbly, and clear */}
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }} pointerEvents="box-none">
+        <Pressable
+          onPress={onNext}
+          style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 24,
+            padding: 24,
+            width: '100%',
+            maxWidth: 500,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 12,
+            elevation: 8,
+            borderWidth: 2,
+            borderColor: 'rgba(255, 255, 255, 0.9)',
+          }}
+          pointerEvents="auto"
+        >
         
         <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
           {/* Message */}
           <Text style={{
             flex: 1,
-            fontSize: 16,
+            fontSize: 18,
             color: theme.colors.text,
-            lineHeight: 24,
-            fontFamily: 'Inter_400Regular',
+            lineHeight: 28,
+            fontFamily: 'Inter_500Medium',
           }}>
             {step.message}
           </Text>
 
-          {/* Navigation buttons */}
-          <View style={{ flexDirection: 'row', marginLeft: 8 }}>
+          {/* Navigation buttons - bigger and more visible */}
+          <View style={{ flexDirection: 'row', marginLeft: 12 }}>
             {/* Back button - only show if not first step */}
             {currentStepNumber > 1 && (
               <Pressable
                 onPress={onBack}
-                style={{ padding: 4, marginRight: 4 }}
+                style={{ padding: 6, marginRight: 6 }}
               >
                 <MaterialCommunityIcons 
                   name="chevron-left" 
-                  size={20} 
+                  size={28} 
                   color={theme.colors.blue} 
                 />
               </Pressable>
@@ -119,32 +118,33 @@ export default function TutorialOverlay({
             {/* Next button */}
             <Pressable
               onPress={onNext}
-              style={{ padding: 4 }}
+              style={{ padding: 6 }}
             >
               <MaterialCommunityIcons 
                 name="chevron-right" 
-                size={20} 
+                size={28} 
                 color={theme.colors.blue} 
               />
             </Pressable>
           </View>
         </View>
 
-        {/* Progress dots */}
-        <View style={{ flexDirection: 'row', marginTop: 12, gap: 6 }}>
+        {/* Progress dots - bigger and more visible */}
+        <View style={{ flexDirection: 'row', marginTop: 16, gap: 10 }}>
           {Array.from({ length: totalSteps }).map((_, i) => (
             <View
               key={i}
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
                 backgroundColor: i === currentStepNumber - 1 ? theme.colors.blue : theme.colors.border,
               }}
             />
           ))}
         </View>
       </Pressable>
+      </View>
 
       {/* Skip button */}
       <Pressable
