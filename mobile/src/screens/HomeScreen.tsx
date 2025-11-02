@@ -1375,11 +1375,10 @@ export default function HomeScreen() {
               { rotate: rotationAnimValue }
             ],
             }}
-            pointerEvents="auto"
+            pointerEvents="box-none"
           >
-        {false && (() => {
+        {(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
-          // TEMPORARILY DISABLED FOR GESTURE TESTING
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
           
@@ -1534,19 +1533,6 @@ export default function HomeScreen() {
             </>
           );
         })()}
-        
-        {/* OBVIOUS TEST PATTERN FOR GESTURE TESTING - INSIDE TRANSFORM */}
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {/* Colored Corner Squares */}
-          <View style={{ position: 'absolute', top: 50, left: 50, width: 100, height: 100, backgroundColor: 'red' }} />
-          <View style={{ position: 'absolute', top: 50, right: 50, width: 100, height: 100, backgroundColor: 'blue' }} />
-          <View style={{ position: 'absolute', bottom: 50, left: 50, width: 100, height: 100, backgroundColor: 'green' }} />
-          <View style={{ position: 'absolute', bottom: 50, right: 50, width: 100, height: 100, backgroundColor: 'yellow' }} />
-          
-          {/* Center Text */}
-          <Text style={{ fontSize: 50, fontWeight: 'bold', color: 'white' }}>PINCH ME</Text>
-          <Text style={{ fontSize: 30, color: 'white', marginTop: 20 }}>Rotate with 2 fingers</Text>
-        </View>
         
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - MOVED INSIDE TRANSFORM */}
       <View 
