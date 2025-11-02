@@ -1342,14 +1342,15 @@ export default function HomeScreen() {
           onHandlerStateChange={onPinchHandlerStateChange}
           simultaneousHandlers={rotationRef}
         >
+          <Animated.View style={{ flex: 1 }} pointerEvents="box-none">
           <Animated.View 
             style={{ 
-            position: 'absolute', 
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 0,
+        position: 'absolute', 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 0,
             transform: [
               { scale: scaleAnimValue },
               { rotate: rotationAnimValue }
@@ -1515,16 +1516,22 @@ export default function HomeScreen() {
           );
         })()}
         
-        {/* SIMPLE TEST VIEW FOR GESTURE TESTING */}
-        <View style={{ flex: 1, backgroundColor: 'rgba(255,0,0,0.1)' }}>
-          <Text style={{ color: 'white', fontSize: 30, margin: 50 }}>TEST - Try pinching</Text>
+        {/* OBVIOUS TEST PATTERN FOR GESTURE TESTING */}
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          {/* Colored Corner Squares */}
+          <View style={{ position: 'absolute', top: 50, left: 50, width: 100, height: 100, backgroundColor: 'red' }} />
+          <View style={{ position: 'absolute', top: 50, right: 50, width: 100, height: 100, backgroundColor: 'blue' }} />
+          <View style={{ position: 'absolute', bottom: 50, left: 50, width: 100, height: 100, backgroundColor: 'green' }} />
+          <View style={{ position: 'absolute', bottom: 50, right: 50, width: 100, height: 100, backgroundColor: 'yellow' }} />
+          
+          {/* Center Text */}
+          <Text style={{ fontSize: 50, fontWeight: 'bold', color: 'white' }}>PINCH ME</Text>
+          <Text style={{ fontSize: 30, color: 'white', marginTop: 20 }}>Rotate with 2 fingers</Text>
         </View>
         
           </Animated.View>
-        </PinchGestureHandler>
-      </RotationGestureHandler>
 
-      {/* Pulsating Blips for Nearby Devices - Outside grid container for better touch handling */}
+      {/* Pulsating Blips for Nearby Devices - Now inside gesture handlers for full-screen gesture detection */}
       <View 
         style={{ 
           position: 'absolute', 
@@ -3075,6 +3082,10 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+          </Animated.View>
+        </PinchGestureHandler>
+      </RotationGestureHandler>
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
