@@ -712,6 +712,8 @@ export default function HomeScreen() {
         left: 30,
         right: 30,
       },
+      arrow: 'up-left' as const,
+      arrowPosition: { top: 70, left: 20 },
     },
     {
       message: 'Use 2-finger pinch to zoom in/out and rotate the grid view for better visibility.',
@@ -722,7 +724,7 @@ export default function HomeScreen() {
       },
     },
     {
-      message: 'Tap the notification icon at the bottom to see drop requests and link notifications when you receive them.',
+      message: 'Tap the drop icon in the center of the screen to see drop requests and link notifications when you receive them.',
       position: {
         top: screenHeight * 0.45,
         left: 30,

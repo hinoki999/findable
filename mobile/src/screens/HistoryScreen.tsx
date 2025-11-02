@@ -222,13 +222,8 @@ export default function HistoryScreen() {
       arrow: undefined,
     },
     {
-      message: 'Once you have contacts, swipe right to pin your favorites to the Home screen!',
+      message: 'Once you have contacts, swipe right to pin your favorites to the top of the page!',
       position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
-      arrow: 'down' as const,
-    },
-    {
-      message: 'Swipe left on any contact to delete them when needed.',
-      position: { top: 205, left: screenWidth * 0.35, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {

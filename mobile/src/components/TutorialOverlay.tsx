@@ -12,8 +12,9 @@ interface TutorialStep {
     right?: number;
     bottom?: number;
   };
-  arrow?: 'up' | 'down' | 'left' | 'right';
-  arrowOffset?: number; // Custom arrow offset in pixels (for 'up' arrow, shifts left/right)
+  arrow?: 'up-left' | 'up' | 'down' | 'left' | 'right';
+  arrowPosition?: { top?: number; left?: number; right?: number; bottom?: number };
+  arrowOffset?: number;
 }
 
 interface TutorialOverlayProps {
@@ -145,6 +146,21 @@ export default function TutorialOverlay({
         </View>
       </Pressable>
       </View>
+
+      {/* Pointing Arrow (if specified) */}
+      {step.arrow === 'up-left' && step.arrowPosition && (
+        <View style={{
+          position: 'absolute',
+          top: step.arrowPosition.top,
+          left: step.arrowPosition.left,
+        }} pointerEvents="none">
+          <MaterialCommunityIcons 
+            name="arrow-top-left" 
+            size={32} 
+            color={theme.colors.blue}
+          />
+        </View>
+      )}
 
       {/* Skip button */}
       <Pressable
