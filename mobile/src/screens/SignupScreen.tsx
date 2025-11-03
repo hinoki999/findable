@@ -291,7 +291,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         name: name || '',
         phone: phoneDigitsOnly || '',
         email: email,
-        bio: bio || ''
+        bio: bio || '',
+        hasCompletedOnboarding: true
       });
       
       const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
@@ -304,7 +305,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
           name: name || '',
           phone: phoneDigitsOnly || '',
           email: email,
-          bio: bio || ''
+          bio: bio || '',
+          hasCompletedOnboarding: true  // Mark onboarding complete after signup
         }),
       });
 

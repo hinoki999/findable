@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL } from '../services/api';
 
 type ScreenName = 'Home' | 'Drop' | 'History' | 'Account';
 
@@ -66,6 +67,32 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const startScreenTutorial = async (screen: ScreenName, steps: number) => {
+    // Check if user has completed onboarding on server
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        const response = await fetch(`${BASE_URL}/user/profile`, {
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const profile = await response.json();
+          
+          // If user completed onboarding, skip all tutorials
+          if (profile.hasCompletedOnboarding) {
+            console.log('✅ User has completed onboarding - skipping tutorials');
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Could not check onboarding status:', error);
+    }
+
+    // Otherwise, check local storage as fallback
     const completed = await isScreenTutorialComplete(screen);
     if (!completed) {
       setCurrentScreen(screen);

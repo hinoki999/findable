@@ -309,7 +309,8 @@ def init_db():
             email {text},
             bio {text},
             social_media {text},
-            profile_photo {text}
+            profile_photo {text},
+            has_completed_onboarding {integer} DEFAULT 0
         )
     ''')
     
@@ -2508,28 +2509,29 @@ def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
 # User Profile endpoints
 @app.get("/user/profile")
 def get_user_profile(user_id: int = Depends(get_current_user)):
-    """Get user profile"""
+    """Get user profile including onboarding status"""
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
         execute_query(cursor, '''
-            SELECT name, email, phone, bio, profile_photo, social_media FROM user_profiles WHERE user_id = ?
+            SELECT name, email, phone, bio, profile_photo, social_media, has_completed_onboarding FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
         
         if not row:
-            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None, "socialMedia": []}
+            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None, "socialMedia": [], "hasCompletedOnboarding": False}
         
         social_media = json.loads(row[5]) if row[5] else []
         
         return {
-            "name": row[0],
-            "email": row[1],
-            "phone": row[2],
-            "bio": row[3],
+            "name": row[0] or "",
+            "email": row[1] or "",
+            "phone": row[2] or "",
+            "bio": row[3] or "",
             "profile_photo": row[4],
-            "socialMedia": social_media
+            "socialMedia": social_media,
+            "hasCompletedOnboarding": bool(row[6]) if row[6] is not None else False
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2553,7 +2555,8 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 phone TEXT,
                 bio TEXT,
                 profile_photo TEXT,
-                social_media TEXT
+                social_media TEXT,
+                has_completed_onboarding INTEGER DEFAULT 0
             )
         ''')
         
@@ -2596,23 +2599,27 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
         # Prepare social_media JSON
         social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
         
+        # Get onboarding flag (convert to 1/0 for database)
+        has_completed_onboarding = 1 if profile.get('hasCompletedOnboarding') else 0
+        
         # Upsert profile - works for both SQLite and PostgreSQL
         if USE_POSTGRES:
             execute_query(cursor, '''
-                INSERT INTO user_profiles (user_id, name, email, phone, bio, social_media)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                INSERT INTO user_profiles (user_id, name, email, phone, bio, social_media, has_completed_onboarding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     email = EXCLUDED.email,
                     phone = EXCLUDED.phone,
                     bio = EXCLUDED.bio,
-                    social_media = EXCLUDED.social_media
-            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
+                    social_media = EXCLUDED.social_media,
+                    has_completed_onboarding = EXCLUDED.has_completed_onboarding
+            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json, has_completed_onboarding))
         else:
             execute_query(cursor, '''
-                INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json))
+                INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media, has_completed_onboarding)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json, has_completed_onboarding))
         
         conn.commit()
         conn.close()
@@ -2665,7 +2672,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
                 email TEXT,
                 phone TEXT,
                 bio TEXT,
-                profile_photo TEXT
+                profile_photo TEXT,
+                has_completed_onboarding INTEGER DEFAULT 0
             )
         ''')
         
