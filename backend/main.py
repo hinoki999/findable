@@ -373,6 +373,15 @@ def init_db():
         # Table/type already exists - this is fine
         print(f"verification_codes table creation skipped (may already exist): {e}")
     
+    # Add has_completed_onboarding column if it doesn't exist (migration)
+    try:
+        cursor.execute(f'ALTER TABLE user_profiles ADD COLUMN has_completed_onboarding {integer} DEFAULT 0')
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        # Column already exists - this is fine
+        print(f"has_completed_onboarding column migration skipped (may already exist): {e}")
+    
     conn.commit()
     conn.close()
 
