@@ -1,229 +1,299 @@
 # DropLink Production Testing Suite
 
-Comprehensive testing infrastructure for the DropLink mobile app to catch OTA deployment issues and backend persistence problems.
+Comprehensive production-grade testing infrastructure for the DropLink mobile app.
 
-## 📁 Structure
+## 🏗️ Architecture
 
 ```
 testing/
-├── backend-tester.py       # Backend API endpoint tests
-├── database-validator.py   # Direct PostgreSQL database validation
-├── ota-monitor.js          # GitHub Actions & EAS update monitoring
-├── integration-tester.js   # End-to-end user flow testing
-├── run-all-tests.ps1       # Master test orchestrator (PowerShell)
-├── logs/                   # Individual test logs (auto-created)
-└── ERRORS.log             # Consolidated error log
+├── backend-tests/           # Pytest backend API tests
+│   ├── conftest.py         # Pytest fixtures (auth, database)
+│   ├── test_auth.py        # Authentication tests
+│   ├── test_profile.py     # Profile API tests
+│   └── test_persistence.py # Database persistence tests
+├── integration-tests/       # Jest integration tests
+│   ├── tutorial-flow.test.js   # Tutorial completion flow
+│   ├── ota-validation.test.js  # EAS update validation
+│   └── jest.config.js
+├── package.json
+├── pytest.ini
+└── README.md
+
+.github/workflows/
+└── test-suite.yml          # CI/CD pipeline
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-1. **Python 3.x** (for backend-tester.py and database-validator.py)
-   ```powershell
-   pip install requests psycopg2-binary
-   ```
-
-2. **Node.js** (for ota-monitor.js and integration-tester.js)
-   ```powershell
-   # Node.js includes https module by default - no install needed
-   ```
-
-3. **PowerShell** (for run-all-tests.ps1)
-   - Pre-installed on Windows
-
-### Environment Setup
-
-Set these environment variables (optional but recommended):
-
-```powershell
-# GitHub token (for Actions monitoring)
-$env:GITHUB_TOKEN = "ghp_your_github_token_here"
-
-# Expo token (for EAS monitoring)
-$env:EXPO_TOKEN = "your_expo_token_here"
-
-# Database URL (for direct DB validation)
-$env:DATABASE_URL = "postgresql://user:pass@host:port/dbname"
+**Python 3.11+:**
+```bash
+pip install pytest requests psycopg2-binary
 ```
 
-### Running Tests
-
-**Option 1: Run all tests continuously (recommended)**
-```powershell
+**Node.js 18+:**
+```bash
 cd testing
-.\run-all-tests.ps1
+npm install
 ```
 
-**Option 2: Run individual tests**
-```powershell
-# Backend API tests
-python backend-tester.py
+### Environment Variables
 
-# Database validation
-python database-validator.py
+Create `.env` file or export:
 
-# OTA monitoring
-node ota-monitor.js
-
-# Integration tests
-node integration-tester.js
+```bash
+export BACKEND_URL="https://findable-production.up.railway.app"
+export TEST_PASSWORD="your_password_here"
+export DATABASE_URL="postgresql://user:pass@railway.app:5432/railway"
+export EXPO_TOKEN="your_expo_token_here"
 ```
 
-## 📊 What Each Test Does
+## 🧪 Running Tests
 
-### 1. Backend API Tests (`backend-tester.py`)
-- ✅ Tests POST /auth/signup
-- ✅ Tests POST /auth/login
-- ✅ Tests GET /user/profile (includes hasCompletedOnboarding)
-- ✅ Tests POST /user/profile (updates hasCompletedOnboarding)
-- ✅ Validates data persistence across requests
+### Backend Tests (Pytest)
 
-### 2. Database Validation (`database-validator.py`)
-- ✅ Directly queries Railway PostgreSQL
-- ✅ Checks user_profiles table for test user
-- ✅ Validates has_completed_onboarding column
-- ✅ Logs when values change (or fail to change)
+```bash
+cd testing
 
-### 3. OTA Monitor (`ota-monitor.js`)
-- ✅ Polls GitHub Actions API for workflow status
-- ✅ Checks "OTA Update on Push" workflow runs
-- ✅ Verifies workflow success/failure
-- ✅ Monitors EAS update deployments
-- ✅ Validates runtime version (1.0.1)
+# Run all backend tests
+pytest backend-tests/ -v
 
-### 4. Integration Tests (`integration-tester.js`)
-- ✅ **Signup Flow**: Create user → Set onboarding flag → Verify persistence
-- ✅ **Login Flow**: Login existing user → Check onboarding status
-- ✅ **Tutorial Completion**: Reset flag → Complete tutorials → Verify backend update
+# Run specific test file
+pytest backend-tests/test_auth.py -v
 
-## 🎯 Key Features
+# Run specific test
+pytest backend-tests/test_profile.py::test_profile_get -v
 
-### Continuous Monitoring
-- Runs all tests every 60 seconds by default
-- Catches issues as they happen in production
-- No manual intervention required
+# Run with markers
+pytest backend-tests/ -m auth -v
+```
 
-### Color-Coded Output
-- 🟢 Green = Tests passed
-- 🔴 Red = Tests failed
-- 🟡 Yellow = Warnings or in-progress
+### Integration Tests (Jest)
 
-### Comprehensive Logging
-- Individual log files per test in `logs/` directory
-- Consolidated `ERRORS.log` for all failures
-- Timestamps on every log entry
+```bash
+cd testing
 
-### Production-Ready
-- Tests against live Railway backend
-- Monitors real GitHub Actions workflows
-- Validates actual EAS deployments
-- Uses real user accounts and data
+# Run all integration tests
+npm test
+
+# Run specific test file
+npm test ota-validation.test.js
+
+# Run in watch mode
+npm run test:watch
+
+# Run OTA tests only
+npm run test:ota
+
+# Run tutorial flow tests only
+npm run test:tutorial
+```
+
+## 📊 Test Coverage
+
+### Backend Tests (`backend-tests/`)
+
+#### **test_auth.py** - Authentication
+- ✅ `test_login_success()` - Login with valid credentials
+- ✅ `test_login_invalid_password()` - Invalid password rejected
+- ✅ `test_token_validity()` - JWT token works for protected endpoints
+
+#### **test_profile.py** - Profile API
+- ✅ `test_profile_get()` - GET /user/profile returns hasCompletedOnboarding
+- ✅ `test_profile_update_onboarding_true()` - Set flag to true
+- ✅ `test_profile_update_onboarding_false()` - Set flag to false
+- ✅ `test_profile_partial_update()` - Partial update preserves other fields
+
+#### **test_persistence.py** - Database
+- ✅ `test_onboarding_persists_in_database()` - Direct PostgreSQL verification
+- ✅ `test_onboarding_false_persists()` - False value persists correctly
+- ✅ `test_multiple_updates_persist()` - Sequential updates work
+- ✅ `test_database_schema_correct()` - Schema validation
+
+### Integration Tests (`integration-tests/`)
+
+#### **tutorial-flow.test.js** - User Journey
+- ✅ Authenticate test user
+- ✅ Reset onboarding flag
+- ✅ Simulate tutorial completion
+- ✅ Verify backend updated
+- ✅ Test persistence across requests
+- ✅ Test signup with onboarding flag
+
+#### **ota-validation.test.js** - OTA Updates
+- ✅ Fetch updates from preview branch
+- ✅ Verify runtime version (1.0.1)
+- ✅ Check update timestamp
+- ✅ Validate update message
+- ✅ Confirm Android platform
+- ✅ Verify GitHub Actions workflow exists
 
 ## 🔧 Configuration
 
-Edit the configuration at the top of each file:
+### Backend Tests
 
-**backend-tester.py & integration-tester.js:**
+Edit `backend-tests/conftest.py`:
 ```python
-BASE_URL = "https://findable-production.up.railway.app"
-TEST_USER = "caitie690"
-TEST_PASSWORD = "your_password_here"  # Update this!
-```
-
-**database-validator.py:**
-```python
+BACKEND_URL = os.environ.get('BACKEND_URL', 'https://findable-production.up.railway.app')
+TEST_USER = 'caitie690'
+TEST_PASSWORD = os.environ.get('TEST_PASSWORD', '')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-TEST_USER = "caitie690"
 ```
 
-**ota-monitor.js:**
+### Integration Tests
+
+Edit test files directly:
 ```javascript
-githubRepo: 'hinoki999/findable',
-easProject: '@hirule/mobile',
-easBranch: 'preview',
-runtimeVersion: '1.0.1'
+const BACKEND_HOST = process.env.BACKEND_URL?.replace('https://', '') || 'findable-production.up.railway.app';
+const TEST_USER = 'caitie690';
+const TEST_PASSWORD = process.env.TEST_PASSWORD || '';
 ```
 
-**run-all-tests.ps1:**
-```powershell
-$TestInterval = 60  # Seconds between test runs
+## 🤖 CI/CD (GitHub Actions)
+
+### Triggers
+- ✅ Push to `develop` or `main` branches
+- ✅ Pull requests
+- ✅ Scheduled hourly runs
+- ✅ Manual workflow dispatch
+
+### Workflow Steps
+1. **Backend Tests**
+   - Set up Python 3.11
+   - Install dependencies (pytest, requests, psycopg2)
+   - Run all backend tests
+   - Upload results as artifacts
+
+2. **Integration Tests**
+   - Set up Node.js 18
+   - Install dependencies (jest)
+   - Run all integration tests
+   - Upload results as artifacts
+
+3. **Report Results**
+   - Post test results as PR comments
+   - Show status for each test suite
+   - Link to full workflow run
+
+### Required GitHub Secrets
+
+Add these in: `Repository Settings → Secrets and variables → Actions`
+
+```
+BACKEND_URL: https://findable-production.up.railway.app
+TEST_PASSWORD: (password for caitie690)
+DATABASE_URL: postgresql://user:pass@railway.app:5432/railway
+EXPO_TOKEN: (from Expo dashboard)
 ```
 
-## 📝 Common Issues & Solutions
+## 📈 What Each Test Validates
 
-### "❌ Login failed"
-- Update `TEST_PASSWORD` in backend-tester.py and integration-tester.js
-- Verify user exists in database
+### Authentication Flow
+```
+POST /auth/login → JWT token → Protected endpoints work
+```
 
-### "❌ DATABASE_URL not set"
-- Get connection string from Railway dashboard
-- Set environment variable: `$env:DATABASE_URL='postgresql://...'`
+### Profile Management
+```
+GET /user/profile → hasCompletedOnboarding field exists
+POST /user/profile → Update hasCompletedOnboarding
+GET /user/profile → Verify value persisted
+```
 
-### "⚠️ GITHUB_TOKEN not set"
-- Create token at: https://github.com/settings/tokens
-- Set environment variable: `$env:GITHUB_TOKEN='ghp_...'`
+### Database Persistence
+```
+API Update → Direct SQL Query → Verify database column value
+```
 
-### "⚠️ EXPO_TOKEN not set"
-- Get token from: https://expo.dev/accounts/[account]/settings/access-tokens
-- Set environment variable: `$env:EXPO_TOKEN='...'`
+### Tutorial Completion
+```
+Login → Reset flag → Complete tutorials → Backend updates → Verify persistence
+```
 
-## 🎯 What We're Testing For
+### OTA Deployment
+```
+EAS GraphQL API → Fetch preview branch updates → Verify runtime version
+```
 
-These tests specifically catch the issues you're experiencing:
+## 🐛 Debugging Failed Tests
 
-1. **Backend Persistence Issues**
-   - Does `hasCompletedOnboarding` actually save to database?
-   - Does it persist across logout/login cycles?
-   - Does it sync across devices?
+### Backend Tests Failing
 
-2. **OTA Update Deployment**
-   - Do pushes to `develop` trigger GitHub Actions?
-   - Does the workflow publish to EAS correctly?
-   - Are updates reaching the `preview` branch?
-   - Is the runtime version correct (1.0.1)?
+**Login failed:**
+- Check TEST_PASSWORD is correct
+- Verify user `caitie690` exists in database
+- Confirm backend URL is accessible
 
-3. **Tutorial System Integration**
-   - Does signup set the onboarding flag?
-   - Does tutorial completion update the backend?
-   - Does login skip tutorials for existing users?
+**Database tests failing:**
+- Verify DATABASE_URL is correct
+- Check PostgreSQL connection works: `psql $DATABASE_URL`
+- Confirm `has_completed_onboarding` column exists
 
-## 📈 Success Metrics
+### Integration Tests Failing
+
+**Connection errors:**
+- Check BACKEND_URL environment variable
+- Verify backend is running and accessible
+- Test with curl: `curl https://findable-production.up.railway.app/health`
+
+**EAS tests failing:**
+- Check EXPO_TOKEN is valid
+- Verify project ID is correct (@hirule/mobile)
+- Confirm preview branch exists
+
+## 📝 Test Output Examples
+
+### Successful Run
+```
+backend-tests/test_auth.py::test_login_success PASSED
+✓ Login successful for user caitie690 (ID: 123)
+
+backend-tests/test_profile.py::test_profile_get PASSED
+✓ Profile retrieved: hasCompletedOnboarding=true
+
+backend-tests/test_persistence.py::test_onboarding_persists_in_database PASSED
+✓ API update successful for user_id 123
+✓ Database verification passed: has_completed_onboarding = 1
+
+integration-tests/ota-validation.test.js
+  ✓ should fetch updates from preview branch
+  ✓ Found 3 updates on preview branch
+  ✓ Runtime version matches: 1.0.1
+```
+
+### Failed Run
+```
+backend-tests/test_persistence.py::test_onboarding_persists_in_database FAILED
+AssertionError: Expected 1 or True, got 0
+
+integration-tests/tutorial-flow.test.js
+  ✗ should verify backend updated correctly
+  Expected: true
+  Received: false
+```
+
+## 🎯 Success Criteria
 
 All tests passing means:
-- ✅ Backend API is responding correctly
-- ✅ Database is storing data properly
-- ✅ OTA updates are deploying successfully
-- ✅ Tutorial system is working end-to-end
-- ✅ User data persists across sessions
+- ✅ Backend authentication works
+- ✅ Profile API endpoints functional
+- ✅ hasCompletedOnboarding field saves to database
+- ✅ Data persists across requests
+- ✅ OTA updates published to preview branch
+- ✅ Runtime version matches app version
+- ✅ Tutorial completion flow works end-to-end
 
-## 🚨 When Tests Fail
+## 🔄 Continuous Monitoring
 
-Check `ERRORS.log` for detailed error messages. Common failure patterns:
+Tests run automatically:
+- **Every push** to develop/main
+- **Every PR** opened or updated
+- **Every hour** via cron schedule
+- **On demand** via workflow_dispatch
 
-- **All backend tests failing** → Backend server issue
-- **Database validation failing** → Data not persisting to DB
-- **OTA monitor failing** → GitHub Actions or EAS deployment issue
-- **Integration tests failing** → End-to-end flow broken
-
-## 💡 Tips
-
-1. **Run tests before pushing code** - Catch issues early
-2. **Leave tests running** - Continuous monitoring catches intermittent issues
-3. **Check logs after failed deployments** - See what broke
-4. **Monitor ERRORS.log** - One place for all failures
-
-## 🎉 Next Steps
-
-Once tests are passing consistently:
-1. Add more test cases for edge cases
-2. Set up automated alerts (email/Slack)
-3. Integrate with CI/CD pipeline
-4. Add performance benchmarks
+Results posted as PR comments and available in Actions tab.
 
 ---
 
-**Happy Testing! 🚀**
-
-If you find bugs the tests aren't catching, add new test cases to improve coverage.
-
+**Built for production. No placeholders. Real tests. Real validation.** 🚀
