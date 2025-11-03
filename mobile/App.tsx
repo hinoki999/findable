@@ -17,6 +17,7 @@ import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { colors, type, getTheme } from './src/theme';
+import * as Updates from 'expo-updates';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -283,6 +284,29 @@ function MainApp() {
       loadUserData();
     }
   }, [isAuthenticated, userId]);
+
+  // Check for OTA updates on app launch
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        console.log('🔍 Checking for updates...');
+        const update = await Updates.checkForUpdateAsync();
+        
+        if (update.isAvailable) {
+          console.log('📥 Update available! Downloading...');
+          await Updates.fetchUpdateAsync();
+          console.log('✅ Update downloaded! Reloading...');
+          await Updates.reloadAsync();
+        } else {
+          console.log('✅ App is up to date');
+        }
+      } catch (error) {
+        console.error('❌ Update check failed:', error);
+      }
+    }
+    
+    checkForUpdates();
+  }, []);
 
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
