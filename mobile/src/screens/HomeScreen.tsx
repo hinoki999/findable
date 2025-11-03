@@ -690,7 +690,7 @@ export default function HomeScreen() {
   // Tutorial steps for Home screen
   const tutorialSteps = [
     {
-      message: 'Welcome to DropLink! This is your home screen where you\'ll see nearby users.',
+      message: 'Welcome to DropLink! This is your home screen.',
       position: {
         top: screenHeight * 0.35,
         left: 30,
@@ -698,7 +698,7 @@ export default function HomeScreen() {
       },
     },
     {
-      message: 'When people are nearby (within 33 feet), they\'ll appear as green dots. The dots pulsate faster when they\'re closer. Tap any dot to connect!',
+      message: 'When other users are nearby, they will appear as green dots on the grid.',
       position: {
         top: screenHeight * 0.40,
         left: 30,
@@ -706,17 +706,17 @@ export default function HomeScreen() {
       },
     },
     {
-      message: 'This toggle controls your visibility mode. When active (green), you\'re discoverable and others can see you on their radar. When off (ghost mode), you\'re invisible to everyone nearby.',
+      message: 'This toggle controls your visibility.',
       position: {
         top: screenHeight * 0.35,
         left: 30,
         right: 30,
       },
-      arrow: 'up-left' as const,
+      arrow: 'up' as const,
       arrowPosition: { top: 70, left: 20 },
     },
     {
-      message: 'Use 2-finger pinch to zoom in/out and rotate the grid view for better visibility.',
+      message: 'Use 2-finger pinch to zoom in/out and rotate the grid view.',
       position: {
         top: screenHeight * 0.40,
         left: 30,
@@ -724,7 +724,7 @@ export default function HomeScreen() {
       },
     },
     {
-      message: 'Tap the drop icon in the center of the screen to see drop requests and link notifications when you receive them.',
+      message: 'Tap the drop icon in the center of the screen to see drop requests and link notifications.',
       position: {
         top: screenHeight * 0.45,
         left: 30,

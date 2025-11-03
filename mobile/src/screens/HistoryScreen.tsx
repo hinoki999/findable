@@ -60,7 +60,7 @@ export default function HistoryScreen() {
 
   // Start History screen tutorial when component mounts
   useEffect(() => {
-    startScreenTutorial('History', 4);
+    startScreenTutorial('History', 3);
   }, []);
 
   useEffect(() => {
@@ -217,7 +217,7 @@ export default function HistoryScreen() {
   // History screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'This is your link history! When you connect with someone, their contact card will appear here. Click any contact to view their full card.',
+      message: 'This is your link page! When you link with someone, their contact card will appear here.',
       position: { top: 150, left: screenWidth * 0.1, right: screenWidth * 0.1 },
       arrow: undefined,
     },

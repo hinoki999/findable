@@ -166,7 +166,7 @@ export default function DropScreen() {
   // Drop screen tutorial steps
   const tutorialSteps = [
     {
-      message: `This page shows nearby people when they're within ${maxDistance} ft (10m). When people appear, you can see them here!`,
+      message: 'When people are nearby, they will appear here!',
       position: { top: screenHeight * 0.28, left: screenWidth * 0.3, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },

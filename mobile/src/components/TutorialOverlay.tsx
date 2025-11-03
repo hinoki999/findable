@@ -161,6 +161,20 @@ export default function TutorialOverlay({
           />
         </View>
       )}
+      
+      {step.arrow === 'up' && step.arrowPosition && (
+        <View style={{
+          position: 'absolute',
+          top: step.arrowPosition.top,
+          left: step.arrowPosition.left,
+        }} pointerEvents="none">
+          <MaterialCommunityIcons 
+            name="arrow-up" 
+            size={32} 
+            color={theme.colors.blue}
+          />
+        </View>
+      )}
 
       {/* Skip button */}
       <Pressable
