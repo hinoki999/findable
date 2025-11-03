@@ -308,7 +308,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
           phone: phoneDigitsOnly || '',
           email: email,
           bio: bio || '',
-          hasCompletedOnboarding: true  // Mark onboarding complete after signup
+          hasCompletedOnboarding: false  // Tutorials not complete yet - will be set to true after tutorials finish
         }),
       });
 
