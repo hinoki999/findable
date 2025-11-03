@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { BASE_URL, secureFetch } from '../services/api';
+import { useTutorial } from '../contexts/TutorialContext';
 
 interface SignupScreenProps {
   onSignupSuccess: (token: string, userId: number, username: string, email?: string) => void;
@@ -14,6 +15,7 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  const { enableTutorialsForSignup } = useTutorial();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -318,6 +320,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       
       console.log('✅ Profile saved successfully:', profileData);
+
+      // Enable tutorials for this new signup
+      await enableTutorialsForSignup();
 
       // Success!
       setShowVerificationModal(false);
