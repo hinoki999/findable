@@ -140,6 +140,24 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (allComplete) {
         await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
         console.log('✅ All tutorials complete - flag cleared');
+        
+        // Update backend that onboarding is complete
+        try {
+          const token = await AsyncStorage.getItem('token');
+          if (token) {
+            await fetch(`${BASE_URL}/user/profile`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ hasCompletedOnboarding: true })
+            });
+            console.log('✅ Backend updated: onboarding complete');
+          }
+        } catch (error) {
+          console.error('Could not update backend onboarding status:', error);
+        }
       }
       
       setIsActive(false);
