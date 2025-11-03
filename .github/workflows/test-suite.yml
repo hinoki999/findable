@@ -49,7 +49,7 @@ jobs:
       
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: backend-test-results
           path: testing/backend-tests/
@@ -82,49 +82,7 @@ jobs:
       
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: integration-test-results
           path: testing/integration-tests/
-
-  report-results:
-    name: Report Test Results
-    needs: [backend-tests, integration-tests]
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const backendStatus = '${{ needs.backend-tests.result }}';
-            const integrationStatus = '${{ needs.integration-tests.result }}';
-            
-            const statusEmoji = (status) => {
-              return status === 'success' ? '✅' : '❌';
-            };
-            
-            const comment = `
-            ## 🧪 Test Suite Results
-            
-            ${statusEmoji(backendStatus)} **Backend Tests**: ${backendStatus}
-            ${statusEmoji(integrationStatus)} **Integration Tests**: ${integrationStatus}
-            
-            ---
-            
-            **Backend Tests**: Authentication, Profile API, Database Persistence
-            **Integration Tests**: Tutorial Flow, OTA Validation
-            
-            [View full workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            `;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.name,
-              body: comment
-            });
-
