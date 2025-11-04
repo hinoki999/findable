@@ -1340,32 +1340,30 @@ export default function HomeScreen() {
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <GestureDetector gesture={composedGesture}>
-        <Animated.View style={{ flex: 1, position: 'relative' }}>
+        <Animated.View style={{ flex: 1 }}>
           <Animated.View 
             style={{ 
-              position: 'absolute', 
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 0,
-              transform: [
-                // Simple transform origin at nucleus
-                // This mathematically forces scale/rotate to occur around nucleus position
-                // Pinch location is irrelevant - only distance matters for scale
-                { translateX: nucleusX },      // Move origin to nucleus X
-                { translateY: nucleusY },      // Move origin to nucleus Y
-                { scale: scaleAnimValue },     // Scale around nucleus
-                { rotate: rotationAnimValue.interpolate({
-                  inputRange: [-100, 100],
-                  outputRange: ['-100rad', '100rad']
-                }) }, // Rotate around nucleus
-                { translateX: -nucleusX },     // Move back
-                { translateY: -nucleusY },     // Move back
-              ],
+        position: 'absolute', 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 0,
+            transform: [
+              // Simple transform origin at nucleus
+              // This mathematically forces scale/rotate to occur around nucleus position
+              // Pinch location is irrelevant - only distance matters for scale
+              { translateX: nucleusX },      // Move origin to nucleus X
+              { translateY: nucleusY },      // Move origin to nucleus Y
+              { scale: scaleAnimValue },     // Scale around nucleus
+              { rotate: rotationAnimValue }, // Rotate around nucleus
+              { translateX: -nucleusX },     // Move back
+              { translateY: -nucleusY },     // Move back
+            ],
             }}
+            pointerEvents="box-none"
           >
-        {React.useMemo(() => {
+        {(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
@@ -1522,7 +1520,7 @@ export default function HomeScreen() {
               })}
             </>
           );
-        }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
+        })()}
         
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
       <View 
