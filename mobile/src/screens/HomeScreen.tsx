@@ -649,7 +649,12 @@ export default function HomeScreen() {
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
-    startScreenTutorial('Home', 6);
+    // Small delay to ensure AsyncStorage operations from signup have completed
+    const timer = setTimeout(() => {
+      startScreenTutorial('Home', 6);
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Start BLE scanning when component mounts

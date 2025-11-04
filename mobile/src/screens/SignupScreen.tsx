@@ -289,13 +289,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // This ensures the profile record exists in the backend
       const phoneDigitsOnly = phone.replace(/\D/g, '');
       
-      console.log('💾 Saving profile data:', {
-        name: name || '',
-        phone: phoneDigitsOnly || '',
-        email: email,
-        bio: bio || '',
-        hasCompletedOnboarding: true
-      });
+      // Save profile with onboarding flag set to false (tutorials not yet complete)
       
       const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
         method: 'POST',
@@ -319,12 +313,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(profileData.detail || 'Failed to save profile information');
       }
       
-      console.log('✅ Profile saved successfully:', profileData);
-
       // Enable tutorials for this new signup
       await enableTutorialsForSignup();
 
-      // Success!
+      // Success! Close modal and navigate
       setShowVerificationModal(false);
       onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {

@@ -70,54 +70,27 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const enableTutorialsForSignup = async () => {
-    // Set flag to enable tutorials for this signup session only
     try {
       await AsyncStorage.setItem(SHOW_TUTORIALS_FLAG, 'true');
-      console.log('✅ Tutorials enabled for new signup');
+      // Clear any existing tutorial completion data to ensure fresh start
+      await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
     } catch (error) {
       console.error('Error enabling tutorials:', error);
     }
   };
 
   const startScreenTutorial = async (screen: ScreenName, steps: number) => {
-    // FIRST: Check if tutorials are enabled for this session (signup only)
+    // Check if tutorials are enabled for this session (signup only)
     try {
       const showTutorialsFlag = await AsyncStorage.getItem(SHOW_TUTORIALS_FLAG);
       if (showTutorialsFlag !== 'true') {
-        console.log('🚫 Tutorials disabled - not a new signup session');
         return;
       }
     } catch (error) {
-      console.log('Could not check tutorial flag:', error);
-      return; // Fail safe: don't show tutorials if we can't verify
+      return;
     }
 
-    // SECOND: Check if user has completed onboarding on server
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        const response = await fetch(`${BASE_URL}/user/profile`, {
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (response.ok) {
-          const profile = await response.json();
-          
-          // If user completed onboarding, skip all tutorials
-          if (profile.hasCompletedOnboarding) {
-            console.log('✅ User has completed onboarding - skipping tutorials');
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.log('Could not check onboarding status:', error);
-    }
-
-    // THIRD: Check local storage as fallback
+    // Check if this specific screen tutorial has been completed
     const completed = await isScreenTutorialComplete(screen);
     if (!completed) {
       setCurrentScreen(screen);
@@ -139,7 +112,6 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const allComplete = allScreens.every(s => completedScreens[s] === true);
       if (allComplete) {
         await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
-        console.log('✅ All tutorials complete - flag cleared');
         
         // Update backend that onboarding is complete
         try {
@@ -153,7 +125,6 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               },
               body: JSON.stringify({ hasCompletedOnboarding: true })
             });
-            console.log('✅ Backend updated: onboarding complete');
           }
         } catch (error) {
           console.error('Could not update backend onboarding status:', error);
@@ -186,10 +157,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (currentScreen) {
       await completeScreenTutorial(currentScreen);
     }
-    // Also clear the tutorial flag when user skips
+    // Clear the tutorial flag when user skips
     try {
       await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
-      console.log('✅ Tutorials skipped - flag cleared');
     } catch (error) {
       console.error('Error clearing tutorial flag:', error);
     }
