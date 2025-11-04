@@ -578,10 +578,6 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Pinch offset compensation - tracks offset from nucleus to pinch midpoint
-  const pinchOffsetX = useRef(new Animated.Value(0)).current;
-  const pinchOffsetY = useRef(new Animated.Value(0)).current;
-  
   // Gesture tracking for pinch and rotation
   const gestureState = useRef({
     initialScale: 1,
@@ -1022,27 +1018,15 @@ export default function HomeScreen() {
     if (touches.length === 2) {
       const [touch1, touch2] = touches;
       
-      // Calculate midpoint of the pinch gesture (where user is actually pinching)
-      const midpointX = (touch1.pageX + touch2.pageX) / 2;
-      const midpointY = (touch1.pageY + touch2.pageY) / 2;
-      
-      // Calculate offset from nucleus to pinch midpoint
-      // This offset will be used to counteract React Native's default behavior
-      // which makes the zoom center follow the touch position
-      const offsetX = midpointX - nucleusX;
-      const offsetY = midpointY - nucleusY;
-      
-      // Update animated offset values - these feed into the transform array
-      pinchOffsetX.setValue(offsetX);
-      pinchOffsetY.setValue(offsetY);
-      
-      // PINCH (zoom)
+      // PINCH (zoom) - Simple distance-based scaling
+      // Transform origin is set to nucleus via translateX/Y pattern (see transform array)
+      // This ensures zoom ALWAYS centers on nucleus, regardless of pinch location
       const distance = Math.sqrt(
         Math.pow(touch2.pageX - touch1.pageX, 2) + 
         Math.pow(touch2.pageY - touch1.pageY, 2)
       );
       if (gestureState.initialDistance) {
-        // Calculate scale based ONLY on distance change (pinch amount)
+        // Calculate scale based ONLY on distance change (pinch amount, not location)
         const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
         
         // Constrain scale: 0.8 to 3
@@ -1051,7 +1035,7 @@ export default function HomeScreen() {
         const constrainedScale = Math.max(0.8, Math.min(3, scale));
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
-        console.log('🔍 PINCH at (' + midpointX.toFixed(0) + ',' + midpointY.toFixed(0) + ') | Offset: (' + offsetX.toFixed(0) + ',' + offsetY.toFixed(0) + ') | Scale:', constrainedScale.toFixed(2), '| Zoom center: FORCED TO NUCLEUS');
+        console.log('🔍 PINCH ZOOM - Scale:', constrainedScale.toFixed(2), '| Zoom center: NUCLEUS (', nucleusX.toFixed(0), ',', nucleusY.toFixed(0), ')');
       }
       
       // ROTATION
@@ -1060,17 +1044,14 @@ export default function HomeScreen() {
         const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
         setViewRotation(rotation);
         rotationAnimValue.setValue(rotation);
-        console.log('🔍 ROTATION DETECTED - Angle:', rotation);
+        console.log('🔍 ROTATION - Angle:', rotation.toFixed(2), 'rad');
       }
     }
   };
 
   const handleTouchEnd = () => {
     touchPositions.current = {};
-    // Reset pinch offset when touch ends
-    pinchOffsetX.setValue(0);
-    pinchOffsetY.setValue(0);
-    console.log('🔍 TOUCH END - Reset offsets');
+    console.log('🔍 TOUCH END - Gesture complete');
   };
 
   // Stack drag animation
@@ -1399,17 +1380,15 @@ export default function HomeScreen() {
         bottom: 0,
         zIndex: 0,
             transform: [
-              // Step 1: Move to transform origin (nucleus + compensating offset)
-              { translateX: Animated.add(nucleusX, pinchOffsetX) },
-              { translateY: Animated.add(nucleusY, pinchOffsetY) },
-              
-              // Step 2: Apply scale and rotation
-              { scale: scaleAnimValue },     // Scale around adjusted origin
-              { rotate: rotationAnimValue }, // Rotate around adjusted origin
-              
-              // Step 3: Move back (subtract the same offset)
-              { translateX: Animated.multiply(Animated.add(nucleusX, pinchOffsetX), -1) },
-              { translateY: Animated.multiply(Animated.add(nucleusY, pinchOffsetY), -1) },
+              // Simple transform origin at nucleus
+              // This mathematically forces scale/rotate to occur around nucleus position
+              // Pinch location is irrelevant - only distance matters for scale
+              { translateX: nucleusX },      // Move origin to nucleus X
+              { translateY: nucleusY },      // Move origin to nucleus Y
+              { scale: scaleAnimValue },     // Scale around nucleus
+              { rotate: rotationAnimValue }, // Rotate around nucleus
+              { translateX: -nucleusX },     // Move back
+              { translateY: -nucleusY },     // Move back
             ],
             }}
             pointerEvents="box-none"
@@ -2049,8 +2028,6 @@ export default function HomeScreen() {
               setViewRotation(0);
               scaleAnimValue.setValue(1);
               rotationAnimValue.setValue(0);
-              pinchOffsetX.setValue(0);
-              pinchOffsetY.setValue(0);
             }}
             style={{
               borderWidth: 1,
