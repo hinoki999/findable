@@ -2,6 +2,7 @@
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
@@ -1536,7 +1537,8 @@ export default function HomeScreen() {
           );
         })()}
         
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - MOVED INSIDE TRANSFORM */}
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ONLY SHOW WHEN DEVICES NEARBY */}
+      {filteredDevices.length > 0 && (
       <View 
         style={{ 
           position: 'absolute',
@@ -1598,6 +1600,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
+      )}
         
           </Animated.View>  {/* ← This Animated.View has the transform - test pattern AND drop icon now INSIDE */}
 
@@ -1669,12 +1672,34 @@ export default function HomeScreen() {
             }}
             pointerEvents="none"
           >
-            <Text style={[theme.type.muted, { 
-              textAlign: 'center', 
-              fontSize: 15,
-            }]}>
-              No drops nearby
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[theme.type.muted, { 
+                fontSize: 15,
+              }]}>
+                No{' '}
+              </Text>
+              <LinearGradient
+                colors={['#FF6B4A', '#FFB199', '#FFF5F3', '#C5E8FF', '#4A90FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{
+                  borderRadius: 4,
+                  paddingHorizontal: 2,
+                }}
+              >
+                <Text style={[theme.type.muted, { 
+                  fontSize: 15,
+                  fontWeight: '600',
+                }]}>
+                  drops
+                </Text>
+              </LinearGradient>
+              <Text style={[theme.type.muted, { 
+                fontSize: 15,
+              }]}>
+                {' '}nearby
+              </Text>
+            </View>
           </View>
         )}
       </View>
