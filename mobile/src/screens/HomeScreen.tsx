@@ -1030,7 +1030,8 @@ export default function HomeScreen() {
       );
       if (gestureState.initialDistance) {
         const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
-        const constrainedScale = Math.max(0.5, Math.min(3, scale));
+        // Constrain zoom: min 0.8x (80%), max 4x (400%)
+        const constrainedScale = Math.max(0.8, Math.min(4, scale));
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
         console.log('🔍 PINCH DETECTED - Scale:', constrainedScale);
@@ -1379,15 +1380,16 @@ export default function HomeScreen() {
         zIndex: 0,
             transform: [
               // Transform origin at nucleus (screen center)
-              { translateX: nucleusX },
-              { translateY: nucleusY },
+              // Order: translate TO origin → scale/rotate → translate BACK
+              { translateX: -nucleusX },
+              { translateY: -nucleusY },
               { scale: scaleAnimValue },
               { rotate: rotationAnimValue.interpolate({
                 inputRange: [-100, 100],
                 outputRange: ['-100rad', '100rad']
               }) },
-              { translateX: -nucleusX },
-              { translateY: -nucleusY },
+              { translateX: nucleusX },
+              { translateY: nucleusY },
             ],
             }}
             pointerEvents="box-none"
@@ -1549,7 +1551,9 @@ export default function HomeScreen() {
           );
         }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
         
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
+          </Animated.View>  {/* ← Close transformed grid container */}
+      
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE, STAYS FIXED */}
       <View 
         style={{ 
           position: 'absolute',
@@ -1611,8 +1615,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-        
-          </Animated.View>  {/* ← This Animated.View has the transform - test pattern AND drop icon now INSIDE */}
 
       {/* Pulsating Blips for Nearby Devices - Now inside gesture handlers for full-screen gesture detection */}
       <View 
