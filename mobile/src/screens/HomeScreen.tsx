@@ -2,7 +2,6 @@
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
@@ -1677,30 +1676,23 @@ export default function HomeScreen() {
             pointerEvents="none"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[theme.type.muted, { 
-                fontSize: 15,
-              }]}>
+              <Text style={[theme.type.muted, { fontSize: 15 }]}>
                 No{' '}
               </Text>
-              <LinearGradient
-                colors={['#FF6B4A', '#FFB199', '#FFF5F3', '#C5E8FF', '#4A90FF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{
-                  borderRadius: 4,
-                  paddingHorizontal: 2,
-                }}
-              >
-                <Text style={[theme.type.muted, { 
-                  fontSize: 15,
-                  fontWeight: '600',
-                }]}>
-                  drops
-                </Text>
-              </LinearGradient>
-              <Text style={[theme.type.muted, { 
-                fontSize: 15,
-              }]}>
+              {/* Gradient text matching DropLink branding - no background */}
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                {/* d - Full orange */}
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FF6B4A', letterSpacing: -0.3 }}>d</Text>
+                {/* r - Orange */}
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FF8A6E', letterSpacing: -0.3 }}>r</Text>
+                {/* o - Light orange/peach */}
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFA892', letterSpacing: -0.3 }}>o</Text>
+                {/* p - Very light/whitish */}
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#C8BFD6', letterSpacing: -0.3 }}>p</Text>
+                {/* s - Light blue */}
+                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#92AAE8', letterSpacing: -0.3 }}>s</Text>
+              </View>
+              <Text style={[theme.type.muted, { fontSize: 15 }]}>
                 {' '}nearby
               </Text>
             </View>
