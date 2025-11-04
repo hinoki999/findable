@@ -1378,13 +1378,21 @@ export default function HomeScreen() {
         bottom: 0,
         zIndex: 0,
             transform: [
+              // Transform origin at nucleus (screen center)
+              { translateX: nucleusX },
+              { translateY: nucleusY },
               { scale: scaleAnimValue },
-              { rotate: rotationAnimValue }
+              { rotate: rotationAnimValue.interpolate({
+                inputRange: [-100, 100],
+                outputRange: ['-100rad', '100rad']
+              }) },
+              { translateX: -nucleusX },
+              { translateY: -nucleusY },
             ],
             }}
             pointerEvents="box-none"
           >
-        {(() => {
+        {React.useMemo(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
@@ -1448,9 +1456,9 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(offset, y1);
                   const p2 = projectToSphere(offset, y2);
                   
-                  // Apply view transformation (rotation & zoom)
-                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
-                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  // Use base positions (parent Animated.View handles scale/rotation)
+                  const start = { x: p1.x, y: p1.y };
+                  const end = { x: p2.x, y: p2.y };
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1501,9 +1509,9 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(x1, offset);
                   const p2 = projectToSphere(x2, offset);
                   
-                  // Apply view transformation (rotation & zoom)
-                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
-                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  // Use base positions (parent Animated.View handles scale/rotation)
+                  const start = { x: p1.x, y: p1.y };
+                  const end = { x: p2.x, y: p2.y };
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1539,9 +1547,9 @@ export default function HomeScreen() {
               })}
             </>
           );
-        })()}
+        }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
         
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - MOVED INSIDE TRANSFORM */}
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
       <View 
         style={{ 
           position: 'absolute',
