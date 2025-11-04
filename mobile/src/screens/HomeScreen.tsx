@@ -1427,9 +1427,10 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(offset, y1);
                   const p2 = projectToSphere(offset, y2);
                   
-                  // Apply view transformation (rotation & zoom)
-                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
-                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  // Use BASE positions (no transformation applied here)
+                  // Parent Animated.View handles ALL scale/rotation via its transform prop
+                  const start = { x: p1.x, y: p1.y };
+                  const end = { x: p2.x, y: p2.y };
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1480,9 +1481,10 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(x1, offset);
                   const p2 = projectToSphere(x2, offset);
                   
-                  // Apply view transformation (rotation & zoom)
-                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
-                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
+                  // Use BASE positions (no transformation applied here)
+                  // Parent Animated.View handles ALL scale/rotation via its transform prop
+                  const start = { x: p1.x, y: p1.y };
+                  const end = { x: p2.x, y: p2.y };
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1520,8 +1522,7 @@ export default function HomeScreen() {
           );
         })()}
         
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ONLY SHOW WHEN DEVICES NEARBY */}
-      {filteredDevices.length > 0 && (
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
       <View 
         style={{ 
           position: 'absolute',
@@ -1583,7 +1584,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      )}
         
           </Animated.View>  {/* ← This Animated.View has the transform - test pattern AND drop icon now INSIDE */}
 
