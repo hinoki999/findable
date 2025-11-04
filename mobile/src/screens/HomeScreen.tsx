@@ -2,6 +2,7 @@
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
@@ -578,14 +579,9 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Gesture tracking for pinch and rotation
-  const gestureState = useRef({
-    initialScale: 1,
-    initialAngle: 0,
-    initialDistance: 0,
-    startAngle: 0,
-  }).current;
-  const touchPositions = useRef<{ [key: string]: { x: number; y: number } }>({});
+  // Gesture tracking - stores base values when gesture starts
+  const baseScale = useRef(1);
+  const baseRotation = useRef(0);
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -987,72 +983,50 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
+  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  const handleTouchStart = (event: any) => {
-    const touches = event.nativeEvent.touches;
-    touches.forEach((touch: any) => {
-      touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
+  // Pinch gesture - CRITICAL: Ignores focalX/focalY to keep zoom centered on nucleus
+  const pinchGesture = Gesture.Pinch()
+    .onBegin(() => {
+      baseScale.current = viewScale;
+      console.log('🔍 PINCH BEGIN - Base scale:', baseScale.current.toFixed(2));
+    })
+    .onUpdate((event) => {
+      // CRITICAL: We ONLY use event.scale (the relative pinch amount)
+      // We IGNORE event.focalX and event.focalY (which would make zoom follow touch location)
+      // Transform origin is locked to nucleus via translateX/Y pattern in transform array
+      
+      const newScale = baseScale.current * event.scale;
+      
+      // Constrain scale: 0.8 to 3
+      // minScale = 0.8: Prevents zooming out too far (grid edges stay off-screen, appears infinite)
+      // maxScale = 3.0: Prevents excessive zoom in (maintains usability)
+      const constrainedScale = Math.max(0.8, Math.min(3, newScale));
+      
+      setViewScale(constrainedScale);
+      scaleAnimValue.setValue(constrainedScale);
+    })
+    .onEnd(() => {
+      console.log('🔍 PINCH END - Final scale:', viewScale.toFixed(2), '| Zoom center: NUCLEUS');
     });
-    
-    if (touches.length === 2) {
-      const [touch1, touch2] = touches;
-      const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
-        Math.pow(touch2.pageY - touch1.pageY, 2)
-      );
-      gestureState.initialScale = viewScale;
-      gestureState.initialDistance = distance;
-      
-      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
-      gestureState.initialAngle = viewRotation;
-      gestureState.startAngle = angle;
-      
-      console.log('🔍 TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
-    }
-  };
 
-  const handleTouchMove = (event: any) => {
-    const touches = event.nativeEvent.touches;
-    
-    if (touches.length === 2) {
-      const [touch1, touch2] = touches;
-      
-      // PINCH (zoom) - Simple distance-based scaling
-      // Transform origin is set to nucleus via translateX/Y pattern (see transform array)
-      // This ensures zoom ALWAYS centers on nucleus, regardless of pinch location
-      const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
-        Math.pow(touch2.pageY - touch1.pageY, 2)
-      );
-      if (gestureState.initialDistance) {
-        // Calculate scale based ONLY on distance change (pinch amount, not location)
-        const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
-        
-        // Constrain scale: 0.8 to 3
-        // minScale = 0.8: Prevents zooming out too far (grid edges stay off-screen, appears infinite)
-        // maxScale = 3.0: Prevents excessive zoom in (maintains usability)
-        const constrainedScale = Math.max(0.8, Math.min(3, scale));
-        setViewScale(constrainedScale);
-        scaleAnimValue.setValue(constrainedScale);
-        console.log('🔍 PINCH ZOOM - Scale:', constrainedScale.toFixed(2), '| Zoom center: NUCLEUS (', nucleusX.toFixed(0), ',', nucleusY.toFixed(0), ')');
-      }
-      
-      // ROTATION
-      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
-      if (gestureState.startAngle !== undefined) {
-        const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
-        setViewRotation(rotation);
-        rotationAnimValue.setValue(rotation);
-        console.log('🔍 ROTATION - Angle:', rotation.toFixed(2), 'rad');
-      }
-    }
-  };
+  // Rotation gesture
+  const rotationGesture = Gesture.Rotation()
+    .onBegin(() => {
+      baseRotation.current = viewRotation;
+      console.log('🔍 ROTATION BEGIN - Base angle:', baseRotation.current.toFixed(2), 'rad');
+    })
+    .onUpdate((event) => {
+      const newRotation = baseRotation.current + event.rotation;
+      setViewRotation(newRotation);
+      rotationAnimValue.setValue(newRotation);
+    })
+    .onEnd(() => {
+      console.log('🔍 ROTATION END - Final angle:', viewRotation.toFixed(2), 'rad');
+    });
 
-  const handleTouchEnd = () => {
-    touchPositions.current = {};
-    console.log('🔍 TOUCH END - Gesture complete');
-  };
+  // Compose gestures to work simultaneously
+  const composedGesture = Gesture.Simultaneous(pinchGesture, rotationGesture);
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -1365,12 +1339,8 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <View 
-        style={{ flex: 1 }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      <GestureDetector gesture={composedGesture}>
+        <Animated.View style={{ flex: 1 }}>
           <Animated.View 
             style={{ 
         position: 'absolute', 
@@ -1709,6 +1679,8 @@ export default function HomeScreen() {
           </View>
         )}
       </View>
+        </Animated.View>
+      </GestureDetector>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -3120,8 +3092,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-
-      </View>
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
