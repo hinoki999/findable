@@ -1,4 +1,5 @@
 ﻿import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -734,10 +735,12 @@ function MainApp() {
 // Export App wrapped with AuthProvider
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <MainApp />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <MainApp />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
