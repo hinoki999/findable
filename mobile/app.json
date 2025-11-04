@@ -8,7 +8,8 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/1e0cee35-fd46-4e78-bea2-7941f776922b"
+      "url": "https://u.expo.dev/1e0cee35-fd46-4e78-bea2-7941f776922b",
+      "channel": "preview"
     },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
