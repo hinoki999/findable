@@ -2,7 +2,6 @@
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
@@ -579,9 +578,14 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Gesture tracking - stores base values when gesture starts
-  const baseScale = useRef(1);
-  const baseRotation = useRef(0);
+  // Gesture tracking for pinch and rotation
+  const gestureState = useRef({
+    initialScale: 1,
+    initialAngle: 0,
+    initialDistance: 0,
+    startAngle: 0,
+  }).current;
+  const touchPositions = useRef<{ [key: string]: { x: number; y: number } }>({});
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -762,8 +766,8 @@ export default function HomeScreen() {
   // Spatial tensor tracking for all devices (position, velocity, acceleration)
   const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
 
-  // Map device to 2D position with ACCURATE grid snapping (3 ft intervals)
-  const GRID_SPACING_FEET = 3; // Matches grid configuration at line 1391
+  // Map device to 2D position with ACCURATE grid snapping (1.5 ft intervals)
+  const GRID_SPACING_FEET = 1.5; // Must match grid configuration
   
   const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
@@ -783,7 +787,7 @@ export default function HomeScreen() {
       y: radiusInPixels * Math.sin(angleInRadians),
     };
     
-    // SNAP TO NEAREST GRID INTERSECTION (3 ft intervals) - BEFORE sphere projection
+    // SNAP TO NEAREST GRID INTERSECTION (1 ft intervals) - BEFORE sphere projection
     // This ensures nodes align perfectly with visible grid lines for accuracy
     const gridPixelSpacing = spatialTensors.pixelsPerFoot * GRID_SPACING_FEET;
     const snappedPosition: Vector2D = {
@@ -983,50 +987,65 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
+  // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  // Pinch gesture - CRITICAL: Ignores focalX/focalY to keep zoom centered on nucleus
-  const pinchGesture = Gesture.Pinch()
-    .onBegin(() => {
-      baseScale.current = viewScale;
-      console.log('🔍 PINCH BEGIN - Base scale:', baseScale.current.toFixed(2));
-    })
-    .onUpdate((event) => {
-      // CRITICAL: We ONLY use event.scale (the relative pinch amount)
-      // We IGNORE event.focalX and event.focalY (which would make zoom follow touch location)
-      // Transform origin is locked to nucleus via translateX/Y pattern in transform array
-      
-      const newScale = baseScale.current * event.scale;
-      
-      // Constrain scale: 0.8 to 3
-      // minScale = 0.8: Prevents zooming out too far (grid edges stay off-screen, appears infinite)
-      // maxScale = 3.0: Prevents excessive zoom in (maintains usability)
-      const constrainedScale = Math.max(0.8, Math.min(3, newScale));
-      
-      setViewScale(constrainedScale);
-      scaleAnimValue.setValue(constrainedScale);
-    })
-    .onEnd(() => {
-      console.log('🔍 PINCH END - Final scale:', viewScale.toFixed(2), '| Zoom center: NUCLEUS');
+  const handleTouchStart = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    touches.forEach((touch: any) => {
+      touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
     });
+    
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
+      gestureState.initialScale = viewScale;
+      gestureState.initialDistance = distance;
+      
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      gestureState.initialAngle = viewRotation;
+      gestureState.startAngle = angle;
+      
+      console.log('🔍 TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
+    }
+  };
 
-  // Rotation gesture
-  const rotationGesture = Gesture.Rotation()
-    .onBegin(() => {
-      baseRotation.current = viewRotation;
-      console.log('🔍 ROTATION BEGIN - Base angle:', baseRotation.current.toFixed(2), 'rad');
-    })
-    .onUpdate((event) => {
-      const newRotation = baseRotation.current + event.rotation;
-      setViewRotation(newRotation);
-      rotationAnimValue.setValue(newRotation);
-    })
-    .onEnd(() => {
-      console.log('🔍 ROTATION END - Final angle:', viewRotation.toFixed(2), 'rad');
-    });
+  const handleTouchMove = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      
+      // PINCH (zoom)
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
+      if (gestureState.initialDistance) {
+        const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
+        const constrainedScale = Math.max(0.5, Math.min(3, scale));
+        setViewScale(constrainedScale);
+        scaleAnimValue.setValue(constrainedScale);
+        console.log('🔍 PINCH DETECTED - Scale:', constrainedScale);
+      }
+      
+      // ROTATION
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      if (gestureState.startAngle !== undefined) {
+        const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
+        setViewRotation(rotation);
+        rotationAnimValue.setValue(rotation);
+        console.log('🔍 ROTATION DETECTED - Angle:', rotation);
+      }
+    }
+  };
 
-  // Compose gestures to work simultaneously
-  const composedGesture = Gesture.Simultaneous(pinchGesture, rotationGesture);
+  const handleTouchEnd = () => {
+    touchPositions.current = {};
+    console.log('🔍 TOUCH END - Reset');
+  };
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -1339,8 +1358,12 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <GestureDetector gesture={composedGesture}>
-        <Animated.View style={{ flex: 1 }}>
+      <View 
+        style={{ flex: 1 }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
           <Animated.View 
             style={{ 
         position: 'absolute', 
@@ -1350,15 +1373,8 @@ export default function HomeScreen() {
         bottom: 0,
         zIndex: 0,
             transform: [
-              // Simple transform origin at nucleus
-              // This mathematically forces scale/rotate to occur around nucleus position
-              // Pinch location is irrelevant - only distance matters for scale
-              { translateX: nucleusX },      // Move origin to nucleus X
-              { translateY: nucleusY },      // Move origin to nucleus Y
-              { scale: scaleAnimValue },     // Scale around nucleus
-              { rotate: rotationAnimValue }, // Rotate around nucleus
-              { translateX: -nucleusX },     // Move back
-              { translateY: -nucleusY },     // Move back
+              { scale: scaleAnimValue },
+              { rotate: rotationAnimValue }
             ],
             }}
             pointerEvents="box-none"
@@ -1427,10 +1443,9 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(offset, y1);
                   const p2 = projectToSphere(offset, y2);
                   
-                  // Use BASE positions (no transformation applied here)
-                  // Parent Animated.View handles ALL scale/rotation via its transform prop
-                  const start = { x: p1.x, y: p1.y };
-                  const end = { x: p2.x, y: p2.y };
+                  // Apply view transformation (rotation & zoom)
+                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
+                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1481,10 +1496,9 @@ export default function HomeScreen() {
                   const p1 = projectToSphere(x1, offset);
                   const p2 = projectToSphere(x2, offset);
                   
-                  // Use BASE positions (no transformation applied here)
-                  // Parent Animated.View handles ALL scale/rotation via its transform prop
-                  const start = { x: p1.x, y: p1.y };
-                  const end = { x: p2.x, y: p2.y };
+                  // Apply view transformation (rotation & zoom)
+                  const start = TensorMath.transformVector(viewTransformTensor, { x: p1.x, y: p1.y });
+                  const end = TensorMath.transformVector(viewTransformTensor, { x: p2.x, y: p2.y });
                   
                   const dx = end.x - start.x;
                   const dy = end.y - start.y;
@@ -1522,7 +1536,7 @@ export default function HomeScreen() {
           );
         })()}
         
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - MOVED INSIDE TRANSFORM */}
       <View 
         style={{ 
           position: 'absolute',
@@ -1655,32 +1669,15 @@ export default function HomeScreen() {
             }}
             pointerEvents="none"
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={[theme.type.muted, { fontSize: 15 }]}>
-                No{' '}
-              </Text>
-              {/* Gradient text matching DropLink branding - no background */}
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-                {/* d - Full orange */}
-                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FF6B4A', letterSpacing: -0.3 }}>d</Text>
-                {/* r - Orange */}
-                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FF8A6E', letterSpacing: -0.3 }}>r</Text>
-                {/* o - Light orange/peach */}
-                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#FFA892', letterSpacing: -0.3 }}>o</Text>
-                {/* p - Very light/whitish */}
-                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#C8BFD6', letterSpacing: -0.3 }}>p</Text>
-                {/* s - Light blue */}
-                <Text style={{ fontSize: 15, fontFamily: 'Inter_600SemiBold', color: '#92AAE8', letterSpacing: -0.3 }}>s</Text>
-              </View>
-              <Text style={[theme.type.muted, { fontSize: 15 }]}>
-                {' '}nearby
-              </Text>
-            </View>
+            <Text style={[theme.type.muted, { 
+              textAlign: 'center', 
+              fontSize: 15,
+            }]}>
+              No drops nearby
+            </Text>
           </View>
         )}
       </View>
-        </Animated.View>
-      </GestureDetector>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -3092,6 +3089,8 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      </View>
 
       {/* Tutorial Overlay */}
       {isActive && currentScreen === 'Home' && currentStep > 0 && (
