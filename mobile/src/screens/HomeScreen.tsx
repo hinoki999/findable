@@ -1374,8 +1374,12 @@ export default function HomeScreen() {
         bottom: 0,
         zIndex: 0,
             transform: [
-              { scale: scaleAnimValue },
-              { rotate: rotationAnimValue }
+              { translateX: nucleusX },      // Move origin to nucleus X
+              { translateY: nucleusY },      // Move origin to nucleus Y
+              { scale: scaleAnimValue },     // Scale around nucleus
+              { rotate: rotationAnimValue }, // Rotate around nucleus
+              { translateX: -nucleusX },     // Move back
+              { translateY: -nucleusY },     // Move back
             ],
             }}
             pointerEvents="box-none"
