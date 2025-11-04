@@ -1363,7 +1363,7 @@ export default function HomeScreen() {
             }}
             pointerEvents="box-none"
           >
-        {(() => {
+        {React.useMemo(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
           const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
@@ -1520,7 +1520,7 @@ export default function HomeScreen() {
               })}
             </>
           );
-        })()}
+        }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
         
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE */}
       <View 
