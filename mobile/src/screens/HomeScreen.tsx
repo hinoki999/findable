@@ -595,6 +595,14 @@ export default function HomeScreen() {
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
+  // Log tutorial state on every render
+  console.log(`🏠 [HomeScreen] RENDER - Tutorial State:`, {
+    isActive,
+    currentScreen,
+    currentStep,
+    totalSteps
+  });
+  
   // Safe area insets for Android/iOS system UI
   const insets = useSafeAreaInsets();
   
@@ -641,13 +649,14 @@ export default function HomeScreen() {
   const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
   // Stable nucleus refs for transforms (prevents drift during gestures)
+  // For transform origin, use the center of the Animated.View itself (not screen-relative)
   const nucleusXRef = useRef(screenWidth / 2);
-  const nucleusYRef = useRef(insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2));
+  const nucleusYRef = useRef(viewableHeight / 2);
   
   // Update refs only when screen dimensions actually change (not during gestures)
   useEffect(() => {
     const newNucleusX = screenWidth / 2;
-    const newNucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2);
+    const newNucleusY = viewableHeight / 2;  // Center of the Animated.View, not screen-relative
     
     nucleusXRef.current = newNucleusX;
     nucleusYRef.current = newNucleusY;
@@ -656,9 +665,9 @@ export default function HomeScreen() {
       nucleusX: nucleusXRef.current,
       nucleusY: nucleusYRef.current,
       screenWidth,
-      radarAvailableHeight
+      viewableHeight
     });
-  }, [screenWidth, radarAvailableHeight, insets.top]);
+  }, [screenWidth, viewableHeight]);
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
@@ -669,12 +678,17 @@ export default function HomeScreen() {
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
+    console.log('🏠 [HomeScreen] useEffect fired - will start tutorial in 100ms');
     // Small delay to ensure AsyncStorage operations from signup have completed
     const timer = setTimeout(() => {
+      console.log('🏠 [HomeScreen] Calling startScreenTutorial("Home", 6)');
       startScreenTutorial('Home', 6);
     }, 100);
     
-    return () => clearTimeout(timer);
+    return () => {
+      console.log('🏠 [HomeScreen] useEffect cleanup');
+      clearTimeout(timer);
+    };
   }, []);
 
   // Start BLE scanning when component mounts
@@ -1074,7 +1088,8 @@ export default function HomeScreen() {
         console.log('🔄 ROTATION UPDATE:', {
           rotation: rotation,
           nucleusX: nucleusXRef.current,
-          nucleusY: nucleusYRef.current
+          nucleusY: nucleusYRef.current,
+          transformOrigin: `(${nucleusXRef.current.toFixed(1)}, ${nucleusYRef.current.toFixed(1)})`
         });
       }
     }
@@ -1411,18 +1426,18 @@ export default function HomeScreen() {
         height: viewableHeight,
         zIndex: 0,
             transform: [
-              // Transform origin at nucleus (screen center) - using stable refs
-              // 1. Move nucleus to (0,0)
+              // Transform origin at VIEW center (not screen-relative) - using stable refs
+              // 1. Move center to (0,0)
               { translateX: -nucleusXRef.current },
               { translateY: -nucleusYRef.current },
-              // 2. Scale from (0,0) - which is now the nucleus
+              // 2. Scale from (0,0) - which is now the center
               { scale: scaleAnimValue },
-              // 3. Rotate from (0,0) - which is now the nucleus
+              // 3. Rotate from (0,0) - which is now the center
               { rotate: rotationAnimValue.interpolate({
                 inputRange: [-100, 100],
                 outputRange: ['-100rad', '100rad']
               }) },
-              // 4. Move nucleus back to original position
+              // 4. Move center back to original position
               { translateX: nucleusXRef.current },
               { translateY: nucleusYRef.current },
             ],
@@ -3143,18 +3158,35 @@ export default function HomeScreen() {
       </View>
 
       {/* Tutorial Overlay */}
-      {isActive && currentScreen === 'Home' && currentStep > 0 && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} pointerEvents="box-none">
-          <TutorialOverlay
-            step={tutorialSteps[currentStep - 1]}
-            currentStepNumber={currentStep}
-            totalSteps={totalSteps}
-            onNext={nextStep}
-            onBack={prevStep}
-            onSkip={skipTutorial}
-          />
-        </View>
-      )}
+      {(() => {
+        const shouldShowTutorial = isActive && currentScreen === 'Home' && currentStep > 0;
+        console.log(`🎓 [HomeScreen] Tutorial Render Check:`, {
+          isActive,
+          currentScreen,
+          currentStep,
+          totalSteps,
+          shouldShowTutorial,
+          tutorialStepsLength: tutorialSteps.length,
+          hasStepData: currentStep > 0 && tutorialSteps[currentStep - 1] !== undefined
+        });
+        
+        if (!shouldShowTutorial) {
+          return null;
+        }
+        
+        return (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} pointerEvents="box-none">
+            <TutorialOverlay
+              step={tutorialSteps[currentStep - 1]}
+              currentStepNumber={currentStep}
+              totalSteps={totalSteps}
+              onNext={nextStep}
+              onBack={prevStep}
+              onSkip={skipTutorial}
+            />
+          </View>
+        );
+      })()}
     </Animated.View>
   );
 }
