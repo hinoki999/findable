@@ -640,6 +640,16 @@ export default function HomeScreen() {
   const nucleusX = screenWidth / 2; // Exact horizontal center
   const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
+  // Stable nucleus refs for transforms (prevents drift during gestures)
+  const nucleusXRef = useRef(nucleusX);
+  const nucleusYRef = useRef(nucleusY);
+  
+  // Update refs only when screen dimensions actually change (not during gestures)
+  useEffect(() => {
+    nucleusXRef.current = nucleusX;
+    nucleusYRef.current = nucleusY;
+  }, [screenWidth, screenHeight, insets.top, insets.bottom]);
+  
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
   const iconOffsetY = DROP_ICON_SIZE / 2; // 15 pixels
@@ -1379,10 +1389,10 @@ export default function HomeScreen() {
         height: viewableHeight,
         zIndex: 0,
             transform: [
-              // Transform origin at nucleus (screen center)
+              // Transform origin at nucleus (screen center) - using stable refs
               // 1. Move nucleus to (0,0)
-              { translateX: -nucleusX },
-              { translateY: -nucleusY },
+              { translateX: -nucleusXRef.current },
+              { translateY: -nucleusYRef.current },
               // 2. Scale from (0,0) - which is now the nucleus
               { scale: scaleAnimValue },
               // 3. Rotate from (0,0) - which is now the nucleus
@@ -1391,8 +1401,8 @@ export default function HomeScreen() {
                 outputRange: ['-100rad', '100rad']
               }) },
               // 4. Move nucleus back to original position
-              { translateX: nucleusX },
-              { translateY: nucleusY },
+              { translateX: nucleusXRef.current },
+              { translateY: nucleusYRef.current },
             ],
             }}
             pointerEvents="box-none"
