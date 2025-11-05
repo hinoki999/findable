@@ -646,8 +646,18 @@ export default function HomeScreen() {
   
   // Update refs only when screen dimensions actually change (not during gestures)
   useEffect(() => {
-    nucleusXRef.current = screenWidth / 2;
-    nucleusYRef.current = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2);
+    const newNucleusX = screenWidth / 2;
+    const newNucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2);
+    
+    console.log('🎯 NUCLEUS REFS UPDATED:');
+    console.log('  nucleusXRef:', newNucleusX);
+    console.log('  nucleusYRef:', newNucleusY);
+    console.log('  screenWidth:', screenWidth);
+    console.log('  radarAvailableHeight:', radarAvailableHeight);
+    console.log('  insets.top:', insets.top);
+    
+    nucleusXRef.current = newNucleusX;
+    nucleusYRef.current = newNucleusY;
   }, [screenWidth, radarAvailableHeight, insets.top]);
   
   // Icon offset to center it perfectly (half the icon size)
@@ -1042,18 +1052,32 @@ export default function HomeScreen() {
         const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
         // Constrain zoom: min 0.91x (91%), max 4x (400%)
         const constrainedScale = Math.max(0.91, Math.min(4, scale));
+        
+        console.log('📏 ZOOM UPDATE:');
+        console.log('  currentScale:', constrainedScale.toFixed(2));
+        console.log('  nucleusXRef:', nucleusXRef.current.toFixed(1));
+        console.log('  nucleusYRef:', nucleusYRef.current.toFixed(1));
+        console.log('  distance:', distance.toFixed(1));
+        console.log('  initialDistance:', gestureState.initialDistance.toFixed(1));
+        
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
-        console.log('🔍 PINCH DETECTED - Scale:', constrainedScale);
       }
       
       // ROTATION
       const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
       if (gestureState.startAngle !== undefined) {
         const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
+        
+        console.log('🔄 ROTATION UPDATE:');
+        console.log('  currentRotation:', rotation.toFixed(3), 'rad');
+        console.log('  nucleusXRef:', nucleusXRef.current.toFixed(1));
+        console.log('  nucleusYRef:', nucleusYRef.current.toFixed(1));
+        console.log('  angle:', angle.toFixed(3));
+        console.log('  startAngle:', gestureState.startAngle.toFixed(3));
+        
         setViewRotation(rotation);
         rotationAnimValue.setValue(rotation);
-        console.log('🔍 ROTATION DETECTED - Angle:', rotation);
       }
     }
   };
@@ -1370,6 +1394,13 @@ export default function HomeScreen() {
     }
   };
 
+
+  // Log render with current ref values
+  console.log('🖼️ HOMESCREEN RENDER:');
+  console.log('  nucleusXRef.current:', nucleusXRef.current.toFixed(1));
+  console.log('  nucleusYRef.current:', nucleusYRef.current.toFixed(1));
+  console.log('  viewScale:', viewScale.toFixed(2));
+  console.log('  viewRotation:', viewRotation.toFixed(3));
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
