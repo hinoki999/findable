@@ -1030,8 +1030,8 @@ export default function HomeScreen() {
       );
       if (gestureState.initialDistance) {
         const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
-        // Constrain zoom: min 0.8x (80%), max 4x (400%)
-        const constrainedScale = Math.max(0.8, Math.min(4, scale));
+        // Constrain zoom: min 0.91x (91%), max 4x (400%)
+        const constrainedScale = Math.max(0.91, Math.min(4, scale));
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
         console.log('🔍 PINCH DETECTED - Scale:', constrainedScale);
