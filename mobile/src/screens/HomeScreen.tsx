@@ -641,14 +641,14 @@ export default function HomeScreen() {
   const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
   // Stable nucleus refs for transforms (prevents drift during gestures)
-  const nucleusXRef = useRef(nucleusX);
-  const nucleusYRef = useRef(nucleusY);
+  const nucleusXRef = useRef(screenWidth / 2);
+  const nucleusYRef = useRef(insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2));
   
   // Update refs only when screen dimensions actually change (not during gestures)
   useEffect(() => {
-    nucleusXRef.current = nucleusX;
-    nucleusYRef.current = nucleusY;
-  }, [screenWidth, screenHeight, insets.top, insets.bottom]);
+    nucleusXRef.current = screenWidth / 2;
+    nucleusYRef.current = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2);
+  }, [screenWidth, radarAvailableHeight, insets.top]);
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
