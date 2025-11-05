@@ -2531,16 +2531,19 @@ def get_user_profile(user_id: int = Depends(get_current_user)):
         if not row:
             return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None, "socialMedia": [], "hasCompletedOnboarding": False}
         
-        social_media = json.loads(row[5]) if row[5] else []
+        social_media_value = get_value(row, 'social_media' if USE_POSTGRES else 5)
+        social_media = json.loads(social_media_value) if social_media_value else []
+        
+        onboarding_value = get_value(row, 'has_completed_onboarding' if USE_POSTGRES else 6)
         
         return {
-            "name": row[0] or "",
-            "email": row[1] or "",
-            "phone": row[2] or "",
-            "bio": row[3] or "",
-            "profile_photo": row[4],
+            "name": get_value(row, 'name' if USE_POSTGRES else 0) or "",
+            "email": get_value(row, 'email' if USE_POSTGRES else 1) or "",
+            "phone": get_value(row, 'phone' if USE_POSTGRES else 2) or "",
+            "bio": get_value(row, 'bio' if USE_POSTGRES else 3) or "",
+            "profile_photo": get_value(row, 'profile_photo' if USE_POSTGRES else 4),
             "socialMedia": social_media,
-            "hasCompletedOnboarding": bool(row[6]) if row[6] is not None else False
+            "hasCompletedOnboarding": bool(onboarding_value) if onboarding_value is not None else False
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
