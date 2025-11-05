@@ -1375,19 +1375,22 @@ export default function HomeScreen() {
         position: 'absolute', 
         top: 0,
         left: 0,
-        right: 0,
-        bottom: 0,
+        width: screenWidth,
+        height: viewableHeight,
         zIndex: 0,
             transform: [
               // Transform origin at nucleus (screen center)
-              // Order: translate TO origin → scale/rotate → translate BACK
+              // 1. Move nucleus to (0,0)
               { translateX: -nucleusX },
               { translateY: -nucleusY },
+              // 2. Scale from (0,0) - which is now the nucleus
               { scale: scaleAnimValue },
+              // 3. Rotate from (0,0) - which is now the nucleus
               { rotate: rotationAnimValue.interpolate({
                 inputRange: [-100, 100],
                 outputRange: ['-100rad', '100rad']
               }) },
+              // 4. Move nucleus back to original position
               { translateX: nucleusX },
               { translateY: nucleusY },
             ],
