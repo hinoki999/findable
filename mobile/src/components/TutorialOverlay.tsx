@@ -37,6 +37,14 @@ export default function TutorialOverlay({
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
 
+  console.log(`🎨 [TutorialOverlay] RENDERING:`, {
+    currentStepNumber,
+    totalSteps,
+    hasStep: !!step,
+    stepMessage: step?.message?.substring(0, 50) + '...',
+    stepPosition: step?.position
+  });
+
   // Directional arrows removed - only navigation arrows remain
 
   return (

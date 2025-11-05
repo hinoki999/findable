@@ -71,32 +71,53 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const enableTutorialsForSignup = async () => {
     try {
+      console.log('📚 [TutorialContext] Setting SHOW_TUTORIALS_FLAG to "true"');
       await AsyncStorage.setItem(SHOW_TUTORIALS_FLAG, 'true');
+      console.log('📚 [TutorialContext] Clearing existing tutorial data');
       // Clear any existing tutorial completion data to ensure fresh start
       await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
+      console.log('✅ [TutorialContext] Tutorials enabled for signup');
     } catch (error) {
-      console.error('Error enabling tutorials:', error);
+      console.error('❌ [TutorialContext] Error enabling tutorials:', error);
     }
   };
 
   const startScreenTutorial = async (screen: ScreenName, steps: number) => {
+    console.log(`📚 [TutorialContext] startScreenTutorial called for screen: "${screen}", steps: ${steps}`);
+    
     // Check if tutorials are enabled for this session (signup only)
     try {
       const showTutorialsFlag = await AsyncStorage.getItem(SHOW_TUTORIALS_FLAG);
+      console.log(`📚 [TutorialContext] SHOW_TUTORIALS_FLAG = "${showTutorialsFlag}"`);
+      
       if (showTutorialsFlag !== 'true') {
+        console.log(`⏭️ [TutorialContext] Tutorials NOT enabled (flag != "true"), skipping tutorial`);
         return;
       }
     } catch (error) {
+      console.error('❌ [TutorialContext] Error reading SHOW_TUTORIALS_FLAG:', error);
       return;
     }
 
     // Check if this specific screen tutorial has been completed
     const completed = await isScreenTutorialComplete(screen);
+    console.log(`📚 [TutorialContext] Screen "${screen}" completed status: ${completed}`);
+    
     if (!completed) {
+      console.log(`✅ [TutorialContext] Starting tutorial for "${screen}"`);
+      console.log(`   Setting: currentScreen="${screen}", totalSteps=${steps}, currentStep=1, isActive=true`);
       setCurrentScreen(screen);
       setTotalSteps(steps);
       setCurrentStep(1);
       setIsActive(true);
+      console.log(`   State update calls completed`);
+      
+      // Verify state was set (next render will show updated values)
+      setTimeout(() => {
+        console.log(`   [TutorialContext] State after 100ms - This should show in next render`);
+      }, 100);
+    } else {
+      console.log(`⏭️ [TutorialContext] Tutorial for "${screen}" already completed, skipping`);
     }
   };
 

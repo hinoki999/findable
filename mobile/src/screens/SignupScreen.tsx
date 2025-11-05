@@ -314,10 +314,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       
       // Enable tutorials for this new signup
+      console.log('📚 Enabling tutorials for new signup...');
       await enableTutorialsForSignup();
+      console.log('✅ Tutorials enabled successfully');
 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
+      console.log('🚀 Calling onSignupSuccess - navigating to app...');
       onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -948,4 +951,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
 

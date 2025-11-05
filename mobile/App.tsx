@@ -311,11 +311,14 @@ function MainApp() {
 
   // Auth handlers
   const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
-    console.log('✅ Signup successful:', username);
+    console.log('✅ [App] Signup successful:', username);
+    console.log('✅ [App] Setting isFirstTimeUser = true');
     // Profile info is already saved in SignupScreen
     // Now log them in and show profile photo prompt
     setIsFirstTimeUser(true);
+    console.log('✅ [App] Calling login()');
     await login(token, userId, username);
+    console.log('✅ [App] Setting showProfilePhotoPrompt = true');
     // Show profile photo prompt instead of going directly to main app
     setShowProfilePhotoPrompt(true);
   };
@@ -337,17 +340,22 @@ function MainApp() {
   };
 
   const handleProfilePhotoPromptComplete = async () => {
-    console.log('✅ Profile photo prompt completed');
+    console.log('✅ [App] Profile photo prompt completed');
+    console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
+    console.log('✅ [App] Loading user data...');
     // Load user data to get the new profile photo if uploaded
     await loadUserData();
+    console.log('✅ [App] User data loaded');
     
     // For first-time users, navigate to Home tab
     // Tutorials will automatically show since AsyncStorage has no completion data yet
+    console.log(`✅ [App] isFirstTimeUser = ${isFirstTimeUser}`);
     if (isFirstTimeUser) {
+      console.log('✅ [App] Navigating to Home tab for first-time user');
       setTab('Home');
       setSubScreen(null);
-      console.log('✅ Navigation reset to Home tab for first-time user');
+      console.log('✅ [App] Navigation complete - HomeScreen should mount now and start tutorial');
     }
     
     showToast({
