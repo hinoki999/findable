@@ -1427,20 +1427,20 @@ export default function HomeScreen() {
         height: viewableHeight,
         zIndex: 0,
             transform: [
-              // Transform origin at VIEW center (not screen-relative) - using stable refs
-              // 1. Move center to (0,0)
-              { translateX: -nucleusXRef.current },
-              { translateY: -nucleusYRef.current },
-              // 2. Scale from (0,0) - which is now the center
+              // Transform origin at raindrop icon position - rotate/zoom around center like a protractor
+              // 1. Move raindrop position to (0,0)
+              { translateX: -nucleusX },
+              { translateY: -nucleusY },
+              // 2. Scale from (0,0) - which is now the raindrop center
               { scale: scaleAnimValue },
-              // 3. Rotate from (0,0) - which is now the center
+              // 3. Rotate from (0,0) - which is now the raindrop center
               { rotate: rotationAnimValue.interpolate({
                 inputRange: [-100, 100],
                 outputRange: ['-100rad', '100rad']
               }) },
-              // 4. Move center back to original position
-              { translateX: nucleusXRef.current },
-              { translateY: nucleusYRef.current },
+              // 4. Move raindrop back to original position
+              { translateX: nucleusX },
+              { translateY: nucleusY },
             ],
             }}
             pointerEvents="box-none"
