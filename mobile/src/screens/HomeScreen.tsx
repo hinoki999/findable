@@ -649,25 +649,26 @@ export default function HomeScreen() {
   const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
   
   // Stable nucleus refs for transforms (prevents drift during gestures)
-  // For transform origin, use the center of the Animated.View itself (not screen-relative)
-  const nucleusXRef = useRef(screenWidth / 2);
-  const nucleusYRef = useRef(viewableHeight / 2);
-  
+  // Transform origin must match the raindrop icon position for proper rotation centering
+  const nucleusXRef = useRef(nucleusX);
+  const nucleusYRef = useRef(nucleusY);
+
   // Update refs only when screen dimensions actually change (not during gestures)
   useEffect(() => {
-    const newNucleusX = screenWidth / 2;
-    const newNucleusY = viewableHeight / 2;  // Center of the Animated.View, not screen-relative
-    
+    const newNucleusX = nucleusX;
+    const newNucleusY = nucleusY;  // Must match raindrop icon Y position
+
     nucleusXRef.current = newNucleusX;
     nucleusYRef.current = newNucleusY;
-    
+
     console.log('🎯 NUCLEUS REFS UPDATED:', {
       nucleusX: nucleusXRef.current,
       nucleusY: nucleusYRef.current,
+      raindropY: nucleusY,
       screenWidth,
       viewableHeight
     });
-  }, [screenWidth, viewableHeight]);
+  }, [nucleusX, nucleusY, screenWidth, viewableHeight]);
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
