@@ -1,6 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
-import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -579,9 +578,14 @@ export default function HomeScreen() {
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
   
-  // Refs to store gesture base values (for relative updates)
-  const baseScale = useRef(1);
-  const baseRotation = useRef(0);
+  // Gesture tracking for pinch and rotation
+  const gestureState = useRef({
+    initialScale: 1,
+    initialAngle: 0,
+    initialDistance: 0,
+    startAngle: 0,
+  }).current;
+  const touchPositions = useRef<{ [key: string]: { x: number; y: number } }>({});
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
@@ -1022,60 +1026,79 @@ export default function HomeScreen() {
     }
   }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
 
-  // ========== GESTURE HANDLERS (PINCH ZOOM & ROTATION) ==========
+  // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
   
-  // Pinch gesture for zoom
-  const pinchGesture = Gesture.Pinch()
-    .onBegin(() => {
-      baseScale.current = viewScale;
-      console.log('🤏 PINCH BEGIN - baseScale:', baseScale.current);
-    })
-    .onUpdate((event) => {
-      // Calculate new scale: baseScale * pinch scale factor
-      const newScale = baseScale.current * event.scale;
-      
-      // Constrain zoom: min 0.91x (91%), max 4x (400%)
-      const constrainedScale = Math.max(0.91, Math.min(4, newScale));
-      
-      setViewScale(constrainedScale);
-      scaleAnimValue.setValue(constrainedScale);
-      
-      console.log('📏 ZOOM UPDATE:', {
-        scale: constrainedScale.toFixed(2),
-        eventScale: event.scale.toFixed(2),
-        nucleusX: nucleusXRef.current.toFixed(1),
-        nucleusY: nucleusYRef.current.toFixed(1)
-      });
-    })
-    .onEnd(() => {
-      console.log('🤏 PINCH END - final scale:', viewScale.toFixed(2));
+  const handleTouchStart = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    touches.forEach((touch: any) => {
+      touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
     });
-
-  // Rotation gesture for twist
-  const rotationGesture = Gesture.Rotation()
-    .onBegin(() => {
-      baseRotation.current = viewRotation;
-      console.log('🔄 ROTATION BEGIN - baseRotation:', baseRotation.current.toFixed(3));
-    })
-    .onUpdate((event) => {
-      // Calculate new rotation: baseRotation + gesture rotation
-      const newRotation = baseRotation.current + event.rotation;
+    
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
+      gestureState.initialScale = viewScale;
+      gestureState.initialDistance = distance;
       
-      setViewRotation(newRotation);
-      rotationAnimValue.setValue(newRotation);
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      gestureState.initialAngle = viewRotation;
+      gestureState.startAngle = angle;
       
-      console.log('🔄 ROTATION UPDATE:', {
-        rotation: newRotation.toFixed(3),
-        eventRotation: event.rotation.toFixed(3),
-        transformOrigin: `(${nucleusXRef.current.toFixed(1)}, ${nucleusYRef.current.toFixed(1)})`
-      });
-    })
-    .onEnd(() => {
-      console.log('🔄 ROTATION END - final rotation:', viewRotation.toFixed(3));
-    });
+      console.log('🔍 TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
+    }
+  };
 
-  // Combine pinch and rotation to work simultaneously
-  const composedGesture = Gesture.Simultaneous(pinchGesture, rotationGesture);
+  const handleTouchMove = (event: any) => {
+    const touches = event.nativeEvent.touches;
+    
+    if (touches.length === 2) {
+      const [touch1, touch2] = touches;
+      
+      // PINCH (zoom)
+      const distance = Math.sqrt(
+        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageY - touch1.pageY, 2)
+      );
+      if (gestureState.initialDistance) {
+        const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
+        // Constrain zoom: min 0.91x (91%), max 4x (400%)
+        const constrainedScale = Math.max(0.91, Math.min(4, scale));
+        
+        setViewScale(constrainedScale);
+        scaleAnimValue.setValue(constrainedScale);
+        
+        console.log('📏 ZOOM UPDATE:', {
+          scale: constrainedScale,
+          nucleusX: nucleusXRef.current,
+          nucleusY: nucleusYRef.current
+        });
+      }
+      
+      // ROTATION
+      const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
+      if (gestureState.startAngle !== undefined) {
+        const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
+        
+        setViewRotation(rotation);
+        rotationAnimValue.setValue(rotation);
+        
+        console.log('🔄 ROTATION UPDATE:', {
+          rotation: rotation,
+          nucleusX: nucleusXRef.current,
+          nucleusY: nucleusYRef.current,
+          transformOrigin: `(${nucleusXRef.current.toFixed(1)}, ${nucleusYRef.current.toFixed(1)})`
+        });
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchPositions.current = {};
+    console.log('🔍 TOUCH END - Reset');
+  };
 
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -1388,8 +1411,12 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <GestureDetector gesture={composedGesture}>
-        <View style={{ flex: 1 }}>
+      <View 
+        style={{ flex: 1 }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
           <Animated.View 
             style={{ 
         position: 'absolute', 
@@ -3128,8 +3155,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-        </View>
-      </GestureDetector>
+      </View>
 
       {/* Tutorial Overlay */}
       {(() => {
