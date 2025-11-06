@@ -287,7 +287,7 @@ function MainApp() {
   }, [isAuthenticated, userId]);
 
   // Check for OTA updates on app launch
-  useEffect(() => {
+  useEffect(() => { 
     async function checkForUpdates() {
       try {
         console.log('🔍 Checking for updates...');
@@ -511,7 +511,7 @@ function MainApp() {
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
           <Text style={{ color: theme.colors.text }}>Loading…</Text>
-        </View>
+      </View>
       </DarkModeContext.Provider>
     );
   }
@@ -594,7 +594,7 @@ function MainApp() {
               handleProfilePhotoPromptComplete();
             }} 
           />
-        </View>
+      </View>
       </DarkModeContext.Provider>
     );
   }
@@ -629,10 +629,10 @@ function MainApp() {
 
   return (
     <TutorialProvider>
-      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-        <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
-          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
-            <ToastContext.Provider value={{ showToast }}>
+    <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+      <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
+        <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
+          <ToastContext.Provider value={{ showToast }}>
               <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
                 <LinkNotificationsContext.Provider value={{ 
                   linkNotifications, 
@@ -648,13 +648,13 @@ function MainApp() {
 
         {/* Bottom nav - Hide when sub-screen is active */}
         {!subScreen && (
-          <View style={{
-            flexDirection: 'row',
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
+        <View style={{
+          flexDirection: 'row',
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
             backgroundColor: theme.colors.white,
             paddingBottom: insets.bottom
-          }}>
+        }}>
            {/* Home */}
            <Pressable
              onPress={() => setTab('Home')}
