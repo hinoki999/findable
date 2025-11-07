@@ -1597,13 +1597,20 @@ export default function HomeScreen() {
         
           </Animated.View>  {/* ← Close transformed grid container */}
       
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ALWAYS VISIBLE, STAYS FIXED */}
-      <View 
-        style={{ 
+      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ROTATES WITH GRID */}
+      <Animated.View
+        style={{
           position: 'absolute',
           top: nucleusY,
           left: nucleusX,
-          transform: [{ translateX: -iconOffsetX }, { translateY: -iconOffsetY }],
+          transform: [
+            { translateX: -iconOffsetX },
+            { translateY: -iconOffsetY },
+            { rotate: rotationAnimValue.interpolate({
+              inputRange: [-100, 100],
+              outputRange: ['-100rad', '100rad']
+            }) }
+          ],
           zIndex: 999,
         }}
         pointerEvents="box-none"
@@ -1658,7 +1665,7 @@ export default function HomeScreen() {
           </View>
           </Pressable>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Pulsating Blips for Nearby Devices - Now inside gesture handlers for full-screen gesture detection */}
       <View 
