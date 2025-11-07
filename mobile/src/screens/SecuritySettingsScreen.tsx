@@ -6,6 +6,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import * as Updates from 'expo-updates';
 
 interface SecuritySettingsScreenProps {
   navigation: any;
@@ -151,6 +152,39 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
     } catch (error: any) {
       showToast({
         message: error.message || 'Failed to update',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
+  const handleForceUpdate = async () => {
+    try {
+      showToast({
+        message: 'Checking for updates...',
+        type: 'info',
+        duration: 2000,
+      });
+
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        showToast({
+          message: 'Downloading update...',
+          type: 'info',
+          duration: 2000,
+        });
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      } else {
+        showToast({
+          message: 'Already on latest version',
+          type: 'success',
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      showToast({
+        message: 'Update failed: ' + error,
         type: 'error',
         duration: 3000,
       });
@@ -319,13 +353,33 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               <MaterialCommunityIcons name="theme-light-dark" size={20} color={theme.colors.muted} style={styles.rowIcon} />
               <Text style={[theme.type.body, { color: theme.colors.text }]}>Dark Mode</Text>
             </View>
-            <Switch 
-              value={isDarkMode} 
+            <Switch
+              value={isDarkMode}
               onValueChange={toggleDarkMode}
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
             />
           </View>
+        </View>
+
+        {/* Force Update */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Updates</Text>
+          </View>
+          <Pressable
+            onPress={handleForceUpdate}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="download" size={20} color={theme.colors.blue} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.blue, fontWeight: '600' }]}>Force Update Now</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.blue} />
+          </Pressable>
         </View>
 
         {/* Logout */}
