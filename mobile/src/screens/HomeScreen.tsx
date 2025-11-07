@@ -1594,7 +1594,85 @@ export default function HomeScreen() {
             </>
           );
         }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
-        
+
+        {/* Pulsating Blips for Nearby Devices - Inside grid so they rotate with it */}
+        <View
+          style={{
+            position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+            zIndex: 1000,
+          }}
+          pointerEvents="box-none"
+        >
+          {filteredDevices.map((device) => {
+            const position = getGridPosition(device);
+
+            return (
+              <DeviceBlip
+                key={device.id || device.name}
+                device={device}
+                position={{ x: position.x, y: position.y }}
+                depth={position.z}
+                nucleusX={nucleusX}
+                nucleusY={nucleusY}
+                viewTransform={viewTransformTensor}
+                onPress={() => {
+                  console.log('✅ Blip press handler called for:', device.name);
+                  setSelectedBlipDevice(device);
+                  setShowBlipModal(true);
+                }}
+              />
+            );
+          })}
+
+          {/* Link Markers - for accepted and returned links (no pulsation) */}
+          {linkedDevices.map((device) => {
+            // Use same positioning logic as blips to ensure grid snapping
+            const position = getGridPosition(device as any); // Device has distanceFeet property
+
+            return (
+              <LinkMarker
+                key={device.id || `link-${device.name}`}
+                device={device}
+                position={{ x: position.x, y: position.y }}
+                depth={position.z}
+                nucleusX={nucleusX}
+                nucleusY={nucleusY}
+                viewTransform={viewTransformTensor}
+                onPress={() => {
+                  console.log('✅ Link marker clicked for:', device.name);
+                  setSelectedLink(device);
+                  setShowLinkModal(true);
+                }}
+              />
+            );
+          })}
+
+          {/* Empty State - No Nearby Users */}
+          {filteredDevices.length === 0 && linkedDevices.length === 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: '45%',
+                left: 0,
+                right: 0,
+                alignItems: 'center',
+              }}
+              pointerEvents="none"
+            >
+              <Text style={[theme.type.muted, {
+                textAlign: 'center',
+                fontSize: 15,
+              }]}>
+                No drops nearby
+              </Text>
+            </View>
+          )}
+        </View>
+
           </Animated.View>  {/* ← Close transformed grid container */}
       
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ROTATES WITH GRID */}
@@ -1666,84 +1744,6 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </Animated.View>
-
-      {/* Pulsating Blips for Nearby Devices - Now inside gesture handlers for full-screen gesture detection */}
-      <View 
-        style={{ 
-          position: 'absolute', 
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-          zIndex: 1000,
-        }}
-        pointerEvents="box-none"
-      >
-        {filteredDevices.map((device) => {
-          const position = getGridPosition(device);
-          
-          return (
-            <DeviceBlip
-              key={device.id || device.name}
-              device={device}
-              position={{ x: position.x, y: position.y }}
-              depth={position.z}
-              nucleusX={nucleusX}
-              nucleusY={nucleusY}
-              viewTransform={viewTransformTensor}
-              onPress={() => {
-                console.log('✅ Blip press handler called for:', device.name);
-                setSelectedBlipDevice(device);
-                setShowBlipModal(true);
-              }}
-            />
-          );
-        })}
-        
-        {/* Link Markers - for accepted and returned links (no pulsation) */}
-        {linkedDevices.map((device) => {
-          // Use same positioning logic as blips to ensure grid snapping
-          const position = getGridPosition(device as any); // Device has distanceFeet property
-          
-          return (
-            <LinkMarker
-              key={device.id || `link-${device.name}`}
-              device={device}
-              position={{ x: position.x, y: position.y }}
-              depth={position.z}
-              nucleusX={nucleusX}
-              nucleusY={nucleusY}
-              viewTransform={viewTransformTensor}
-              onPress={() => {
-                console.log('✅ Link marker clicked for:', device.name);
-                setSelectedLink(device);
-                setShowLinkModal(true);
-              }}
-            />
-          );
-        })}
-        
-        {/* Empty State - No Nearby Users */}
-        {filteredDevices.length === 0 && linkedDevices.length === 0 && (
-          <View
-            style={{
-              position: 'absolute',
-              top: '45%',
-              left: 0,
-              right: 0,
-              alignItems: 'center',
-            }}
-            pointerEvents="none"
-          >
-            <Text style={[theme.type.muted, { 
-              textAlign: 'center', 
-              fontSize: 15,
-            }]}>
-              No drops nearby
-            </Text>
-          </View>
-        )}
-      </View>
 
       <ScrollView
         style={{ flex: 1 }}
