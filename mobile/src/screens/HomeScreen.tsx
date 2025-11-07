@@ -806,8 +806,8 @@ export default function HomeScreen() {
   // Spatial tensor tracking for all devices (position, velocity, acceleration)
   const deviceSpatialTensors = useRef<Map<string, SpatialTensor>>(new Map());
 
-  // Map device to 2D position with ACCURATE grid snapping (1.5 ft intervals)
-  const GRID_SPACING_FEET = 1.5; // Must match grid configuration
+  // Map device to 2D position with ACCURATE grid snapping (3 ft intervals to match visible grid)
+  const GRID_SPACING_FEET = 3; // Must match grid configuration (3 ft intervals)
   
   const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
@@ -1605,7 +1605,6 @@ export default function HomeScreen() {
                 bottom: 0,
             zIndex: 1000,
           }}
-          pointerEvents="box-none"
         >
           {filteredDevices.map((device) => {
             const position = getGridPosition(device);
