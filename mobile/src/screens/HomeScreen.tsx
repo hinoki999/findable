@@ -1547,9 +1547,9 @@ export default function HomeScreen() {
                   const t1 = (seg / segmentsPerLine) * 2 - 1;
                   const t2 = ((seg + 1) / segmentsPerLine) * 2 - 1;
                   
-                  // Extend lines to full screen width for complete background coverage
-                  const x1 = t1 * screenWidth * 0.6;
-                  const x2 = t2 * screenWidth * 0.6;
+                  // Extend lines to full screen width for complete background coverage (even when zoomed out)
+                  const x1 = t1 * screenWidth * 1.2;
+                  const x2 = t2 * screenWidth * 1.2;
                   
                   // Apply cubed sphere projection to create outward bulge
                   const p1 = projectToSphere(x1, offset);
