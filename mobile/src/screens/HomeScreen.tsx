@@ -1428,9 +1428,9 @@ export default function HomeScreen() {
         zIndex: 0,
             transform: [
               // Transform origin at raindrop icon position - rotate/zoom around center like a protractor
-              // 1. Move raindrop position to (0,0)
-              { translateX: -nucleusX },
-              { translateY: -nucleusY },
+              // 1. Move raindrop position to (0,0) - MUST use refs to prevent drift
+              { translateX: -nucleusXRef.current },
+              { translateY: -nucleusYRef.current },
               // 2. Scale from (0,0) - which is now the raindrop center
               { scale: scaleAnimValue },
               // 3. Rotate from (0,0) - which is now the raindrop center
@@ -1439,8 +1439,8 @@ export default function HomeScreen() {
                 outputRange: ['-100rad', '100rad']
               }) },
               // 4. Move raindrop back to original position
-              { translateX: nucleusX },
-              { translateY: nucleusY },
+              { translateX: nucleusXRef.current },
+              { translateY: nucleusYRef.current },
             ],
             }}
             pointerEvents="box-none"
