@@ -20,6 +20,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
   const theme = getTheme(isDarkMode);
   // const { request, response, promptAsync } = useGoogleAuth();
   const [googleLoading, setGoogleLoading] = React.useState(false);
+  const [dropPosition, setDropPosition] = React.useState({ x: 0, y: 0 });
 
   // useEffect(() => {
   //   if (response?.type === 'success') {
@@ -63,21 +64,57 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
         {/* Gradient Text with Drop as dot over 'i' */}
         <View style={styles.textWithDropContainer}>
           {Platform.OS === 'web' ? (
-            <Text
-              style={[
-                styles.appName,
-                {
-                  display: 'inline-block',
-                  background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                } as any
-              ]}
-            >
-              DropLınk
-            </Text>
+            <View style={{ flexDirection: 'row' }}>
+              <Text
+                style={[
+                  styles.appName,
+                  {
+                    display: 'inline-block',
+                    background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  } as any
+                ]}
+              >
+                DropL
+              </Text>
+              <Text
+                style={[
+                  styles.appName,
+                  {
+                    display: 'inline-block',
+                    background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  } as any
+                ]}
+                onLayout={(event) => {
+                  const { x, y, width } = event.nativeEvent.layout;
+                  setDropPosition({ x: x + width / 2, y: y });
+                }}
+              >
+                ı
+              </Text>
+              <Text
+                style={[
+                  styles.appName,
+                  {
+                    display: 'inline-block',
+                    background: 'linear-gradient(90deg, #FF6B35 0%, #FF8C5A 33%, #5BA3FF 66%, #007AFF 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  } as any
+                ]}
+              >
+                nk
+              </Text>
+            </View>
           ) : (
             <LinearGradient
               colors={['#FF6B35', '#FF8C5A', '#5BA3FF', '#007AFF']}
@@ -85,11 +122,23 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
               end={{ x: 1, y: 0 }}
               style={styles.gradientContainer}
             >
-              <Text style={styles.appName}>DropLınk</Text>
+              <View style={{ flexDirection: 'row' }}>
+                <Text style={styles.appName}>DropL</Text>
+                <Text
+                  style={styles.appName}
+                  onLayout={(event) => {
+                    const { x, y, width } = event.nativeEvent.layout;
+                    setDropPosition({ x: x + width / 2, y: y });
+                  }}
+                >
+                  ı
+                </Text>
+                <Text style={styles.appName}>nk</Text>
+              </View>
             </LinearGradient>
           )}
-          {/* Water Drop Icon positioned over 'i' */}
-          <View style={styles.dropOverI}>
+          {/* Water Drop Icon positioned dynamically over 'ı' */}
+          <View style={[styles.dropOverI, dropPosition.x > 0 && { left: dropPosition.x, marginLeft: 0 }]}>
             <MaterialCommunityIcons name="water" size={12} color="#FF8C5A" />
           </View>
         </View>
@@ -158,8 +207,7 @@ const styles = StyleSheet.create({
   dropOverI: {
     position: 'absolute',
     top: -6,
-    left: '50%',
-    marginLeft: 22.5,
+    left: 0,
     zIndex: 10,
   },
   appName: {
