@@ -315,16 +315,17 @@ export default function DropScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          <View style={{ 
-            alignItems: 'center', 
+          <View style={{
+            flex: 1,
+            alignItems: 'center',
             justifyContent: 'center',
-            paddingVertical: 80,
+            minHeight: 400,
             paddingHorizontal: 40,
           }}>
-            <Text style={[theme.type.h1, { 
-              textAlign: 'center', 
-              fontSize: 20,
-              color: theme.colors.text,
+            <Text style={[theme.type.body, {
+              textAlign: 'center',
+              fontSize: 15,
+              color: theme.colors.muted,
             }]}>
               No DropLink users nearby
             </Text>
