@@ -90,7 +90,7 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
           )}
           {/* Water Drop Icon positioned over 'i' */}
           <View style={styles.dropOverI}>
-            <MaterialCommunityIcons name="water" size={12} color="#007AFF" />
+            <MaterialCommunityIcons name="water" size={12} color="#FF8C5A" />
           </View>
         </View>
       </View>
@@ -158,8 +158,8 @@ const styles = StyleSheet.create({
   dropOverI: {
     position: 'absolute',
     top: -6,
-    left: '50%',
-    marginLeft: 20,
+    left: '60%',
+    marginLeft: -6,
     zIndex: 10,
   },
   appName: {
