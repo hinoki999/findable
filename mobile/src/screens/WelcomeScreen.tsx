@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     left: '50%',
-    marginLeft: 20,
+    marginLeft: 22.5,
     zIndex: 10,
   },
   appName: {

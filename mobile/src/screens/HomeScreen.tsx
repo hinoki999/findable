@@ -1411,8 +1411,23 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
+      {/* OTA TEST BANNER - REMOVE AFTER TESTING */}
+      <View style={{
+        position: 'absolute',
+        top: 60,
+        left: 0,
+        right: 0,
+        backgroundColor: '#FF0000',
+        padding: 20,
+        zIndex: 99999,
+        alignItems: 'center'
+      }}>
+        <Text style={{ color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' }}>
+          🟢 OTA UPDATE WORKING! 🟢
+        </Text>
+      </View>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
-      <View 
+      <View
         style={{ flex: 1 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
