@@ -1426,8 +1426,8 @@ export default function HomeScreen() {
         width: screenWidth,
         height: viewableHeight,
         zIndex: 0,
-            // Native RN transformOrigin - rotate/zoom around raindrop icon
-            transformOrigin: `${nucleusX}px ${nucleusY}px`,
+            // Native RN transformOrigin - rotate/zoom around raindrop icon (array syntax)
+            transformOrigin: [nucleusX, nucleusY],
             transform: [
               { scale: scaleAnimValue },
               { rotate: rotationAnimValue.interpolate({
