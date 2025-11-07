@@ -1418,29 +1418,22 @@ export default function HomeScreen() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-          <Animated.View 
-            style={{ 
-        position: 'absolute', 
+          <Animated.View
+            style={{
+        position: 'absolute',
         top: 0,
         left: 0,
         width: screenWidth,
         height: viewableHeight,
         zIndex: 0,
+            // Native RN transformOrigin - rotate/zoom around raindrop icon
+            transformOrigin: `${nucleusX}px ${nucleusY}px`,
             transform: [
-              // Transform origin at raindrop icon position - rotate/zoom around center like a protractor
-              // 1. Move raindrop position to (0,0) - MUST use refs to prevent drift
-              { translateX: -nucleusXRef.current },
-              { translateY: -nucleusYRef.current },
-              // 2. Scale from (0,0) - which is now the raindrop center
               { scale: scaleAnimValue },
-              // 3. Rotate from (0,0) - which is now the raindrop center
               { rotate: rotationAnimValue.interpolate({
                 inputRange: [-100, 100],
                 outputRange: ['-100rad', '100rad']
               }) },
-              // 4. Move raindrop back to original position
-              { translateX: nucleusXRef.current },
-              { translateY: nucleusYRef.current },
             ],
             }}
             pointerEvents="box-none"
