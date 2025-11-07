@@ -1650,29 +1650,30 @@ export default function HomeScreen() {
             );
           })}
 
-          {/* Empty State - No Nearby Users */}
-          {filteredDevices.length === 0 && linkedDevices.length === 0 && (
-            <View
-              style={{
-                position: 'absolute',
-                top: '45%',
-                left: 0,
-                right: 0,
-                alignItems: 'center',
-              }}
-              pointerEvents="none"
-            >
-              <Text style={[theme.type.muted, {
-                textAlign: 'center',
-                fontSize: 15,
-              }]}>
-                No drops nearby
-              </Text>
-            </View>
-          )}
         </View>
 
           </Animated.View>  {/* ← Close transformed grid container */}
+
+      {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
+      {filteredDevices.length === 0 && linkedDevices.length === 0 && (
+        <View
+          style={{
+            position: 'absolute',
+            top: '45%',
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+          }}
+          pointerEvents="none"
+        >
+          <Text style={[theme.type.muted, {
+            textAlign: 'center',
+            fontSize: 15,
+          }]}>
+            No drops nearby
+          </Text>
+        </View>
+      )}
       
       {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ROTATES WITH GRID */}
       <Animated.View
