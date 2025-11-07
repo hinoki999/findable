@@ -158,8 +158,8 @@ const styles = StyleSheet.create({
   dropOverI: {
     position: 'absolute',
     top: -6,
-    left: '60%',
-    marginLeft: -6,
+    left: '50%',
+    marginLeft: 20,
     zIndex: 10,
   },
   appName: {
