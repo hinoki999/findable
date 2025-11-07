@@ -179,6 +179,23 @@ function MainApp() {
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
   const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
 
+  // Check for OTA updates on app launch
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (error) {
+        console.log('Error checking for updates:', error);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
+
   // Function to load all user data from backend
   const loadUserData = async () => {
     if (!isAuthenticated || !userId) return;
