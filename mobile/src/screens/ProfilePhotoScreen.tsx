@@ -394,7 +394,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
           {/* Instructions */}
           <View style={styles.instructions}>
             <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 16 }]}>
-              Drag to reposition • Pinch to zoom
+              Drag to reposition
             </Text>
             
             {/* Zoom controls */}
