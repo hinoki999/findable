@@ -94,7 +94,8 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
                 ]}
                 onLayout={(event) => {
                   const { x, y, width } = event.nativeEvent.layout;
-                  setDropPosition({ x: x + width / 2, y: y });
+                  // Center the drop icon (size 12) over the center of ı
+                  setDropPosition({ x: x + width / 2 - 6, y: y });
                 }}
               >
                 ı
@@ -128,7 +129,8 @@ export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSucc
                   style={styles.appName}
                   onLayout={(event) => {
                     const { x, y, width } = event.nativeEvent.layout;
-                    setDropPosition({ x: x + width / 2, y: y });
+                    // Center the drop icon (size 12) over the center of ı
+                    setDropPosition({ x: x + width / 2 - 6, y: y });
                   }}
                 >
                   ı
