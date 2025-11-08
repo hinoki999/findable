@@ -393,3 +393,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
     throw new Error(error.detail || `HTTP ${res.status}`);
   }
 }
+
+export async function deleteAccount(): Promise<void> {
+  const headers = await getAuthHeaders();
+  const res = await secureFetch(`${BASE_URL}/user/delete`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || `HTTP ${res.status}`);
+  }
+}

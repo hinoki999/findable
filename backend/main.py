@@ -2832,6 +2832,70 @@ async def delete_profile_photo(user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/user/delete")
+async def delete_user_account(request: Request, user_id: int = Depends(get_current_user)):
+    """Delete user account and all associated data"""
+    ip_address = get_client_ip(request)
+    user_agent = request.headers.get("User-Agent", "unknown")
+
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+
+        # Get user's email for verification code cleanup
+        execute_query(cursor, 'SELECT email FROM users WHERE id = ?', (user_id,))
+        user_row = cursor.fetchone()
+        user_email = user_row[0] if user_row else None
+
+        # Try to delete profile photo from Cloudinary
+        try:
+            execute_query(cursor, 'SELECT profile_photo FROM user_profiles WHERE user_id = ?', (user_id,))
+            photo_row = cursor.fetchone()
+            if photo_row and photo_row[0]:
+                cloudinary.uploader.destroy(f"droplink/profile_photos/user_{user_id}")
+        except:
+            pass  # Continue even if Cloudinary delete fails
+
+        # Log the deletion action before deleting
+        execute_query(cursor, '''
+            INSERT INTO audit_logs (user_id, action, details, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, 'account_deletion', f'User {user_id} deleted their account', ip_address, user_agent))
+        conn.commit()
+
+        # Delete user data from all tables (in correct order to respect foreign key constraints)
+        # 1. Delete devices owned by user
+        execute_query(cursor, 'DELETE FROM devices WHERE user_id = ?', (user_id,))
+
+        # 2. Delete privacy zones
+        execute_query(cursor, 'DELETE FROM privacy_zones WHERE user_id = ?', (user_id,))
+
+        # 3. Delete pinned contacts
+        execute_query(cursor, 'DELETE FROM pinned_contacts WHERE user_id = ?', (user_id,))
+
+        # 4. Delete audit logs
+        execute_query(cursor, 'DELETE FROM audit_logs WHERE user_id = ?', (user_id,))
+
+        # 5. Delete user settings
+        execute_query(cursor, 'DELETE FROM user_settings WHERE user_id = ?', (user_id,))
+
+        # 6. Delete verification codes associated with user's email
+        if user_email:
+            execute_query(cursor, 'DELETE FROM verification_codes WHERE email = ?', (user_email,))
+
+        # 7. Delete user profile
+        execute_query(cursor, 'DELETE FROM user_profiles WHERE user_id = ?', (user_id,))
+
+        # 8. Finally, delete the user account itself
+        execute_query(cursor, 'DELETE FROM users WHERE id = ?', (user_id,))
+
+        conn.commit()
+        conn.close()
+
+        return {"success": True, "message": "Account successfully deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+
 # Settings endpoints
 @app.get("/user/settings")
 def get_user_settings(user_id: int = Depends(get_current_user)):

@@ -262,11 +262,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         throw new Error('Invalid verification code');
       }
 
-      // TODO: Add delete account endpoint to backend
-      // await fetch('https://findable-production.up.railway.app/user/delete', {
-      //   method: 'DELETE',
-      //   headers: { 'Content-Type': 'application/json' },
-      // });
+      // Delete the account
+      await api.deleteAccount();
 
       // Show success toast first
       showToast({
