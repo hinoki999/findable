@@ -128,8 +128,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       completedScreens[screen] = true;
       await AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(completedScreens));
       
-      // Check if all screens are complete, if so, clear the tutorial flag
-      const allScreens: ScreenName[] = ['Home', 'Drop', 'History', 'Account'];
+      // Check if all tutorial screens are complete, if so, clear the tutorial flag
+      // Note: Account screen doesn't have a tutorial, so only check Home, Drop, History
+      const allScreens: ScreenName[] = ['Home', 'Drop', 'History'];
       const allComplete = allScreens.every(s => completedScreens[s] === true);
       if (allComplete) {
         await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);

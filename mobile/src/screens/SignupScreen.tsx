@@ -390,6 +390,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       await enableTutorialsForSignup();
       console.log('✅ Tutorials enabled successfully');
 
+      // Small delay to ensure AsyncStorage operations complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      console.log('✅ AsyncStorage operations should be complete');
+
       // Success! Close modal and navigate
       setShowVerificationModal(false);
       console.log('🚀 Calling onSignupSuccess - navigating to app...');
