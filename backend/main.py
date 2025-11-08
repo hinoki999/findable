@@ -786,10 +786,16 @@ class VerifyRecoveryCodeRequest(BaseModel):
 
 class CheckUsernameRequest(BaseModel):
     username: constr(min_length=3, max_length=20) = Field(..., description="Username to check")
-    
+
     @validator('username', pre=True)
     def validate_username(cls, v):
         return validate_username_format(v)
+
+class CheckEmailRequest(BaseModel):
+    email: str = Field(..., description="Email to check")
+
+class CheckPhoneRequest(BaseModel):
+    phone: str = Field(..., description="Phone number to check")
 
 # Additional validated models
 class ProfileRequest(BaseModel):
@@ -1801,28 +1807,82 @@ def check_username(request: CheckUsernameRequest):
     """Check if username is available"""
     try:
         username = request.username.strip().lower()  # Convert to lowercase
-        
+
         # Validate username format
         if len(username) < 3 or len(username) > 20:
             return {"available": False, "message": "Username must be 3-20 characters"}
-        
+
         if not username.replace('_', '').isalnum():
             return {"available": False, "message": "Letters, numbers, and underscores only"}
-        
+
         # Check if username exists (case-insensitive)
         conn = get_db_connection()
         cursor = get_cursor(conn)
         execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
         existing = cursor.fetchone()
         conn.close()
-        
+
         if existing:
             return {"available": False, "message": "Username already taken"}
-        
+
         return {"available": True, "message": "Username available"}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to check username: {str(e)}")
+
+@app.post("/auth/check-email")
+def check_email(request: CheckEmailRequest):
+    """Check if email is available"""
+    try:
+        email = request.email.strip().lower()
+
+        # Validate email format
+        import re
+        email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+        if not re.match(email_regex, email):
+            return {"available": False, "message": "Please enter a valid email address"}
+
+        # Check if email exists (case-insensitive)
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (email,))
+        existing = cursor.fetchone()
+        conn.close()
+
+        if existing:
+            return {"available": False, "message": "Email is already in use"}
+
+        return {"available": True, "message": "Email available"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check email: {str(e)}")
+
+@app.post("/auth/check-phone")
+def check_phone(request: CheckPhoneRequest):
+    """Check if phone number is available"""
+    try:
+        # Remove all non-digit characters for comparison
+        phone_digits = ''.join(filter(str.isdigit, request.phone))
+
+        # Check if phone number has 10 digits
+        if len(phone_digits) != 10:
+            return {"available": False, "message": "Phone number must be 10 digits"}
+
+        # Check if phone exists in user_profiles table
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        # Store phone as digits only in database for comparison
+        execute_query(cursor, "SELECT user_id FROM user_profiles WHERE phone = ?", (phone_digits,))
+        existing = cursor.fetchone()
+        conn.close()
+
+        if existing:
+            return {"available": False, "message": "Phone number is already in use"}
+
+        return {"available": True, "message": "Phone number available"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to check phone: {str(e)}")
 
 @app.post("/auth/change-username")
 def change_username(new_username: str, user_id: int = Depends(get_current_user)):

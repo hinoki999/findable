@@ -34,6 +34,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
 
   // Email verification modal
   const [showVerificationModal, setShowVerificationModal] = useState(false);
@@ -43,19 +44,65 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const checkUsernameAvailability = async (username: string) => {
     try {
+      console.log('🔍 Checking username availability:', username);
       const response = await secureFetch(`${BASE_URL}/auth/check-username`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
-      
+
       const data = await response.json();
-      
+      console.log('✅ Username check response:', data);
+
       if (!data.available) {
         setUsernameError(data.message);
       }
     } catch (err) {
-      console.error('Failed to check username:', err);
+      console.error('❌ Failed to check username:', err);
+    }
+  };
+
+  const checkEmailAvailability = async (email: string) => {
+    try {
+      console.log('🔍 Checking email availability:', email);
+      const response = await secureFetch(`${BASE_URL}/auth/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+      console.log('✅ Email check response:', data);
+
+      if (!data.available) {
+        setEmailError(data.message || 'Email is already in use');
+      }
+    } catch (err) {
+      console.error('❌ Failed to check email:', err);
+    }
+  };
+
+  const checkPhoneAvailability = async (phone: string) => {
+    try {
+      // Only check if phone has 10 digits
+      const phoneDigits = phone.replace(/\D/g, '');
+      if (phoneDigits.length !== 10) return;
+
+      console.log('🔍 Checking phone availability:', phoneDigits);
+      const response = await secureFetch(`${BASE_URL}/auth/check-phone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneDigits }),
+      });
+
+      const data = await response.json();
+      console.log('✅ Phone check response:', data);
+
+      if (!data.available) {
+        setPhoneError(data.message || 'Phone number is already in use');
+      }
+    } catch (err) {
+      console.error('❌ Failed to check phone:', err);
     }
   };
 
@@ -89,6 +136,30 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return () => clearTimeout(timer);
     }
   }, [username]);
+
+  // Debounced email availability check
+  useEffect(() => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email.length > 0 && emailRegex.test(email) && !emailError) {
+      const timer = setTimeout(() => {
+        checkEmailAvailability(email);
+      }, 500); // Wait 500ms after user stops typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [email]);
+
+  // Debounced phone availability check
+  useEffect(() => {
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length === 10 && !phoneError) {
+      const timer = setTimeout(() => {
+        checkPhoneAvailability(phone);
+      }, 500); // Wait 500ms after user stops typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [phone]);
 
   const validatePassword = (text: string) => {
     setPassword(text);
@@ -139,7 +210,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const validateEmail = (text: string) => {
     setEmail(text);
-    setEmailError('');
+    setEmailError(''); // Clear error on every keystroke
 
     if (text.length === 0) return;
 
@@ -154,10 +225,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const formatPhoneNumber = (text: string) => {
     // Remove all non-digit characters
     const cleaned = text.replace(/\D/g, '');
-    
+
     // Limit to 10 digits
     const limited = cleaned.slice(0, 10);
-    
+
     // Apply formatting
     if (limited.length === 0) {
       return '';
@@ -173,6 +244,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const handlePhoneChange = (text: string) => {
     const formatted = formatPhoneNumber(text);
     setPhone(formatted);
+    setPhoneError(''); // Clear error on every keystroke
   };
 
   const handleSignup = () => {
@@ -329,7 +401,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 14 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 14 && !usernameError && !passwordError && !confirmPasswordError && !emailError && !phoneError;
 
   return (
     <KeyboardAvoidingView
@@ -519,7 +591,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             </Text>
             <View style={[
               styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: phoneError ? '#FF3B30' : theme.colors.border,
+              }
             ]}>
               <TextInput
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
@@ -532,6 +607,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 editable={!loading}
               />
             </View>
+            {phoneError ? (
+              <Text style={styles.errorText}>{phoneError}</Text>
+            ) : null}
           </View>
 
           {/* Bio (Optional) */}
