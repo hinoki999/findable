@@ -364,17 +364,14 @@ function MainApp() {
     // Load user data to get the new profile photo if uploaded
     await loadUserData();
     console.log('✅ [App] User data loaded');
-    
-    // For first-time users, navigate to Home tab
-    // Tutorials will automatically show since AsyncStorage has no completion data yet
-    console.log(`✅ [App] isFirstTimeUser = ${isFirstTimeUser}`);
-    if (isFirstTimeUser) {
-      console.log('✅ [App] Navigating to Home tab for first-time user');
-      setTab('Home');
-      setSubScreen(null);
-      console.log('✅ [App] Navigation complete - HomeScreen should mount now and start tutorial');
-    }
-    
+
+    // Always navigate to Home tab after profile photo prompt (only shown after signup)
+    // Tutorials will automatically show for new signups
+    console.log('✅ [App] Navigating to Home tab');
+    setTab('Home');
+    setSubScreen(null);
+    console.log('✅ [App] Navigation complete - HomeScreen should mount now');
+
     showToast({
       message: 'Welcome to DropLink!',
       type: 'success',
