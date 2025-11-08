@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   dropOverI: {
     position: 'absolute',
-    top: -6,
+    top: 2,
     left: 0,
     zIndex: 10,
   },
