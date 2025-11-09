@@ -2727,7 +2727,16 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         # Validate file type
         if not file.content_type in ["image/jpeg", "image/png", "image/jpg"]:
             raise HTTPException(status_code=400, detail="Only JPEG and PNG images are allowed")
-        
+
+        # Validate file size (max 10MB)
+        file.file.seek(0, 2)  # Seek to end
+        file_size = file.file.tell()  # Get position (file size)
+        file.file.seek(0)  # Reset to beginning
+
+        max_size = 10 * 1024 * 1024  # 10MB
+        if file_size > max_size:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
+
         # Upload to Cloudinary
         upload_result = cloudinary.uploader.upload(
             file.file,
