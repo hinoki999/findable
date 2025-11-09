@@ -1846,6 +1846,10 @@ def check_email(request: CheckEmailRequest):
         if not re.match(email_regex, email):
             return {"available": False, "message": "Please enter a valid email address"}
 
+        # Allow testing email to be reused infinitely
+        if email == "caitie690@gmail.com":
+            return {"available": True, "message": "Email available"}
+
         # Check if email exists (case-insensitive)
         conn = get_db_connection()
         cursor = get_cursor(conn)
