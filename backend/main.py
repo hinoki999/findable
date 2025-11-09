@@ -770,10 +770,12 @@ class AuthResponse(BaseModel):
 
 class SendVerificationCodeRequest(BaseModel):
     email: str
+    type: str = 'registration'  # 'registration' or 'account_deletion'
 
 class VerifyCodeRequest(BaseModel):
     email: str
     code: str
+    type: str = 'registration'  # 'registration' or 'account_deletion'
 
 class SendRecoveryCodeRequest(BaseModel):
     email: str
@@ -1706,28 +1708,29 @@ def send_verification_code(request: SendVerificationCodeRequest):
     """Send a 6-digit verification code to email"""
     try:
         email = request.email.lower().strip()
-        
+        code_type = request.type  # 'registration' or 'account_deletion'
+
         # Validate email format
         if '@' not in email or '.' not in email:
             raise HTTPException(status_code=400, detail="Invalid email format")
-        
+
         # Generate 6-digit code
         code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-        
+
         # Store code in database with expiration (10 minutes)
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
-        
-        # Delete any existing codes for this email
-        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ?", (email,))
-        
+
+        # Delete any existing codes for this email and type
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
+
         # Insert new code
         execute_query(
             cursor,
             "INSERT INTO verification_codes (email, code, code_type, expires_at) VALUES (?, ?, ?, ?)",
-            (email, code, 'registration', expires_at)
+            (email, code, code_type, expires_at)
         )
         
         conn.commit()
@@ -1753,42 +1756,43 @@ def verify_code(request: VerifyCodeRequest):
     try:
         email = request.email.lower().strip()
         code = request.code.strip()
-        
+        code_type = request.type  # 'registration' or 'account_deletion'
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
-        # Check if code exists for this email
+
+        # Check if code exists for this email and type
         execute_query(
             cursor,
             "SELECT code, expires_at FROM verification_codes WHERE email = ? AND code_type = ? ORDER BY created_at DESC LIMIT 1",
-            (email, 'registration')
+            (email, code_type)
         )
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
             raise HTTPException(status_code=400, detail="No verification code found for this email")
-        
+
         stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
         expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
-        
+
         # Parse expiration time
         expires_at = datetime.fromisoformat(expires_at_str)
-        
+
         # Check if code has expired
         if datetime.now() > expires_at:
-            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'registration'))
+            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
             conn.commit()
             conn.close()
             raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
-        
+
         # Verify code
         if stored_code != code:
             conn.close()
             raise HTTPException(status_code=400, detail="Invalid verification code")
-        
+
         # Code is valid, remove it from database
-        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'registration'))
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
         conn.commit()
         conn.close()
         
