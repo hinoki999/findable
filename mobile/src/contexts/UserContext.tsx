@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, getUserProfile, saveUserProfile } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface UserContextType {
   profile: UserProfile | null;
   loading: boolean;
   updateProfile: (profile: UserProfile) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  clearProfile: () => void;
 }
 
 const UserContext = createContext<UserContextType>({
@@ -13,15 +15,24 @@ const UserContext = createContext<UserContextType>({
   loading: true,
   updateProfile: async () => {},
   refreshProfile: async () => {},
+  clearProfile: () => {},
 });
 
 export const useUser = () => useContext(UserContext);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   const refreshProfile = async () => {
+    if (!isAuthenticated) {
+      console.log('User not authenticated, skipping profile load');
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const data = await getUserProfile();
@@ -60,13 +71,21 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Load profile on mount
+  const clearProfile = () => {
+    setProfile(null);
+  };
+
+  // Load profile when authentication status changes
   useEffect(() => {
-    refreshProfile();
-  }, []);
+    if (isAuthenticated) {
+      refreshProfile();
+    } else {
+      clearProfile();
+    }
+  }, [isAuthenticated]);
 
   return (
-    <UserContext.Provider value={{ profile, loading, updateProfile, refreshProfile }}>
+    <UserContext.Provider value={{ profile, loading, updateProfile, refreshProfile, clearProfile }}>
       {children}
     </UserContext.Provider>
   );

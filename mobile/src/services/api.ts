@@ -395,13 +395,28 @@ export async function changePassword(currentPassword: string, newPassword: strin
 }
 
 export async function deleteAccount(): Promise<void> {
+  console.log('🔑 Getting auth token for delete...');
   const headers = await getAuthHeaders();
+  console.log('📤 Sending DELETE request to:', `${BASE_URL}/user/delete`);
+  console.log('📋 Headers:', headers);
+
   const res = await secureFetch(`${BASE_URL}/user/delete`, {
     method: "DELETE",
     headers,
   });
+
+  console.log('📥 Response status:', res.status);
+
   if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || `HTTP ${res.status}`);
+    const errorText = await res.text();
+    console.error('❌ Delete failed. Response:', errorText);
+    try {
+      const error = JSON.parse(errorText);
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    } catch {
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
   }
+
+  console.log('✅ Delete request successful');
 }

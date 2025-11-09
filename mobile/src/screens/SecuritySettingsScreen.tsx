@@ -264,7 +264,9 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       }
 
       // Delete the account
+      console.log('🗑️ Attempting to delete account...');
       await api.deleteAccount();
+      console.log('✅ Account deleted successfully from backend');
 
       // Show success toast first
       showToast({
@@ -272,7 +274,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         type: 'success',
         duration: 3000,
       });
-      
+
       // Close modal and logout after a brief delay
       setTimeout(() => {
         setShowDeleteConfirm(false);
@@ -280,6 +282,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         logout();
       }, 500);
     } catch (error: any) {
+      console.error('❌ Delete account error:', error);
+      console.error('Error message:', error.message);
       showToast({
         message: error.message || 'Failed to delete account',
         type: 'error',
