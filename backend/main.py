@@ -703,16 +703,33 @@ class RegisterRequest(BaseModel):
     username: constr(min_length=3, max_length=20) = Field(..., description="Username (3-20 chars, alphanumeric + underscore/period)")
     password: constr(min_length=8, max_length=128) = Field(..., description="Password (min 8 chars, complex requirements)")
     email: Optional[constr(max_length=100)] = Field(None, description="Email address (optional)")
-    
+    name: Optional[constr(max_length=100)] = Field(None, description="Full name (optional)")
+    phone: Optional[str] = Field(None, description="Phone number (optional)")
+    bio: Optional[constr(max_length=500)] = Field(None, description="Biography (optional)")
+    profile_photo: Optional[str] = Field(None, description="Profile photo URL (optional)")
+
     @validator('username', pre=True)
     def validate_username_field(cls, v):
         return validate_username_format(v)
-    
+
     @validator('email', pre=True)
     def validate_email_field(cls, v):
         if v is None or v == '':
             return None
         return validate_email_format(v)
+
+    @validator('name', 'bio', pre=True)
+    def sanitize_text_fields(cls, v):
+        if v is None or v == '':
+            return None
+        return sanitize_string(v)
+
+    @validator('phone', pre=True)
+    def validate_phone_field(cls, v):
+        if v is None or v == '':
+            return None
+        # Basic phone validation - can be enhanced
+        return sanitize_string(v)
     
     @validator('password')
     def validate_password_field(cls, v, values):
@@ -1278,7 +1295,21 @@ def register(register_request: RegisterRequest, request: Request):
             INSERT INTO user_settings (user_id, dark_mode, max_distance)
             VALUES (?, ?, ?)
         ''', (user_id, 1, 33))
-        
+
+        # Create user profile with registration data
+        execute_query(cursor, '''
+            INSERT INTO user_profiles (user_id, name, phone, email, bio, social_media, profile_photo)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            user_id,
+            register_request.name,
+            register_request.phone,
+            register_request.email,
+            register_request.bio,
+            '[]',  # Initialize with empty social media array
+            register_request.profile_photo
+        ))
+
         conn.commit()
         conn.close()
         
