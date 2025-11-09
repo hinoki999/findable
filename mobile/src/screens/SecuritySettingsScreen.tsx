@@ -213,10 +213,10 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
     setSendingDeleteCode(true);
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/send-verification-code', {
+      const response = await fetch(`${api.BASE_URL}/auth/send-verification-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail }),
+        body: JSON.stringify({ email: userEmail, type: 'account_deletion' }),
       });
 
       if (!response.ok) {
@@ -249,12 +249,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
     try {
       // Verify the code
-      const verifyResponse = await fetch('https://findable-production.up.railway.app/auth/verify-code', {
+      const verifyResponse = await fetch(`${api.BASE_URL}/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: userEmail,
           code: deleteVerificationCode,
+          type: 'account_deletion',
         }),
       });
 
