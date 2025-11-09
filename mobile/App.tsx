@@ -17,6 +17,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 
@@ -760,7 +761,9 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <MainApp />
+          <UserProvider>
+            <MainApp />
+          </UserProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
