@@ -15,7 +15,7 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  const { enableTutorialsForSignup } = useTutorial();
+  const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -389,6 +389,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log('📚 Enabling tutorials for new signup...');
       await enableTutorialsForSignup();
       console.log('✅ Tutorials enabled successfully');
+      await startScreenTutorial('Home', 5);
 
       // Small delay to ensure AsyncStorage operations complete
       await new Promise(resolve => setTimeout(resolve, 200));
