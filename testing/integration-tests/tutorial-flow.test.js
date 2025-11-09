@@ -157,7 +157,7 @@ describe('Signup Flow with Onboarding', () => {
     const testUsername = `testuser_${timestamp}`;
     
     // Step 1: Signup
-    const signupRes = await backendRequest('POST', '/auth/signup', {
+    const signupRes = await backendRequest('POST', '/auth/register', {
       username: testUsername,
       password: 'TestPass123!',
       email: `${testUsername}@test.com`
