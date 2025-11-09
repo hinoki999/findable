@@ -5,7 +5,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
-import { storage } from '../services/storage';
+import { uploadProfilePhoto } from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CIRCLE_SIZE = 280;
@@ -211,50 +211,9 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
     setUploading(true);
     try {
-      // Create FormData for upload
-      const formData = new FormData();
-      
-      // For web
-      if (Platform.OS === 'web') {
-        const response = await fetch(selectedImage);
-        const blob = await response.blob();
-        formData.append('file', blob, 'profile.jpg');
-      } else {
-        // For mobile
-        const filename = selectedImage.split('/').pop() || 'profile.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
-        
-        formData.append('file', {
-          uri: selectedImage,
-          name: filename,
-          type,
-        } as any);
-      }
+      const result = await uploadProfilePhoto(selectedImage);
 
-      // Get auth token
-      const token = await storage.getItem('authToken');
-      
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      // Upload to backend
-      const BASE_URL = 'https://findable-production.up.railway.app';
-      const response = await fetch(`${BASE_URL}/user/profile/photo`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ Photo uploaded:', result);
+      console.log('✅ Photo uploaded successfully');
 
       showToast({
         message: 'Profile photo updated!',
@@ -262,12 +221,12 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         duration: 2000,
       });
 
-      onPhotoSaved(selectedImage);
+      onPhotoSaved(result.url);
       navigation.goBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Upload error:', error);
       showToast({
-        message: 'Failed to upload photo',
+        message: error.message || 'Failed to upload photo',
         type: 'error',
         duration: 3000,
       });

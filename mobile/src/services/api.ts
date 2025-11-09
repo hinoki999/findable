@@ -1,4 +1,5 @@
 // src/services/api.ts
+import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 
@@ -419,4 +420,105 @@ export async function deleteAccount(): Promise<void> {
   }
 
   console.log('✅ Delete request successful');
+}
+
+// ==================== PROFILE PHOTO ====================
+export async function uploadProfilePhoto(imageUri: string): Promise<{ success: boolean; url: string }> {
+  console.log('📸 Starting profile photo upload...');
+  console.log('Image URI:', imageUri);
+
+  // Validate file size (max 10MB)
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+  try {
+    // Check if file exists and get info
+    if (Platform.OS !== 'web') {
+      // For native, we'll validate size after FormData creation
+      console.log('⚠️ Skipping size validation for native (will validate on backend)');
+    }
+
+    // Create FormData
+    const formData = new FormData();
+
+    if (Platform.OS === 'web') {
+      console.log('🌐 Web platform - fetching blob...');
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      // Validate size on web
+      if (blob.size > MAX_SIZE) {
+        throw new Error('File too large. Maximum size is 10MB');
+      }
+
+      formData.append('file', blob, 'profile.jpg');
+    } else {
+      // For mobile (Android/iOS)
+      console.log('📱 Mobile platform - preparing file...');
+      const filename = imageUri.split('/').pop() || 'profile.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      console.log('File name:', filename);
+      console.log('File type:', type);
+
+      // Create proper file object for React Native
+      formData.append('file', {
+        uri: imageUri,
+        name: filename,
+        type: type,
+      } as any);
+    }
+
+    // Get auth headers
+    console.log('🔑 Getting auth token...');
+    const headers = await getAuthHeaders();
+
+    // Remove Content-Type header - let browser/RN set it with boundary for FormData
+    const uploadHeaders: any = { ...headers };
+    delete uploadHeaders['Content-Type'];
+
+    console.log('📤 Uploading to backend...');
+
+    // Upload with timeout and retry
+    const res = await secureFetch(`${BASE_URL}/user/profile/photo`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: formData,
+    });
+
+    console.log('📥 Response status:', res.status);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('❌ Upload failed. Response:', errorText);
+      try {
+        const error = JSON.parse(errorText);
+        throw new Error(error.detail || `Upload failed: ${res.status}`);
+      } catch {
+        throw new Error(`Upload failed: ${res.status} - ${errorText}`);
+      }
+    }
+
+    const result = await res.json();
+    console.log('✅ Photo uploaded successfully:', result);
+
+    return {
+      success: true,
+      url: result.url || imageUri,
+    };
+  } catch (error: any) {
+    console.error('❌ Upload error:', error);
+    console.error('Error details:', error.message);
+
+    // Provide user-friendly error messages
+    if (error.message?.includes('too large')) {
+      throw new Error('Photo too large. Please choose a smaller photo (max 10MB)');
+    } else if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      throw new Error('Upload timed out. Please check your internet connection and try again');
+    } else if (error.message?.includes('Network')) {
+      throw new Error('Network error. Please check your internet connection');
+    } else {
+      throw new Error(error.message || 'Failed to upload photo. Please try again');
+    }
+  }
 }

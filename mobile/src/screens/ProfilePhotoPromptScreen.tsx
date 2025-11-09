@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import { storage } from '../services/storage';
+import { uploadProfilePhoto } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProfilePhotoPromptScreenProps {
@@ -50,48 +50,13 @@ export default function ProfilePhotoPromptScreen({ onComplete }: ProfilePhotoPro
 
     setUploading(true);
     try {
-      // Get auth token
-      const token = await storage.getItem('authToken');
-
-      // Prepare form data
-      const formData = new FormData();
-      
-      if (Platform.OS === 'web') {
-        const response = await fetch(selectedImage);
-        const blob = await response.blob();
-        formData.append('file', blob, 'profile.jpg');
-      } else {
-        const uriParts = selectedImage.split('.');
-        const fileType = uriParts[uriParts.length - 1];
-        
-        formData.append('file', {
-          uri: selectedImage,
-          name: `profile.${fileType}`,
-          type: `image/${fileType}`,
-        } as any);
-      }
-
-      // Upload to backend
-      const uploadResponse = await fetch(
-        `https://findable-production.up.railway.app/user/profile/photo`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.status}`);
-      }
+      await uploadProfilePhoto(selectedImage);
 
       console.log('✅ Profile photo uploaded successfully');
       onComplete();
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Upload error:', error);
-      alert('Failed to upload photo. Please try again.');
+      alert(error.message || 'Failed to upload photo. Please try again.');
     } finally {
       setUploading(false);
     }
