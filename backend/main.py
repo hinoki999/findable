@@ -3445,6 +3445,192 @@ async def cleanup_audit_logs_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Diagnostics endpoint
+@app.post("/api/diagnostics/run")
+async def run_diagnostics(
+    diagnostic_type: str,
+    context: dict,
+    authorization: str = Header(None)
+):
+    """
+    Runs diagnostic checks and returns detailed results.
+
+    Checks:
+    - Database schema (missing columns, wrong types)
+    - Recent errors in logs
+    - Data persistence verification
+    - API endpoint health
+
+    Args:
+        diagnostic_type: Type of diagnostic ("profile_save", "auth", "database")
+        context: Additional context (e.g., user_id for profile checks)
+        authorization: Bearer token for authenticated checks
+    """
+    results = {
+        "timestamp": datetime.now().isoformat(),
+        "diagnostic_type": diagnostic_type,
+        "checks": []
+    }
+
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+
+        # Check 1: Database Schema
+        if diagnostic_type in ["profile_save", "database"]:
+            try:
+                # Get columns from user_profiles table
+                if USE_POSTGRES:
+                    execute_query(cursor, """
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_name = 'user_profiles'
+                    """)
+                else:
+                    # SQLite - use PRAGMA
+                    execute_query(cursor, "PRAGMA table_info(user_profiles)")
+
+                columns = cursor.fetchall()
+
+                if USE_POSTGRES:
+                    found_columns = [col[0] for col in columns]
+                else:
+                    # SQLite PRAGMA returns: cid, name, type, notnull, dflt_value, pk
+                    found_columns = [col[1] for col in columns]
+
+                expected_columns = ["user_id", "name", "email", "phone", "bio", "has_completed_onboarding"]
+                missing = [c for c in expected_columns if c not in found_columns]
+
+                results["checks"].append({
+                    "name": "Database Schema",
+                    "status": "pass" if not missing else "fail",
+                    "details": {
+                        "found_columns": found_columns,
+                        "missing_columns": missing,
+                        "expected_columns": expected_columns
+                    }
+                })
+            except Exception as e:
+                results["checks"].append({
+                    "name": "Database Schema",
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        # Check 2: Data Persistence
+        if diagnostic_type == "profile_save" and context.get("user_id"):
+            try:
+                execute_query(cursor, """
+                    SELECT name, email, phone, bio, has_completed_onboarding
+                    FROM user_profiles
+                    WHERE user_id = ?
+                """, (context["user_id"],))
+
+                profile = cursor.fetchone()
+
+                if profile:
+                    profile_data = {
+                        "name": profile[0] if profile else None,
+                        "email": profile[1] if profile else None,
+                        "phone": profile[2] if profile else None,
+                        "bio": profile[3] if profile else None,
+                        "has_completed_onboarding": profile[4] if profile else None
+                    }
+                else:
+                    profile_data = None
+
+                results["checks"].append({
+                    "name": "Profile Data",
+                    "status": "pass" if profile else "fail",
+                    "details": {
+                        "exists": bool(profile),
+                        "data": profile_data
+                    }
+                })
+            except Exception as e:
+                results["checks"].append({
+                    "name": "Profile Data",
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        # Check 3: Recent API Call Logs
+        if diagnostic_type in ["profile_save", "database"]:
+            try:
+                execute_query(cursor, """
+                    SELECT COUNT(*) as total_calls,
+                           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successful_calls,
+                           SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END) as failed_calls
+                    FROM api_call_logs
+                    WHERE timestamp > ?
+                """, ((datetime.now() - timedelta(minutes=10)).isoformat(),))
+
+                stats = cursor.fetchone()
+
+                results["checks"].append({
+                    "name": "Recent API Activity",
+                    "status": "pass",
+                    "details": {
+                        "total_calls": stats[0] if stats else 0,
+                        "successful_calls": stats[1] if stats else 0,
+                        "failed_calls": stats[2] if stats else 0,
+                        "time_window": "last 10 minutes"
+                    }
+                })
+            except Exception as e:
+                results["checks"].append({
+                    "name": "Recent API Activity",
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        # Check 4: User Authentication
+        if diagnostic_type == "auth" and context.get("user_id"):
+            try:
+                execute_query(cursor, """
+                    SELECT id, username, email
+                    FROM users
+                    WHERE id = ?
+                """, (context["user_id"],))
+
+                user = cursor.fetchone()
+
+                results["checks"].append({
+                    "name": "User Authentication",
+                    "status": "pass" if user else "fail",
+                    "details": {
+                        "user_exists": bool(user),
+                        "user_id": user[0] if user else None,
+                        "username": user[1] if user else None,
+                        "email": user[2] if user else None
+                    }
+                })
+            except Exception as e:
+                results["checks"].append({
+                    "name": "User Authentication",
+                    "status": "error",
+                    "error": str(e)
+                })
+
+        conn.close()
+
+        # Overall status
+        has_failures = any(check["status"] == "fail" for check in results["checks"])
+        has_errors = any(check["status"] == "error" for check in results["checks"])
+
+        results["overall_status"] = "error" if has_errors else ("fail" if has_failures else "pass")
+
+        return results
+
+    except Exception as e:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "diagnostic_type": diagnostic_type,
+            "overall_status": "error",
+            "error": str(e),
+            "checks": []
+        }
+
 # ADMIN: Simple web dashboard
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard():

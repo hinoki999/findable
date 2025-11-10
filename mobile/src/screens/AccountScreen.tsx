@@ -8,6 +8,7 @@ import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 import { BASE_URL, secureFetch } from '../services/api';
+import { logAction, logStateChange } from '../services/activityMonitor';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -152,6 +153,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password', socialIndex?: number) => {
     setEditingField(field);
+    logAction(`Edit ${field} clicked`, { field, currentValue: field === 'phone' ? phone : field === 'email' ? email : field === 'name' ? name : field === 'bio' ? bio : undefined });
     setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
       // Remove formatting for editing, keep only the formatted value
@@ -189,6 +191,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
+      logStateChange('profile.phone', phone, tempValue);
+      logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
       updateProfile({ phone: tempValue });
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
@@ -196,6 +200,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
+      logStateChange('profile.email', email, tempValue);
+      logAction('Profile email updated', { oldEmail: email, newEmail: tempValue });
       updateProfile({ email: tempValue });
     } else if (editingField === 'name') {
       error = validateName(tempValue);
@@ -203,8 +209,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
+      logStateChange('profile.name', name, tempValue);
+      logAction('Profile name updated', { oldName: name, newName: tempValue });
       updateProfile({ name: tempValue });
     } else if (editingField === 'bio') {
+      logStateChange('profile.bio', bio, tempValue);
+      logAction('Profile bio updated', { oldBio: bio, newBio: tempValue });
       updateProfile({ bio: tempValue });
     } else if (editingField === 'social-media' && tempSocialIndex !== null) {
       // Validate social media
@@ -236,6 +246,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       // Call API to change username
       try {
         const result = await api.changeUsername(tempValue.trim());
+        logAction('Username changed', { oldUsername: username, newUsername: tempValue.trim() });
         // Update token in storage
         await login(result.token, userId || 0, result.username);
         
@@ -280,7 +291,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       // Call API to change password
       try {
         await api.changePassword(currentPassword, newPassword);
-        
+        logAction('Password changed successfully', { userId });
+
         showToast({
           message: 'Password changed successfully!',
           type: 'success',
@@ -381,7 +393,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Edit contact information</Text>
             <Pressable
-              onPress={() => setShowPreviewModal(true)}
+              onPress={() => {
+                logAction('Preview My Card button clicked', { username });
+                setShowPreviewModal(true);
+              }}
               style={{
                 borderRadius: 4,
                 borderWidth: 1,
@@ -417,7 +432,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   <MaterialCommunityIcons name="account" size={24} color={theme.colors.blue} />
                 )}
               </View>
-              <Pressable style={{ padding: 4 }} onPress={() => navigation.navigate('ProfilePhoto')}>
+              <Pressable style={{ padding: 4 }} onPress={() => {
+                logAction('Edit profile photo clicked', { hasCurrentPhoto: !!profilePhotoUri });
+                navigation.navigate('ProfilePhoto');
+              }}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
             </View>

@@ -2,6 +2,7 @@
 import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
+import { logApiCall, logError } from './activityMonitor';
 
 export const BASE_URL = ENV.BASE_URL;
 const USE_STUB = false; // Connected to backend!
@@ -80,6 +81,9 @@ export async function secureFetch(
     }
   } catch {}
 
+  // Capture start time for performance tracking
+  const startTime = Date.now();
+
   // Create abort controller for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -95,6 +99,23 @@ export async function secureFetch(
     // Log success/failure
     logData.success = response.ok;
     logData.status_code = response.status;
+
+    // Calculate timing and log to activity monitor
+    const timing = Date.now() - startTime;
+    logApiCall(
+      options.method || 'GET',
+      url,
+      {
+        headers: options.headers,
+        body: options.body
+      },
+      {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      },
+      timing
+    );
 
     // Send to backend logging endpoint (fire-and-forget, don't block on this)
     fetch(`${BASE_URL}/api/log-api-call`, {
@@ -122,6 +143,20 @@ export async function secureFetch(
 
     // Log error
     logData.error = error.message || String(error);
+
+    // Log to activity monitor
+    const timing = Date.now() - startTime;
+    logApiCall(
+      options.method || 'GET',
+      url,
+      {
+        headers: options.headers,
+        body: options.body
+      },
+      undefined,
+      timing,
+      error
+    );
 
     // Send to backend logging endpoint (fire-and-forget)
     fetch(`${BASE_URL}/api/log-api-call`, {

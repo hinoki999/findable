@@ -20,6 +20,7 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
+import { initMonitor } from './src/services/activityMonitor';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -206,6 +207,11 @@ function MainApp() {
     }
 
     checkForUpdates();
+  }, []);
+
+  // Initialize activity monitor on app launch
+  useEffect(() => {
+    initMonitor();
   }, []);
 
   // Function to load all user data from backend
