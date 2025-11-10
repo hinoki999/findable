@@ -1,0 +1,183 @@
+name: Error Monitoring System
+
+on:
+  # Run every 5 minutes
+  schedule:
+    - cron: '*/5 * * * *'
+
+  # Allow manual trigger
+  workflow_dispatch:
+
+  # Run on push to develop
+  push:
+    branches:
+      - develop
+    paths:
+      - 'monitoring/**'
+      - '.github/workflows/error-monitoring.yml'
+
+jobs:
+  # Backend health monitoring
+  monitor-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor Railway logs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_URL: https://findable-production.up.railway.app
+        run: |
+          cd monitoring
+          timeout 120 python monitor-railway-logs.py || echo "Monitor completed"
+
+  # Database health monitoring
+  monitor-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor database health
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd monitoring
+          timeout 120 python monitor-database-health.py || echo "Monitor completed"
+
+  # API health monitoring
+  monitor-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor API health
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKEND_URL: https://findable-production.up.railway.app
+          TEST_USERNAME: ${{ secrets.MONITOR_TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.MONITOR_TEST_PASSWORD }}
+          TEST_EMAIL: ${{ secrets.MONITOR_TEST_EMAIL }}
+        run: |
+          cd monitoring
+          timeout 120 python monitor-api-health.py || echo "Monitor completed"
+
+  # User error monitoring
+  monitor-user-errors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor user errors
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd monitoring
+          timeout 120 python monitor-user-errors.py || echo "Monitor completed"
+
+  # Performance monitoring
+  monitor-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor performance
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd monitoring
+          timeout 300 python monitor-performance.py || echo "Monitor completed"
+
+  # BLE health monitoring
+  monitor-ble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor BLE health
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd monitoring
+          timeout 180 python monitor-ble-health.py || echo "Monitor completed"

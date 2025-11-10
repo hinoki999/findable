@@ -235,7 +235,21 @@ export async function getUserProfile(): Promise<UserProfile> {
   }
   const headers = await getAuthHeaders();
   const res = await secureFetch(`${BASE_URL}/user/profile`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Better error handling
+  if (!res.ok) {
+    let errorMessage = `Failed to load profile: HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch (parseError) {
+      // Response wasn't JSON, use default message
+    }
+    throw new Error(errorMessage);
+  }
+
   return res.json();
 }
 
@@ -250,7 +264,21 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     headers,
     body: JSON.stringify(profile),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Parse backend error response for detailed message
+  if (!res.ok) {
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      // Backend returns { detail: "error message" }
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch (parseError) {
+      // Response wasn't JSON, use default message
+    }
+    throw new Error(errorMessage);
+  }
 }
 
 // ==================== USER SETTINGS ====================

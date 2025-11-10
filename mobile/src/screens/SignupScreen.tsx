@@ -398,7 +398,12 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
       console.log('🚀 Calling onSignupSuccess - navigating to app...');
-      onSignupSuccess(data.token, data.user_id, data.username, email);
+      // Pass profile data to App to prevent race condition
+      onSignupSuccess(data.token, data.user_id, data.username, email, {
+        name: name || '',
+        phone: phoneDigitsOnly || '',
+        bio: bio || ''
+      });
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {

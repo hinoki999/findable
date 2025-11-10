@@ -144,6 +144,16 @@ import { useFonts,
   Inter_700Bold
 } from '@expo-google-fonts/inter';
 
+// Helper function for phone formatting (defined outside component for stability)
+// Used when loading profile data to ensure consistent (XXX) XXX-XXXX format
+const formatPhoneNumber = (text: string): string => {
+  const cleaned = text.replace(/\D/g, '');
+  if (cleaned.length === 0) return '';
+  if (cleaned.length <= 3) return `(${cleaned}`;
+  if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+  return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+};
+
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
@@ -172,6 +182,7 @@ function MainApp() {
     bio: 'Add bio',
     socialMedia: [],
   });
+  const [isSignupInProgress, setIsSignupInProgress] = useState(false);
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
   const [nextLinkId, setNextLinkId] = useState(1);
@@ -198,18 +209,18 @@ function MainApp() {
   }, []);
 
   // Function to load all user data from backend
-  const loadUserData = async () => {
+  const loadUserData = async (options?: { onlyPhoto?: boolean }) => {
     if (!isAuthenticated || !userId) return;
-    
+
     try {
       console.log('📥 Loading user data from backend...');
-      
+
       // Load user profile
       try {
         console.log('🔍 Attempting to load profile data...');
         const profileData = await import('./src/services/api').then(m => m.getUserProfile());
         console.log('📦 Profile response:', profileData);
-        
+
         if (profileData) {
           console.log('✅ Setting profile state with:', {
             name: profileData.name,
@@ -218,18 +229,30 @@ function MainApp() {
             bio: profileData.bio,
             profile_photo: profileData.profile_photo
           });
-          
-          // Always set profile data, even if fields are empty
-          // This allows the backend to be the single source of truth
-          setUserProfile({
-            name: profileData.name || 'Your Name',
-            phoneNumber: profileData.phone || '(555) 123-4567',
-            email: profileData.email || 'user@example.com',
-            bio: profileData.bio || 'Add bio',
-            socialMedia: profileData.socialMedia || [],
-          });
-          
-          // Load profile photo if exists (moved outside conditional)
+
+          // If onlyPhoto flag is set, only update photo (skip profile data)
+          if (options?.onlyPhoto) {
+            if (profileData.profile_photo) {
+              console.log('✅ Loaded profile photo:', profileData.profile_photo);
+              setProfilePhotoUri(profileData.profile_photo);
+            } else {
+              console.log('ℹ️ No profile photo found');
+              setProfilePhotoUri(null);
+            }
+            return; // Skip profile data update
+          }
+
+          // Merge with existing data - don't overwrite with empty/undefined values
+          // Use !== undefined to allow intentionally empty strings
+          setUserProfile(prev => ({
+            name: profileData.name !== undefined ? profileData.name : prev.name,
+            phoneNumber: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phoneNumber) : prev.phoneNumber,
+            email: profileData.email !== undefined ? profileData.email : prev.email,
+            bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
+            socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
+          }));
+
+          // Load profile photo
           if (profileData.profile_photo) {
             console.log('✅ Loaded profile photo:', profileData.profile_photo);
             setProfilePhotoUri(profileData.profile_photo);
@@ -243,7 +266,7 @@ function MainApp() {
       } catch (error) {
         console.error('❌ Failed to load profile:', error);
       }
-      
+
       // Load settings
       const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
       if (settingsData) {
@@ -256,7 +279,7 @@ function MainApp() {
       const devicesData = await import('./src/services/api').then(m => m.getDevices());
       if (devicesData && devicesData.length > 0) {
         console.log('✅ Loaded devices:', devicesData.length, 'contacts');
-        
+
         // Convert devices to link notifications for accepted/returned contacts
         const notifications: LinkNotification[] = devicesData
           .filter(device => device.action === 'accepted' || device.action === 'returned')
@@ -272,7 +295,7 @@ function MainApp() {
             dismissed: false,
             deviceId: device.id,
           }));
-        
+
         setLinkNotifications(notifications);
         console.log('✅ Loaded link notifications:', notifications.length);
       }
@@ -283,14 +306,14 @@ function MainApp() {
         console.log('✅ Loaded pinned contacts:', pinnedData);
         setPinnedIds(new Set(pinnedData));
       }
-      
+
       // Privacy Zones feature removed
       // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
       // if (zonesData) {
       //   console.log('✅ Loaded privacy zones:', zonesData);
       //   setPrivacyZones(zonesData);
       // }
-      
+
       console.log('✅ All user data loaded successfully');
     } catch (error) {
       console.error('❌ Failed to load user data:', error);
@@ -298,11 +321,12 @@ function MainApp() {
   };
 
   // Load user data when authenticated
+  // Skip during signup to prevent race condition with profile save
   useEffect(() => {
-    if (isAuthenticated && userId) {
+    if (isAuthenticated && userId && !isSignupInProgress) {
       loadUserData();
     }
-  }, [isAuthenticated, userId]);
+  }, [isAuthenticated, userId, isSignupInProgress]);
 
   // Check for OTA updates on app launch
   useEffect(() => { 
@@ -328,16 +352,46 @@ function MainApp() {
   }, []);
 
   // Auth handlers
-  const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
+  const handleSignupSuccess = async (
+    token: string,
+    userId: number,
+    username: string,
+    email?: string,
+    profileData?: { name: string; phone: string; bio: string }
+  ) => {
     console.log('✅ [App] Signup successful:', username);
-    console.log('✅ [App] Setting isFirstTimeUser = true');
-    // Profile info is already saved in SignupScreen
-    // Now log them in and show profile photo prompt
+
+    // Set flag to prevent automatic data reload (prevents race condition)
+    setIsSignupInProgress(true);
+
+    // Set profile data directly from signup form instead of reloading from backend
+    // This prevents race condition where GET /profile happens before POST /profile completes
+    if (profileData) {
+      const phoneDigitsOnly = profileData.phone.replace(/\D/g, '');
+
+      setUserProfile({
+        name: profileData.name || 'Your Name',
+        phoneNumber: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
+        email: email || 'user@example.com',
+        bio: profileData.bio || 'Add bio',
+        socialMedia: [],
+      });
+      console.log('✅ [App] Profile data set from signup form:', {
+        name: profileData.name,
+        phone: phoneDigitsOnly,
+        email: email
+      });
+    }
+
     setIsFirstTimeUser(true);
     console.log('✅ [App] Calling login()');
     await login(token, userId, username);
+
+    // Reset flag - normal data loads can proceed from here
+    setIsSignupInProgress(false);
+    console.log('✅ [App] Signup flow complete, flag reset');
+
     console.log('✅ [App] Setting showProfilePhotoPrompt = true');
-    // Show profile photo prompt instead of going directly to main app
     setShowProfilePhotoPrompt(true);
   };
 
@@ -361,13 +415,13 @@ function MainApp() {
     console.log('✅ [App] Profile photo prompt completed');
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
-    console.log('✅ [App] Loading user data...');
-    // Load user data to get the new profile photo if uploaded
-    await loadUserData();
-    console.log('✅ [App] User data loaded');
+    console.log('✅ [App] Loading profile photo...');
 
-    // Always navigate to Home tab after profile photo prompt (only shown after signup)
-    // Tutorials will automatically show for new signups
+    // Only load photo, not entire profile (prevents overwriting signup data)
+    await loadUserData({ onlyPhoto: true });
+    console.log('✅ [App] Profile photo loaded');
+
+    // Always navigate to Home tab after profile photo prompt
     console.log('✅ [App] Navigating to Home tab');
     setTab('Home');
     setSubScreen(null);
@@ -428,9 +482,8 @@ function MainApp() {
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     const newProfile = { ...userProfile, ...updates };
-    setUserProfile(newProfile);
-    
-    // Save to backend
+
+    // Save to backend FIRST (pessimistic update - ensures data integrity)
     try {
       const api = await import('./src/services/api');
       await api.saveUserProfile({
@@ -440,11 +493,27 @@ function MainApp() {
         bio: newProfile.bio,
         socialMedia: newProfile.socialMedia,
       });
+
       console.log('✅ Profile saved to backend:', newProfile);
+
+      // Only update local state AFTER successful backend save
+      setUserProfile(newProfile);
+
+      // Success toast only after confirmed save
       showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('❌ Failed to save profile:', error);
-      showToast({ message: 'Failed to save profile', type: 'error', duration: 3000 });
+
+      // Show error with message from backend (ERROR 7 will improve this)
+      const errorMessage = error.message || 'Failed to save profile';
+      showToast({
+        message: errorMessage,
+        type: 'error',
+        duration: 3000
+      });
+
+      // NOTE: Local state was never changed, so no rollback needed
     }
   };
 
