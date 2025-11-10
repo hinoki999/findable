@@ -40,7 +40,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
-  const { name, phoneNumber, email, bio, socialMedia } = profile;
+  const { name, phone, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
@@ -122,7 +122,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
       // Remove formatting for editing, keep only the formatted value
-      setTempValue(phoneNumber);
+      setTempValue(phone);
     } else if (field === 'email') {
       setTempValue(email);
     } else if (field === 'name') {
@@ -156,7 +156,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
-      updateProfile({ phoneNumber: tempValue });
+      updateProfile({ phone: tempValue });
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
       if (error) {
@@ -394,7 +394,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phoneNumber}</Text>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone}</Text>
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -841,11 +841,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               {/* Contact Information */}
               <View style={{ marginBottom: 16 }}>
                 {/* Phone */}
-                {phoneNumber && (
+                {phone && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
                     <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                      {phoneNumber}
+                      {phone}
                     </Text>
                   </View>
                 )}

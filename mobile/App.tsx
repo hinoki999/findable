@@ -51,7 +51,7 @@ interface SocialMediaAccount {
 
 interface UserProfile {
   name: string;
-  phoneNumber: string;
+  phone: string;
   email: string;
   bio: string;
   socialMedia: SocialMediaAccount[];
@@ -63,7 +63,7 @@ const UserProfileContext = createContext<{
 }>({
   profile: {
     name: 'Your Name',
-    phoneNumber: '(555) 123-4567',
+    phone: '(555) 123-4567',
     email: 'user@example.com',
     bio: 'Add bio',
     socialMedia: [],
@@ -177,7 +177,7 @@ function MainApp() {
   // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
-    phoneNumber: '(555) 123-4567',
+    phone: '(555) 123-4567',
     email: 'user@example.com',
     bio: 'Add bio',
     socialMedia: [],
@@ -246,7 +246,7 @@ function MainApp() {
           // Use !== undefined to allow intentionally empty strings
           setUserProfile(prev => ({
             name: profileData.name !== undefined ? profileData.name : prev.name,
-            phoneNumber: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phoneNumber) : prev.phoneNumber,
+            phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
             email: profileData.email !== undefined ? profileData.email : prev.email,
             bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
             socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
@@ -371,7 +371,7 @@ function MainApp() {
 
       setUserProfile({
         name: profileData.name || 'Your Name',
-        phoneNumber: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
+        phone: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
         email: email || 'user@example.com',
         bio: profileData.bio || 'Add bio',
         socialMedia: [],
@@ -489,7 +489,7 @@ function MainApp() {
       await api.saveUserProfile({
         name: newProfile.name,
         email: newProfile.email,
-        phone: newProfile.phoneNumber,
+        phone: newProfile.phone,
         bio: newProfile.bio,
         socialMedia: newProfile.socialMedia,
       });
