@@ -1,11 +1,13 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import { BASE_URL, secureFetch } from '../services/api';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -64,6 +66,37 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const theme = getTheme(isDarkMode);
+
+  // Load profile from backend on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const token = await AsyncStorage.getItem('@droplink_token');
+
+        const response = await secureFetch(`${BASE_URL}/user/profile`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const data = await response.json();
+
+        // Update context with fresh backend data
+        updateProfile({
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          bio: data.bio || '',
+          socialMedia: data.socialMedia || []
+        });
+
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   // Format phone number as (###) ###-####
   const formatPhoneNumber = (text: string) => {
