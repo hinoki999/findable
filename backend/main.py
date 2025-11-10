@@ -2885,6 +2885,50 @@ async def delete_profile_photo(user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# API Call Logging Endpoint
+@app.post("/api/log-api-call")
+async def log_api_call(log_data: dict):
+    """Log API calls from mobile app for monitoring"""
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+
+        # Create table if not exists
+        execute_query(cursor, '''
+            CREATE TABLE IF NOT EXISTS api_call_logs (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP,
+                endpoint TEXT,
+                method TEXT,
+                user_id INTEGER,
+                success BOOLEAN,
+                status_code INTEGER,
+                error TEXT
+            )
+        ''')
+
+        # Insert log
+        execute_query(cursor, '''
+            INSERT INTO api_call_logs
+            (timestamp, endpoint, method, user_id, success, status_code, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            log_data.get('timestamp'),
+            log_data.get('endpoint'),
+            log_data.get('method'),
+            log_data.get('user_id'),
+            log_data.get('success'),
+            log_data.get('status_code'),
+            log_data.get('error')
+        ))
+
+        conn.commit()
+        conn.close()
+        return {"success": True}
+    except Exception as e:
+        # Silent fail - don't break if logging fails
+        return {"success": False, "error": str(e)}
+
 @app.delete("/user/delete")
 async def delete_user_account(request: Request, user_id: int = Depends(get_current_user)):
     """Delete user account and all associated data"""

@@ -181,3 +181,30 @@ jobs:
         run: |
           cd monitoring
           timeout 180 python monitor-ble-health.py || echo "Monitor completed"
+
+  # API call monitoring
+  monitor-api-calls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          cd monitoring
+          pip install -r requirements.txt
+
+      - name: Monitor API calls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd monitoring
+          timeout 180 python monitor-api-calls.py || echo "Monitor completed"

@@ -60,6 +60,26 @@ export async function secureFetch(
     url = httpsUrl;
   }
 
+  // Log all API calls for monitoring
+  const logData = {
+    timestamp: new Date().toISOString(),
+    endpoint: url,
+    method: options.method || 'GET',
+    user_id: null as number | null,
+    success: false,
+    status_code: null as number | null,
+    error: null as string | null
+  };
+
+  // Extract user_id from token if available
+  try {
+    const token = await storage.getItem('authToken');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      logData.user_id = payload.user_id || payload.sub || null;
+    }
+  } catch {}
+
   // Create abort controller for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -71,6 +91,17 @@ export async function secureFetch(
     });
 
     clearTimeout(timeoutId);
+
+    // Log success/failure
+    logData.success = response.ok;
+    logData.status_code = response.status;
+
+    // Send to backend logging endpoint (fire-and-forget, don't block on this)
+    fetch(`${BASE_URL}/api/log-api-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData)
+    }).catch(() => {}); // Silent fail - don't break app if logging fails
 
     // Handle HTTP -> HTTPS redirects (301, 302, 307, 308)
     if ([301, 302, 307, 308].includes(response.status)) {
@@ -88,6 +119,16 @@ export async function secureFetch(
     return response;
   } catch (error: any) {
     clearTimeout(timeoutId);
+
+    // Log error
+    logData.error = error.message || String(error);
+
+    // Send to backend logging endpoint (fire-and-forget)
+    fetch(`${BASE_URL}/api/log-api-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData)
+    }).catch(() => {}); // Silent fail
 
     // Handle abort (timeout)
     if (error.name === 'AbortError') {
