@@ -1,6 +1,6 @@
 ﻿import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -209,7 +209,8 @@ function MainApp() {
   }, []);
 
   // Function to load all user data from backend
-  const loadUserData = async (options?: { onlyPhoto?: boolean }) => {
+  // Wrapped in useCallback to provide stable reference for useEffect dependencies
+  const loadUserData = useCallback(async (options?: { onlyPhoto?: boolean }) => {
     if (!isAuthenticated || !userId) return;
 
     try {
@@ -232,12 +233,12 @@ function MainApp() {
 
           // If onlyPhoto flag is set, only update photo (skip profile data)
           if (options?.onlyPhoto) {
-            if (profileData.profile_photo) {
+            // Only update if backend has a value (don't overwrite with null)
+            if (profileData.profile_photo !== undefined) {
               console.log('✅ Loaded profile photo:', profileData.profile_photo);
               setProfilePhotoUri(profileData.profile_photo);
             } else {
-              console.log('ℹ️ No profile photo found');
-              setProfilePhotoUri(null);
+              console.log('ℹ️ No profile photo in response, preserving existing state');
             }
             return; // Skip profile data update
           }
@@ -252,13 +253,12 @@ function MainApp() {
             socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
           }));
 
-          // Load profile photo
-          if (profileData.profile_photo) {
+          // Load profile photo - only update if backend provides a value
+          if (profileData.profile_photo !== undefined) {
             console.log('✅ Loaded profile photo:', profileData.profile_photo);
             setProfilePhotoUri(profileData.profile_photo);
           } else {
-            console.log('ℹ️ No profile photo found');
-            setProfilePhotoUri(null);
+            console.log('ℹ️ No profile photo in response, preserving existing state');
           }
         } else {
           console.log('⚠️ Profile response was null/undefined');
@@ -318,7 +318,7 @@ function MainApp() {
     } catch (error) {
       console.error('❌ Failed to load user data:', error);
     }
-  };
+  }, []); // Empty deps: function only uses stable API imports and setState functions
 
   // Load user data when authenticated
   // Skip during signup to prevent race condition with profile save
@@ -326,7 +326,7 @@ function MainApp() {
     if (isAuthenticated && userId && !isSignupInProgress) {
       loadUserData();
     }
-  }, [isAuthenticated, userId, isSignupInProgress]);
+  }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
 
   // Check for OTA updates on app launch
   useEffect(() => { 
@@ -411,15 +411,21 @@ function MainApp() {
     });
   };
 
-  const handleProfilePhotoPromptComplete = async () => {
+  const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
     console.log('✅ [App] Profile photo prompt completed');
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
-    console.log('✅ [App] Loading profile photo...');
 
-    // Only load photo, not entire profile (prevents overwriting signup data)
-    await loadUserData({ onlyPhoto: true });
-    console.log('✅ [App] Profile photo loaded');
+    // Use uploaded URI if provided (prevents race condition)
+    // Otherwise load from backend (for skip button case)
+    if (uploadedPhotoUri) {
+      console.log('✅ [App] Using uploaded photo URI directly:', uploadedPhotoUri);
+      setProfilePhotoUri(uploadedPhotoUri);
+    } else {
+      console.log('✅ [App] Loading profile photo from backend...');
+      await loadUserData({ onlyPhoto: true });
+      console.log('✅ [App] Profile photo loaded');
+    }
 
     // Always navigate to Home tab after profile photo prompt
     console.log('✅ [App] Navigating to Home tab');
@@ -671,12 +677,12 @@ function MainApp() {
               </Text>
             </Pressable>
           </View>
-          <ProfilePhotoScreen 
-            navigation={promptNavigation} 
+          <ProfilePhotoScreen
+            navigation={promptNavigation}
             onPhotoSaved={(uri) => {
-              setProfilePhotoUri(uri);
-              handleProfilePhotoPromptComplete();
-            }} 
+              // Pass URI to handler to avoid race condition
+              handleProfilePhotoPromptComplete(uri);
+            }}
           />
       </View>
       </DarkModeContext.Provider>
@@ -697,7 +703,16 @@ function MainApp() {
     // }
     
     if (subScreen === 'ProfilePhoto') {
-      return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+      return <ProfilePhotoScreen
+        navigation={navigation}
+        onPhotoSaved={async (uri) => {
+          // Optimistic update for immediate feedback
+          setProfilePhotoUri(uri);
+
+          // Verify database actually has it (defensive merge won't overwrite on failure)
+          await loadUserData({ onlyPhoto: true });
+        }}
+      />;
     }
 
     if (subScreen === 'SecuritySettings') {

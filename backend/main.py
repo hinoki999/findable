@@ -2722,55 +2722,74 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
 # Profile Photo endpoints
 @app.post("/user/profile/photo")
 async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depends(get_current_user)):
-    """Upload profile photo to Cloudinary"""
+    """Upload profile photo - accepts any image format, converts to JPEG"""
+    conn = None
+    cloudinary_public_id = None
+
     try:
-        # Validate file type
-        if not file.content_type in ["image/jpeg", "image/png", "image/jpg"]:
-            raise HTTPException(status_code=400, detail="Only JPEG and PNG images are allowed")
+        # Read file into memory
+        contents = await file.read()
 
         # Validate file size (max 10MB)
-        file.file.seek(0, 2)  # Seek to end
-        file_size = file.file.tell()  # Get position (file size)
-        file.file.seek(0)  # Reset to beginning
-
-        max_size = 10 * 1024 * 1024  # 10MB
-        if file_size > max_size:
+        max_size = 10 * 1024 * 1024
+        if len(contents) > max_size:
             raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
 
+        # Use Pillow to validate and convert image
+        try:
+            from PIL import Image
+            import io
+
+            # Open and verify it's a valid image
+            img = Image.open(io.BytesIO(contents))
+            img.verify()
+
+            # Re-open after verify (verify consumes the image)
+            img = Image.open(io.BytesIO(contents))
+
+            # Convert to RGB (handles RGBA, grayscale, CMYK, etc.)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            # Resize if too large (max 2048x2048, maintains aspect ratio)
+            max_dimensions = (2048, 2048)
+            img.thumbnail(max_dimensions, Image.Resampling.LANCZOS)
+
+            # Convert to JPEG in memory
+            output = io.BytesIO()
+            img.save(output, format='JPEG', quality=90, optimize=True)
+            output.seek(0)
+
+            # Use converted JPEG for upload
+            file_to_upload = output
+
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid or corrupted image file: {str(e)}")
+
         # Upload to Cloudinary
+        cloudinary_public_id = f"user_{user_id}"
         upload_result = cloudinary.uploader.upload(
-            file.file,
+            file_to_upload,
             folder="droplink/profile_photos",
-            public_id=f"user_{user_id}",
+            public_id=cloudinary_public_id,
             overwrite=True,
-            resource_type="image"
+            resource_type="image",
+            format="jpg"
         )
-        
-        # Get the secure URL from Cloudinary
+
+        # Validate Cloudinary response
         photo_url = upload_result.get("secure_url")
-        
-        # Update database with photo URL
+        if not photo_url:
+            raise HTTPException(status_code=500, detail="Cloudinary upload failed to return URL")
+
+        # Save to database
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
-        # Create table if it doesn't exist
-        execute_query(cursor, '''
-            CREATE TABLE IF NOT EXISTS user_profiles (
-                user_id INTEGER PRIMARY KEY,
-                name TEXT,
-                email TEXT,
-                phone TEXT,
-                bio TEXT,
-                profile_photo TEXT,
-                has_completed_onboarding INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # Update or insert photo URL
+
         # Check if profile exists
         execute_query(cursor, 'SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
         exists = cursor.fetchone()
-        
+
         if exists:
             # Update existing profile
             execute_query(cursor, '''
@@ -2782,18 +2801,35 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
                 INSERT INTO user_profiles (user_id, profile_photo)
                 VALUES (?, ?)
             ''', (user_id, photo_url))
-        
+
         conn.commit()
-        conn.close()
-        
+
         return {
             "success": True,
             "url": photo_url
         }
+
     except HTTPException:
+        # If database failed but Cloudinary succeeded, clean up
+        if cloudinary_public_id:
+            try:
+                cloudinary.uploader.destroy(f"droplink/profile_photos/{cloudinary_public_id}")
+            except:
+                pass  # Best effort cleanup
         raise
+
     except Exception as e:
+        # If database failed but Cloudinary succeeded, clean up
+        if cloudinary_public_id:
+            try:
+                cloudinary.uploader.destroy(f"droplink/profile_photos/{cloudinary_public_id}")
+            except:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        if conn:
+            conn.close()
 
 @app.get("/user/profile/photo")
 async def get_profile_photo(user_id: int = Depends(get_current_user)):
