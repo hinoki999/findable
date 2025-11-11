@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, getUserProfile, saveUserProfile } from '../services/api';
 import { useAuth } from './AuthContext';
+import { logStateChange } from '../services/activityMonitor';
 
 interface UserContextType {
   profile: UserProfile | null;
@@ -63,7 +64,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = async (newProfile: UserProfile) => {
     try {
+      const oldProfile = profile;
       await saveUserProfile(newProfile);
+      logStateChange('profile', oldProfile, newProfile);
       setProfile(newProfile);
     } catch (error) {
       console.error('Failed to update profile:', error);

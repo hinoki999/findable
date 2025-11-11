@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { logAuth, logStateChange } from '../services/activityMonitor';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -85,6 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await storage.setItem('userId', userId.toString());
       await storage.setItem('username', username);
 
+      logAuth('Login', { userId, username });
+      logStateChange('auth.isAuthenticated', false, true);
+
       setState({
         isAuthenticated: true,
         userId,
@@ -103,6 +107,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await storage.deleteItem('authToken');
       await storage.deleteItem('userId');
       await storage.deleteItem('username');
+
+      logAuth('Logout');
+      logStateChange('auth.isAuthenticated', true, false);
 
       setState({
         isAuthenticated: false,

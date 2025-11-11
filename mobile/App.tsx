@@ -20,7 +20,7 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
-import { initMonitor } from './src/services/activityMonitor';
+import { initMonitor, logAction } from './src/services/activityMonitor';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -762,7 +762,10 @@ function MainApp() {
         }}>
            {/* Home */}
            <Pressable
-             onPress={() => setTab('Home')}
+             onPress={() => {
+               logAction('Navigation', 'Home Tab');
+               setTab('Home');
+             }}
              style={{
                flex: 1, paddingVertical: 14, alignItems:'center',
                backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
@@ -778,7 +781,10 @@ function MainApp() {
 
           {/* Drop */}
           <Pressable
-            onPress={() => setTab('Drop')}
+            onPress={() => {
+              logAction('Navigation', 'Drop Tab');
+              setTab('Drop');
+            }}
             style={{
               flex: 1, paddingVertical: 14, alignItems:'center',
               backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
@@ -793,7 +799,10 @@ function MainApp() {
 
         {/* History */}
         <Pressable
-          onPress={() => setTab('History')}
+          onPress={() => {
+            logAction('Navigation', 'History Tab');
+            setTab('History');
+          }}
           style={{
             flex: 1, paddingVertical: 14, alignItems:'center',
             backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
@@ -808,7 +817,10 @@ function MainApp() {
 
           {/* Account */}
           <Pressable
-            onPress={() => setTab('Account')}
+            onPress={() => {
+              logAction('Navigation', 'Account Tab');
+              setTab('Account');
+            }}
             style={{
               flex: 1, paddingVertical: 14, alignItems:'center',
               backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
