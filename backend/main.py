@@ -2615,9 +2615,11 @@ def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
 
 # User Profile endpoints
 @app.get("/user/profile")
-def get_user_profile(user_id: int = Depends(get_current_user)):
-    """Get user profile including onboarding status"""
+async def get_user_profile(payload = Depends(JWTBearer())):
+    """Get user profile with authentication via JWTBearer middleware"""
     try:
+        user_id = payload['user_id']
+        
         conn = get_db_connection()
         cursor = get_cursor(conn)
         
