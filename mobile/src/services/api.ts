@@ -39,11 +39,18 @@ async function getAuthToken(): Promise<string | null> {
 // Helper to create authorized headers
 async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await getAuthToken();
+  console.log('🔑 getAuthHeaders - Token exists:', !!token);
+  console.log('🔑 Token length:', token?.length || 0);
+  console.log('🔑 Token first 20 chars:', token?.substring(0, 20));
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('✅ Authorization header set');
+  } else {
+    console.log('❌ No token available, Authorization header NOT set');
   }
   return headers;
 }
