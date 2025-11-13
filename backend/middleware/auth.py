@@ -43,6 +43,9 @@ class JWTBearer(HTTPBearer):
             logger.warning(f"No token found for {request.method} {request.url.path}")
             raise HTTPException(status_code=401, detail="No authentication token found")
             
+        # Log token details for debugging
+        logger.info(f"🔍 Token received - Length: {len(token)}, Segments: {len(token.split('.'))}, First 30 chars: {token[:30]}")
+        
         # Verify token
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
