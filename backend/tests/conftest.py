@@ -21,7 +21,7 @@ def test_user_credentials() -> Dict[str, str]:
         dict: {'username': email, 'password': password}
     """
     return {
-        'username': os.getenv('TEST_USER_EMAIL', 'test@droplink.com'),
+        'username': os.getenv('TEST_USER_USERNAME', 'test_droplink'),
         'password': os.getenv('TEST_USER_PASSWORD', 'TestPass123!')
     }
 

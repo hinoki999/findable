@@ -21,7 +21,8 @@ import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 from dotenv import load_dotenv
-
+from middleware.auth import JWTBearer
+            
 # Load environment variables from .env file
 load_dotenv()
 
@@ -381,6 +382,35 @@ def init_db():
         conn.rollback()
         # Column already exists - this is fine
         print(f"has_completed_onboarding column migration skipped (may already exist): {e}")
+    
+    # Create test user for monitoring/testing
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT id FROM users WHERE email = 'test@droplink.com'")
+        else:
+            cursor.execute("SELECT id FROM users WHERE email = 'test@droplink.com'")
+        
+        if not cursor.fetchone():
+            test_password = hash_password('TestPass123!')
+            test_username = 'test_droplink'  # Fixed username for monitoring/testing
+            
+            if USE_POSTGRES:
+                cursor.execute("""
+                    INSERT INTO users (username, email, password_hash, created_at) 
+                    VALUES (%s, %s, %s, NOW())
+                """, (test_username, 'test@droplink.com', test_password))
+            else:
+                cursor.execute("""
+                    INSERT INTO users (username, email, password_hash, created_at) 
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                """, (test_username, 'test@droplink.com', test_password))
+            
+            conn.commit()
+            print("✅ Test user created: test@droplink.com")
+        else:
+            print("ℹ️  Test user already exists")
+    except Exception as e:
+        print(f"⚠️  Could not create test user: {e}")
     
     conn.commit()
     conn.close()
@@ -2585,36 +2615,56 @@ def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
 
 # User Profile endpoints
 @app.get("/user/profile")
-def get_user_profile(user_id: int = Depends(get_current_user)):
-    """Get user profile including onboarding status"""
+async def get_user_profile(payload = Depends(JWTBearer())):
+    """Get user profile with authentication via JWTBearer middleware"""
     try:
+        user_id = payload['user_id']
+        
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        execute_query(cursor, '''
-            SELECT name, email, phone, bio, profile_photo, social_media, has_completed_onboarding FROM user_profiles WHERE user_id = ?
-        ''', (user_id,))
-        row = cursor.fetchone()
+        
+        execute_query(cursor,
+            "SELECT username, email, created_at FROM users WHERE id = ?",
+            (user_id,)
+        )
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        execute_query(cursor,
+            "SELECT name, phone, profile_photo, has_completed_onboarding FROM user_profiles WHERE user_id = ?",
+            (user_id,)
+        )
+        profile = cursor.fetchone()
+        
         conn.close()
         
-        if not row:
-            return {"name": "", "email": "", "phone": "", "bio": "", "profile_photo": None, "socialMedia": [], "hasCompletedOnboarding": False}
-        
-        social_media_value = get_value(row, 'social_media' if USE_POSTGRES else 5)
-        social_media = json.loads(social_media_value) if social_media_value else []
-        
-        onboarding_value = get_value(row, 'has_completed_onboarding' if USE_POSTGRES else 6)
-        
-        return {
-            "name": get_value(row, 'name' if USE_POSTGRES else 0) or "",
-            "email": get_value(row, 'email' if USE_POSTGRES else 1) or "",
-            "phone": get_value(row, 'phone' if USE_POSTGRES else 2) or "",
-            "bio": get_value(row, 'bio' if USE_POSTGRES else 3) or "",
-            "profile_photo": get_value(row, 'profile_photo' if USE_POSTGRES else 4),
-            "socialMedia": social_media,
-            "hasCompletedOnboarding": bool(onboarding_value) if onboarding_value is not None else False
-        }
+        if profile:
+            return {
+                'username': get_value(user, 'username' if USE_POSTGRES else 0),
+                'email': get_value(user, 'email' if USE_POSTGRES else 1),
+                'name': get_value(profile, 'name' if USE_POSTGRES else 0),
+                'phone': get_value(profile, 'phone' if USE_POSTGRES else 1),
+                'profile_photo': get_value(profile, 'profile_photo' if USE_POSTGRES else 2),
+                'has_completed_onboarding': bool(get_value(profile, 'has_completed_onboarding' if USE_POSTGRES else 3)),
+                'created_at': get_value(user, 'created_at' if USE_POSTGRES else 2)
+            }
+        else:
+            return {
+                'username': get_value(user, 'username' if USE_POSTGRES else 0),
+                'email': get_value(user, 'email' if USE_POSTGRES else 1),
+                'name': None,
+                'phone': None,
+                'profile_photo': None,
+                'has_completed_onboarding': False,
+                'created_at': get_value(user, 'created_at' if USE_POSTGRES else 2)
+            }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve profile: {str(e)}")
 
 @app.post("/user/profile")
 def save_user_profile(profile: dict, request: Request, user_id: int = Depends(get_current_user)):

@@ -27,7 +27,7 @@ class ProductionMonitor:
             response = requests.post(
                 f"{self.base_url}/auth/login",
                 json={
-                    "username": "test@droplink.com",
+                    "username": "test_droplink",
                     "password": "TestPass123!"
                 },
                 timeout=5
