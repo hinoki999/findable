@@ -12,49 +12,50 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-1
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
         super(JWTBearer, self).__init__(auto_error=auto_error)
-    
+
     async def __call__(self, request: Request):
-        # Log the request details
-        logger.info(f"Auth check: {request.method} {request.url.path}")
-        
-        # Check for token in different places
+        """Enhanced token extraction and validation"""
         token = None
         
-        # 1. Check Authorization header
-        try:
-            credentials: HTTPAuthorizationCredentials = await super().__call__(request)
-            if credentials:
-                token = credentials.credentials
-                logger.info(f"Token found in Authorization header")
-        except HTTPException:
-            pass  # No token in header, try other methods
+        # Try Authorization header first
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            # Handle both "Bearer token" and just "token"
+            parts = auth_header.split()
+            if len(parts) == 2 and parts[0] == "Bearer":
+                token = parts[1]
+            elif len(parts) == 1:
+                token = parts[0]
+            logger.debug(f"Token from header: {token[:20] if token else 'None'}...")
         
-        # 2. Check cookies (for web app)
+        # Check cookies (for web app)
         if not token and "token" in request.cookies:
             token = request.cookies["token"]
-            logger.info(f"Token found in cookies")
+            logger.debug(f"Token from cookies: {token[:20]}...")
         
-        # 3. Check query params (for mobile app)
+        # Check query params (for mobile app)
         if not token and "token" in request.query_params:
             token = request.query_params["token"]
-            logger.info(f"Token found in query params")
-            
+            logger.debug(f"Token from query: {token[:20]}...")
+        
         if not token:
-            logger.warning(f"No token found for {request.method} {request.url.path}")
-            raise HTTPException(status_code=401, detail="No authentication token found")
-            
-        # Log token details for debugging
-        logger.info(f"🔍 Token received - Length: {len(token)}, Segments: {len(token.split('.'))}, First 30 chars: {token[:30]}")
+            # Log what headers we received for debugging
+            logger.warning(f"No token found. Headers: {dict(request.headers)}")
+            raise HTTPException(status_code=401, detail="No authentication token")
+        
+        # Validate token format (JWT should have 3 segments)
+        if token.count('.') != 2:
+            logger.error(f"Invalid token format: {token[:20]}... (segments: {token.count('.')+1})")
+            raise HTTPException(status_code=401, detail="Invalid token format")
         
         # Verify token
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            logger.info(f"Token valid for user: {payload.get('user_id')}")
+            logger.info(f"✅ Token valid for user: {payload.get('user_id')}")
             return payload
         except jwt.ExpiredSignatureError:
             logger.error("Token expired")
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError as e:
-            logger.error(f"Invalid token: {e}")
+            logger.error(f"Token validation failed: {e}")
             raise HTTPException(status_code=401, detail="Invalid token")
-

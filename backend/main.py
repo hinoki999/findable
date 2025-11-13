@@ -2618,49 +2618,58 @@ def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
 async def get_user_profile(payload = Depends(JWTBearer())):
     """Get user profile with authentication via JWTBearer middleware"""
     try:
-        user_id = payload['user_id']
+        from serializers.profile_serializer import serialize_profile
         
+        user_id = payload['user_id']
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         execute_query(cursor,
             "SELECT username, email, created_at FROM users WHERE id = ?",
             (user_id,)
         )
         user = cursor.fetchone()
-        
+
         if not user:
             conn.close()
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         execute_query(cursor,
-            "SELECT name, phone, profile_photo, has_completed_onboarding FROM user_profiles WHERE user_id = ?",
+            "SELECT name, phone, profile_photo, has_completed_onboarding, bio FROM user_profiles WHERE user_id = ?",
             (user_id,)
         )
         profile = cursor.fetchone()
-        
+
         conn.close()
-        
+
+        # Build response with snake_case from database
         if profile:
-            return {
+            response_data = {
                 'username': get_value(user, 'username' if USE_POSTGRES else 0),
                 'email': get_value(user, 'email' if USE_POSTGRES else 1),
                 'name': get_value(profile, 'name' if USE_POSTGRES else 0),
                 'phone': get_value(profile, 'phone' if USE_POSTGRES else 1),
                 'profile_photo': get_value(profile, 'profile_photo' if USE_POSTGRES else 2),
                 'has_completed_onboarding': bool(get_value(profile, 'has_completed_onboarding' if USE_POSTGRES else 3)),
+                'bio': get_value(profile, 'bio' if USE_POSTGRES else 4),
                 'created_at': get_value(user, 'created_at' if USE_POSTGRES else 2)
             }
         else:
-            return {
+            response_data = {
                 'username': get_value(user, 'username' if USE_POSTGRES else 0),
                 'email': get_value(user, 'email' if USE_POSTGRES else 1),
                 'name': None,
                 'phone': None,
                 'profile_photo': None,
                 'has_completed_onboarding': False,
+                'bio': None,
                 'created_at': get_value(user, 'created_at' if USE_POSTGRES else 2)
             }
+        
+        # Convert snake_case to camelCase for API response
+        return serialize_profile(response_data)
+        
     except HTTPException:
         raise
     except Exception as e:
