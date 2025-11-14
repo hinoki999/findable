@@ -33,7 +33,22 @@ export class TimeoutError extends Error {
 
 // Helper to get auth token
 async function getAuthToken(): Promise<string | null> {
-  return await storage.getItem('authToken');
+  const token = await storage.getItem('authToken');
+  
+  // 🔍 POINT D: Token retrieval from storage
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('🔍 POINT D: api.ts - Token Retrieved from Storage');
+  console.log('  timestamp:', new Date().toISOString());
+  console.log('  retrieved token:', token);
+  console.log('  typeof token:', typeof token);
+  console.log('  token length:', token?.length);
+  console.log('  is null?:', token === null);
+  console.log('  is string "null"?:', token === 'null');
+  console.log('  is undefined?:', token === undefined);
+  console.log('  JWT segments:', token?.split('.').length);
+  console.log('═══════════════════════════════════════════════════════');
+  
+  return token;
 }
 
 // Helper to create authorized headers
@@ -46,10 +61,28 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
+  
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    console.log('✅ Authorization header set');
+    
+    // 🔍 POINT E: Final Authorization header
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 POINT E: api.ts - Authorization Header Constructed');
+    console.log('  timestamp:', new Date().toISOString());
+    console.log('  token used:', token);
+    console.log('  Authorization header:', headers['Authorization']);
+    console.log('  Header length:', headers['Authorization']?.length);
+    console.log('  Contains Bearer?:', headers['Authorization']?.startsWith('Bearer '));
+    console.log('═══════════════════════════════════════════════════════');
   } else {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 POINT E: api.ts - NO TOKEN AVAILABLE');
+    console.log('  timestamp:', new Date().toISOString());
+    console.log('  token was null/undefined');
+    console.log('═══════════════════════════════════════════════════════');
+  }
+ else {
     console.log('❌ No token available, Authorization header NOT set');
   }
   return headers;

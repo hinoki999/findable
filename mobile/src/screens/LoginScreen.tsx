@@ -52,6 +52,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Login failed');
@@ -107,6 +120,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to send code');
@@ -141,6 +167,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Invalid code');
@@ -185,6 +224,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to reset password');

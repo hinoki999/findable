@@ -82,7 +82,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (token: string, userId: number, username: string) => {
     try {
+      
+      // 🔍 POINT B: Before storage write
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT B: AuthContext - Before Storage Write');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  token param:', token);
+      console.log('  typeof token:', typeof token);
+      console.log('  token length:', token?.length);
+      console.log('  is null?:', token === null);
+      console.log('  is string "null"?:', token === 'null');
+      console.log('  is undefined?:', token === undefined);
+      console.log('  JWT segments:', token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+      
       await storage.setItem('authToken', token);
+      
+      // 🔍 POINT C: After storage write - verify what was saved
+      const storedToken = await storage.getItem('authToken');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT C: AuthContext - After Storage Write (Verification)');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  storedToken:', storedToken);
+      console.log('  typeof storedToken:', typeof storedToken);
+      console.log('  token length:', storedToken?.length);
+      console.log('  is null?:', storedToken === null);
+      console.log('  is string "null"?:', storedToken === 'null');
+      console.log('  is undefined?:', storedToken === undefined);
+      console.log('  JWT segments:', storedToken?.split('.').length);
+      console.log('  MATCHES ORIGINAL?:', token === storedToken);
+      console.log('═══════════════════════════════════════════════════════');
+
       await storage.setItem('userId', userId.toString());
       await storage.setItem('username', username);
 
