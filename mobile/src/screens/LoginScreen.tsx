@@ -58,6 +58,9 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       }
 
       // Success!
+      console.log("🔍 LOGIN RESPONSE:", JSON.stringify(data));
+      console.log("🔍 TOKEN VALUE:", data.token);
+      console.log("🔍 TOKEN TYPE:", typeof data.token);
       onLoginSuccess(data.token, data.user_id, data.username);
     } catch (err: any) {
       setError(err.message || 'Invalid username or password');
@@ -224,6 +227,8 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       >
         {/* Header */}
         <View style={styles.header}>
+      <View style={{position: "absolute", top: 100, left: "50%%", marginLeft: -150, width: 300, height: 200, backgroundColor: "red", justifyContent: "center", alignItems: "center", zIndex: 9999, borderRadius: 20, borderWidth: 5, borderColor: "yellow"}}><Text style={{color: "white", fontSize: 32, fontWeight: "bold", textAlign: "center"}}>OTA UPDATE WORKING!</Text></View>
+
           <Pressable onPress={onBack} style={styles.backButton}>
             {({ pressed }) => (
               <MaterialCommunityIcons
