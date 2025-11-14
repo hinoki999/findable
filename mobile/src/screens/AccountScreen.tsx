@@ -80,16 +80,13 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     loadProfile();
   }, []);
 
-  const data = await response.json();
 
-  // Update context with fresh backend data
-  updateProfile({
-    name: data.name || '',
+  name: data.name || '',
     email: data.email || '',
-    phone: data.phone || '',
-    bio: data.bio || '',
-    socialMedia: data.socialMedia || []
-  });
+      phone: data.phone || '',
+        bio: data.bio || '',
+          socialMedia: data.socialMedia || []
+});
 
 } catch (error) {
   console.error('Failed to load profile:', error);
