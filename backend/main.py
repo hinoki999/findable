@@ -2291,6 +2291,45 @@ def health_check():
         )
 
 # Readiness probe endpoint for Railway
+
+
+@app.get("/admin/fix-database-columns")
+def fix_database_columns():
+    """One-time fix: Check and add missing columns if needed"""
+    try:
+        conn = get_db_connection()
+        cursor = get_cursor(conn)
+        
+        results = []
+        
+        # Check user_profiles for has_completed_onboarding
+        cursor.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'user_profiles' AND column_name = 'has_completed_onboarding'
+        """)
+        
+        if not cursor.fetchone():
+            cursor.execute(f"ALTER TABLE user_profiles ADD COLUMN has_completed_onboarding {integer} DEFAULT 0")
+            conn.commit()
+            results.append("✅ Added has_completed_onboarding to user_profiles")
+        else:
+            results.append("✅ has_completed_onboarding already exists")
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "results": results,
+            "message": "Database column check complete"
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/ready")
 def readiness_check():
     """
