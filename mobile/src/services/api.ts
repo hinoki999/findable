@@ -75,14 +75,14 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     console.log('  Header length:', headers['Authorization']?.length);
     console.log('  Contains Bearer?:', headers['Authorization']?.startsWith('Bearer '));
     console.log('═══════════════════════════════════════════════════════');
-  }} else {
+  } else {
     console.log('═══════════════════════════════════════════════════════');
     console.log('🔍 POINT E: api.ts - NO TOKEN AVAILABLE');
     console.log('  timestamp:', new Date().toISOString());
     console.log('  token was null/undefined');
     console.log('═══════════════════════════════════════════════════════');
   }
-} else {
+ else {
     console.log('❌ No token available, Authorization header NOT set');
   }
   return headers;
@@ -261,7 +261,7 @@ export async function saveDevice(d: Device) {
     const existingIndex = _store.findIndex(device => device.id === item.id);
     if (existingIndex !== -1) {
       _store[existingIndex] = item;
-    }} else {
+    } else {
       _store.unshift(item);
     }
     return item;
@@ -595,7 +595,7 @@ export async function uploadProfilePhoto(imageUri: string): Promise<{ success: b
       }
 
       formData.append('file', blob, 'profile.jpg');
-    }} else {
+    } else {
       // For mobile (Android/iOS)
       console.log('📱 Mobile platform - preparing file...');
       const filename = imageUri.split('/').pop() || 'profile.jpg';
@@ -661,12 +661,11 @@ export async function uploadProfilePhoto(imageUri: string): Promise<{ success: b
       throw new Error('Upload timed out. Please check your internet connection and try again');
     } else if (error.message?.includes('Network')) {
       throw new Error('Network error. Please check your internet connection');
-    }} else {
+    } else {
       throw new Error(error.message || 'Failed to upload photo. Please try again');
     }
   }
 }
-
 
 
 
