@@ -82,9 +82,6 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     console.log('  token was null/undefined');
     console.log('═══════════════════════════════════════════════════════');
   }
- else {
-    console.log('❌ No token available, Authorization header NOT set');
-  }
   return headers;
 }
 
