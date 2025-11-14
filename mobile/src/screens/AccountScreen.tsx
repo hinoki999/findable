@@ -80,14 +80,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     loadProfile();
   }, []);
 
-
-  name: data.name || '',
-    email: data.email || '',
-      phone: data.phone || '',
-        bio: data.bio || '',
-          socialMedia: data.socialMedia || []
-});
-
 } catch (error) {
   console.error('Failed to load profile:', error);
 }
