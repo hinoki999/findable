@@ -293,9 +293,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(data.detail || 'Registration failed');
       }
 
-      // Save profile information (always save, even if fields are empty)
-      // This ensures the profile record exists in the backend
-
 
       // Enable tutorials for this new signup
       console.log('📚 Enabling tutorials for new signup...');
@@ -311,7 +308,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setShowVerificationModal(false);
       console.log('🚀 Calling onSignupSuccess - navigating to app...');
       // Pass profile data to App to prevent race condition
-    onSignupSuccess(data.token, data.user_id, data.username, email);
+      onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
