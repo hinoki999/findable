@@ -80,30 +80,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const checkPhoneAvailability = async (phone: string) => {
-    try {
-      // Only check if phone has 10 digits
-      const phoneDigits = phone.replace(/\D/g, '');
-      if (phoneDigits.length !== 10) return;
-
-      console.log('🔍 Checking phone availability:', phoneDigits);
-      const response = await secureFetch(`${BASE_URL}/auth/check-phone`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneDigits }),
-      });
-
-      const data = await response.json();
-      console.log('✅ Phone check response:', data);
-
-      if (!data.available) {
-        setPhoneError(data.message || 'Phone number is already in use');
-      }
-    } catch (err) {
-      console.error('❌ Failed to check phone:', err);
-    }
-  };
-
   const validateUsername = (text: string) => {
     setUsername(text);
     setUsernameError('');
@@ -146,18 +122,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return () => clearTimeout(timer);
     }
   }, [email]);
-
-  // Debounced phone availability check
-  useEffect(() => {
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (phoneDigits.length === 10 && !phoneError) {
-      const timer = setTimeout(() => {
-        checkPhoneAvailability(phone);
-      }, 500); // Wait 500ms after user stops typing
-
-      return () => clearTimeout(timer);
-    }
-  }, [phone]);
 
   const validatePassword = (text: string) => {
     setPassword(text);
@@ -217,32 +181,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setEmailError('Please enter a valid email address');
       return;
     }
-  };
-
-  // Phone number formatting: (555) 123-4567
-  const formatPhoneNumber = (text: string) => {
-    // Remove all non-digit characters
-    const cleaned = text.replace(/\D/g, '');
-
-    // Limit to 10 digits
-    const limited = cleaned.slice(0, 10);
-
-    // Apply formatting
-    if (limited.length === 0) {
-      return '';
-    } else if (limited.length <= 3) {
-      return `(${limited}`;
-    } else if (limited.length <= 6) {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3)}`;
-    } else {
-      return `(${limited.slice(0, 3)}) ${limited.slice(3, 6)}-${limited.slice(6)}`;
-    }
-  };
-
-  const handlePhoneChange = (text: string) => {
-    const formatted = formatPhoneNumber(text);
-    setPhone(formatted);
-    setPhoneError(''); // Clear error on every keystroke
   };
 
   const handleSignup = () => {
@@ -357,7 +295,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
       // Save profile information (always save, even if fields are empty)
       // This ensures the profile record exists in the backend
-      const phoneDigitsOnly = phone.replace(/\D/g, '');
 
 
       // Enable tutorials for this new signup
@@ -374,11 +311,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setShowVerificationModal(false);
       console.log('🚀 Calling onSignupSuccess - navigating to app...');
       // Pass profile data to App to prevent race condition
-      onSignupSuccess(data.token, data.user_id, data.username, email, {
-        name: name || '',
-        phone: phoneDigitsOnly || '',
-        bio: bio || ''
-      });
+    onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
