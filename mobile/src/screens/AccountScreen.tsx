@@ -71,7 +71,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   // Load profile from backend on mount
   useEffect(() => {
     const loadProfile = async () => {
-      // Add guard to prevent loading when not authenticated
       const hasToken = await storage.getItem('authToken');
       if (!hasToken) {
         console.log('No auth token, skipping profile load');
@@ -79,12 +78,16 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       }
 
       try {
-        console.log('🔄 Loading profile from backend...');
+        console.log('Loading profile from backend...');
         const profile = await getUserProfile();
+        console.log('RAW PROFILE DATA:', JSON.stringify(profile));  // ← Add this
+        console.log('Profile name:', profile.name);                 // ← Add this
+        console.log('Profile phone:', profile.phone);               // ← Add this
+        console.log('Profile bio:', profile.bio);                   // ← Add this
         setProfile(profile);
-        console.log('✅ Profile loaded:', profile);
+        console.log('Profile loaded:', profile);
       } catch (error) {
-        console.error('❌ Failed to load profile:', error);
+        console.error('Failed to load profile:', error);
       }
     };
     loadProfile();
