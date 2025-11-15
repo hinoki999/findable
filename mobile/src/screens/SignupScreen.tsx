@@ -22,7 +22,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
 
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -358,31 +358,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Save profile information (always save, even if fields are empty)
       // This ensures the profile record exists in the backend
       const phoneDigitsOnly = phone.replace(/\D/g, '');
-      
-      // Save profile with onboarding flag set to false (tutorials not yet complete)
-      
-      const profileResponse = await secureFetch(`${BASE_URL}/user/profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.token}`
-        },
-        body: JSON.stringify({
-          name: name || '',
-          phone: phoneDigitsOnly || '',
-          email: email,
-          bio: bio || '',
-          hasCompletedOnboarding: false  // Tutorials not complete yet - will be set to true after tutorials finish
-        }),
-      });
 
-      const profileData = await profileResponse.json();
-      
-      if (!profileResponse.ok) {
-        console.error('❌ Profile save failed:', profileData);
-        throw new Error(profileData.detail || 'Failed to save profile information');
-      }
-      
+
       // Enable tutorials for this new signup
       console.log('📚 Enabling tutorials for new signup...');
       await enableTutorialsForSignup();
@@ -409,7 +386,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 14 && !usernameError && !passwordError && !confirmPasswordError && !emailError && !phoneError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -439,27 +416,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Name
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={name}
-                onChangeText={setName}
-                placeholder=""
-                placeholderTextColor={theme.colors.muted}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-          </View>
-
           {/* Username */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>Username</Text>
@@ -592,56 +548,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             ) : null}
           </View>
 
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Phone
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              {
-                backgroundColor: theme.colors.white,
-                borderColor: phoneError ? '#FF3B30' : theme.colors.border,
-              }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={phone}
-                onChangeText={handlePhoneChange}
-                placeholder=""
-                placeholderTextColor={theme.colors.muted}
-                keyboardType="phone-pad"
-                maxLength={14}
-                editable={!loading}
-              />
-            </View>
-            {phoneError ? (
-              <Text style={styles.errorText}>{phoneError}</Text>
-            ) : null}
-          </View>
-
-          {/* Bio (Optional) */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Bio <Text style={{ color: theme.colors.muted }}>(optional)</Text>
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border, minHeight: 80 }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', height: 70, textAlignVertical: 'top' }]}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={theme.colors.muted}
-                multiline={true}
-                numberOfLines={3}
-                editable={!loading}
-              />
-            </View>
-          </View>
-
           {/* Error Message */}
           {error ? (
             <View style={styles.errorContainer}>
@@ -724,7 +630,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 />
               )}
             </Pressable>
-            
+
             {verificationStep === 'confirm' ? (
               <>
                 <MaterialCommunityIcons name="email-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
