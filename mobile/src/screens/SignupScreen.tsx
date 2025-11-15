@@ -21,9 +21,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [bio, setBio] = useState('');
+
+  
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,7 +33,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
 
   // Email verification modal
   const [showVerificationModal, setShowVerificationModal] = useState(false);
