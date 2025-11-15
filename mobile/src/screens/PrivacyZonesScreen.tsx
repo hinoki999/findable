@@ -10,14 +10,8 @@ interface PrivacyZone {
   radius: number; // in miles
 }
 
-// Mock address suggestions
-const mockAddressSuggestions = [
-  '123 Main Street, New York, NY 10001',
-  '456 Broadway, New York, NY 10013',
-  '789 5th Avenue, New York, NY 10022',
-  '321 Park Avenue, New York, NY 10017',
-  '654 Madison Avenue, New York, NY 10065',
-];
+// Address suggestions - empty, no mock data
+const mockAddressSuggestions: string[] = [];
 
 interface PrivacyZonesScreenProps {
   navigation: any;

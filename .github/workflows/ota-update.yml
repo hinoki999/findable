@@ -1,0 +1,35 @@
+name: OTA Update on Push
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'mobile/**'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        working-directory: ./mobile
+        run: npm install
+
+      - name: Publish update to preview
+        working-directory: ./mobile
+        run: npx eas update --branch preview --non-interactive --message "${{ github.event.head_commit.message }}"
+

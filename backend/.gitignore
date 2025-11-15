@@ -45,3 +45,14 @@ Thumbs.db
 # Railway
 .railway/
 
+# Test environment files
+.env.local
+.env.test
+*.log
+test-results/
+.pytest_cache/
+__pycache__/
+coverage.xml
+.coverage
+htmlcov/
+

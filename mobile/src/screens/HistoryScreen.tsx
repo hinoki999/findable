@@ -8,6 +8,7 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import SwipeableRow from '../components/SwipeableRow';
+import TopBar from '../components/TopBar';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -59,7 +60,7 @@ export default function HistoryScreen() {
 
   // Start History screen tutorial when component mounts
   useEffect(() => {
-    startScreenTutorial('History', 4);
+    startScreenTutorial('History', 3);
   }, []);
 
   useEffect(() => {
@@ -75,13 +76,14 @@ export default function HistoryScreen() {
         setData(filteredItems);
         setErr(null); // Clear any previous errors
       } catch (e:any) {
+        console.error('❌ HISTORY: Failed to load devices:', e);
         const errorMsg = e?.message || 'Failed to load contacts';
-        setErr(errorMsg);
-        showToast({
-          message: 'Oops! Failed to load your links. Check your connection and try again.',
-          type: 'error',
-          duration: 4000,
-        });
+        
+        // Don't show error toast - just log it
+        // User can still use the app, they just don't see links yet
+        console.log('⚠️ HISTORY: Error loading links (this is OK if user has no links yet)');
+        setData([]); // Set empty array instead of showing error
+        setErr(null); // Don't set error state
       } finally {
         setLoading(false);
       }
@@ -172,12 +174,11 @@ export default function HistoryScreen() {
       setData(filteredItems);
       setErr(null);
     } catch (e: any) {
-      setErr(e?.message || 'Failed to reload');
-      showToast({
-        message: 'Failed to refresh. Check your connection and try again.',
-        type: 'error',
-        duration: 3000,
-      });
+      console.error('❌ HISTORY: Failed to refresh devices:', e);
+      // Don't show error toast on refresh - just silently fail
+      // User can try again if they want
+      console.log('⚠️ HISTORY: Refresh failed, keeping existing data');
+      setErr(null); // Don't set error state
     } finally {
       setRefreshing(false);
     }
@@ -216,18 +217,13 @@ export default function HistoryScreen() {
   // History screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'This is your link history! When you connect with someone, their contact card will appear here. Click any contact to view their full card.',
+      message: 'This is your link page! When you link with someone, their contact card will appear here.',
       position: { top: 150, left: screenWidth * 0.1, right: screenWidth * 0.1 },
       arrow: undefined,
     },
     {
-      message: 'Once you have contacts, swipe right to pin your favorites to the Home screen!',
+      message: 'Once you have contacts, swipe right to pin your favorites to the top of the page!',
       position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
-      arrow: 'down' as const,
-    },
-    {
-      message: 'Swipe left on any contact to delete them when needed.',
-      position: { top: 205, left: screenWidth * 0.35, right: screenWidth * 0.05 },
       arrow: 'down' as const,
     },
     {
@@ -240,10 +236,48 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+        <TopBar logoMode={true} logoIcon="link-variant" />
         <NetworkBanner isDarkMode={isDarkMode} />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.blue} />
-          <Text style={[theme.type.muted, { marginTop: 16, fontSize: 14 }]}>Loading your links...</Text>
+        <View style={{ 
+          flex: 1, 
+          justifyContent: 'center', 
+          alignItems: 'center',
+          paddingHorizontal: 40,
+        }}>
+          {/* Smooth Loading Spinner */}
+          <View style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: theme.colors.blueLight,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 24,
+            shadowColor: theme.colors.blue,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+            elevation: 8,
+          }}>
+            <ActivityIndicator size="large" color={theme.colors.blue} />
+          </View>
+          
+          {/* Loading Text */}
+          <Text style={[theme.type.h2, { 
+            textAlign: 'center',
+            marginBottom: 8,
+            fontSize: 18,
+            color: theme.colors.text,
+          }]}>
+            Loading your links
+          </Text>
+          <Text style={[theme.type.muted, { 
+            textAlign: 'center',
+            fontSize: 14,
+            opacity: 0.7,
+          }]}>
+            Just a moment...
+          </Text>
         </View>
       </View>
     );
@@ -251,6 +285,7 @@ export default function HistoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      <TopBar logoMode={true} logoIcon="link-variant" />
       <NetworkBanner isDarkMode={isDarkMode} />
       <FlatList
         contentContainerStyle={{ paddingBottom: 16 }}
@@ -258,14 +293,6 @@ export default function HistoryScreen() {
         keyExtractor={(item, i) => String(item.id ?? i)}
         ListHeaderComponent={
           <>
-            <View style={{ alignItems: 'center', paddingVertical: 8, paddingTop: 16 }}>
-              <MaterialCommunityIcons
-                name="link-variant"
-                size={28}
-                color="#FF6B4A"
-              />
-            </View>
-            
             {/* Search Bar */}
             <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
               <View style={{
