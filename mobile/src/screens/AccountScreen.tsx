@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 import { getUserProfile } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
+import { storage } from '../services/storage';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -70,11 +71,20 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   // Load profile from backend on mount
   useEffect(() => {
     const loadProfile = async () => {
+      // Add guard to prevent loading when not authenticated
+      const hasToken = await storage.getItem('authToken');
+      if (!hasToken) {
+        console.log('No auth token, skipping profile load');
+        return;
+      }
+
       try {
+        console.log('🔄 Loading profile from backend...');
         const profile = await getUserProfile();
         setProfile(profile);
+        console.log('✅ Profile loaded:', profile);
       } catch (error) {
-        console.error('Failed to load profile:', error);
+        console.error('❌ Failed to load profile:', error);
       }
     };
     loadProfile();
