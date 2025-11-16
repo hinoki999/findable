@@ -22,7 +22,7 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
 from dotenv import load_dotenv
 from middleware.auth import JWTBearer
-            
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -37,6 +37,8 @@ except ImportError:
 app = FastAPI(title="DropLink API")
 
 # Custom validation error handler for clear 422 responses
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Return clear, user-friendly validation error messages"""
@@ -44,7 +46,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     for error in exc.errors():
         field = " -> ".join(str(x) for x in error['loc'][1:])  # Skip 'body'
         message = error['msg']
-        
+
         # Make error messages more user-friendly
         if error['type'] == 'value_error':
             # Custom validator errors (our SQL injection, XSS, etc.)
@@ -63,12 +65,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             message = "Must be true or false"
         elif error['type'] == 'value_error.missing':
             message = "This field is required"
-        
+
         errors.append({
             "field": field,
             "message": message
         })
-    
+
     return JSONResponse(
         status_code=422,
         content={
@@ -79,8 +81,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 # JWT Configuration from environment variables
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
-PREVIOUS_SECRET_KEY = os.getenv("PREVIOUS_JWT_SECRET_KEY", None)  # For key rotation grace period
+SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+# For key rotation grace period
+PREVIOUS_SECRET_KEY = os.getenv("PREVIOUS_JWT_SECRET_KEY", None)
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 
@@ -89,8 +93,10 @@ ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
 CURRENT_KEY_VERSION = int(os.getenv("JWT_KEY_VERSION", "1"))
 
 # Session activity timeout configuration
-ACTIVITY_TIMEOUT_MINUTES = int(os.getenv("ACTIVITY_TIMEOUT_MINUTES", "30"))  # Standard timeout
-REMEMBER_ME_TIMEOUT_DAYS = int(os.getenv("REMEMBER_ME_TIMEOUT_DAYS", "30"))  # "Remember Me" extended timeout
+ACTIVITY_TIMEOUT_MINUTES = int(
+    os.getenv("ACTIVITY_TIMEOUT_MINUTES", "30"))  # Standard timeout
+# "Remember Me" extended timeout
+REMEMBER_ME_TIMEOUT_DAYS = int(os.getenv("REMEMBER_ME_TIMEOUT_DAYS", "30"))
 
 # Warn if using default JWT secret (security risk)
 if SECRET_KEY == "your-secret-key-change-in-production-12345":
@@ -103,7 +109,8 @@ print(f"✓ JWT Key Version: {CURRENT_KEY_VERSION}")
 cloudinary.config(
     cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", "ddxxjia44"),
     api_key=os.environ.get("CLOUDINARY_API_KEY", "213846241467723"),
-    api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
+    api_secret=os.environ.get("CLOUDINARY_API_SECRET",
+                              "3ICj-oLAW4HZm8EVCQuImb53R5Y")
 )
 
 # SendGrid Configuration
@@ -111,6 +118,8 @@ SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "noreply@droplinkconnect.com")
 
 # Security Headers Middleware
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -125,6 +134,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Referrer policy
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
+
 
 # Enable CORS for React Native app
 # React Native apps don't send traditional Origin headers, so we allow both
@@ -141,10 +151,12 @@ ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"^(http://localhost:\d+|http://192\.168\.\d+\.\d+:\d+)$",  # Allow any local dev
+    # Allow any local dev
+    allow_origin_regex=r"^(http://localhost:\d+|http://192\.168\.\d+\.\d+:\d+)$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type",
+                   "Accept", "Origin", "X-Requested-With"],
     expose_headers=["Content-Length", "Content-Type"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
@@ -157,6 +169,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL", None)
 USE_POSTGRES = DATABASE_URL is not None and POSTGRES_AVAILABLE
 
 # Database connection helper
+
+
 def get_db_connection():
     """
     Returns a database connection.
@@ -170,6 +184,7 @@ def get_db_connection():
     else:
         return sqlite3.connect('droplink.db')
 
+
 def get_cursor(conn):
     """
     Returns a cursor for the given connection.
@@ -180,6 +195,7 @@ def get_cursor(conn):
     else:
         return conn.cursor()
 
+
 def execute_query(cursor, query, params=None):
     """
     Execute a query with proper placeholder syntax for the database type.
@@ -188,7 +204,7 @@ def execute_query(cursor, query, params=None):
     if USE_POSTGRES and params:
         # Convert SQLite ? placeholders to PostgreSQL %s placeholders
         query = query.replace('?', '%s')
-    
+
     # Convert INSERT OR REPLACE to PostgreSQL ON CONFLICT DO NOTHING
     # Note: For proper upsert, use INSERT ... ON CONFLICT (column) DO UPDATE in the query
     if USE_POSTGRES and "INSERT OR REPLACE" in query.upper():
@@ -201,11 +217,12 @@ def execute_query(cursor, query, params=None):
             if "VALUES" in query.upper():
                 # Simple approach: add at the end
                 query = query.rstrip(';') + " ON CONFLICT DO NOTHING"
-    
+
     if params:
         cursor.execute(query, params)
     else:
         cursor.execute(query)
+
 
 def get_value(row, key_or_index):
     """
@@ -216,6 +233,7 @@ def get_value(row, key_or_index):
     else:
         # For tuple, key_or_index should be an integer index
         return row[key_or_index]
+
 
 def get_lastrowid(cursor, conn):
     """
@@ -230,10 +248,12 @@ def get_lastrowid(cursor, conn):
         return cursor.lastrowid
 
 # Database setup
+
+
 def init_db():
     conn = get_db_connection()
     cursor = get_cursor(conn)
-    
+
     # SQL type mapping based on database
     if USE_POSTGRES:
         auto_id = "SERIAL PRIMARY KEY"
@@ -247,7 +267,7 @@ def init_db():
         text = "TEXT"
         real = "REAL"
         timestamp_default = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-    
+
     # Users table
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
@@ -261,29 +281,31 @@ def init_db():
             key_version {integer} DEFAULT 1
         )
     ''')
-    
+
     # Add account lockout columns if they don't exist (for existing databases)
     try:
-        cursor.execute(f'ALTER TABLE users ADD COLUMN failed_login_attempts {integer} DEFAULT 0')
+        cursor.execute(
+            f'ALTER TABLE users ADD COLUMN failed_login_attempts {integer} DEFAULT 0')
         conn.commit()
     except Exception as e:
         conn.rollback()  # Rollback transaction on error
         # Column already exists or other error - continue
-    
+
     try:
         cursor.execute(f'ALTER TABLE users ADD COLUMN locked_until {text}')
         conn.commit()
     except Exception as e:
         conn.rollback()  # Rollback transaction on error
         # Column already exists or other error - continue
-    
+
     try:
-        cursor.execute(f'ALTER TABLE users ADD COLUMN key_version {integer} DEFAULT 1')
+        cursor.execute(
+            f'ALTER TABLE users ADD COLUMN key_version {integer} DEFAULT 1')
         conn.commit()
     except Exception as e:
         conn.rollback()  # Rollback transaction on error
         # Column already exists or other error - continue
-    
+
     # Devices table
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS devices (
@@ -300,7 +322,7 @@ def init_db():
             user_id {integer} DEFAULT 1
         )
     ''')
-    
+
     # User profiles table (if not exists)
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS user_profiles (
@@ -314,7 +336,7 @@ def init_db():
             has_completed_onboarding {integer} DEFAULT 0
         )
     ''')
-    
+
     # User settings table (if not exists)
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS user_settings (
@@ -323,7 +345,7 @@ def init_db():
             max_distance {integer} DEFAULT 50
         )
     ''')
-    
+
     # Privacy zones table (if not exists)
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS privacy_zones (
@@ -333,7 +355,7 @@ def init_db():
             radius {real} NOT NULL
         )
     ''')
-    
+
     # Pinned contacts table (if not exists)
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS pinned_contacts (
@@ -342,7 +364,7 @@ def init_db():
             PRIMARY KEY (user_id, device_id)
         )
     ''')
-    
+
     # Audit logs table (if not exists)
     cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS audit_logs (
@@ -355,7 +377,7 @@ def init_db():
             timestamp {timestamp_default}
         )
     ''')
-    
+
     # Verification codes table (for email/SMS verification codes)
     try:
         cursor.execute(f'''
@@ -372,28 +394,33 @@ def init_db():
     except Exception as e:
         conn.rollback()
         # Table/type already exists - this is fine
-        print(f"verification_codes table creation skipped (may already exist): {e}")
-    
+        print(
+            f"verification_codes table creation skipped (may already exist): {e}")
+
     # Add has_completed_onboarding column if it doesn't exist (migration)
     try:
-        cursor.execute(f'ALTER TABLE user_profiles ADD COLUMN has_completed_onboarding {integer} DEFAULT 0')
+        cursor.execute(
+            f'ALTER TABLE user_profiles ADD COLUMN has_completed_onboarding {integer} DEFAULT 0')
         conn.commit()
     except Exception as e:
         conn.rollback()
         # Column already exists - this is fine
-        print(f"has_completed_onboarding column migration skipped (may already exist): {e}")
-    
+        print(
+            f"has_completed_onboarding column migration skipped (may already exist): {e}")
+
     # Create test user for monitoring/testing
     try:
         if USE_POSTGRES:
-            cursor.execute("SELECT id FROM users WHERE email = 'test@droplink.com'")
+            cursor.execute(
+                "SELECT id FROM users WHERE email = 'test@droplink.com'")
         else:
-            cursor.execute("SELECT id FROM users WHERE email = 'test@droplink.com'")
-        
+            cursor.execute(
+                "SELECT id FROM users WHERE email = 'test@droplink.com'")
+
         if not cursor.fetchone():
             test_password = hash_password('TestPass123!')
             test_username = 'test_droplink'  # Fixed username for monitoring/testing
-            
+
             if USE_POSTGRES:
                 cursor.execute("""
                     INSERT INTO users (username, email, password_hash, created_at) 
@@ -404,16 +431,17 @@ def init_db():
                     INSERT INTO users (username, email, password_hash, created_at) 
                     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                 """, (test_username, 'test@droplink.com', test_password))
-            
+
             conn.commit()
             print("✅ Test user created: test@droplink.com")
         else:
             print("ℹ️  Test user already exists")
     except Exception as e:
         print(f"⚠️  Could not create test user: {e}")
-    
+
     conn.commit()
     conn.close()
+
 
 init_db()
 
@@ -438,6 +466,7 @@ XSS_PATTERNS = [
     r"<embed",
 ]
 
+
 def sanitize_string(value: str) -> str:
     """Sanitize string input by removing HTML tags and trimming whitespace"""
     if not value:
@@ -450,13 +479,16 @@ def sanitize_string(value: str) -> str:
     value = value.strip()
     return value
 
+
 def check_sql_injection(value: str) -> None:
     """Check for SQL injection patterns"""
     if not value:
         return
     for pattern in SQL_INJECTION_PATTERNS:
         if re.search(pattern, value, re.IGNORECASE):
-            raise ValueError("Input contains potentially malicious SQL patterns")
+            raise ValueError(
+                "Input contains potentially malicious SQL patterns")
+
 
 def check_xss(value: str) -> None:
     """Check for XSS patterns"""
@@ -464,7 +496,9 @@ def check_xss(value: str) -> None:
         return
     for pattern in XSS_PATTERNS:
         if re.search(pattern, value, re.IGNORECASE):
-            raise ValueError("Input contains potentially malicious script patterns")
+            raise ValueError(
+                "Input contains potentially malicious script patterns")
+
 
 def validate_email_format(email: str) -> str:
     """Validate email format"""
@@ -476,22 +510,24 @@ def validate_email_format(email: str) -> str:
         raise ValueError("Invalid email format")
     return email
 
+
 def validate_phone_format(phone: str) -> str:
     """Validate and format phone number to (XXX) XXX-XXXX format"""
     if not phone:
         return phone
     phone = phone.strip()
-    
+
     # Extract only digits
     digits_only = re.sub(r'\D', '', phone)
-    
+
     # Must be exactly 10 digits for US phone numbers
     if len(digits_only) != 10:
         raise ValueError("Phone number must be exactly 10 digits")
-    
+
     # Format as (XXX) XXX-XXXX
     formatted = f"({digits_only[0:3]}) {digits_only[3:6]}-{digits_only[6:10]}"
     return formatted
+
 
 def validate_username_format(username: str) -> str:
     """Validate username format"""
@@ -501,8 +537,10 @@ def validate_username_format(username: str) -> str:
     if len(username) < 3 or len(username) > 20:
         raise ValueError("Username must be 3-20 characters")
     if not re.match(r'^[a-z0-9_.]+$', username):
-        raise ValueError("Username can only contain letters, numbers, underscores, and periods")
+        raise ValueError(
+            "Username can only contain letters, numbers, underscores, and periods")
     return username
+
 
 # Common passwords to block (top 100 most common)
 COMMON_PASSWORDS = [
@@ -521,6 +559,7 @@ COMMON_PASSWORDS = [
     'bailey1', 'charlie1', 'whatever1', 'starwars1', 'ninja1', 'mustang1'
 ]
 
+
 def calculate_password_strength(password: str) -> tuple:
     """
     Calculate password strength based on complexity
@@ -529,7 +568,7 @@ def calculate_password_strength(password: str) -> tuple:
     score: 0-100
     """
     score = 0
-    
+
     # Length scoring (up to 30 points)
     if len(password) >= 8:
         score += 10
@@ -537,7 +576,7 @@ def calculate_password_strength(password: str) -> tuple:
         score += 10
     if len(password) >= 16:
         score += 10
-    
+
     # Character diversity (up to 40 points)
     if re.search(r'[a-z]', password):
         score += 10
@@ -547,7 +586,7 @@ def calculate_password_strength(password: str) -> tuple:
         score += 10
     if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
         score += 10
-    
+
     # Bonus for mixing character types (up to 20 points)
     char_types = 0
     if re.search(r'[a-z]', password):
@@ -558,24 +597,24 @@ def calculate_password_strength(password: str) -> tuple:
         char_types += 1
     if re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
         char_types += 1
-    
+
     if char_types == 4:
         score += 20
     elif char_types == 3:
         score += 10
-    
+
     # Penalty for common patterns
     if re.search(r'(.)\1{2,}', password):  # Repeated characters (aaa, 111)
         score -= 10
     if re.search(r'(012|123|234|345|456|567|678|789|890|abc|bcd|cde)', password.lower()):
         score -= 10  # Sequential characters
-    
+
     # Bonus for length beyond 16 (up to 10 points)
     if len(password) > 16:
         score += min(10, (len(password) - 16) * 2)
-    
+
     score = max(0, min(100, score))  # Clamp between 0-100
-    
+
     # Determine strength level
     if score < 40:
         strength = 'weak'
@@ -585,13 +624,14 @@ def calculate_password_strength(password: str) -> tuple:
         strength = 'strong'
     else:
         strength = 'very strong'
-    
+
     return strength, score
+
 
 def validate_password(password: str, username: str = None) -> dict:
     """
     Comprehensive password validation with specific error messages
-    
+
     Returns:
         dict: {
             'valid': bool,
@@ -601,46 +641,51 @@ def validate_password(password: str, username: str = None) -> dict:
         }
     """
     errors = []
-    
+
     # Check minimum length
     if len(password) < 8:
         errors.append("Password must be at least 8 characters long")
-    
+
     # Check for uppercase letter
     if not re.search(r'[A-Z]', password):
-        errors.append("Password must contain at least one uppercase letter (A-Z)")
-    
+        errors.append(
+            "Password must contain at least one uppercase letter (A-Z)")
+
     # Check for lowercase letter
     if not re.search(r'[a-z]', password):
-        errors.append("Password must contain at least one lowercase letter (a-z)")
-    
+        errors.append(
+            "Password must contain at least one lowercase letter (a-z)")
+
     # Check for number
     if not re.search(r'\d', password):
         errors.append("Password must contain at least one number (0-9)")
-    
+
     # Check for special character
     if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
-        errors.append("Password must contain at least one special character (!@#$%^&*)")
-    
+        errors.append(
+            "Password must contain at least one special character (!@#$%^&*)")
+
     # Check against common passwords
     if password.lower() in COMMON_PASSWORDS:
-        errors.append("Password is too common. Please choose a more unique password")
-    
+        errors.append(
+            "Password is too common. Please choose a more unique password")
+
     # Check if password is same as username
     if username and password.lower() == username.lower():
         errors.append("Password cannot be the same as your username")
-    
+
     # Check if password contains username
     if username and len(username) >= 3 and username.lower() in password.lower():
         errors.append("Password cannot contain your username")
-    
+
     # Calculate strength
     strength, score = calculate_password_strength(password)
-    
+
     # Warn if password is weak (even if it meets minimum requirements)
     if not errors and strength == 'weak':
-        errors.append(f"Password meets minimum requirements but is weak (strength: {score}/100). Consider making it longer or more complex")
-    
+        errors.append(
+            f"Password meets minimum requirements but is weak (strength: {score}/100). Consider making it longer or more complex")
+
     return {
         'valid': len(errors) == 0,
         'errors': errors,
@@ -649,6 +694,8 @@ def validate_password(password: str, username: str = None) -> dict:
     }
 
 # Audit logging helper
+
+
 def log_audit_event(
     action: str,
     user_id: Optional[int] = None,
@@ -658,7 +705,7 @@ def log_audit_event(
 ):
     """
     Log an audit event to the audit_logs table
-    
+
     Args:
         action: The action being performed (e.g., 'user_registration', 'login_success')
         user_id: The user ID performing the action (None for anonymous actions)
@@ -669,21 +716,22 @@ def log_audit_event(
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Convert details dict to JSON string
         details_json = json.dumps(details) if details else None
-        
+
         execute_query(
             cursor,
             "INSERT INTO audit_logs (user_id, action, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)",
             (user_id, action, details_json, ip_address, user_agent)
         )
-        
+
         conn.commit()
         conn.close()
     except Exception as e:
         # Don't fail the main operation if audit logging fails
         print(f"⚠️  Audit logging failed: {str(e)}")
+
 
 def get_client_ip(request: Request) -> str:
     """
@@ -695,30 +743,34 @@ def get_client_ip(request: Request) -> str:
     if forwarded_for:
         # X-Forwarded-For can contain multiple IPs, take the first one
         return forwarded_for.split(",")[0].strip()
-    
+
     # Check for X-Real-IP header
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         return real_ip
-    
+
     # Fallback to direct client host
     if request.client:
         return request.client.host
-    
+
     return "unknown"
 
 # Pydantic models with validation
+
+
 class DeviceCreate(BaseModel):
-    name: constr(min_length=1, max_length=100) = Field(..., description="Device name")
+    name: constr(min_length=1, max_length=100) = Field(...,
+                                                       description="Device name")
     rssi: int = Field(..., description="Signal strength")
     distance: float = Field(..., ge=0, le=1000, description="Distance in feet")
     action: Optional[str] = Field(default="dropped", max_length=50)
     timestamp: Optional[str] = Field(default=None, max_length=50)
-    phoneNumber: Optional[str] = Field(None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
+    phoneNumber: Optional[str] = Field(
+        None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
     email: Optional[constr(max_length=100)] = None
     bio: Optional[constr(max_length=500)] = None
     socialMedia: Optional[List[dict]] = None
-    
+
     @validator('name', 'bio', 'action', pre=True)
     def sanitize_strings(cls, v):
         if v is None:
@@ -727,18 +779,19 @@ class DeviceCreate(BaseModel):
         check_sql_injection(v)
         check_xss(v)
         return v
-    
+
     @validator('email', pre=True)
     def validate_email(cls, v):
         if v is None or v == '':
             return None
         return validate_email_format(v)
-    
+
     @validator('phoneNumber', pre=True)
     def validate_phone(cls, v):
         if v is None or v == '':
             return None
         return validate_phone_format(v)
+
 
 class DeviceResponse(BaseModel):
     id: int
@@ -753,90 +806,115 @@ class DeviceResponse(BaseModel):
     socialMedia: Optional[List[dict]] = None
 
 # Auth models
+
+
 class RegisterRequest(BaseModel):
-    username: constr(min_length=3, max_length=20) = Field(..., description="Username (3-20 chars, alphanumeric + underscore/period)")
-    password: constr(min_length=8, max_length=128) = Field(..., description="Password (min 8 chars, complex requirements)")
-    email: Optional[constr(max_length=100)] = Field(None, description="Email address (optional)")
-    
+    username: constr(min_length=3, max_length=20) = Field(...,
+                                                          description="Username (3-20 chars, alphanumeric + underscore/period)")
+    password: constr(min_length=8, max_length=128) = Field(...,
+                                                           description="Password (min 8 chars, complex requirements)")
+    email: Optional[constr(max_length=100)] = Field(
+        None, description="Email address (optional)")
+
     @validator('username', pre=True)
     def validate_username_field(cls, v):
         return validate_username_format(v)
-    
+
     @validator('email', pre=True)
     def validate_email_field(cls, v):
         if v is None or v == '':
             return None
         return validate_email_format(v)
-    
+
     @validator('password')
     def validate_password_field(cls, v, values):
         """Comprehensive password validation with strength checking"""
         username = values.get('username', '')
-        
+
         # Use the comprehensive password validation function
         result = validate_password(v, username)
-        
+
         if not result['valid']:
             # Join all errors with newlines for detailed feedback
             error_message = "; ".join(result['errors'])
             raise ValueError(error_message)
-        
+
         # Password is valid, return it
         return v
 
+
 class LoginRequest(BaseModel):
-    username: constr(min_length=3, max_length=20) = Field(..., description="Username")
-    password: constr(min_length=1, max_length=128) = Field(..., description="Password")
-    remember_me: bool = Field(default=False, description="Keep me logged in (30 days inactivity timeout instead of 30 minutes)")
-    
+    username: constr(min_length=3, max_length=20) = Field(...,
+                                                          description="Username")
+    password: constr(min_length=1, max_length=128) = Field(...,
+                                                           description="Password")
+    remember_me: bool = Field(
+        default=False, description="Keep me logged in (30 days inactivity timeout instead of 30 minutes)")
+
     @validator('username', pre=True)
     def sanitize_username(cls, v):
         return v.strip().lower() if v else v
+
 
 class AuthResponse(BaseModel):
     token: str
     user_id: int
     username: str
 
+
 class SendVerificationCodeRequest(BaseModel):
     email: str
     type: str = 'registration'  # 'registration' or 'account_deletion'
+
 
 class VerifyCodeRequest(BaseModel):
     email: str
     code: str
     type: str = 'registration'  # 'registration' or 'account_deletion'
 
+
 class SendRecoveryCodeRequest(BaseModel):
     email: str
     type: str  # 'username' or 'password'
+
 
 class VerifyRecoveryCodeRequest(BaseModel):
     email: str
     code: str
     type: str  # 'username' or 'password'
 
+
 class CheckUsernameRequest(BaseModel):
-    username: constr(min_length=3, max_length=20) = Field(..., description="Username to check")
+    username: constr(min_length=3, max_length=20) = Field(...,
+                                                          description="Username to check")
 
     @validator('username', pre=True)
     def validate_username(cls, v):
         return validate_username_format(v)
 
+
 class CheckEmailRequest(BaseModel):
     email: str = Field(..., description="Email to check")
+
 
 class CheckPhoneRequest(BaseModel):
     phone: str = Field(..., description="Phone number to check")
 
 # Additional validated models
+
+
 class ProfileRequest(BaseModel):
-    name: Optional[constr(max_length=100)] = Field(None, description="Full name")
-    email: Optional[constr(max_length=100)] = Field(None, description="Email address")
-    phone: Optional[str] = Field(None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
-    bio: Optional[constr(max_length=500)] = Field(None, description="Biography")
-    socialMedia: Optional[List[dict]] = Field(None, description="Social media links")
-    
+    name: Optional[constr(max_length=100)] = Field(
+        None, description="Full name")
+    email: Optional[constr(max_length=100)] = Field(
+        None, description="Email address")
+    phone: Optional[str] = Field(
+        None, description="Phone number - will be formatted as (XXX) XXX-XXXX")
+    bio: Optional[constr(max_length=500)] = Field(
+        None, description="Biography")
+    socialMedia: Optional[List[dict]] = Field(
+        None, description="Social media links")
+
     @validator('name', 'bio', pre=True)
     def sanitize_text_fields(cls, v):
         if v is None or v == '':
@@ -845,25 +923,28 @@ class ProfileRequest(BaseModel):
         check_sql_injection(v)
         check_xss(v)
         return v
-    
+
     @validator('email', pre=True)
     def validate_email(cls, v):
         if v is None or v == '':
             return None
         return validate_email_format(v)
-    
+
     @validator('phone', pre=True)
     def validate_phone(cls, v):
         if v is None or v == '':
             return None
         return validate_phone_format(v)
 
+
 class PrivacyZoneRequest(BaseModel):
-    address: constr(min_length=1, max_length=200) = Field(..., description="Address for privacy zone")
-    radius: conint(ge=1, le=10000) = Field(..., description="Radius in meters (1-10000)")
+    address: constr(min_length=1, max_length=200) = Field(...,
+                                                          description="Address for privacy zone")
+    radius: conint(ge=1, le=10000) = Field(...,
+                                           description="Radius in meters (1-10000)")
     latitude: float = Field(..., ge=-90, le=90, description="Latitude")
     longitude: float = Field(..., ge=-180, le=180, description="Longitude")
-    
+
     @validator('address', pre=True)
     def sanitize_address(cls, v):
         v = sanitize_string(v)
@@ -871,11 +952,14 @@ class PrivacyZoneRequest(BaseModel):
         check_xss(v)
         return v
 
+
 class SettingsRequest(BaseModel):
     darkMode: bool = Field(..., description="Dark mode enabled")
-    maxDistance: conint(ge=1, le=100) = Field(..., description="Maximum distance (1-100 feet)")
+    maxDistance: conint(ge=1, le=100) = Field(...,
+                                              description="Maximum distance (1-100 feet)")
 
 # ========== AUTH HELPER FUNCTIONS ==========
+
 
 def hash_password(password: str) -> str:
     """Hash a password using bcrypt"""
@@ -883,25 +967,27 @@ def hash_password(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
 
+
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify a password against its hash"""
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
+
 def create_access_token(user_id: int, username: str, remember_me: bool = False) -> str:
     """
     Create a JWT access token with activity tracking
-    
+
     Args:
         user_id: User ID
         username: Username
         remember_me: If True, uses extended timeout (30 days inactivity). If False, uses standard timeout (30 minutes)
-    
+
     Returns:
         JWT token string
     """
     expire = datetime.utcnow() + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     now = datetime.utcnow()
-    
+
     payload = {
         "user_id": user_id,
         "username": username,
@@ -914,24 +1000,25 @@ def create_access_token(user_id: int, username: str, remember_me: bool = False) 
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
+
 def verify_token(token: str, check_activity: bool = True, check_key_version: bool = True) -> dict:
     """
     Verify and decode a JWT token with activity timeout checking and key rotation support
-    
+
     Args:
         token: JWT token string
         check_activity: If True, checks for activity timeout
         check_key_version: If True, checks that token key_version is valid
-    
+
     Returns:
         Decoded token payload
-    
+
     Raises:
         HTTPException: If token is invalid, expired, inactive, or has wrong key version
     """
     payload = None
     used_previous_key = False
-    
+
     # Try decoding with current key first
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -941,19 +1028,21 @@ def verify_token(token: str, check_activity: bool = True, check_key_version: boo
         # If current key fails and we have a previous key, try that (grace period)
         if PREVIOUS_SECRET_KEY:
             try:
-                payload = jwt.decode(token, PREVIOUS_SECRET_KEY, algorithms=[ALGORITHM])
+                payload = jwt.decode(
+                    token, PREVIOUS_SECRET_KEY, algorithms=[ALGORITHM])
                 used_previous_key = True
             except jwt.ExpiredSignatureError:
-                raise HTTPException(status_code=401, detail="Token has expired")
+                raise HTTPException(
+                    status_code=401, detail="Token has expired")
             except jwt.InvalidTokenError:
                 raise HTTPException(status_code=401, detail="Invalid token")
         else:
             raise HTTPException(status_code=401, detail="Invalid token")
-    
+
     # Check key version
     if check_key_version and payload:
         token_key_version = payload.get('key_version', 1)
-        
+
         # Token must match current key version, or be from previous version during grace period
         if token_key_version == CURRENT_KEY_VERSION:
             # Valid - current version
@@ -961,24 +1050,25 @@ def verify_token(token: str, check_activity: bool = True, check_key_version: boo
         elif used_previous_key and token_key_version == CURRENT_KEY_VERSION - 1:
             # Valid - previous version during grace period
             # Log that user should refresh their token
-            print(f"⚠️  User {payload.get('username')} using old key version {token_key_version}. Should refresh token.")
+            print(
+                f"⚠️  User {payload.get('username')} using old key version {token_key_version}. Should refresh token.")
         else:
             # Invalid - token is too old or has been rotated
             raise HTTPException(
                 status_code=401,
                 detail="Token has been invalidated. Please log in again."
             )
-    
+
     # Check activity timeout if enabled
     if check_activity and payload:
         last_activity = payload.get('last_activity')
         remember_me = payload.get('remember_me', False)
-        
+
         if last_activity:
             last_activity_time = datetime.utcfromtimestamp(last_activity)
             now = datetime.utcnow()
             time_since_activity = now - last_activity_time
-            
+
             # Determine timeout based on remember_me flag
             if remember_me:
                 timeout = timedelta(days=REMEMBER_ME_TIMEOUT_DAYS)
@@ -986,34 +1076,37 @@ def verify_token(token: str, check_activity: bool = True, check_key_version: boo
             else:
                 timeout = timedelta(minutes=ACTIVITY_TIMEOUT_MINUTES)
                 timeout_msg = f"{ACTIVITY_TIMEOUT_MINUTES} minutes"
-            
+
             # Check if session has been inactive too long
             if time_since_activity > timeout:
                 raise HTTPException(
                     status_code=401,
                     detail=f"Session expired due to inactivity (timeout: {timeout_msg}). Please log in again."
                 )
-    
+
     return payload
+
 
 def get_current_user(authorization: str = Header(None)) -> int:
     """Dependency to get current user from JWT token"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
-    
+
     token = authorization.split(" ")[1]
     payload = verify_token(token)
     return payload["user_id"]
 
+
 def send_verification_email(email: str, code: str):
     """Send verification code via email using SendGrid"""
-    
+
     # If SendGrid is not configured, log the code for testing
     if not SENDGRID_API_KEY:
-        print(f"⚠️ SendGrid not configured. VERIFICATION CODE for {email}: {code}")
+        print(
+            f"⚠️ SendGrid not configured. VERIFICATION CODE for {email}: {code}")
         print(f"📧 Code expires in 10 minutes")
         return True  # Return success so testing can continue
-    
+
     try:
         # HTML email body
         html_content = f"""
@@ -1033,7 +1126,7 @@ def send_verification_email(email: str, code: str):
         </body>
         </html>
         """
-        
+
         # Plain text version
         plain_content = f"""
 Welcome to DropLink!
@@ -1047,7 +1140,7 @@ If you didn't request this code, please ignore this email.
 ---
 DropLink - Share contacts with people near you
         """
-        
+
         # Create SendGrid message
         message = Mail(
             from_email=Email(FROM_EMAIL),
@@ -1056,29 +1149,32 @@ DropLink - Share contacts with people near you
             plain_text_content=Content("text/plain", plain_content),
             html_content=Content("text/html", html_content)
         )
-        
+
         # Send via SendGrid
         sg = SendGridAPIClient(SENDGRID_API_KEY)
         response = sg.send(message)
-        
-        print(f"✅ Email sent successfully to {email}. Status: {response.status_code}")
+
+        print(
+            f"✅ Email sent successfully to {email}. Status: {response.status_code}")
         return True
-        
+
     except Exception as e:
         print(f"❌ Failed to send email: {str(e)}")
         # Also log the code so user can still test
         print(f"📧 VERIFICATION CODE for {email}: {code}")
         return False
 
+
 def send_lockout_notification(email: str, username: str, lockout_minutes: int):
     """Send account lockout notification via email"""
-    
+
     # If SendGrid is not configured, log the notification
     if not SENDGRID_API_KEY:
-        print(f"⚠️ SendGrid not configured. LOCKOUT NOTIFICATION for {email} (user: {username})")
+        print(
+            f"⚠️ SendGrid not configured. LOCKOUT NOTIFICATION for {email} (user: {username})")
         print(f"🔒 Account locked for {lockout_minutes} minutes")
         return True
-    
+
     try:
         # HTML email body
         html_content = f"""
@@ -1120,7 +1216,7 @@ def send_lockout_notification(email: str, username: str, lockout_minutes: int):
         </body>
         </html>
         """
-        
+
         # Plain text version
         plain_content = f"""
 ACCOUNT LOCKED - DropLink
@@ -1149,7 +1245,7 @@ Need help? Contact our support team.
 This is an automated security notification from DropLink.
 For security reasons, please do not reply to this email.
         """
-        
+
         # Create SendGrid message
         message = Mail(
             from_email=Email(FROM_EMAIL),
@@ -1158,32 +1254,34 @@ For security reasons, please do not reply to this email.
             plain_text_content=Content("text/plain", plain_content),
             html_content=Content("text/html", html_content)
         )
-        
+
         # Send via SendGrid
         sg = SendGridAPIClient(SENDGRID_API_KEY)
         response = sg.send(message)
-        
-        print(f"✅ Lockout notification sent to {email}. Status: {response.status_code}")
+
+        print(
+            f"✅ Lockout notification sent to {email}. Status: {response.status_code}")
         return True
-        
+
     except Exception as e:
         print(f"❌ Failed to send lockout notification: {str(e)}")
         return False
 
 # ========== AUTH ENDPOINTS ==========
 
+
 @app.post("/auth/check-password-strength")
 def check_password_strength(data: dict):
     """
     Check password strength without creating an account
     Useful for real-time feedback during registration
-    
+
     Request body:
     {
         "password": "MyPassword123!",
         "username": "optional_username"  // optional, to check if password contains username
     }
-    
+
     Response:
     {
         "valid": true/false,
@@ -1203,13 +1301,13 @@ def check_password_strength(data: dict):
     """
     password = data.get('password', '')
     username = data.get('username', None)
-    
+
     if not password:
         raise HTTPException(status_code=400, detail="Password is required")
-    
+
     # Validate password
     result = validate_password(password, username)
-    
+
     # Check individual requirements
     requirements = {
         "min_length": len(password) >= 8,
@@ -1220,7 +1318,7 @@ def check_password_strength(data: dict):
         "not_common": password.lower() not in COMMON_PASSWORDS,
         "not_username": not (username and (password.lower() == username.lower() or (len(username) >= 3 and username.lower() in password.lower())))
     }
-    
+
     return {
         "valid": result['valid'],
         "strength": result['strength'],
@@ -1229,150 +1327,172 @@ def check_password_strength(data: dict):
         "requirements": requirements
     }
 
+
 @app.post("/auth/register", response_model=AuthResponse)
 def register(register_request: RegisterRequest, request: Request):
     """Register a new user"""
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "unknown")
-    
+
     try:
         # Convert username to lowercase for case-insensitive storage
         username_lower = register_request.username.lower()
-        
+
         # Validate username (3-20 chars, alphanumeric + underscore)
         if not username_lower or len(username_lower) < 3 or len(username_lower) > 20:
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "invalid_username_length"},
+                details={"username": username_lower,
+                         "reason": "invalid_username_length"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
-        
+            raise HTTPException(
+                status_code=400, detail="Username must be 3-20 characters")
+
         if not username_lower.replace('_', '').replace('.', '').isalnum():
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "invalid_username_chars"},
+                details={"username": username_lower,
+                         "reason": "invalid_username_chars"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
-        
+            raise HTTPException(
+                status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
+
         # Validate password (8+ chars, uppercase, lowercase, number)
         if len(register_request.password) < 8:
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "password_too_short"},
+                details={"username": username_lower,
+                         "reason": "password_too_short"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must be at least 8 characters")
+
         if not any(c.isupper() for c in register_request.password):
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "password_no_uppercase"},
+                details={"username": username_lower,
+                         "reason": "password_no_uppercase"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one uppercase letter")
+
         if not any(c.islower() for c in register_request.password):
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "password_no_lowercase"},
+                details={"username": username_lower,
+                         "reason": "password_no_lowercase"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one lowercase letter")
+
         if not any(c.isdigit() for c in register_request.password):
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "password_no_digit"},
+                details={"username": username_lower,
+                         "reason": "password_no_digit"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Password must contain at least one number")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one number")
+
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in register_request.password):
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "password_no_special_char"},
+                details={"username": username_lower,
+                         "reason": "password_no_special_char"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one special character")
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Check if username already exists (case-insensitive)
-        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username_lower,))
+        execute_query(
+            cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username_lower,))
         existing = cursor.fetchone()
         if existing:
             conn.close()
             log_audit_event(
                 action="registration_failed",
-                details={"username": username_lower, "reason": "username_taken"},
+                details={"username": username_lower,
+                         "reason": "username_taken"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=400, detail="Username already taken")
-        
+            raise HTTPException(
+                status_code=400, detail="Username already taken")
+
         # Check if email already exists (skip for testing email)
         if register_request.email:
             # Allow testing email to be reused infinitely
             if register_request.email.lower() != "caitie690@gmail.com":
-                execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (register_request.email.lower(),))
+                execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?",
+                              (register_request.email.lower(),))
                 existing_email = cursor.fetchone()
                 if existing_email:
                     conn.close()
                     log_audit_event(
                         action="registration_failed",
-                        details={"username": username_lower, "email": register_request.email.lower(), "reason": "email_exists"},
+                        details={"username": username_lower, "email": register_request.email.lower(
+                        ), "reason": "email_exists"},
                         ip_address=ip_address,
                         user_agent=user_agent
                     )
-                    raise HTTPException(status_code=400, detail="An account with this email already exists")
-        
+                    raise HTTPException(
+                        status_code=400, detail="An account with this email already exists")
+
         # Hash password and create user (store username in lowercase)
         password_hash = hash_password(register_request.password)
         execute_query(cursor,
-            "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
-            (username_lower, password_hash, register_request.email)
-        )
-        
+                      "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+                      (username_lower, password_hash, register_request.email)
+                      )
+
         # Get the inserted user_id
         user_id = get_lastrowid(cursor, conn)
-        
+
         # Initialize default settings with dark mode enabled
         execute_query(cursor, '''
             INSERT INTO user_settings (user_id, dark_mode, max_distance)
             VALUES (?, ?, ?)
         ''', (user_id, 1, 33))
-        
+
         conn.commit()
         conn.close()
-        
+
         # Log successful registration
         log_audit_event(
             action="user_registration",
             user_id=user_id,
-            details={"username": username_lower, "email": register_request.email},
+            details={"username": username_lower,
+                     "email": register_request.email},
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         # Create JWT token
         token = create_access_token(user_id, username_lower)
-        
+
         return AuthResponse(
             token=token,
             user_id=user_id,
             username=username_lower
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1382,37 +1502,41 @@ def register(register_request: RegisterRequest, request: Request):
             ip_address=ip_address,
             user_agent=user_agent
         )
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Registration failed: {str(e)}")
+
 
 @app.post("/auth/login", response_model=AuthResponse)
 def login(login_request: LoginRequest, request: Request):
     """Login with username and password (with account lockout protection)"""
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "unknown")
-    
+
     try:
         username_lower = login_request.username.lower()  # Convert to lowercase
-        
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Find user by username (case-insensitive) - include lockout fields
         execute_query(cursor,
-            "SELECT id, username, password_hash, email, failed_login_attempts, locked_until FROM users WHERE LOWER(username) = ?",
-            (username_lower,)
-        )
+                      "SELECT id, username, password_hash, email, failed_login_attempts, locked_until FROM users WHERE LOWER(username) = ?",
+                      (username_lower,)
+                      )
         user = cursor.fetchone()
-        
+
         if not user:
             conn.close()
             log_audit_event(
                 action="login_failed",
-                details={"username": username_lower, "reason": "user_not_found"},
+                details={"username": username_lower,
+                         "reason": "user_not_found"},
                 ip_address=ip_address,
                 user_agent=user_agent
             )
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-        
+            raise HTTPException(
+                status_code=401, detail="Invalid username or password")
+
         # Handle both dict (PostgreSQL) and tuple (SQLite) results
         if isinstance(user, dict):
             user_id = user['id']
@@ -1424,27 +1548,29 @@ def login(login_request: LoginRequest, request: Request):
         else:
             user_id, username, password_hash, email, failed_attempts, locked_until_str = user
             failed_attempts = failed_attempts or 0
-        
+
         # Check if account is locked
         if locked_until_str:
             try:
                 locked_until = datetime.fromisoformat(locked_until_str)
                 now = datetime.now()
-                
+
                 if now < locked_until:
                     # Account is still locked
-                    remaining_seconds = int((locked_until - now).total_seconds())
+                    remaining_seconds = int(
+                        (locked_until - now).total_seconds())
                     remaining_minutes = remaining_seconds // 60
                     conn.close()
-                    
+
                     log_audit_event(
                         action="login_failed",
                         user_id=user_id,
-                        details={"username": username_lower, "reason": "account_locked", "remaining_minutes": remaining_minutes},
+                        details={"username": username_lower, "reason": "account_locked",
+                                 "remaining_minutes": remaining_minutes},
                         ip_address=ip_address,
                         user_agent=user_agent
                     )
-                    
+
                     raise HTTPException(
                         status_code=423,  # 423 Locked
                         detail=f"Account locked due to multiple failed login attempts. Try again in {remaining_minutes} minutes.",
@@ -1453,53 +1579,54 @@ def login(login_request: LoginRequest, request: Request):
                 else:
                     # Lock period expired, reset lockout
                     execute_query(cursor,
-                        "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
-                        (user_id,)
-                    )
+                                  "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                                  (user_id,)
+                                  )
                     conn.commit()
                     failed_attempts = 0
             except ValueError:
                 # Invalid timestamp format, reset lockout
                 execute_query(cursor,
-                    "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
-                    (user_id,)
-                )
+                              "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                              (user_id,)
+                              )
                 conn.commit()
                 failed_attempts = 0
-        
+
         # Verify password
         if not verify_password(login_request.password, password_hash):
             # Increment failed login attempts
             failed_attempts += 1
-            
+
             # Lock account after 5 failed attempts
             if failed_attempts >= 5:
                 lock_duration = timedelta(minutes=15)
                 locked_until = datetime.now() + lock_duration
                 locked_until_str = locked_until.isoformat()
-                
+
                 execute_query(cursor,
-                    "UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?",
-                    (failed_attempts, locked_until_str, user_id)
-                )
+                              "UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?",
+                              (failed_attempts, locked_until_str, user_id)
+                              )
                 conn.commit()
                 conn.close()
-                
+
                 # Send email notification
                 if email:
                     try:
                         send_lockout_notification(email, username, 15)
                     except:
                         pass  # Don't fail login if email fails
-                
+
                 log_audit_event(
                     action="account_locked",
                     user_id=user_id,
-                    details={"username": username_lower, "failed_attempts": failed_attempts, "lock_duration_minutes": 15},
+                    details={"username": username_lower,
+                             "failed_attempts": failed_attempts, "lock_duration_minutes": 15},
                     ip_address=ip_address,
                     user_agent=user_agent
                 )
-                
+
                 raise HTTPException(
                     status_code=423,
                     detail="Account locked due to multiple failed login attempts. Try again in 15 minutes.",
@@ -1508,65 +1635,69 @@ def login(login_request: LoginRequest, request: Request):
             else:
                 # Update failed attempts count
                 execute_query(cursor,
-                    "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
-                    (failed_attempts, user_id)
-                )
+                              "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                              (failed_attempts, user_id)
+                              )
                 conn.commit()
                 conn.close()
-                
+
                 log_audit_event(
                     action="login_failed",
                     user_id=user_id,
-                    details={"username": username_lower, "reason": "invalid_password", "failed_attempts": failed_attempts},
+                    details={"username": username_lower, "reason": "invalid_password",
+                             "failed_attempts": failed_attempts},
                     ip_address=ip_address,
                     user_agent=user_agent
                 )
-                
+
                 remaining_attempts = 5 - failed_attempts
                 raise HTTPException(
                     status_code=401,
                     detail=f"Invalid username or password. {remaining_attempts} attempts remaining before account lockout."
                 )
-        
+
         # Successful login - reset failed attempts
         execute_query(cursor,
-            "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
-            (user_id,)
-        )
+                      "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                      (user_id,)
+                      )
         conn.commit()
         conn.close()
-        
+
         # Log successful login
         log_audit_event(
             action="login_success",
             user_id=user_id,
-            details={"username": username_lower, "remember_me": login_request.remember_me},
+            details={"username": username_lower,
+                     "remember_me": login_request.remember_me},
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         # Create JWT token with remember_me flag
-        token = create_access_token(user_id, username, remember_me=login_request.remember_me)
-        
+        token = create_access_token(
+            user_id, username, remember_me=login_request.remember_me)
+
         return AuthResponse(
             token=token,
             user_id=user_id,
             username=username
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
+
 @app.post("/auth/refresh", response_model=AuthResponse)
 def refresh_token(authorization: str = Header(None)):
     """
     Refresh JWT token with updated last_activity timestamp
-    
+
     This endpoint should be called periodically (e.g., every 5-10 minutes) 
     to extend the session and prevent timeout.
-    
+
     Returns a new token with:
     - Same user_id, username, remember_me settings
     - Updated last_activity timestamp
@@ -1575,56 +1706,60 @@ def refresh_token(authorization: str = Header(None)):
     try:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Not authenticated")
-        
+
         token = authorization.split(" ")[1]
-        
+
         # Verify token and get payload (this checks activity timeout)
         payload = verify_token(token, check_activity=True)
         user_id = payload["user_id"]
         remember_me = payload.get("remember_me", False)
-        
+
         # Get user details from database
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
-        execute_query(cursor, "SELECT username FROM users WHERE id = ?", (user_id,))
+
+        execute_query(
+            cursor, "SELECT username FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
         conn.close()
-        
+
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Handle both dict (PostgreSQL) and tuple (SQLite) results
         if isinstance(user, dict):
             username = user['username']
         else:
             username = user[0]
-        
+
         # Create new JWT token with updated activity timestamp
         # Preserve remember_me setting from original token
-        new_token = create_access_token(user_id, username, remember_me=remember_me)
-        
+        new_token = create_access_token(
+            user_id, username, remember_me=remember_me)
+
         return AuthResponse(
             token=new_token,
             user_id=user_id,
             username=username
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Token refresh failed: {str(e)}")
+
 
 @app.post("/auth/unlock-account")
 def unlock_account(data: dict, admin_user_id: int = Depends(get_current_user)):
     """
     Manually unlock a locked account (admin only)
-    
+
     Request body:
     {
         "username": "user_to_unlock"
     }
-    
+
     Note: This is a temporary admin endpoint. In production, implement proper
     admin role checking. For now, any authenticated user can unlock accounts.
     """
@@ -1632,23 +1767,23 @@ def unlock_account(data: dict, admin_user_id: int = Depends(get_current_user)):
         username = data.get('username')
         if not username:
             raise HTTPException(status_code=400, detail="Username is required")
-        
+
         username_lower = username.lower()
-        
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Find user
         execute_query(cursor,
-            "SELECT id, username, locked_until, failed_login_attempts FROM users WHERE LOWER(username) = ?",
-            (username_lower,)
-        )
+                      "SELECT id, username, locked_until, failed_login_attempts FROM users WHERE LOWER(username) = ?",
+                      (username_lower,)
+                      )
         user = cursor.fetchone()
-        
+
         if not user:
             conn.close()
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         # Reset lockout
         if isinstance(user, dict):
             user_id = user['id']
@@ -1656,61 +1791,64 @@ def unlock_account(data: dict, admin_user_id: int = Depends(get_current_user)):
         else:
             user_id = user[0]
             actual_username = user[1]
-        
+
         execute_query(cursor,
-            "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
-            (user_id,)
-        )
+                      "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                      (user_id,)
+                      )
         conn.commit()
         conn.close()
-        
-        print(f"✅ Account unlocked for user: {actual_username} (by admin user_id: {admin_user_id})")
-        
+
+        print(
+            f"✅ Account unlocked for user: {actual_username} (by admin user_id: {admin_user_id})")
+
         return {
             "success": True,
             "message": f"Account '{actual_username}' has been unlocked successfully",
             "username": actual_username
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unlock failed: {str(e)}")
 
+
 @app.post("/admin/rotate-keys")
 def rotate_jwt_keys(admin_user_id: int = Depends(get_current_user)):
     """
     Rotate JWT keys and invalidate all existing tokens (admin only)
-    
+
     WARNING: This will log out ALL users immediately!
-    
+
     Process:
     1. Generate a new JWT secret
     2. Move current secret to PREVIOUS_JWT_SECRET_KEY (grace period)
     3. Increment JWT_KEY_VERSION
     4. All users must log in again with new keys
-    
+
     Returns:
         - new_jwt_secret: The new JWT secret to set in environment
         - previous_jwt_secret: The old secret (for grace period)
         - new_key_version: The new version number
         - instructions: How to update Railway environment variables
-    
+
     Note: This is a temporary admin endpoint. In production, implement proper
     admin role checking. For now, any authenticated user can rotate keys.
     """
     try:
         import secrets
-        
+
         # Generate new JWT secret (256-bit)
         new_secret = secrets.token_urlsafe(32)
         new_key_version = CURRENT_KEY_VERSION + 1
-        
-        print(f"🔄 JWT Key Rotation initiated by admin user_id: {admin_user_id}")
+
+        print(
+            f"🔄 JWT Key Rotation initiated by admin user_id: {admin_user_id}")
         print(f"📌 Current Key Version: {CURRENT_KEY_VERSION}")
         print(f"📌 New Key Version: {new_key_version}")
         print(f"🔑 New JWT Secret Generated: {new_secret[:10]}...")
-        
+
         return {
             "success": True,
             "message": "Key rotation prepared. Update environment variables to complete rotation.",
@@ -1729,9 +1867,11 @@ def rotate_jwt_keys(admin_user_id: int = Depends(get_current_user)):
             },
             "grace_period_note": "Tokens signed with old key will work during grace period (24-48 hours recommended)"
         }
-        
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Key rotation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Key rotation failed: {str(e)}")
+
 
 @app.post("/auth/send-verification-code")
 def send_verification_code(request: SendVerificationCodeRequest):
@@ -1754,7 +1894,8 @@ def send_verification_code(request: SendVerificationCodeRequest):
         expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
 
         # Delete any existing codes for this email and type
-        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
+        execute_query(
+            cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
 
         # Insert new code
         execute_query(
@@ -1762,23 +1903,25 @@ def send_verification_code(request: SendVerificationCodeRequest):
             "INSERT INTO verification_codes (email, code, code_type, expires_at) VALUES (?, ?, ?, ?)",
             (email, code, code_type, expires_at)
         )
-        
+
         conn.commit()
         conn.close()
-        
+
         # Send email (or log if SendGrid not configured)
         send_verification_email(email, code)
-        
+
         # Always return success - if SendGrid isn't configured, code is logged
         return {
             "success": True,
             "message": f"Verification code sent to {email}"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send verification code: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send verification code: {str(e)}")
+
 
 @app.post("/auth/verify-code")
 def verify_code(request: VerifyCodeRequest):
@@ -1801,7 +1944,8 @@ def verify_code(request: VerifyCodeRequest):
 
         if not row:
             conn.close()
-            raise HTTPException(status_code=400, detail="No verification code found for this email")
+            raise HTTPException(
+                status_code=400, detail="No verification code found for this email")
 
         stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
         expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
@@ -1811,30 +1955,36 @@ def verify_code(request: VerifyCodeRequest):
 
         # Check if code has expired
         if datetime.now() > expires_at:
-            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
+            execute_query(
+                cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
             conn.commit()
             conn.close()
-            raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new one.")
+            raise HTTPException(
+                status_code=400, detail="Verification code has expired. Please request a new one.")
 
         # Verify code
         if stored_code != code:
             conn.close()
-            raise HTTPException(status_code=400, detail="Invalid verification code")
+            raise HTTPException(
+                status_code=400, detail="Invalid verification code")
 
         # Code is valid, remove it from database
-        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
+        execute_query(
+            cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, code_type))
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": "Email verified successfully"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to verify code: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to verify code: {str(e)}")
+
 
 @app.post("/auth/check-username")
 def check_username(request: CheckUsernameRequest):
@@ -1852,7 +2002,8 @@ def check_username(request: CheckUsernameRequest):
         # Check if username exists (case-insensitive)
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
+        execute_query(
+            cursor, "SELECT id FROM users WHERE LOWER(username) = ?", (username,))
         existing = cursor.fetchone()
         conn.close()
 
@@ -1862,7 +2013,9 @@ def check_username(request: CheckUsernameRequest):
         return {"available": True, "message": "Username available"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check username: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check username: {str(e)}")
+
 
 @app.post("/auth/check-email")
 def check_email(request: CheckEmailRequest):
@@ -1883,7 +2036,8 @@ def check_email(request: CheckEmailRequest):
         # Check if email exists (case-insensitive)
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        execute_query(cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (email,))
+        execute_query(
+            cursor, "SELECT id FROM users WHERE LOWER(email) = ?", (email,))
         existing = cursor.fetchone()
         conn.close()
 
@@ -1893,7 +2047,9 @@ def check_email(request: CheckEmailRequest):
         return {"available": True, "message": "Email available"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check email: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check email: {str(e)}")
+
 
 @app.post("/auth/check-phone")
 def check_phone(request: CheckPhoneRequest):
@@ -1910,7 +2066,8 @@ def check_phone(request: CheckPhoneRequest):
         conn = get_db_connection()
         cursor = get_cursor(conn)
         # Store phone as digits only in database for comparison
-        execute_query(cursor, "SELECT user_id FROM user_profiles WHERE phone = ?", (phone_digits,))
+        execute_query(
+            cursor, "SELECT user_id FROM user_profiles WHERE phone = ?", (phone_digits,))
         existing = cursor.fetchone()
         conn.close()
 
@@ -1920,7 +2077,9 @@ def check_phone(request: CheckPhoneRequest):
         return {"available": True, "message": "Phone number available"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to check phone: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check phone: {str(e)}")
+
 
 @app.post("/auth/change-username")
 def change_username(new_username: str, user_id: int = Depends(get_current_user)):
@@ -1928,31 +2087,36 @@ def change_username(new_username: str, user_id: int = Depends(get_current_user))
     try:
         # Convert to lowercase for case-insensitive storage
         new_username_lower = new_username.lower()
-        
+
         # Validate new username
         if not new_username_lower or len(new_username_lower) < 3 or len(new_username_lower) > 20:
-            raise HTTPException(status_code=400, detail="Username must be 3-20 characters")
-        
+            raise HTTPException(
+                status_code=400, detail="Username must be 3-20 characters")
+
         if not new_username_lower.replace('_', '').replace('.', '').isalnum():
-            raise HTTPException(status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
-        
+            raise HTTPException(
+                status_code=400, detail="Username can only contain letters, numbers, underscores, and periods")
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Check if new username is already taken (case-insensitive)
-        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ? AND id != ?", (new_username_lower, user_id))
+        execute_query(cursor, "SELECT id FROM users WHERE LOWER(username) = ? AND id != ?",
+                      (new_username_lower, user_id))
         if cursor.fetchone():
             conn.close()
-            raise HTTPException(status_code=400, detail="Username already taken")
-        
+            raise HTTPException(
+                status_code=400, detail="Username already taken")
+
         # Update username (store in lowercase)
-        execute_query(cursor, "UPDATE users SET username = ? WHERE id = ?", (new_username_lower, user_id))
+        execute_query(cursor, "UPDATE users SET username = ? WHERE id = ?",
+                      (new_username_lower, user_id))
         conn.commit()
         conn.close()
-        
+
         # Create new JWT token with updated username
         token = create_access_token(user_id, new_username_lower)
-        
+
         return {
             "success": True,
             "message": "Username changed successfully",
@@ -1962,7 +2126,9 @@ def change_username(new_username: str, user_id: int = Depends(get_current_user))
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to change username: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to change username: {str(e)}")
+
 
 @app.post("/auth/change-password")
 def change_password(
@@ -1974,44 +2140,53 @@ def change_password(
     try:
         # Validate new password
         if len(new_password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must be at least 8 characters")
+
         if not any(c.isupper() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one uppercase letter")
+
         if not any(c.islower() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one lowercase letter")
+
         if not any(c.isdigit() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one number")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one number")
+
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one special character")
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Get current password hash
-        execute_query(cursor, "SELECT password_hash FROM users WHERE id = ?", (user_id,))
+        execute_query(
+            cursor, "SELECT password_hash FROM users WHERE id = ?", (user_id,))
         user = cursor.fetchone()
-        
+
         if not user:
             conn.close()
             raise HTTPException(status_code=404, detail="User not found")
-        
-        current_hash = get_value(user, 'password_hash') if isinstance(user, dict) else user[0]
-        
+
+        current_hash = get_value(user, 'password_hash') if isinstance(
+            user, dict) else user[0]
+
         # Verify current password
         if not verify_password(current_password, current_hash):
             conn.close()
-            raise HTTPException(status_code=401, detail="Current password is incorrect")
-        
+            raise HTTPException(
+                status_code=401, detail="Current password is incorrect")
+
         # Hash and update new password
         new_hash = hash_password(new_password)
-        execute_query(cursor, "UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
+        execute_query(
+            cursor, "UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": "Password changed successfully"
@@ -2019,7 +2194,9 @@ def change_password(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to change password: {str(e)}")
+
 
 @app.post("/auth/send-recovery-code")
 def send_recovery_code(request: SendRecoveryCodeRequest):
@@ -2027,58 +2204,64 @@ def send_recovery_code(request: SendRecoveryCodeRequest):
     try:
         email = request.email.lower().strip()
         type = request.type
-        
+
         # Validate email format
         if '@' not in email or '.' not in email:
             raise HTTPException(status_code=400, detail="Invalid email format")
-        
+
         # Check if user with this email exists
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        execute_query(cursor, "SELECT id, username FROM users WHERE email = ?", (email,))
+        execute_query(
+            cursor, "SELECT id, username FROM users WHERE email = ?", (email,))
         user = cursor.fetchone()
         conn.close()
-        
+
         if not user:
-            raise HTTPException(status_code=404, detail="No account found with this email address")
-        
+            raise HTTPException(
+                status_code=404, detail="No account found with this email address")
+
         # Generate 6-digit code
         code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-        
+
         # Store code in database with expiration (10 minutes) and recovery type
         conn2 = get_db_connection()
         cursor2 = get_cursor(conn2)
-        
+
         expires_at = (datetime.now() + timedelta(minutes=10)).isoformat()
-        username_value = get_value(user, 'username') if isinstance(user, dict) else user[1]
-        
+        username_value = get_value(user, 'username') if isinstance(
+            user, dict) else user[1]
+
         # Delete any existing recovery codes for this email
-        execute_query(cursor2, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
-        
+        execute_query(
+            cursor2, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+
         # Insert new code (store username in email field for later retrieval)
         execute_query(
             cursor2,
             "INSERT INTO verification_codes (email, code, code_type, expires_at) VALUES (?, ?, ?, ?)",
             (email, code, f'recovery_{type}', expires_at)
         )
-        
+
         conn2.commit()
         conn2.close()
-        
+
         # Send email (or log if SendGrid not configured)
         subject = 'DropLink - Password Reset Code' if type == 'password' else 'DropLink - Username Recovery Code'
         send_verification_email(email, code)
-        
+
         # Always return success - if SendGrid isn't configured, code is logged
         return {
             "success": True,
             "message": f"Recovery code sent to {email}"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send recovery code: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send recovery code: {str(e)}")
+
 
 @app.post("/auth/verify-recovery-code")
 def verify_recovery_code(request: VerifyRecoveryCodeRequest):
@@ -2087,10 +2270,10 @@ def verify_recovery_code(request: VerifyRecoveryCodeRequest):
         email = request.email.lower().strip()
         code = request.code.strip()
         type = request.type
-        
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Check if code exists for this email
         execute_query(
             cursor,
@@ -2098,62 +2281,70 @@ def verify_recovery_code(request: VerifyRecoveryCodeRequest):
             (email, f'recovery_{type}')
         )
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
-            raise HTTPException(status_code=400, detail="No recovery code found for this email")
-        
+            raise HTTPException(
+                status_code=400, detail="No recovery code found for this email")
+
         stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
         expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
-        
+
         # Parse expiration time
         expires_at = datetime.fromisoformat(expires_at_str)
-        
+
         # Check if code has expired
         if datetime.now() > expires_at:
-            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+            execute_query(
+                cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
             conn.commit()
             conn.close()
-            raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
-        
+            raise HTTPException(
+                status_code=400, detail="Recovery code has expired. Please request a new one.")
+
         # Verify code
         if stored_code != code:
             conn.close()
-            raise HTTPException(status_code=400, detail="Invalid recovery code")
-        
+            raise HTTPException(
+                status_code=400, detail="Invalid recovery code")
+
         # For username recovery, get username and delete code
         if type == 'username':
             # Get username from users table
-            execute_query(cursor, "SELECT username FROM users WHERE email = ?", (email,))
+            execute_query(
+                cursor, "SELECT username FROM users WHERE email = ?", (email,))
             user_row = cursor.fetchone()
             if not user_row:
                 conn.close()
                 raise HTTPException(status_code=404, detail="User not found")
-            
+
             username = get_value(user_row, 'username' if USE_POSTGRES else 0)
-            
+
             # Delete code
-            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
+            execute_query(
+                cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, f'recovery_{type}'))
             conn.commit()
             conn.close()
-            
+
             return {
                 "success": True,
                 "username": username,
                 "message": "Username recovered successfully"
             }
-        
+
         # For password recovery, keep code for password reset step
         conn.close()
         return {
             "success": True,
             "message": "Code verified successfully"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to verify recovery code: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to verify recovery code: {str(e)}")
+
 
 @app.post("/auth/reset-password")
 def reset_password(email: str, code: str, new_password: str):
@@ -2161,10 +2352,10 @@ def reset_password(email: str, code: str, new_password: str):
     try:
         email = email.lower().strip()
         code = code.strip()
-        
+
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Check if code exists for this email
         execute_query(
             cursor,
@@ -2172,66 +2363,80 @@ def reset_password(email: str, code: str, new_password: str):
             (email, 'recovery_password')
         )
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
-            raise HTTPException(status_code=400, detail="No recovery code found. Please request a new code.")
-        
+            raise HTTPException(
+                status_code=400, detail="No recovery code found. Please request a new code.")
+
         stored_code = get_value(row, 'code' if USE_POSTGRES else 0)
         expires_at_str = get_value(row, 'expires_at' if USE_POSTGRES else 1)
-        
+
         # Parse expiration time
         expires_at = datetime.fromisoformat(expires_at_str)
-        
+
         # Check if code has expired
         if datetime.now() > expires_at:
-            execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'recovery_password'))
+            execute_query(
+                cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'recovery_password'))
             conn.commit()
             conn.close()
-            raise HTTPException(status_code=400, detail="Recovery code has expired. Please request a new one.")
-        
+            raise HTTPException(
+                status_code=400, detail="Recovery code has expired. Please request a new one.")
+
         # Verify code
         if stored_code != code:
             conn.close()
-            raise HTTPException(status_code=400, detail="Invalid recovery code")
-        
+            raise HTTPException(
+                status_code=400, detail="Invalid recovery code")
+
         # Validate new password
         if len(new_password) < 8:
-            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must be at least 8 characters")
+
         if not any(c.isupper() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one uppercase letter")
+
         if not any(c.islower() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one lowercase letter")
+
         if not any(c.isdigit() for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one number")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one number")
+
         if not any(c in "!@#$%^&*()_+-=[]{}; ':\"\\|,.<>/?" for c in new_password):
-            raise HTTPException(status_code=400, detail="Password must contain at least one special character")
-        
+            raise HTTPException(
+                status_code=400, detail="Password must contain at least one special character")
+
         # Update password
         new_hash = hash_password(new_password)
-        execute_query(cursor, "UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
-        
+        execute_query(
+            cursor, "UPDATE users SET password_hash = ? WHERE email = ?", (new_hash, email))
+
         # Delete the used code from database
-        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?", (email, 'recovery_password'))
-        
+        execute_query(cursor, "DELETE FROM verification_codes WHERE email = ? AND code_type = ?",
+                      (email, 'recovery_password'))
+
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": "Password reset successfully"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reset password: {str(e)}")
 
 # Root endpoint
+
+
 @app.get("/")
 def read_root():
     return {
@@ -2241,6 +2446,8 @@ def read_root():
     }
 
 # Health check endpoint for Railway monitoring
+
+
 @app.get("/health")
 def health_check():
     """
@@ -2250,20 +2457,20 @@ def health_check():
     try:
         # Get current timestamp
         timestamp = datetime.utcnow().isoformat() + "Z"
-        
+
         # Test database connectivity
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Simple query to verify database is responding
         execute_query(cursor, "SELECT 1")
         result = cursor.fetchone()
-        
+
         conn.close()
-        
+
         # If we got here, database is connected
         database_status = "connected"
-        
+
         return JSONResponse(
             status_code=200,
             content={
@@ -2274,11 +2481,11 @@ def health_check():
                 "environment": "production" if USE_POSTGRES else "development"
             }
         )
-        
+
     except Exception as e:
         # Database connection failed
         timestamp = datetime.utcnow().isoformat() + "Z"
-        
+
         return JSONResponse(
             status_code=503,
             content={
@@ -2291,8 +2498,6 @@ def health_check():
         )
 
 # Readiness probe endpoint for Railway
-
-
 
 
 @app.get("/ready")
@@ -2309,10 +2514,10 @@ def readiness_check():
         "database_write": False
     }
     errors = []
-    
+
     try:
         timestamp = datetime.utcnow().isoformat() + "Z"
-        
+
         # Check 1: Database connectivity
         try:
             conn = get_db_connection()
@@ -2324,47 +2529,48 @@ def readiness_check():
             errors.append(f"Database connection failed: {str(e)}")
             conn.close() if 'conn' in locals() else None
             raise
-        
+
         # Check 2: Critical environment variables
         try:
             required_vars = ["DATABASE_URL"] if USE_POSTGRES else []
             missing_vars = []
-            
+
             # Check if JWT secret is not default
             if SECRET_KEY == "your-secret-key-change-in-production-12345":
                 missing_vars.append("JWT_SECRET_KEY (using default)")
-            
+
             if USE_POSTGRES and not os.getenv("DATABASE_URL"):
                 missing_vars.append("DATABASE_URL")
-            
+
             if missing_vars:
-                errors.append(f"Environment variables issue: {', '.join(missing_vars)}")
-            
+                errors.append(
+                    f"Environment variables issue: {', '.join(missing_vars)}")
+
             checks["environment_vars"] = True
         except Exception as e:
             errors.append(f"Environment check failed: {str(e)}")
-        
+
         # Check 3: Database tables exist
         try:
             # Check if critical tables exist
             execute_query(cursor, "SELECT COUNT(*) FROM users")
             cursor.fetchone()
-            
+
             execute_query(cursor, "SELECT COUNT(*) FROM devices")
             cursor.fetchone()
-            
+
             execute_query(cursor, "SELECT COUNT(*) FROM audit_logs")
             cursor.fetchone()
-            
+
             checks["database_tables"] = True
         except Exception as e:
             errors.append(f"Database tables check failed: {str(e)}")
-        
+
         # Check 4: Database write capability (optional - commented out to avoid writes)
         # Uncomment if you want to test write capability
         # try:
         #     test_action = "readiness_check_test"
-        #     execute_query(cursor, 
+        #     execute_query(cursor,
         #         "INSERT INTO audit_logs (user_id, action, details, ip_address) VALUES (?, ?, ?, ?)",
         #         (None, test_action, '{"test": true}', "127.0.0.1")
         #     )
@@ -2375,16 +2581,16 @@ def readiness_check():
         #     checks["database_write"] = True
         # except Exception as e:
         #     errors.append(f"Database write test failed: {str(e)}")
-        
+
         # For now, mark write as true if tables exist
         checks["database_write"] = checks["database_tables"]
-        
+
         conn.close()
-        
+
         # Determine if ready
         is_ready = all(checks.values())
         status_code = 200 if is_ready else 503
-        
+
         response_content = {
             "status": "ready" if is_ready else "not_ready",
             "timestamp": timestamp,
@@ -2392,19 +2598,19 @@ def readiness_check():
             "version": "1.0.0",
             "environment": "production" if USE_POSTGRES else "development"
         }
-        
+
         if errors:
             response_content["errors"] = errors
-        
+
         return JSONResponse(
             status_code=status_code,
             content=response_content
         )
-        
+
     except Exception as e:
         # Critical failure
         timestamp = datetime.utcnow().isoformat() + "Z"
-        
+
         return JSONResponse(
             status_code=503,
             content={
@@ -2423,19 +2629,21 @@ def create_device(device: DeviceCreate, user_id: int = Depends(get_current_user)
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
-        social_media_json = json.dumps(device.socialMedia) if device.socialMedia else None
+
+        social_media_json = json.dumps(
+            device.socialMedia) if device.socialMedia else None
         timestamp = device.timestamp or datetime.now().isoformat()
-        
+
         # Check if device with same name already exists for this user
         execute_query(cursor, '''
             SELECT id FROM devices WHERE name = ? AND user_id = ?
         ''', (device.name, user_id))
         existing = cursor.fetchone()
-        
+
         if existing:
             # Update existing device
-            device_id = get_value(existing, 0) if isinstance(existing, dict) else existing[0]
+            device_id = get_value(existing, 0) if isinstance(
+                existing, dict) else existing[0]
             execute_query(cursor, '''
                 UPDATE devices 
                 SET rssi = ?, distance_feet = ?, action = ?, timestamp = ?,
@@ -2452,7 +2660,8 @@ def create_device(device: DeviceCreate, user_id: int = Depends(get_current_user)
                 social_media_json,
                 device_id
             ))
-            print(f"✅ Updated existing device: {device.name} (ID: {device_id})")
+            print(
+                f"✅ Updated existing device: {device.name} (ID: {device_id})")
         else:
             # Insert new device
             execute_query(cursor, '''
@@ -2473,10 +2682,10 @@ def create_device(device: DeviceCreate, user_id: int = Depends(get_current_user)
             ))
             device_id = get_lastrowid(cursor, conn)
             print(f"✅ Created new device: {device.name} (ID: {device_id})")
-        
+
         conn.commit()
         conn.close()
-        
+
         return DeviceResponse(
             id=device_id,
             name=device.name,
@@ -2493,6 +2702,8 @@ def create_device(device: DeviceCreate, user_id: int = Depends(get_current_user)
         raise HTTPException(status_code=500, detail=str(e))
 
 # GET /devices - Retrieve all devices
+
+
 @app.get("/devices", response_model=List[DeviceResponse])
 def get_devices(user_id: int = Depends(get_current_user)):
     try:
@@ -2505,10 +2716,10 @@ def get_devices(user_id: int = Depends(get_current_user)):
             WHERE user_id = ?
             ORDER BY timestamp DESC
         ''', (user_id,))
-        
+
         rows = cursor.fetchall()
         conn.close()
-        
+
         devices = []
         for row in rows:
             social_media = json.loads(row[9]) if row[9] else None
@@ -2524,12 +2735,14 @@ def get_devices(user_id: int = Depends(get_current_user)):
                 bio=row[8],
                 socialMedia=social_media
             ))
-        
+
         return devices
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # GET /devices/{id} - Get specific device
+
+
 @app.get("/devices/{device_id}", response_model=DeviceResponse)
 def get_device(device_id: int, user_id: int = Depends(get_current_user)):
     try:
@@ -2541,21 +2754,24 @@ def get_device(device_id: int, user_id: int = Depends(get_current_user)):
             FROM devices 
             WHERE id = ?
         ''', (device_id,))
-        
+
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
             raise HTTPException(status_code=404, detail="Device not found")
-        
+
         # Verify ownership
-        device_user_id = get_value(row, 10) if isinstance(row, dict) else row[10]
+        device_user_id = get_value(
+            row, 10) if isinstance(row, dict) else row[10]
         if device_user_id != user_id:
-            raise HTTPException(status_code=403, detail="Not authorized to access this device")
-        
+            raise HTTPException(
+                status_code=403, detail="Not authorized to access this device")
+
         # Handle dict (PostgreSQL) or tuple (SQLite) results
         if isinstance(row, dict):
-            social_media = json.loads(row['social_media']) if row.get('social_media') else None
+            social_media = json.loads(row['social_media']) if row.get(
+                'social_media') else None
             return DeviceResponse(
                 id=row['id'],
                 name=row['name'],
@@ -2588,29 +2804,33 @@ def get_device(device_id: int, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # DELETE /devices/{id} - Delete a device
+
+
 @app.delete("/devices/{device_id}")
 def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Verify ownership before deleting
-        execute_query(cursor, 'SELECT user_id FROM devices WHERE id = ?', (device_id,))
+        execute_query(
+            cursor, 'SELECT user_id FROM devices WHERE id = ?', (device_id,))
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
             raise HTTPException(status_code=404, detail="Device not found")
-        
+
         device_user_id = get_value(row, 0) if isinstance(row, dict) else row[0]
         if device_user_id != user_id:
             conn.close()
-            raise HTTPException(status_code=403, detail="Not authorized to delete this device")
-        
+            raise HTTPException(
+                status_code=403, detail="Not authorized to delete this device")
+
         execute_query(cursor, 'DELETE FROM devices WHERE id = ?', (device_id,))
         conn.commit()
         conn.close()
-        
+
         return {"message": "Device deleted successfully"}
     except HTTPException:
         raise
@@ -2618,21 +2838,23 @@ def delete_device(device_id: int, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # User Profile endpoints
+
+
 @app.get("/user/profile")
-async def get_user_profile(payload = Depends(JWTBearer())):
+async def get_user_profile(payload=Depends(JWTBearer())):
     """Get user profile with authentication via JWTBearer middleware"""
     try:
         from serializers.profile_serializer import serialize_profile
-        
+
         user_id = payload['user_id']
 
         conn = get_db_connection()
         cursor = get_cursor(conn)
 
         execute_query(cursor,
-            "SELECT username, email, created_at FROM users WHERE id = ?",
-            (user_id,)
-        )
+                      "SELECT username, email, created_at FROM users WHERE id = ?",
+                      (user_id,)
+                      )
         user = cursor.fetchone()
 
         if not user:
@@ -2640,10 +2862,14 @@ async def get_user_profile(payload = Depends(JWTBearer())):
             raise HTTPException(status_code=404, detail="User not found")
 
         execute_query(cursor,
-            "SELECT name, phone, profile_photo, has_completed_onboarding, bio FROM user_profiles WHERE user_id = ?",
-            (user_id,)
-        )
+                      "SELECT name, phone, profile_photo, has_completed_onboarding, bio FROM user_profiles WHERE user_id = ?",
+                      (user_id,)
+                      )
         profile = cursor.fetchone()
+
+        # ADD DEBUG LOGGING HERE ⬇️
+        print(f"🔍 DEBUG GET PROFILE - User ID: {user_id}")
+        print(f"🔍 DEBUG GET PROFILE - Profile row from DB: {profile}")
 
         conn.close()
 
@@ -2670,25 +2896,36 @@ async def get_user_profile(payload = Depends(JWTBearer())):
                 'bio': None,
                 'created_at': get_value(user, 'created_at' if USE_POSTGRES else 2)
             }
-        
+
+        # ADD DEBUG LOGGING HERE ⬇️
+        print(
+            f"🔍 DEBUG GET PROFILE - Response data before serialize: {response_data}")
+
         # Convert snake_case to camelCase for API response
-        return serialize_profile(response_data)
-        
+        serialized = serialize_profile(response_data)
+
+        # ADD DEBUG LOGGING HERE ⬇️
+        print(f"🔍 DEBUG GET PROFILE - Final serialized response: {serialized}")
+
+        return serialized
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve profile: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to retrieve profile: {str(e)}")
+
 
 @app.post("/user/profile")
 def save_user_profile(profile: dict, request: Request, user_id: int = Depends(get_current_user)):
     """Save user profile"""
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "unknown")
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Create table if it doesn't exist
         execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS user_profiles (
@@ -2702,19 +2939,19 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 has_completed_onboarding INTEGER DEFAULT 0
             )
         ''')
-        
+
         # Clean up phone number - strip all non-numeric characters
         # Frontend may send: "(555) 123-4567" -> convert to: "5551234567"
         if profile.get('phone'):
             import re
             phone_cleaned = re.sub(r'\D', '', profile.get('phone'))
             profile['phone'] = phone_cleaned if phone_cleaned else None
-        
+
         # Clean up bio - convert placeholder text to empty string
         # Frontend may send: "Add bio" -> convert to: ""
         if profile.get('bio') == 'Add bio':
             profile['bio'] = ''
-        
+
         # Check if phone number is already used by another user
         if profile.get('phone'):
             execute_query(cursor, '''
@@ -2724,8 +2961,9 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
             existing_phone = cursor.fetchone()
             if existing_phone:
                 conn.close()
-                raise HTTPException(status_code=400, detail="This phone number is already associated with another account")
-        
+                raise HTTPException(
+                    status_code=400, detail="This phone number is already associated with another account")
+
         # Check if email is already used by another user (in users table, skip for testing email)
         if profile.get('email'):
             # Allow testing email to be reused infinitely
@@ -2737,14 +2975,17 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 existing_email = cursor.fetchone()
                 if existing_email:
                     conn.close()
-                    raise HTTPException(status_code=400, detail="This email is already associated with another account")
-        
+                    raise HTTPException(
+                        status_code=400, detail="This email is already associated with another account")
+
         # Prepare social_media JSON
-        social_media_json = json.dumps(profile.get('socialMedia', [])) if profile.get('socialMedia') else None
-        
+        social_media_json = json.dumps(profile.get(
+            'socialMedia', [])) if profile.get('socialMedia') else None
+
         # Get onboarding flag (convert to 1/0 for database)
-        has_completed_onboarding = 1 if profile.get('hasCompletedOnboarding') else 0
-        
+        has_completed_onboarding = 1 if profile.get(
+            'hasCompletedOnboarding') else 0
+
         # Upsert profile - works for both SQLite and PostgreSQL
         if USE_POSTGRES:
             execute_query(cursor, '''
@@ -2763,10 +3004,10 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
                 INSERT OR REPLACE INTO user_profiles (user_id, name, email, phone, bio, social_media, has_completed_onboarding)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (user_id, profile.get('name'), profile.get('email'), profile.get('phone'), profile.get('bio'), social_media_json, has_completed_onboarding))
-        
+
         conn.commit()
         conn.close()
-        
+
         # Log profile update
         log_audit_event(
             action="profile_update",
@@ -2775,7 +3016,7 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         return {"success": True}
     except HTTPException:
         raise
@@ -2783,6 +3024,8 @@ def save_user_profile(profile: dict, request: Request, user_id: int = Depends(ge
         raise HTTPException(status_code=500, detail=str(e))
 
 # Profile Photo endpoints
+
+
 @app.post("/user/profile/photo")
 async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depends(get_current_user)):
     """Upload profile photo - accepts any image format, converts to JPEG"""
@@ -2796,7 +3039,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         # Validate file size (max 10MB)
         max_size = 10 * 1024 * 1024
         if len(contents) > max_size:
-            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB")
+            raise HTTPException(
+                status_code=400, detail="File too large. Maximum size is 10MB")
 
         # Use Pillow to validate and convert image
         try:
@@ -2827,7 +3071,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
             file_to_upload = output
 
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid or corrupted image file: {str(e)}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid or corrupted image file: {str(e)}")
 
         # Upload to Cloudinary
         cloudinary_public_id = f"user_{user_id}"
@@ -2843,14 +3088,16 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         # Validate Cloudinary response
         photo_url = upload_result.get("secure_url")
         if not photo_url:
-            raise HTTPException(status_code=500, detail="Cloudinary upload failed to return URL")
+            raise HTTPException(
+                status_code=500, detail="Cloudinary upload failed to return URL")
 
         # Save to database
         conn = get_db_connection()
         cursor = get_cursor(conn)
 
         # Check if profile exists
-        execute_query(cursor, 'SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'SELECT user_id FROM user_profiles WHERE user_id = ?', (user_id,))
         exists = cursor.fetchone()
 
         if exists:
@@ -2876,7 +3123,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         # If database failed but Cloudinary succeeded, clean up
         if cloudinary_public_id:
             try:
-                cloudinary.uploader.destroy(f"droplink/profile_photos/{cloudinary_public_id}")
+                cloudinary.uploader.destroy(
+                    f"droplink/profile_photos/{cloudinary_public_id}")
             except:
                 pass  # Best effort cleanup
         raise
@@ -2885,7 +3133,8 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
         # If database failed but Cloudinary succeeded, clean up
         if cloudinary_public_id:
             try:
-                cloudinary.uploader.destroy(f"droplink/profile_photos/{cloudinary_public_id}")
+                cloudinary.uploader.destroy(
+                    f"droplink/profile_photos/{cloudinary_public_id}")
             except:
                 pass
         raise HTTPException(status_code=500, detail=str(e))
@@ -2893,6 +3142,7 @@ async def upload_profile_photo(file: UploadFile = File(...), user_id: int = Depe
     finally:
         if conn:
             conn.close()
+
 
 @app.get("/user/profile/photo")
 async def get_profile_photo(user_id: int = Depends(get_current_user)):
@@ -2905,19 +3155,22 @@ async def get_profile_photo(user_id: int = Depends(get_current_user)):
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
-            raise HTTPException(status_code=404, detail="Profile photo not found")
-        
+            raise HTTPException(
+                status_code=404, detail="Profile photo not found")
+
         photo_url = get_value(row, 0) if isinstance(row, dict) else row[0]
         if not photo_url:
-            raise HTTPException(status_code=404, detail="Profile photo not found")
-        
+            raise HTTPException(
+                status_code=404, detail="Profile photo not found")
+
         return {"url": photo_url}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/user/profile/photo")
 async def delete_profile_photo(user_id: int = Depends(get_current_user)):
@@ -2929,26 +3182,29 @@ async def delete_profile_photo(user_id: int = Depends(get_current_user)):
             SELECT profile_photo FROM user_profiles WHERE user_id = ?
         ''', (user_id,))
         row = cursor.fetchone()
-        
+
         if row and row[0]:
             # Delete from Cloudinary
             try:
-                cloudinary.uploader.destroy(f"droplink/profile_photos/user_{user_id}")
+                cloudinary.uploader.destroy(
+                    f"droplink/profile_photos/user_{user_id}")
             except:
                 pass  # Continue even if Cloudinary delete fails
-            
+
             # Update database
             execute_query(cursor, '''
                 UPDATE user_profiles SET profile_photo = NULL WHERE user_id = ?
             ''', (user_id,))
             conn.commit()
-        
+
         conn.close()
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # API Call Logging Endpoint
+
+
 @app.post("/api/log-api-call")
 async def log_api_call(log_data: dict):
     """Log API calls from mobile app for monitoring"""
@@ -2992,6 +3248,7 @@ async def log_api_call(log_data: dict):
         # Silent fail - don't break if logging fails
         return {"success": False, "error": str(e)}
 
+
 @app.delete("/user/delete")
 async def delete_user_account(request: Request, user_id: int = Depends(get_current_user)):
     """Delete user account and all associated data"""
@@ -3003,16 +3260,19 @@ async def delete_user_account(request: Request, user_id: int = Depends(get_curre
         cursor = get_cursor(conn)
 
         # Get user's email for verification code cleanup
-        execute_query(cursor, 'SELECT email FROM users WHERE id = ?', (user_id,))
+        execute_query(
+            cursor, 'SELECT email FROM users WHERE id = ?', (user_id,))
         user_row = cursor.fetchone()
         user_email = user_row[0] if user_row else None
 
         # Try to delete profile photo from Cloudinary
         try:
-            execute_query(cursor, 'SELECT profile_photo FROM user_profiles WHERE user_id = ?', (user_id,))
+            execute_query(
+                cursor, 'SELECT profile_photo FROM user_profiles WHERE user_id = ?', (user_id,))
             photo_row = cursor.fetchone()
             if photo_row and photo_row[0]:
-                cloudinary.uploader.destroy(f"droplink/profile_photos/user_{user_id}")
+                cloudinary.uploader.destroy(
+                    f"droplink/profile_photos/user_{user_id}")
         except:
             pass  # Continue even if Cloudinary delete fails
 
@@ -3025,26 +3285,33 @@ async def delete_user_account(request: Request, user_id: int = Depends(get_curre
 
         # Delete user data from all tables (in correct order to respect foreign key constraints)
         # 1. Delete devices owned by user
-        execute_query(cursor, 'DELETE FROM devices WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM devices WHERE user_id = ?', (user_id,))
 
         # 2. Delete privacy zones
-        execute_query(cursor, 'DELETE FROM privacy_zones WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM privacy_zones WHERE user_id = ?', (user_id,))
 
         # 3. Delete pinned contacts
-        execute_query(cursor, 'DELETE FROM pinned_contacts WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM pinned_contacts WHERE user_id = ?', (user_id,))
 
         # 4. Delete audit logs
-        execute_query(cursor, 'DELETE FROM audit_logs WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM audit_logs WHERE user_id = ?', (user_id,))
 
         # 5. Delete user settings
-        execute_query(cursor, 'DELETE FROM user_settings WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM user_settings WHERE user_id = ?', (user_id,))
 
         # 6. Delete verification codes associated with user's email
         if user_email:
-            execute_query(cursor, 'DELETE FROM verification_codes WHERE email = ?', (user_email,))
+            execute_query(
+                cursor, 'DELETE FROM verification_codes WHERE email = ?', (user_email,))
 
         # 7. Delete user profile
-        execute_query(cursor, 'DELETE FROM user_profiles WHERE user_id = ?', (user_id,))
+        execute_query(
+            cursor, 'DELETE FROM user_profiles WHERE user_id = ?', (user_id,))
 
         # 8. Finally, delete the user account itself
         execute_query(cursor, 'DELETE FROM users WHERE id = ?', (user_id,))
@@ -3054,9 +3321,12 @@ async def delete_user_account(request: Request, user_id: int = Depends(get_curre
 
         return {"success": True, "message": "Account successfully deleted"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete account: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete account: {str(e)}")
 
 # Settings endpoints
+
+
 @app.get("/user/settings")
 def get_user_settings(user_id: int = Depends(get_current_user)):
     """Get user settings"""
@@ -3068,10 +3338,10 @@ def get_user_settings(user_id: int = Depends(get_current_user)):
         ''', (user_id,))
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
             return {"darkMode": True, "maxDistance": 33}
-        
+
         return {
             "darkMode": bool(row[0]),
             "maxDistance": row[1]
@@ -3079,13 +3349,14 @@ def get_user_settings(user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/user/settings")
 def save_user_settings(settings: dict, user_id: int = Depends(get_current_user)):
     """Save user settings"""
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS user_settings (
                 user_id INTEGER PRIMARY KEY,
@@ -3093,7 +3364,7 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
                 max_distance INTEGER
             )
         ''')
-        
+
         # Upsert settings - works for both SQLite and PostgreSQL
         if USE_POSTGRES:
             execute_query(cursor, '''
@@ -3102,17 +3373,17 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
                 ON CONFLICT (user_id) DO UPDATE SET
                     dark_mode = EXCLUDED.dark_mode,
                     max_distance = EXCLUDED.max_distance
-            ''', (user_id, 
+            ''', (user_id,
                   1 if settings.get('darkMode') else 0,
                   settings.get('maxDistance', 33)))
         else:
             execute_query(cursor, '''
                 INSERT OR REPLACE INTO user_settings (user_id, dark_mode, max_distance)
                 VALUES (?, ?, ?)
-            ''', (user_id, 
+            ''', (user_id,
                   1 if settings.get('darkMode') else 0,
                   settings.get('maxDistance', 33)))
-        
+
         conn.commit()
         conn.close()
         return {"success": True}
@@ -3120,6 +3391,8 @@ def save_user_settings(settings: dict, user_id: int = Depends(get_current_user))
         raise HTTPException(status_code=500, detail=str(e))
 
 # Privacy Zones endpoints
+
+
 @app.get("/user/privacy-zones")
 def get_privacy_zones(user_id: int = Depends(get_current_user)):
     """Get privacy zones"""
@@ -3131,7 +3404,7 @@ def get_privacy_zones(user_id: int = Depends(get_current_user)):
         ''', (user_id,))
         rows = cursor.fetchall()
         conn.close()
-        
+
         zones = []
         for row in rows:
             zones.append({
@@ -3143,16 +3416,17 @@ def get_privacy_zones(user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/user/privacy-zones")
 def save_privacy_zone(zone: dict, request: Request, user_id: int = Depends(get_current_user)):
     """Save a privacy zone"""
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "unknown")
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS privacy_zones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3161,56 +3435,62 @@ def save_privacy_zone(zone: dict, request: Request, user_id: int = Depends(get_c
                 radius INTEGER
             )
         ''')
-        
+
         execute_query(cursor, '''
             INSERT INTO privacy_zones (user_id, address, radius)
             VALUES (?, ?, ?)
         ''', (user_id, zone.get('address'), zone.get('radius')))
-        
+
         conn.commit()
         zone_id = get_lastrowid(cursor, conn)
         conn.close()
-        
+
         # Log privacy zone creation
         log_audit_event(
             action="privacy_zone_created",
             user_id=user_id,
-            details={"zone_id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')},
+            details={"zone_id": zone_id, "address": zone.get(
+                'address'), "radius": zone.get('radius')},
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         return {"id": zone_id, "address": zone.get('address'), "radius": zone.get('radius')}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/user/privacy-zones/{zone_id}")
 def delete_privacy_zone(zone_id: int, request: Request, user_id: int = Depends(get_current_user)):
     """Delete a privacy zone"""
     ip_address = get_client_ip(request)
     user_agent = request.headers.get("User-Agent", "unknown")
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Verify ownership before deleting
-        execute_query(cursor, 'SELECT user_id FROM privacy_zones WHERE id = ?', (zone_id,))
+        execute_query(
+            cursor, 'SELECT user_id FROM privacy_zones WHERE id = ?', (zone_id,))
         row = cursor.fetchone()
-        
+
         if not row:
             conn.close()
-            raise HTTPException(status_code=404, detail="Privacy zone not found")
-        
+            raise HTTPException(
+                status_code=404, detail="Privacy zone not found")
+
         zone_user_id = get_value(row, 0) if isinstance(row, dict) else row[0]
         if zone_user_id != user_id:
             conn.close()
-            raise HTTPException(status_code=403, detail="Not authorized to delete this privacy zone")
-        
-        execute_query(cursor, 'DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
+            raise HTTPException(
+                status_code=403, detail="Not authorized to delete this privacy zone")
+
+        execute_query(
+            cursor, 'DELETE FROM privacy_zones WHERE id = ?', (zone_id,))
         conn.commit()
         conn.close()
-        
+
         # Log privacy zone deletion
         log_audit_event(
             action="privacy_zone_deleted",
@@ -3219,12 +3499,14 @@ def delete_privacy_zone(zone_id: int, request: Request, user_id: int = Depends(g
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # Pinned contacts endpoint
+
+
 @app.get("/user/pinned")
 def get_pinned_contacts(user_id: int = Depends(get_current_user)):
     """Get pinned contact IDs"""
@@ -3240,13 +3522,14 @@ def get_pinned_contacts(user_id: int = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/user/pinned/{device_id}")
 def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
     """Pin a contact"""
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         execute_query(cursor, '''
             CREATE TABLE IF NOT EXISTS pinned_contacts (
                 user_id INTEGER,
@@ -3254,17 +3537,18 @@ def pin_contact(device_id: int, user_id: int = Depends(get_current_user)):
                 PRIMARY KEY (user_id, device_id)
             )
         ''')
-        
+
         execute_query(cursor, '''
             INSERT OR IGNORE INTO pinned_contacts (user_id, device_id)
             VALUES (?, ?)
         ''', (user_id, device_id))
-        
+
         conn.commit()
         conn.close()
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/user/pinned/{device_id}")
 def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
@@ -3282,6 +3566,8 @@ def unpin_contact(device_id: int, user_id: int = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # ADMIN: Get user statistics
+
+
 @app.get("/admin/stats")
 async def get_admin_stats(secret: str = Header(None)):
     """
@@ -3291,29 +3577,31 @@ async def get_admin_stats(secret: str = Header(None)):
     # Simple security check
     if secret != "delete-all-profiles-2024":
         raise HTTPException(status_code=403, detail="Forbidden")
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Count users
         execute_query(cursor, 'SELECT COUNT(*) FROM users')
         total_users = cursor.fetchone()[0]
-        
+
         # Get list of all usernames with IDs
-        execute_query(cursor, 'SELECT id, username, email FROM users ORDER BY id')
+        execute_query(
+            cursor, 'SELECT id, username, email FROM users ORDER BY id')
         users_list = cursor.fetchall()
-        
+
         # Count devices
         execute_query(cursor, 'SELECT COUNT(*) FROM devices')
         total_devices = cursor.fetchone()[0]
-        
+
         # Count profiles with photos
-        execute_query(cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+        execute_query(
+            cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
         users_with_photos = cursor.fetchone()[0]
-        
+
         conn.close()
-        
+
         return {
             "total_users": total_users,
             "total_devices": total_devices,
@@ -3330,6 +3618,7 @@ async def get_admin_stats(secret: str = Header(None)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/admin/audit-logs")
 async def get_audit_logs(
     secret: str = Header(None),
@@ -3342,7 +3631,7 @@ async def get_audit_logs(
     """
     ADMIN ENDPOINT - Get audit logs with filtering
     Requires secret header for security
-    
+
     Query parameters:
     - user_id: Filter by user ID
     - action: Filter by action type (e.g., 'user_registration', 'login_success')
@@ -3353,61 +3642,61 @@ async def get_audit_logs(
     # Simple security check
     if secret != "delete-all-profiles-2024":
         raise HTTPException(status_code=403, detail="Forbidden")
-    
+
     # Limit validation
     if limit > 1000:
         limit = 1000
     if limit < 1:
         limit = 100
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Build query with filters
         query = "SELECT id, user_id, action, details, ip_address, user_agent, timestamp FROM audit_logs WHERE 1=1"
         params = []
-        
+
         if user_id is not None:
             query += " AND user_id = ?"
             params.append(user_id)
-        
+
         if action:
             query += " AND action = ?"
             params.append(action)
-        
+
         if ip_address:
             query += " AND ip_address = ?"
             params.append(ip_address)
-        
+
         # Add ordering and pagination
         query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
-        
+
         execute_query(cursor, query, tuple(params))
         rows = cursor.fetchall()
-        
+
         # Get total count (without pagination)
         count_query = "SELECT COUNT(*) FROM audit_logs WHERE 1=1"
         count_params = []
-        
+
         if user_id is not None:
             count_query += " AND user_id = ?"
             count_params.append(user_id)
-        
+
         if action:
             count_query += " AND action = ?"
             count_params.append(action)
-        
+
         if ip_address:
             count_query += " AND ip_address = ?"
             count_params.append(ip_address)
-        
+
         execute_query(cursor, count_query, tuple(count_params))
         total_count = cursor.fetchone()[0] if cursor.fetchone() else 0
-        
+
         conn.close()
-        
+
         # Format results
         logs = []
         for row in rows:
@@ -3432,7 +3721,7 @@ async def get_audit_logs(
                     "timestamp": row[6]
                 }
             logs.append(log_entry)
-        
+
         return {
             "total_count": total_count,
             "limit": limit,
@@ -3442,6 +3731,7 @@ async def get_audit_logs(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 def cleanup_old_audit_logs(days: int = 90):
     """
     Delete audit logs older than the specified number of days
@@ -3450,32 +3740,33 @@ def cleanup_old_audit_logs(days: int = 90):
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Calculate cutoff date
         cutoff_date = datetime.now() - timedelta(days=days)
         cutoff_timestamp = cutoff_date.isoformat()
-        
+
         # Count logs to be deleted
-        execute_query(cursor, 
-            "SELECT COUNT(*) FROM audit_logs WHERE timestamp < ?",
-            (cutoff_timestamp,)
-        )
+        execute_query(cursor,
+                      "SELECT COUNT(*) FROM audit_logs WHERE timestamp < ?",
+                      (cutoff_timestamp,)
+                      )
         count_result = cursor.fetchone()
         count = count_result[0] if count_result else 0
-        
+
         # Delete old logs
         execute_query(cursor,
-            "DELETE FROM audit_logs WHERE timestamp < ?",
-            (cutoff_timestamp,)
-        )
-        
+                      "DELETE FROM audit_logs WHERE timestamp < ?",
+                      (cutoff_timestamp,)
+                      )
+
         conn.commit()
         conn.close()
-        
+
         return count
     except Exception as e:
         print(f"⚠️  Audit log cleanup failed: {str(e)}")
         return 0
+
 
 @app.post("/admin/cleanup-audit-logs")
 async def cleanup_audit_logs_endpoint(
@@ -3485,20 +3776,20 @@ async def cleanup_audit_logs_endpoint(
     """
     ADMIN ENDPOINT - Delete audit logs older than specified days
     Requires secret header for security
-    
+
     Query parameters:
     - days: Number of days to retain logs (default: 90)
     """
     # Simple security check
     if secret != "delete-all-profiles-2024":
         raise HTTPException(status_code=403, detail="Forbidden")
-    
+
     if days < 1:
         raise HTTPException(status_code=400, detail="Days must be at least 1")
-    
+
     try:
         deleted_count = cleanup_old_audit_logs(days)
-        
+
         return {
             "success": True,
             "deleted_count": deleted_count,
@@ -3509,6 +3800,8 @@ async def cleanup_audit_logs_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Diagnostics endpoint
+
+
 @app.post("/api/diagnostics/run")
 async def run_diagnostics(
     diagnostic_type: str,
@@ -3561,8 +3854,10 @@ async def run_diagnostics(
                     # SQLite PRAGMA returns: cid, name, type, notnull, dflt_value, pk
                     found_columns = [col[1] for col in columns]
 
-                expected_columns = ["user_id", "name", "email", "phone", "bio", "has_completed_onboarding"]
-                missing = [c for c in expected_columns if c not in found_columns]
+                expected_columns = ["user_id", "name", "email",
+                                    "phone", "bio", "has_completed_onboarding"]
+                missing = [
+                    c for c in expected_columns if c not in found_columns]
 
                 results["checks"].append({
                     "name": "Database Schema",
@@ -3678,10 +3973,13 @@ async def run_diagnostics(
         conn.close()
 
         # Overall status
-        has_failures = any(check["status"] == "fail" for check in results["checks"])
-        has_errors = any(check["status"] == "error" for check in results["checks"])
+        has_failures = any(check["status"] ==
+                           "fail" for check in results["checks"])
+        has_errors = any(check["status"] ==
+                         "error" for check in results["checks"])
 
-        results["overall_status"] = "error" if has_errors else ("fail" if has_failures else "pass")
+        results["overall_status"] = "error" if has_errors else (
+            "fail" if has_failures else "pass")
 
         return results
 
@@ -3695,6 +3993,8 @@ async def run_diagnostics(
         }
 
 # ADMIN: Simple web dashboard
+
+
 @app.get("/admin/dashboard", response_class=HTMLResponse)
 async def admin_dashboard():
     """
@@ -3704,22 +4004,24 @@ async def admin_dashboard():
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Get user stats
         execute_query(cursor, 'SELECT COUNT(*) FROM users')
         total_users = cursor.fetchone()[0]
-        
-        execute_query(cursor, 'SELECT id, username, email FROM users ORDER BY id')
+
+        execute_query(
+            cursor, 'SELECT id, username, email FROM users ORDER BY id')
         users_list = cursor.fetchall()
-        
-        execute_query(cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
+
+        execute_query(
+            cursor, 'SELECT COUNT(*) FROM user_profiles WHERE profile_photo IS NOT NULL')
         users_with_photos = cursor.fetchone()[0]
-        
+
         conn.close()
-        
+
         # Get current timestamp
         current_time = datetime.now().strftime("%B %d, %Y at %I:%M:%S %p")
-        
+
         # Build HTML
         users_html = ""
         if len(users_list) == 0:
@@ -3741,7 +4043,7 @@ async def admin_dashboard():
                     <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #6b7280;">{user[2] or 'No email'}</td>
                 </tr>
                 """
-        
+
         html = f"""
         <!DOCTYPE html>
         <html>
@@ -3869,13 +4171,15 @@ async def admin_dashboard():
         </body>
         </html>
         """
-        
+
         return html
-        
+
     except Exception as e:
         return f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>"
 
 # TEMPORARY: Admin endpoint to clear all test data
+
+
 @app.delete("/admin/clear-all-data")
 async def clear_all_data(secret: str = Header(None)):
     """
@@ -3885,11 +4189,11 @@ async def clear_all_data(secret: str = Header(None)):
     # Simple security check
     if secret != "delete-all-profiles-2024":
         raise HTTPException(status_code=403, detail="Forbidden")
-    
+
     try:
         conn = get_db_connection()
         cursor = get_cursor(conn)
-        
+
         # Delete all data from all tables
         execute_query(cursor, 'DELETE FROM pinned_contacts')
         execute_query(cursor, 'DELETE FROM privacy_zones')
@@ -3897,19 +4201,22 @@ async def clear_all_data(secret: str = Header(None)):
         execute_query(cursor, 'DELETE FROM user_profiles')
         execute_query(cursor, 'DELETE FROM devices')
         execute_query(cursor, 'DELETE FROM users')
-        
+
         # Reset sequences if using PostgreSQL
         if USE_POSTGRES:
             try:
-                execute_query(cursor, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
-                execute_query(cursor, "ALTER SEQUENCE devices_id_seq RESTART WITH 1")
-                execute_query(cursor, "ALTER SEQUENCE privacy_zones_id_seq RESTART WITH 1")
+                execute_query(
+                    cursor, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
+                execute_query(
+                    cursor, "ALTER SEQUENCE devices_id_seq RESTART WITH 1")
+                execute_query(
+                    cursor, "ALTER SEQUENCE privacy_zones_id_seq RESTART WITH 1")
             except Exception as seq_error:
                 print(f"Warning: Could not reset sequences: {seq_error}")
-        
+
         conn.commit()
         conn.close()
-        
+
         return {
             "success": True,
             "message": "All user data has been deleted and sequences reset",
@@ -3919,4 +4226,3 @@ async def clear_all_data(secret: str = Header(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Run with: uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
