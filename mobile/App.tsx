@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, createContext, useContext } fr
 import { View, Pressable, Text, PanResponder } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -28,7 +29,7 @@ const DarkModeContext = createContext<{
   toggleDarkMode: () => void;
 }>({
   isDarkMode: false,
-  toggleDarkMode: () => {},
+  toggleDarkMode: () => { },
 });
 
 export const useDarkMode = () => useContext(DarkModeContext);
@@ -39,7 +40,7 @@ const PinnedProfilesContext = createContext<{
   togglePin: (id: number) => void;
 }>({
   pinnedIds: new Set(),
-  togglePin: () => {},
+  togglePin: () => { },
 });
 
 export const usePinnedProfiles = () => useContext(PinnedProfilesContext);
@@ -69,7 +70,7 @@ const UserProfileContext = createContext<{
     bio: 'Add bio',
     socialMedia: [],
   },
-  updateProfile: () => {},
+  updateProfile: () => { },
 });
 
 export const useUserProfile = () => useContext(UserProfileContext);
@@ -86,7 +87,7 @@ interface ToastConfig {
 const ToastContext = createContext<{
   showToast: (config: ToastConfig) => void;
 }>({
-  showToast: () => {},
+  showToast: () => { },
 });
 
 export const useToast = () => useContext(ToastContext);
@@ -97,17 +98,12 @@ const SettingsContext = createContext<{
   setMaxDistance: (distance: number) => void;
 }>({
   maxDistance: 33,
-  setMaxDistance: () => {},
+  setMaxDistance: () => { },
 });
 
 export const useSettings = () => useContext(SettingsContext);
 
 // Link Notifications Context (for returned drops)
-interface SocialMediaAccount {
-  platform: string;
-  handle: string;
-}
-
 interface LinkNotification {
   id: number;
   deviceId?: number; // References the device in the store for pinning
@@ -129,15 +125,16 @@ const LinkNotificationsContext = createContext<{
   hasUnviewedLinks: boolean;
 }>({
   linkNotifications: [],
-  addLinkNotification: () => {},
-  markAsViewed: () => {},
-  dismissNotification: () => {},
+  addLinkNotification: () => { },
+  markAsViewed: () => { },
+  dismissNotification: () => { },
   hasUnviewedLinks: false,
 });
 
 export const useLinkNotifications = () => useContext(LinkNotificationsContext);
 
-import { useFonts,
+import {
+  useFonts,
   Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
@@ -158,7 +155,7 @@ const formatPhoneNumber = (text: string): string => {
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
-  
+
   const [fontsReady] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -170,19 +167,22 @@ function MainApp() {
   // Auth flow state
   const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login'>('welcome');
 
-  const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
+  const [tab, setTab] = useState<'Home' | 'Drop' | 'History' | 'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
   const insets = useSafeAreaInsets();
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
   // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
+
+  // ✅ FIXED: Initialize with socialMedia array to prevent crashes
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
     phone: '(555) 123-4567',
     email: 'user@example.com',
     bio: 'Add bio',
-    socialMedia: [],
+    socialMedia: [], // ← CRITICAL: Always an array, never undefined
   });
+
   const [isSignupInProgress, setIsSignupInProgress] = useState(false);
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
@@ -191,6 +191,52 @@ function MainApp() {
   const [profilePhotoUri, setProfilePhotoUri] = useState<string | null>(null);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
   const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
+
+  // ✅ NEW: Load profile from AsyncStorage when app starts
+  useEffect(() => {
+    const loadProfileFromCache = async () => {
+      try {
+        console.log('📱 Loading profile from AsyncStorage...');
+        const cachedProfile = await AsyncStorage.getItem('userProfile');
+
+        if (cachedProfile) {
+          const parsedProfile = JSON.parse(cachedProfile);
+          console.log('📱 Profile loaded from cache:', parsedProfile);
+
+          // Ensure socialMedia is always an array (defensive)
+          if (!parsedProfile.socialMedia) {
+            parsedProfile.socialMedia = [];
+          }
+
+          setUserProfile(parsedProfile);
+        } else {
+          console.log('📱 No cached profile found');
+        }
+      } catch (error) {
+        console.error('📱 Failed to load profile from AsyncStorage:', error);
+      }
+    };
+
+    loadProfileFromCache();
+  }, []); // Run once on mount
+
+  // ✅ NEW: Auto-save profile to AsyncStorage whenever it changes
+  useEffect(() => {
+    const saveProfileToCache = async () => {
+      try {
+        // Only save if profile has actual data (not just initial empty state)
+        if (userProfile.name !== 'Your Name' || userProfile.phone !== '(555) 123-4567' || userProfile.bio !== 'Add bio' || userProfile.email !== 'user@example.com') {
+          console.log('💾 Saving profile to AsyncStorage:', userProfile);
+          await AsyncStorage.setItem('userProfile', JSON.stringify(userProfile));
+          console.log('💾 Profile saved successfully');
+        }
+      } catch (error) {
+        console.error('💾 Failed to save profile to AsyncStorage:', error);
+      }
+    };
+
+    saveProfileToCache();
+  }, [userProfile]); // Run every time userProfile changes
 
   // Check for OTA updates on app launch
   useEffect(() => {
@@ -335,12 +381,12 @@ function MainApp() {
   }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
 
   // Check for OTA updates on app launch
-  useEffect(() => { 
+  useEffect(() => {
     async function checkForUpdates() {
       try {
         console.log('🔍 Checking for updates...');
         const update = await Updates.checkForUpdateAsync();
-        
+
         if (update.isAvailable) {
           console.log('📥 Update available! Downloading...');
           await Updates.fetchUpdateAsync();
@@ -353,7 +399,7 @@ function MainApp() {
         console.error('❌ Update check failed:', error);
       }
     }
-    
+
     checkForUpdates();
   }, []);
 
@@ -404,11 +450,11 @@ function MainApp() {
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
-    
+
     // Navigate to Home tab
     setTab('Home');
     setSubScreen(null);
-    
+
     // Show success message
     showToast({
       message: 'Successfully logged in!',
@@ -449,7 +495,7 @@ function MainApp() {
   const toggleDarkMode = async () => {
     const newValue = !isDarkMode;
     setIsDarkMode(newValue);
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -476,7 +522,7 @@ function MainApp() {
       }
       return newSet;
     });
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -509,6 +555,7 @@ function MainApp() {
       console.log('✅ Profile saved to backend:', newProfile);
 
       // Only update local state AFTER successful backend save
+      // AsyncStorage auto-save will trigger from the useEffect
       setUserProfile(newProfile);
 
       // Success toast only after confirmed save
@@ -535,7 +582,7 @@ function MainApp() {
 
   const updateMaxDistance = async (distance: number) => {
     setMaxDistance(distance);
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -605,9 +652,9 @@ function MainApp() {
   if (!fontsReady || authLoading) {
     return (
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-        <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
           <Text style={{ color: theme.colors.text }}>Loading…</Text>
-      </View>
+        </View>
       </DarkModeContext.Provider>
     );
   }
@@ -649,24 +696,24 @@ function MainApp() {
   // Show profile photo prompt after signup (authenticated but before main app)
   if (isAuthenticated && showProfilePhotoPrompt) {
     const promptNavigation = {
-      navigate: () => {},
+      navigate: () => { },
       goBack: handleProfilePhotoPromptComplete,
     };
-    
+
     return (
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <View style={{ flex: 1, backgroundColor: getTheme(isDarkMode).colors.bg }}>
           {/* Header with Skip button */}
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
             alignItems: 'center',
             paddingHorizontal: 20,
             paddingTop: 60,
             paddingBottom: 20,
           }}>
-            <Text style={{ 
-              fontSize: 20, 
+            <Text style={{
+              fontSize: 20,
               fontWeight: '600',
               color: getTheme(isDarkMode).colors.text,
               fontFamily: 'Inter_600SemiBold',
@@ -674,7 +721,7 @@ function MainApp() {
               Profile Photo
             </Text>
             <Pressable onPress={handleProfilePhotoPromptComplete}>
-              <Text style={{ 
+              <Text style={{
                 color: getTheme(isDarkMode).colors.muted,
                 fontSize: 16,
                 fontFamily: 'Inter_400Regular',
@@ -690,7 +737,7 @@ function MainApp() {
               handleProfilePhotoPromptComplete(uri);
             }}
           />
-      </View>
+        </View>
       </DarkModeContext.Provider>
     );
   }
@@ -707,7 +754,7 @@ function MainApp() {
     // if (subScreen === 'PrivacyZones') {
     //   return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
     // }
-    
+
     if (subScreen === 'ProfilePhoto') {
       return <ProfilePhotoScreen
         navigation={navigation}
@@ -734,125 +781,125 @@ function MainApp() {
 
   return (
     <TutorialProvider>
-    <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-      <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
-        <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
-          <ToastContext.Provider value={{ showToast }}>
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+        <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
+          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
+            <ToastContext.Provider value={{ showToast }}>
               <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
-                <LinkNotificationsContext.Provider value={{ 
-                  linkNotifications, 
-                  addLinkNotification, 
-                  markAsViewed, 
-                  dismissNotification, 
-                  hasUnviewedLinks 
+                <LinkNotificationsContext.Provider value={{
+                  linkNotifications,
+                  addLinkNotification,
+                  markAsViewed,
+                  dismissNotification,
+                  hasUnviewedLinks
                 }}>
-          <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <Screen />
-        </View>
+                  <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+                      <Screen />
+                    </View>
 
-        {/* Bottom nav - Hide when sub-screen is active */}
-        {!subScreen && (
-        <View style={{
-          flexDirection: 'row',
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.white,
-            paddingBottom: insets.bottom
-        }}>
-           {/* Home */}
-           <Pressable
-             onPress={() => {
-               logAction('Navigation', 'Home Tab');
-               setTab('Home');
-             }}
-             style={{
-               flex: 1, paddingVertical: 14, alignItems:'center',
-               backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
-             }}
-           >
-             <MaterialCommunityIcons 
-               name="home-outline" 
-               size={24} 
-               color="#FF6B4A" 
-               style={{ fontWeight: '100' }}
-             />
-           </Pressable>
+                    {/* Bottom nav - Hide when sub-screen is active */}
+                    {!subScreen && (
+                      <View style={{
+                        flexDirection: 'row',
+                        borderTopWidth: 1,
+                        borderTopColor: theme.colors.border,
+                        backgroundColor: theme.colors.white,
+                        paddingBottom: insets.bottom
+                      }}>
+                        {/* Home */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Home Tab');
+                            setTab('Home');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="home-outline"
+                            size={24}
+                            color="#FF6B4A"
+                            style={{ fontWeight: '100' }}
+                          />
+                        </Pressable>
 
-          {/* Drop */}
-          <Pressable
-            onPress={() => {
-              logAction('Navigation', 'Drop Tab');
-              setTab('Drop');
-            }}
-            style={{
-              flex: 1, paddingVertical: 14, alignItems:'center',
-              backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="water-outline" 
-              size={24} 
-              color={theme.colors.blue} 
-            />
-          </Pressable>
+                        {/* Drop */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Drop Tab');
+                            setTab('Drop');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="water-outline"
+                            size={24}
+                            color={theme.colors.blue}
+                          />
+                        </Pressable>
 
-        {/* History */}
-        <Pressable
-          onPress={() => {
-            logAction('Navigation', 'History Tab');
-            setTab('History');
-          }}
-          style={{
-            flex: 1, paddingVertical: 14, alignItems:'center',
-            backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
-          }}
-        >
-          <MaterialCommunityIcons
-            name="link-variant"
-            size={24}
-            color="#FF6B4A"
-          />
-        </Pressable>
+                        {/* History */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'History Tab');
+                            setTab('History');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="link-variant"
+                            size={24}
+                            color="#FF6B4A"
+                          />
+                        </Pressable>
 
-          {/* Account */}
-          <Pressable
-            onPress={() => {
-              logAction('Navigation', 'Account Tab');
-              setTab('Account');
-            }}
-            style={{
-              flex: 1, paddingVertical: 14, alignItems:'center',
-              backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="account-outline" 
-              size={24} 
-              color={theme.colors.blue} 
-            />
-          </Pressable>
-        </View>
-        )}
+                        {/* Account */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Account Tab');
+                            setTab('Account');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="account-outline"
+                            size={24}
+                            color={theme.colors.blue}
+                          />
+                        </Pressable>
+                      </View>
+                    )}
 
-        {/* Toast Notification */}
-        {toastConfig && (
-          <Toast
-            message={toastConfig.message}
-            type={toastConfig.type}
-            duration={toastConfig.duration}
-            actionLabel={toastConfig.actionLabel}
-            onAction={toastConfig.onAction}
-            onDismiss={() => setToastConfig(null)}
-          />
-        )}
-      </View>
-              </LinkNotificationsContext.Provider>
-            </SettingsContext.Provider>
-          </ToastContext.Provider>
-        </UserProfileContext.Provider>
-      </PinnedProfilesContext.Provider>
-    </DarkModeContext.Provider>
+                    {/* Toast Notification */}
+                    {toastConfig && (
+                      <Toast
+                        message={toastConfig.message}
+                        type={toastConfig.type}
+                        duration={toastConfig.duration}
+                        actionLabel={toastConfig.actionLabel}
+                        onAction={toastConfig.onAction}
+                        onDismiss={() => setToastConfig(null)}
+                      />
+                    )}
+                  </View>
+                </LinkNotificationsContext.Provider>
+              </SettingsContext.Provider>
+            </ToastContext.Provider>
+          </UserProfileContext.Provider>
+        </PinnedProfilesContext.Provider>
+      </DarkModeContext.Provider>
     </TutorialProvider>
   );
 }
