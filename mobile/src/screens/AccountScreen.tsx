@@ -45,6 +45,15 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
   const { name, phone, email, bio, socialMedia } = profile;
+
+  // 🔍 DIAGNOSTIC: Log what AccountScreen receives from context
+  console.log('👤 [AccountScreen] Received from context:', {
+    name,
+    phone,
+    email,
+    bio,
+    hasProfile: !!profile
+  });
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');

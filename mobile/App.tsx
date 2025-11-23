@@ -196,6 +196,16 @@ function MainApp() {
   // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
   const hasCachedProfileRef = useRef(false);
 
+  // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
+  useEffect(() => {
+    console.log('📊 [DIAGNOSTIC] userProfile state changed:', {
+      name: userProfile.name,
+      email: userProfile.email,
+      phone: userProfile.phone,
+      bio: userProfile.bio
+    });
+  }, [userProfile]);
+
   // ✅ NEW: Load profile AND photo from AsyncStorage when app starts
   useEffect(() => {
     const loadProfileFromCache = async () => {
@@ -338,26 +348,35 @@ function MainApp() {
               phone: profileData.phone ? formatPhoneNumber(profileData.phone) : ''
             });
             
-            setUserProfile({
+            const newProfileData = {
               name: profileData.name ?? '',
               email: profileData.email ?? '',
               phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
               bio: profileData.bio ?? '',
               socialMedia: profileData.socialMedia ?? [],
               profilePhoto: profileData.profilePhoto,
-            });
+            };
+            
+            console.log('🔄 CALLING setUserProfile with:', newProfileData);
+            setUserProfile(newProfileData);
+            console.log('✅ setUserProfile CALLED - state should update now');
             
             hasCachedProfileRef.current = true; // Mark as cached for next time
           } else {
             // 💾 HAS CACHE: Defensive merge (don't overwrite with empty/undefined)
-            setUserProfile(prev => ({
-              name: profileData.name !== undefined ? profileData.name : prev.name,
-              phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
-              email: profileData.email !== undefined ? profileData.email : prev.email,
-              bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
-              socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
-              profilePhoto: profileData.profilePhoto !== undefined ? profileData.profilePhoto : prev.profilePhoto,
-            }));
+            console.log('🔄 MERGE PATH - Previous state:', userProfile);
+            setUserProfile(prev => {
+              const merged = {
+                name: profileData.name !== undefined ? profileData.name : prev.name,
+                phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
+                email: profileData.email !== undefined ? profileData.email : prev.email,
+                bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
+                socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
+                profilePhoto: profileData.profilePhoto !== undefined ? profileData.profilePhoto : prev.profilePhoto,
+              };
+              console.log('🔄 MERGE PATH - Merged result:', merged);
+              return merged;
+            });
           }
 
           // Load profile photo - only update if backend provides a value
