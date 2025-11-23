@@ -41,7 +41,7 @@ interface AccountScreenProps {
 export default function AccountScreen({ navigation, profilePhotoUri }: AccountScreenProps) {
   const [isPublic, setIsPublic] = useState(true);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { profile, updateProfile } = useUserProfile();
+  const { profile, updateProfile, debugSetProfileCalls } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
   const { name, phone, email, bio, socialMedia } = profile;
@@ -346,6 +346,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         </Text>
         <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
           from context: {JSON.stringify(profile).substring(0, 100)}
+        </Text>
+        <Text style={{color: 'yellow', fontSize: 12, fontWeight: 'bold', marginTop: 5}}>
+          ⚡ setUserProfile called: {debugSetProfileCalls} times
         </Text>
       </View>
       

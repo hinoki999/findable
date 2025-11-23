@@ -63,6 +63,7 @@ interface UserProfile {
 const UserProfileContext = createContext<{
   profile: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
+  debugSetProfileCalls: number;
 }>({
   profile: {
     name: 'Your Name',
@@ -72,6 +73,7 @@ const UserProfileContext = createContext<{
     socialMedia: [],
   },
   updateProfile: () => { },
+  debugSetProfileCalls: 0,
 });
 
 export const useUserProfile = () => useContext(UserProfileContext);
@@ -196,6 +198,9 @@ function MainApp() {
   // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
   const hasCachedProfileRef = useRef(false);
 
+  // 🔍 DEBUG COUNTER: Track how many times setUserProfile is called
+  const [debugSetProfileCalls, setDebugSetProfileCalls] = useState(0);
+
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
     console.log('📊 [DIAGNOSTIC] userProfile state changed:', {
@@ -223,6 +228,8 @@ function MainApp() {
             parsedProfile.socialMedia = [];
           }
 
+          console.log('🔢 [DEBUG] setUserProfile CALL #1: Loading from AsyncStorage cache');
+          setDebugSetProfileCalls(prev => prev + 1);
           setUserProfile(parsedProfile);
         } else {
           hasCachedProfileRef.current = false; // ← No cache found (fresh install)
@@ -358,6 +365,8 @@ function MainApp() {
             };
             
             console.log('🔄 CALLING setUserProfile with:', newProfileData);
+            console.log('🔢 [DEBUG] setUserProfile CALL #2: REPLACE path (fresh install)');
+            setDebugSetProfileCalls(prev => prev + 1);
             setUserProfile(newProfileData);
             console.log('✅ setUserProfile CALLED - state should update now');
             
@@ -365,6 +374,8 @@ function MainApp() {
           } else {
             // 💾 HAS CACHE: Defensive merge (don't overwrite with empty/undefined)
             console.log('🔄 MERGE PATH - Previous state:', userProfile);
+            console.log('🔢 [DEBUG] setUserProfile CALL #3: MERGE path (has cache)');
+            setDebugSetProfileCalls(prev => prev + 1);
             setUserProfile(prev => {
               const merged = {
                 name: profileData.name !== undefined ? profileData.name : prev.name,
@@ -495,6 +506,8 @@ function MainApp() {
     if (profileData) {
       const phoneDigitsOnly = profileData.phone.replace(/\D/g, '');
 
+      console.log('🔢 [DEBUG] setUserProfile CALL #4: Signup flow');
+      setDebugSetProfileCalls(prev => prev + 1);
       setUserProfile({
         name: profileData.name || 'Your Name',
         phone: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
@@ -630,6 +643,8 @@ function MainApp() {
 
       // Only update local state AFTER successful backend save
       // AsyncStorage auto-save will trigger from the useEffect
+      console.log('🔢 [DEBUG] setUserProfile CALL #5: updateProfile function');
+      setDebugSetProfileCalls(prev => prev + 1);
       setUserProfile(newProfile);
 
       // Success toast only after confirmed save
@@ -857,7 +872,7 @@ function MainApp() {
     <TutorialProvider>
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
-          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
+          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile, debugSetProfileCalls }}>
             <ToastContext.Provider value={{ showToast }}>
               <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
                 <LinkNotificationsContext.Provider value={{
