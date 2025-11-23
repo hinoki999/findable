@@ -314,11 +314,11 @@ function MainApp() {
 
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
-  const loadUserData = useCallback(async (options?: { onlyPhoto?: boolean }) => {
+  const loadUserData = useCallback(async (auth: boolean, uid: number | null, options?: { onlyPhoto?: boolean }) => {
     console.log('🚀 loadUserData CALLED - Starting execution');
-    setDebugGuardStatus('Started');
+    setDebugGuardStatus(`Function sees: Auth:${auth} ID:${uid}`);
     
-    if (!isAuthenticated || !userId) {
+    if (!auth || !uid) {
       console.log('❌ GUARD #1 TRIGGERED: Not authenticated or no userId');
       setDebugGuardStatus('FAILED: Not authenticated or no userId');
       return;
@@ -493,7 +493,7 @@ function MainApp() {
   // Skip during signup to prevent race condition with profile save
   useEffect(() => {
     if (isAuthenticated && userId && !isSignupInProgress) {
-      loadUserData();
+      loadUserData(isAuthenticated, userId);
     }
   }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
 
@@ -594,7 +594,7 @@ function MainApp() {
       setProfilePhotoUri(uploadedPhotoUri);
     } else {
       console.log('✅ [App] Loading profile photo from backend...');
-      await loadUserData({ onlyPhoto: true });
+      await loadUserData(isAuthenticated, userId, { onlyPhoto: true });
       console.log('✅ [App] Profile photo loaded');
     }
 
@@ -884,7 +884,7 @@ function MainApp() {
           setProfilePhotoUri(uri);
 
           // Verify database actually has it (defensive merge won't overwrite on failure)
-          await loadUserData({ onlyPhoto: true });
+          await loadUserData(isAuthenticated, userId, { onlyPhoto: true });
         }}
       />;
     }
