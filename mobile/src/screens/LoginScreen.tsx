@@ -52,12 +52,28 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Login failed');
       }
 
       // Success!
+      console.log("🔍 LOGIN RESPONSE:", JSON.stringify(data));
+      console.log("🔍 TOKEN VALUE:", data.token);
+      console.log("🔍 TOKEN TYPE:", typeof data.token);
       onLoginSuccess(data.token, data.user_id, data.username);
     } catch (err: any) {
       setError(err.message || 'Invalid username or password');
@@ -104,6 +120,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to send code');
@@ -138,6 +167,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Invalid code');
@@ -182,6 +224,19 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       });
 
       const data = await response.json();
+      // 🔍 POINT A: Check token immediately after API response
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('🔍 POINT A: LoginScreen API Response');
+      console.log('  timestamp:', new Date().toISOString());
+      console.log('  data.token:', data.token);
+      console.log('  typeof token:', typeof data.token);
+      console.log('  token length:', data.token?.length);
+      console.log('  is null?:', data.token === null);
+      console.log('  is string "null"?:', data.token === 'null');
+      console.log('  is undefined?:', data.token === undefined);
+      console.log('  JWT segments:', data.token?.split('.').length);
+      console.log('═══════════════════════════════════════════════════════');
+
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to reset password');
@@ -224,6 +279,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       >
         {/* Header */}
         <View style={styles.header}>
+
           <Pressable onPress={onBack} style={styles.backButton}>
             {({ pressed }) => (
               <MaterialCommunityIcons
@@ -254,7 +310,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                   setUsername(text);
                   setError('');
                 }}
-                placeholder="johndoe"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -277,7 +333,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                   setPassword(text);
                   setError('');
                 }}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -522,7 +578,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                     style={[styles.modalInput, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    placeholder="New password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showNewPassword}
                     autoCapitalize="none"
@@ -547,7 +603,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
                     style={[styles.modalInput, { flex: 1, borderWidth: 0, marginBottom: 0 }]}
                     value={confirmNewPassword}
                     onChangeText={setConfirmNewPassword}
-                    placeholder="Confirm password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showConfirmNewPassword}
                     autoCapitalize="none"

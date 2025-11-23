@@ -6,6 +6,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import * as Updates from 'expo-updates';
 
 interface SecuritySettingsScreenProps {
   navigation: any;
@@ -157,6 +158,39 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
     }
   };
 
+  const handleForceUpdate = async () => {
+    try {
+      showToast({
+        message: 'Checking for updates...',
+        type: 'info',
+        duration: 2000,
+      });
+
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        showToast({
+          message: 'Downloading update...',
+          type: 'info',
+          duration: 2000,
+        });
+        await Updates.fetchUpdateAsync();
+        await Updates.reloadAsync();
+      } else {
+        showToast({
+          message: 'Already on latest version',
+          type: 'success',
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      showToast({
+        message: 'Update failed: ' + error,
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
   const handleLogout = () => {
     setShowLogoutConfirm(false);
     logout();
@@ -179,10 +213,10 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
     setSendingDeleteCode(true);
     try {
-      const response = await fetch('https://findable-production.up.railway.app/auth/send-verification-code', {
+      const response = await fetch(`${api.BASE_URL}/auth/send-verification-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail }),
+        body: JSON.stringify({ email: userEmail, type: 'account_deletion' }),
       });
 
       if (!response.ok) {
@@ -215,12 +249,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
     try {
       // Verify the code
-      const verifyResponse = await fetch('https://findable-production.up.railway.app/auth/verify-code', {
+      const verifyResponse = await fetch(`${api.BASE_URL}/auth/verify-code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: userEmail,
           code: deleteVerificationCode,
+          type: 'account_deletion',
         }),
       });
 
@@ -228,11 +263,10 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         throw new Error('Invalid verification code');
       }
 
-      // TODO: Add delete account endpoint to backend
-      // await fetch('https://findable-production.up.railway.app/user/delete', {
-      //   method: 'DELETE',
-      //   headers: { 'Content-Type': 'application/json' },
-      // });
+      // Delete the account
+      console.log('🗑️ Attempting to delete account...');
+      await api.deleteAccount();
+      console.log('✅ Account deleted successfully from backend');
 
       // Show success toast first
       showToast({
@@ -240,7 +274,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         type: 'success',
         duration: 3000,
       });
-      
+
       // Close modal and logout after a brief delay
       setTimeout(() => {
         setShowDeleteConfirm(false);
@@ -248,6 +282,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         logout();
       }, 500);
     } catch (error: any) {
+      console.error('❌ Delete account error:', error);
+      console.error('Error message:', error.message);
       showToast({
         message: error.message || 'Failed to delete account',
         type: 'error',
@@ -319,13 +355,33 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               <MaterialCommunityIcons name="theme-light-dark" size={20} color={theme.colors.muted} style={styles.rowIcon} />
               <Text style={[theme.type.body, { color: theme.colors.text }]}>Dark Mode</Text>
             </View>
-            <Switch 
-              value={isDarkMode} 
+            <Switch
+              value={isDarkMode}
               onValueChange={toggleDarkMode}
               trackColor={{ false: theme.colors.border, true: theme.colors.blueLight }}
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
             />
           </View>
+        </View>
+
+        {/* Force Update */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Updates</Text>
+          </View>
+          <Pressable
+            onPress={handleForceUpdate}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="download" size={20} color={theme.colors.blue} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.blue, fontWeight: '600' }]}>Force Update Now</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.blue} />
+          </Pressable>
         </View>
 
         {/* Logout */}

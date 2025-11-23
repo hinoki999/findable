@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
@@ -6,6 +6,9 @@ import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import { getUserProfile } from '../services/api';
+import { logAction, logStateChange } from '../services/activityMonitor';
+import { storage } from '../services/storage';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -40,7 +43,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
-  const { name, phoneNumber, email, bio, socialMedia } = profile;
+  const { name, phone, email, bio, socialMedia } = profile;
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
@@ -48,12 +51,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
   const [validationError, setValidationError] = useState<string>('');
-  
+
   // Password change states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -65,13 +68,36 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   const theme = getTheme(isDarkMode);
 
+  // Load profile from backend on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      // Add guard to prevent loading when not authenticated
+      const hasToken = await storage.getItem('authToken');
+      if (!hasToken) {
+        console.log('No auth token, skipping profile load');
+        return;
+      }
+
+      try {
+        console.log('🔄 Loading profile from backend...');
+        const profile = await getUserProfile();
+        setProfile(profile);
+        console.log('✅ Profile loaded:', profile);
+      } catch (error) {
+        console.error('❌ Failed to load profile:', error);
+      }
+    };
+    loadProfile();
+  }, []);
+
+
   // Format phone number as (###) ###-####
   const formatPhoneNumber = (text: string) => {
     // Remove all non-numeric characters
     const cleaned = text.replace(/\D/g, '');
     // Limit to 10 digits
     const limited = cleaned.slice(0, 10);
-    
+
     // Format based on length
     if (limited.length <= 3) {
       return limited ? `(${limited}` : '';
@@ -119,16 +145,18 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password', socialIndex?: number) => {
     setEditingField(field);
+    logAction(`Edit ${field} clicked`, { field, currentValue: field === 'phone' ? phone : field === 'email' ? email : field === 'name' ? name : field === 'bio' ? bio : undefined });
     setValidationError(''); // Clear any previous errors
     if (field === 'phone') {
       // Remove formatting for editing, keep only the formatted value
-      setTempValue(phoneNumber);
+      setTempValue(phone);
     } else if (field === 'email') {
       setTempValue(email);
     } else if (field === 'name') {
       setTempValue(name);
     } else if (field === 'bio') {
-      setTempValue(bio);
+      // If bio is the placeholder text, start with empty string
+      setTempValue(bio === 'Add bio' ? '' : bio);
     } else if (field === 'social-media' && socialIndex !== undefined) {
       setTempSocialIndex(socialIndex);
       setTempSocialPlatform(socialMedia[socialIndex].platform);
@@ -155,13 +183,17 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
-      updateProfile({ phoneNumber: tempValue });
+      logStateChange('profile.phone', phone, tempValue);
+      logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
+      updateProfile({ phone: tempValue });
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
       if (error) {
         setValidationError(error);
         return;
       }
+      logStateChange('profile.email', email, tempValue);
+      logAction('Profile email updated', { oldEmail: email, newEmail: tempValue });
       updateProfile({ email: tempValue });
     } else if (editingField === 'name') {
       error = validateName(tempValue);
@@ -169,8 +201,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
+      logStateChange('profile.name', name, tempValue);
+      logAction('Profile name updated', { oldName: name, newName: tempValue });
       updateProfile({ name: tempValue });
     } else if (editingField === 'bio') {
+      logStateChange('profile.bio', bio, tempValue);
+      logAction('Profile bio updated', { oldBio: bio, newBio: tempValue });
       updateProfile({ bio: tempValue });
     } else if (editingField === 'social-media' && tempSocialIndex !== null) {
       // Validate social media
@@ -198,13 +234,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Username can only contain letters, numbers, underscores, and periods');
         return;
       }
-      
+
       // Call API to change username
       try {
         const result = await api.changeUsername(tempValue.trim());
+        logAction('Username changed', { oldUsername: username, newUsername: tempValue.trim() });
         // Update token in storage
         await login(result.token, userId || 0, result.username);
-        
+
         showToast({
           message: 'Username changed successfully!',
           type: 'success',
@@ -242,11 +279,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Passwords do not match');
         return;
       }
-      
+
       // Call API to change password
       try {
         await api.changePassword(currentPassword, newPassword);
-        
+        logAction('Password changed successfully', { userId });
+
         showToast({
           message: 'Password changed successfully!',
           type: 'success',
@@ -269,7 +307,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setTempSocialHandle('');
     setTempSocialIndex(null);
     setValidationError('');
-    
+
     // Show success toast
     showToast({
       message: 'Changes saved successfully!',
@@ -314,13 +352,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      <TopBar 
-        title="Account" 
+      <TopBar
+        logoMode={true}
+        logoIcon="account-outline"
         subtitle={`@${username || 'user'}`}
         rightIcon="cog"
         onRightIconPress={() => navigation.navigate('SecuritySettings')}
       />
-      <ScrollView 
+      <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
@@ -346,7 +385,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Edit contact information</Text>
             <Pressable
-              onPress={() => setShowPreviewModal(true)}
+              onPress={() => {
+                logAction('Preview My Card button clicked', { username });
+                setShowPreviewModal(true);
+              }}
               style={{
                 borderRadius: 4,
                 borderWidth: 1,
@@ -361,7 +403,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               </Text>
             </Pressable>
           </View>
-          
+
           {/* Profile Picture Row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Profile picture</Text>
@@ -382,7 +424,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   <MaterialCommunityIcons name="account" size={24} color={theme.colors.blue} />
                 )}
               </View>
-              <Pressable style={{ padding: 4 }} onPress={() => navigation.navigate('ProfilePhoto')}>
+              <Pressable style={{ padding: 4 }} onPress={() => {
+                logAction('Edit profile photo clicked', { hasCurrentPhoto: !!profilePhotoUri });
+                navigation.navigate('ProfilePhoto');
+              }}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
             </View>
@@ -392,7 +437,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phoneNumber}</Text>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone}</Text>
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -413,7 +458,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           {/* Social Media Header */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginTop: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Social Media</Text>
-            <Pressable 
+            <Pressable
               onPress={() => {
                 const newSocial = [...socialMedia, { platform: '', handle: '' }];
                 if (newSocial.length <= 3) {
@@ -433,9 +478,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             </Text>
           )}
           {socialMedia.map((social, index) => (
-            <View key={index} style={{ 
-              flexDirection: 'row', 
-              alignItems: 'center', 
+            <View key={index} style={{
+              flexDirection: 'row',
+              alignItems: 'center',
               paddingVertical: 8,
               paddingLeft: 16,
               borderLeftWidth: 2,
@@ -454,8 +499,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 <Pressable style={{ padding: 4 }} onPress={() => handleEdit('social-media', index)}>
                   <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
                 </Pressable>
-                <Pressable 
-                  style={{ padding: 4, marginLeft: 4 }} 
+                <Pressable
+                  style={{ padding: 4, marginLeft: 4 }}
                   onPress={() => {
                     const updatedSocial = socialMedia.filter((_, i) => i !== index);
                     updateProfile({ socialMedia: updatedSocial });
@@ -477,24 +522,24 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         animationType="slide"
         onRequestClose={handleCancel}
       >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'center', 
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
           alignItems: 'center',
-          padding: 20 
+          padding: 20
         }}>
           <View style={[theme.card, { width: '100%', maxWidth: 400 }]}>
             <Text style={theme.type.h2}>
               {editingField === 'phone' ? 'Edit Phone Number' :
-               editingField === 'email' ? 'Edit Email' :
-               editingField === 'name' ? 'Edit Name' :
-               editingField === 'bio' ? 'Edit Bio' :
-               editingField === 'username' ? 'Change Username' :
-               editingField === 'password' ? 'Change Password' :
-               editingField === 'social-media' ? 'Edit Social Media Account' : ''}
+                editingField === 'email' ? 'Edit Email' :
+                  editingField === 'name' ? 'Edit Name' :
+                    editingField === 'bio' ? 'Edit Bio' :
+                      editingField === 'username' ? 'Change Username' :
+                        editingField === 'password' ? 'Change Password' :
+                          editingField === 'social-media' ? 'Edit Social Media Account' : ''}
             </Text>
-            
+
             {editingField === 'password' ? (
               <>
                 {/* Current Password */}
@@ -520,7 +565,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setCurrentPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Enter current password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showCurrentPassword}
                     autoFocus={true}
@@ -541,7 +586,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     />
                   </Pressable>
                 </View>
-                
+
                 {/* New Password */}
                 <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
                   New Password
@@ -565,7 +610,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setNewPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Enter new password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showNewPassword}
                   />
@@ -585,7 +630,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     />
                   </Pressable>
                 </View>
-                
+
                 {/* Confirm Password */}
                 <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
                   Confirm New Password
@@ -609,7 +654,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setConfirmPassword(text);
                       if (validationError) setValidationError('');
                     }}
-                    placeholder="Confirm new password"
+                    placeholder=""
                     placeholderTextColor={theme.colors.muted}
                     secureTextEntry={!showConfirmPassword}
                   />
@@ -629,7 +674,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     />
                   </Pressable>
                 </View>
-                
+
                 <Text style={[theme.type.muted, { marginTop: 12, fontSize: 12, fontStyle: 'italic' }]}>
                   Password must be at least 8 characters with uppercase, lowercase, and a number
                 </Text>
@@ -659,11 +704,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setValidationError('');
                     }
                   }}
-                  placeholder="e.g., Instagram, Twitter, LinkedIn"
+                  placeholder=""
                   placeholderTextColor={theme.colors.muted}
                   autoFocus={true}
                 />
-                
+
                 {/* Handle Input */}
                 <Text style={[theme.type.muted, { marginTop: 12, marginBottom: 8, fontSize: 14 }]}>
                   Username/Handle
@@ -687,7 +732,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       setValidationError('');
                     }
                   }}
-                  placeholder="e.g., @username"
+                  placeholder=""
                   placeholderTextColor={theme.colors.muted}
                 />
               </>
@@ -724,10 +769,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     setValidationError('');
                   }
                 }}
-                placeholder={editingField === 'phone' ? '(555) 555-5555' :
-                            editingField === 'email' ? 'Enter email' :
-                            editingField === 'name' ? 'Enter your name' :
-                            editingField === 'bio' ? 'Enter your bio' : ''}
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 keyboardType={editingField === 'phone' ? 'phone-pad' : 'default'}
                 multiline={editingField === 'bio'}
@@ -735,13 +777,13 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 autoFocus={true}
               />
             )}
-            
+
             {validationError && (
               <Text style={{ color: '#FF6B6B', fontSize: 12, marginTop: 4 }}>
                 {validationError}
               </Text>
             )}
-            
+
             {editingField === 'bio' && (
               <Text style={[theme.type.muted, { fontSize: 12, marginTop: 4, textAlign: 'right' }]}>
                 {tempValue.length}/50
@@ -778,9 +820,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               >
                 <Text style={[theme.type.button, { color: theme.colors.white }]}>Save</Text>
               </Pressable>
+            </View>
           </View>
         </View>
-      </View>
       </Modal>
 
       {/* Preview My Contact Card Modal */}
@@ -842,11 +884,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               {/* Contact Information */}
               <View style={{ marginBottom: 16 }}>
                 {/* Phone */}
-                {phoneNumber && (
+                {phone && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
                     <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                      {phoneNumber}
+                      {phone}
                     </Text>
                   </View>
                 )}

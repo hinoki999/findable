@@ -1,0 +1,22 @@
+{
+  "name": "droplink-testing-suite",
+  "version": "1.0.0",
+  "description": "Production-grade testing infrastructure for DropLink mobile app",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:ota": "jest ota-validation.test.js",
+    "test:tutorial": "jest tutorial-flow.test.js",
+    "test:all": "jest --runInBand"
+  },
+  "keywords": ["droplink", "testing", "eas", "ota"],
+  "author": "DropLink Team",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

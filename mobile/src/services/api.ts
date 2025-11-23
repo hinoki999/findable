@@ -1,7 +1,8 @@
 // src/services/api.ts
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
+import { storage } from './storage';
+import { logApiCall, logError } from './activityMonitor';
 
 export const BASE_URL = ENV.BASE_URL;
 const USE_STUB = false; // Connected to backend!
@@ -32,21 +33,54 @@ export class TimeoutError extends Error {
 
 // Helper to get auth token
 async function getAuthToken(): Promise<string | null> {
-  if (Platform.OS === 'web') {
-    return localStorage.getItem('authToken');
-  } else {
-    return await SecureStore.getItemAsync('authToken');
-  }
+  const token = await storage.getItem('authToken');
+  
+  // 🔍 POINT D: Token retrieval from storage
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('🔍 POINT D: api.ts - Token Retrieved from Storage');
+  console.log('  timestamp:', new Date().toISOString());
+  console.log('  retrieved token:', token);
+  console.log('  typeof token:', typeof token);
+  console.log('  token length:', token?.length);
+  console.log('  is null?:', token === null);
+  console.log('  is string "null"?:', token === 'null');
+  console.log('  is undefined?:', token === undefined);
+  console.log('  JWT segments:', token?.split('.').length);
+  console.log('═══════════════════════════════════════════════════════');
+  
+  return token;
 }
 
 // Helper to create authorized headers
 async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await getAuthToken();
+  console.log('🔑 getAuthHeaders - Token exists:', !!token);
+  console.log('🔑 Token length:', token?.length || 0);
+  console.log('🔑 Token first 20 chars:', token?.substring(0, 20));
+  
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
+  
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    
+    // 🔍 POINT E: Final Authorization header
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 POINT E: api.ts - Authorization Header Constructed');
+    console.log('  timestamp:', new Date().toISOString());
+    console.log('  token used:', token);
+    console.log('  Authorization header:', headers['Authorization']);
+    console.log('  Header length:', headers['Authorization']?.length);
+    console.log('  Contains Bearer?:', headers['Authorization']?.startsWith('Bearer '));
+    console.log('═══════════════════════════════════════════════════════');
+  } else {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 POINT E: api.ts - NO TOKEN AVAILABLE');
+    console.log('  timestamp:', new Date().toISOString());
+    console.log('  token was null/undefined');
+    console.log('═══════════════════════════════════════════════════════');
   }
   return headers;
 }
@@ -64,6 +98,29 @@ export async function secureFetch(
     url = httpsUrl;
   }
 
+  // Log all API calls for monitoring
+  const logData = {
+    timestamp: new Date().toISOString(),
+    endpoint: url,
+    method: options.method || 'GET',
+    user_id: null as number | null,
+    success: false,
+    status_code: null as number | null,
+    error: null as string | null
+  };
+
+  // Extract user_id from token if available
+  try {
+    const token = await storage.getItem('authToken');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      logData.user_id = payload.user_id || payload.sub || null;
+    }
+  } catch {}
+
+  // Capture start time for performance tracking
+  const startTime = Date.now();
+
   // Create abort controller for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
@@ -75,6 +132,34 @@ export async function secureFetch(
     });
 
     clearTimeout(timeoutId);
+
+    // Log success/failure
+    logData.success = response.ok;
+    logData.status_code = response.status;
+
+    // Calculate timing and log to activity monitor
+    const timing = Date.now() - startTime;
+    logApiCall(
+      options.method || 'GET',
+      url,
+      {
+        headers: options.headers,
+        body: options.body
+      },
+      {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      },
+      timing
+    );
+
+    // Send to backend logging endpoint (fire-and-forget, don't block on this)
+    fetch(`${BASE_URL}/api/log-api-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData)
+    }).catch(() => {}); // Silent fail - don't break app if logging fails
 
     // Handle HTTP -> HTTPS redirects (301, 302, 307, 308)
     if ([301, 302, 307, 308].includes(response.status)) {
@@ -92,6 +177,30 @@ export async function secureFetch(
     return response;
   } catch (error: any) {
     clearTimeout(timeoutId);
+
+    // Log error
+    logData.error = error.message || String(error);
+
+    // Log to activity monitor
+    const timing = Date.now() - startTime;
+    logApiCall(
+      options.method || 'GET',
+      url,
+      {
+        headers: options.headers,
+        body: options.body
+      },
+      undefined,
+      timing,
+      error
+    );
+
+    // Send to backend logging endpoint (fire-and-forget)
+    fetch(`${BASE_URL}/api/log-api-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logData)
+    }).catch(() => {}); // Silent fail
 
     // Handle abort (timeout)
     if (error.name === 'AbortError') {
@@ -132,118 +241,8 @@ export type Device = {
   profilePhoto?: string;
 };
 
-// --- simple in-memory store for stub mode ---
-const _store: Device[] = [
-  { id: 1001, name: 'Sarah Chen', rssi: -55, distanceFeet: 18, action: 'returned', timestamp: new Date(Date.now() - 1000 * 60 * 30) },
-  { 
-    id: 1002, 
-    name: 'Alex Rivera', 
-    rssi: -60, 
-    distanceFeet: 25, 
-    action: 'accepted', 
-    timestamp: new Date(Date.now() - 1000 * 60 * 60),
-    phoneNumber: '+1 (555) 234-5678',
-    email: 'alex.rivera@email.com',
-    bio: 'Software engineer & coffee enthusiast ☕',
-    socialMedia: [
-      { platform: 'instagram', handle: '@alexrivera' },
-      { platform: 'linkedin', handle: 'alex-rivera' }
-    ]
-  },
-  { id: 1003, name: 'Jordan Kim', rssi: -58, distanceFeet: 20, action: 'dropped', timestamp: new Date(Date.now() - 1000 * 60 * 90) },
-  { id: 1004, name: 'Taylor Brooks', rssi: -62, distanceFeet: 28, action: 'returned', timestamp: new Date(Date.now() - 1000 * 60 * 120) },
-  { 
-    id: 1005, 
-    name: 'Morgan Lee', 
-    rssi: -57, 
-    distanceFeet: 12, 
-    action: 'accepted', 
-    timestamp: new Date(Date.now() - 1000 * 60 * 150),
-    phoneNumber: '+1 (555) 345-6789',
-    email: 'morgan.lee@email.com',
-    bio: 'Photographer | Travel lover 🌍 | Dog mom 🐕',
-    socialMedia: [
-      { platform: 'instagram', handle: '@morganlee_photo' },
-      { platform: 'twitter', handle: '@morganlee' }
-    ]
-  },
-  { id: 1006, name: 'Casey Williams', rssi: -61, distanceFeet: 26, action: 'returned', timestamp: new Date(Date.now() - 1000 * 60 * 180) },
-  { 
-    id: 1007, 
-    name: 'Avery Martinez', 
-    rssi: -59, 
-    distanceFeet: 8, 
-    action: 'accepted', 
-    timestamp: new Date(Date.now() - 1000 * 60 * 210),
-    phoneNumber: '+1 (555) 456-7890',
-    email: 'avery.m@email.com',
-    bio: 'UX Designer | Gaming geek 🎮 | Always creating',
-    socialMedia: [
-      { platform: 'linkedin', handle: 'avery-martinez' },
-      { platform: 'twitter', handle: '@averymartinez' }
-    ]
-  },
-  { id: 1008, name: 'Riley Johnson', rssi: -63, distanceFeet: 30, action: 'dropped', timestamp: new Date(Date.now() - 1000 * 60 * 240) },
-  {
-    id: 1009,
-    name: 'Jamie Foster',
-    rssi: -52,
-    distanceFeet: 15,
-    action: 'accepted',
-    timestamp: new Date(Date.now() - 1000 * 60 * 270),
-    phoneNumber: '+1 (555) 567-8901',
-    email: 'jamie.foster@email.com',
-    bio: 'Marketing pro | Foodie | Yoga enthusiast 🧘',
-    socialMedia: [
-      { platform: 'instagram', handle: '@jamiefoster' },
-      { platform: 'linkedin', handle: 'jamie-foster' }
-    ]
-  },
-  {
-    id: 1010,
-    name: 'Quinn Parker',
-    rssi: -65,
-    distanceFeet: 32,
-    action: 'accepted',
-    timestamp: new Date(Date.now() - 1000 * 60 * 300),
-    phoneNumber: '+1 (555) 678-9012',
-    email: 'quinn.parker@email.com',
-    bio: 'Music producer 🎵 | LA based | Always jamming',
-    socialMedia: [
-      { platform: 'instagram', handle: '@quinnparker' },
-      { platform: 'twitter', handle: '@quinnparker' }
-    ]
-  },
-  {
-    id: 1011,
-    name: 'Sam Chen',
-    rssi: -48,
-    distanceFeet: 6,
-    action: 'accepted',
-    timestamp: new Date(Date.now() - 1000 * 60 * 330),
-    phoneNumber: '+1 (555) 789-0123',
-    email: 'sam.chen@email.com',
-    bio: 'Startup founder | Tech investor | Building the future 🚀',
-    socialMedia: [
-      { platform: 'linkedin', handle: 'sam-chen' },
-      { platform: 'twitter', handle: '@samchen' }
-    ]
-  },
-  {
-    id: 1012,
-    name: 'Drew Wilson',
-    rssi: -54,
-    distanceFeet: 19,
-    action: 'accepted',
-    timestamp: new Date(Date.now() - 1000 * 60 * 360),
-    phoneNumber: '+1 (555) 890-1234',
-    email: 'drew.wilson@email.com',
-    bio: 'Fitness coach | Runner 🏃 | Healthy living advocate',
-    socialMedia: [
-      { platform: 'instagram', handle: '@drewwilson_fit' }
-    ]
-  },
-];
+// --- simple in-memory store for stub mode (empty - no mock data) ---
+const _store: Device[] = [];
 const sleep = (ms:number) => new Promise(r => setTimeout(r, ms));
 
 export async function saveDevice(d: Device) {
@@ -349,7 +348,21 @@ export async function getUserProfile(): Promise<UserProfile> {
   }
   const headers = await getAuthHeaders();
   const res = await secureFetch(`${BASE_URL}/user/profile`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Better error handling
+  if (!res.ok) {
+    let errorMessage = `Failed to load profile: HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch (parseError) {
+      // Response wasn't JSON, use default message
+    }
+    throw new Error(errorMessage);
+  }
+
   return res.json();
 }
 
@@ -364,7 +377,21 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
     headers,
     body: JSON.stringify(profile),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  // Parse backend error response for detailed message
+  if (!res.ok) {
+    let errorMessage = `HTTP ${res.status}`;
+    try {
+      const errorData = await res.json();
+      // Backend returns { detail: "error message" }
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch (parseError) {
+      // Response wasn't JSON, use default message
+    }
+    throw new Error(errorMessage);
+  }
 }
 
 // ==================== USER SETTINGS ====================
@@ -508,3 +535,134 @@ export async function changePassword(currentPassword: string, newPassword: strin
     throw new Error(error.detail || `HTTP ${res.status}`);
   }
 }
+
+export async function deleteAccount(): Promise<void> {
+  console.log('🔑 Getting auth token for delete...');
+  const headers = await getAuthHeaders();
+  console.log('📤 Sending DELETE request to:', `${BASE_URL}/user/delete`);
+  console.log('📋 Headers:', headers);
+
+  const res = await secureFetch(`${BASE_URL}/user/delete`, {
+    method: "DELETE",
+    headers,
+  });
+
+  console.log('📥 Response status:', res.status);
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('❌ Delete failed. Response:', errorText);
+    try {
+      const error = JSON.parse(errorText);
+      throw new Error(error.detail || `HTTP ${res.status}`);
+    } catch {
+      throw new Error(`HTTP ${res.status}: ${errorText}`);
+    }
+  }
+
+  console.log('✅ Delete request successful');
+}
+
+// ==================== PROFILE PHOTO ====================
+export async function uploadProfilePhoto(imageUri: string): Promise<{ success: boolean; url: string }> {
+  console.log('📸 Starting profile photo upload...');
+  console.log('Image URI:', imageUri);
+
+  // Validate file size (max 10MB)
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+  try {
+    // Check if file exists and get info
+    if (Platform.OS !== 'web') {
+      // For native, we'll validate size after FormData creation
+      console.log('⚠️ Skipping size validation for native (will validate on backend)');
+    }
+
+    // Create FormData
+    const formData = new FormData();
+
+    if (Platform.OS === 'web') {
+      console.log('🌐 Web platform - fetching blob...');
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      // Validate size on web
+      if (blob.size > MAX_SIZE) {
+        throw new Error('File too large. Maximum size is 10MB');
+      }
+
+      formData.append('file', blob, 'profile.jpg');
+    } else {
+      // For mobile (Android/iOS)
+      console.log('📱 Mobile platform - preparing file...');
+      const filename = imageUri.split('/').pop() || 'profile.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+      console.log('File name:', filename);
+      console.log('File type:', type);
+
+      // Create proper file object for React Native
+      formData.append('file', {
+        uri: imageUri,
+        name: filename,
+        type: type,
+      } as any);
+    }
+
+    // Get auth headers
+    console.log('🔑 Getting auth token...');
+    const headers = await getAuthHeaders();
+
+    // Remove Content-Type header - let browser/RN set it with boundary for FormData
+    const uploadHeaders: any = { ...headers };
+    delete uploadHeaders['Content-Type'];
+
+    console.log('📤 Uploading to backend...');
+
+    // Upload with timeout and retry
+    const res = await secureFetch(`${BASE_URL}/user/profile/photo`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: formData,
+    });
+
+    console.log('📥 Response status:', res.status);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('❌ Upload failed. Response:', errorText);
+      try {
+        const error = JSON.parse(errorText);
+        throw new Error(error.detail || `Upload failed: ${res.status}`);
+      } catch {
+        throw new Error(`Upload failed: ${res.status} - ${errorText}`);
+      }
+    }
+
+    const result = await res.json();
+    console.log('✅ Photo uploaded successfully:', result);
+
+    return {
+      success: true,
+      url: result.url || imageUri,
+    };
+  } catch (error: any) {
+    console.error('❌ Upload error:', error);
+    console.error('Error details:', error.message);
+
+    // Provide user-friendly error messages
+    if (error.message?.includes('too large')) {
+      throw new Error('Photo too large. Please choose a smaller photo (max 10MB)');
+    } else if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
+      throw new Error('Upload timed out. Please check your internet connection and try again');
+    } else if (error.message?.includes('Network')) {
+      throw new Error('Network error. Please check your internet connection');
+    } else {
+      throw new Error(error.message || 'Failed to upload photo. Please try again');
+    }
+  }
+}
+
+
+

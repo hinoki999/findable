@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { BASE_URL, secureFetch } from '../services/api';
+import { useTutorial } from '../contexts/TutorialContext';
 
 interface SignupScreenProps {
   onSignupSuccess: (token: string, userId: number, username: string, email?: string) => void;
@@ -14,14 +15,14 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [bio, setBio] = useState('');
+
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,19 +42,41 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const checkUsernameAvailability = async (username: string) => {
     try {
+      console.log('🔍 Checking username availability:', username);
       const response = await secureFetch(`${BASE_URL}/auth/check-username`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
-      
+
       const data = await response.json();
-      
+      console.log('✅ Username check response:', data);
+
       if (!data.available) {
         setUsernameError(data.message);
       }
     } catch (err) {
-      console.error('Failed to check username:', err);
+      console.error('❌ Failed to check username:', err);
+    }
+  };
+
+  const checkEmailAvailability = async (email: string) => {
+    try {
+      console.log('🔍 Checking email availability:', email);
+      const response = await secureFetch(`${BASE_URL}/auth/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+      console.log('✅ Email check response:', data);
+
+      if (!data.available) {
+        setEmailError(data.message || 'Email is already in use');
+      }
+    } catch (err) {
+      console.error('❌ Failed to check email:', err);
     }
   };
 
@@ -87,6 +110,18 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return () => clearTimeout(timer);
     }
   }, [username]);
+
+  // Debounced email availability check
+  useEffect(() => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (email.length > 0 && emailRegex.test(email) && !emailError) {
+      const timer = setTimeout(() => {
+        checkEmailAvailability(email);
+      }, 500); // Wait 500ms after user stops typing
+
+      return () => clearTimeout(timer);
+    }
+  }, [email]);
 
   const validatePassword = (text: string) => {
     setPassword(text);
@@ -137,7 +172,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const validateEmail = (text: string) => {
     setEmail(text);
-    setEmailError('');
+    setEmailError(''); // Clear error on every keystroke
 
     if (text.length === 0) return;
 
@@ -258,25 +293,21 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(data.detail || 'Registration failed');
       }
 
-      // Save profile information
-      if (name || phone || bio) {
-        await fetch('https://findable-production.up.railway.app/user/profile', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.token}`
-          },
-          body: JSON.stringify({
-            name: name || '',
-            phone: phone || '',
-            email: email,
-            bio: bio || ''
-          }),
-        });
-      }
 
-      // Success!
+      // Enable tutorials for this new signup
+      console.log('📚 Enabling tutorials for new signup...');
+      await enableTutorialsForSignup();
+      console.log('✅ Tutorials enabled successfully');
+      await startScreenTutorial('Home', 5);
+
+      // Small delay to ensure AsyncStorage operations complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      console.log('✅ AsyncStorage operations should be complete');
+
+      // Success! Close modal and navigate
       setShowVerificationModal(false);
+      console.log('🚀 Calling onSignupSuccess - navigating to app...');
+      // Pass profile data to App to prevent race condition
       onSignupSuccess(data.token, data.user_id, data.username, email);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
@@ -285,7 +316,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && name.length > 0 && phone.length >= 10 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -315,27 +346,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Name */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Name
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={name}
-                onChangeText={setName}
-                placeholder="John Doe"
-                placeholderTextColor={theme.colors.muted}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
-          </View>
-
           {/* Username */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>Username</Text>
@@ -350,7 +360,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={username}
                 onChangeText={validateUsername}
-                placeholder="johndoe"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -376,7 +386,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={password}
                 onChangeText={validatePassword}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
@@ -416,7 +426,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', flex: 1 }]}
                 value={confirmPassword}
                 onChangeText={validateConfirmPassword}
-                placeholder="••••••••"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 secureTextEntry={!showConfirmPassword}
                 autoCapitalize="none"
@@ -455,7 +465,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
                 value={email}
                 onChangeText={validateEmail}
-                placeholder="john@example.com"
+                placeholder=""
                 placeholderTextColor={theme.colors.muted}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -466,50 +476,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             {emailError ? (
               <Text style={styles.errorText}>{emailError}</Text>
             ) : null}
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Phone
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="5551234567"
-                placeholderTextColor={theme.colors.muted}
-                keyboardType="phone-pad"
-                maxLength={10}
-                editable={!loading}
-              />
-            </View>
-          </View>
-
-          {/* Bio (Optional) */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>
-              Bio <Text style={{ color: theme.colors.muted }}>(optional)</Text>
-            </Text>
-            <View style={[
-              styles.inputContainer,
-              { backgroundColor: theme.colors.white, borderColor: theme.colors.border, minHeight: 80 }
-            ]}>
-              <TextInput
-                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000', height: 70, textAlignVertical: 'top' }]}
-                value={bio}
-                onChangeText={setBio}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={theme.colors.muted}
-                multiline={true}
-                numberOfLines={3}
-                editable={!loading}
-              />
-            </View>
           </View>
 
           {/* Error Message */}
@@ -594,7 +560,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 />
               )}
             </Pressable>
-            
+
             {verificationStep === 'confirm' ? (
               <>
                 <MaterialCommunityIcons name="email-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
@@ -907,4 +873,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
 

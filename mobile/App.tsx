@@ -1,6 +1,10 @@
-﻿import React, { useState, useEffect, createContext, useContext } from 'react';
+﻿import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -14,7 +18,10 @@ import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
+import * as Updates from 'expo-updates';
+import { initMonitor, logAction } from './src/services/activityMonitor';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -22,7 +29,7 @@ const DarkModeContext = createContext<{
   toggleDarkMode: () => void;
 }>({
   isDarkMode: false,
-  toggleDarkMode: () => {},
+  toggleDarkMode: () => { },
 });
 
 export const useDarkMode = () => useContext(DarkModeContext);
@@ -33,7 +40,7 @@ const PinnedProfilesContext = createContext<{
   togglePin: (id: number) => void;
 }>({
   pinnedIds: new Set(),
-  togglePin: () => {},
+  togglePin: () => { },
 });
 
 export const usePinnedProfiles = () => useContext(PinnedProfilesContext);
@@ -46,10 +53,11 @@ interface SocialMediaAccount {
 
 interface UserProfile {
   name: string;
-  phoneNumber: string;
+  phone: string;
   email: string;
   bio: string;
   socialMedia: SocialMediaAccount[];
+  profilePhoto?: string;
 }
 
 const UserProfileContext = createContext<{
@@ -58,12 +66,12 @@ const UserProfileContext = createContext<{
 }>({
   profile: {
     name: 'Your Name',
-    phoneNumber: '(555) 123-4567',
+    phone: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Bio will display here once created.',
+    bio: 'Add bio',
     socialMedia: [],
   },
-  updateProfile: () => {},
+  updateProfile: () => { },
 });
 
 export const useUserProfile = () => useContext(UserProfileContext);
@@ -80,7 +88,7 @@ interface ToastConfig {
 const ToastContext = createContext<{
   showToast: (config: ToastConfig) => void;
 }>({
-  showToast: () => {},
+  showToast: () => { },
 });
 
 export const useToast = () => useContext(ToastContext);
@@ -91,17 +99,12 @@ const SettingsContext = createContext<{
   setMaxDistance: (distance: number) => void;
 }>({
   maxDistance: 33,
-  setMaxDistance: () => {},
+  setMaxDistance: () => { },
 });
 
 export const useSettings = () => useContext(SettingsContext);
 
 // Link Notifications Context (for returned drops)
-interface SocialMediaAccount {
-  platform: string;
-  handle: string;
-}
-
 interface LinkNotification {
   id: number;
   deviceId?: number; // References the device in the store for pinning
@@ -123,15 +126,16 @@ const LinkNotificationsContext = createContext<{
   hasUnviewedLinks: boolean;
 }>({
   linkNotifications: [],
-  addLinkNotification: () => {},
-  markAsViewed: () => {},
-  dismissNotification: () => {},
+  addLinkNotification: () => { },
+  markAsViewed: () => { },
+  dismissNotification: () => { },
   hasUnviewedLinks: false,
 });
 
 export const useLinkNotifications = () => useContext(LinkNotificationsContext);
 
-import { useFonts,
+import {
+  useFonts,
   Inter_300Light,
   Inter_400Regular,
   Inter_500Medium,
@@ -139,10 +143,20 @@ import { useFonts,
   Inter_700Bold
 } from '@expo-google-fonts/inter';
 
+// Helper function for phone formatting (defined outside component for stability)
+// Used when loading profile data to ensure consistent (XXX) XXX-XXXX format
+const formatPhoneNumber = (text: string): string => {
+  const cleaned = text.replace(/\D/g, '');
+  if (cleaned.length === 0) return '';
+  if (cleaned.length <= 3) return `(${cleaned}`;
+  if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+  return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+};
+
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
-  
+
   const [fontsReady] = useFonts({
     Inter_300Light,
     Inter_400Regular,
@@ -154,18 +168,23 @@ function MainApp() {
   // Auth flow state
   const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login'>('welcome');
 
-  const [tab, setTab] = useState<'Home'|'Drop'|'History'|'Account'>('Home');
+  const [tab, setTab] = useState<'Home' | 'Drop' | 'History' | 'Account'>('Home');
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const insets = useSafeAreaInsets();
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
   // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
+
+  // ✅ FIXED: Initialize with socialMedia array to prevent crashes
   const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Your Name',
-    phoneNumber: '(555) 123-4567',
+    phone: '(555) 123-4567',
     email: 'user@example.com',
-    bio: 'Bio will display here once created',
-    socialMedia: [],
+    bio: 'Add bio',
+    socialMedia: [], // ← CRITICAL: Always an array, never undefined
   });
+
+  const [isSignupInProgress, setIsSignupInProgress] = useState(false);
   const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
   const [linkNotifications, setLinkNotifications] = useState<LinkNotification[]>([]);
   const [nextLinkId, setNextLinkId] = useState(1);
@@ -174,32 +193,187 @@ function MainApp() {
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
   const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
 
+  // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
+  const hasCachedProfileRef = useRef(false);
+
+  // ✅ NEW: Load profile AND photo from AsyncStorage when app starts
+  useEffect(() => {
+    const loadProfileFromCache = async () => {
+      try {
+        console.log('📱 Loading profile from AsyncStorage...');
+        const cachedProfile = await AsyncStorage.getItem('userProfile');
+
+        if (cachedProfile) {
+          hasCachedProfileRef.current = true; // ← Track cache existence
+          const parsedProfile = JSON.parse(cachedProfile);
+          console.log('📱 Profile loaded from cache:', parsedProfile);
+
+          // Ensure socialMedia is always an array (defensive)
+          if (!parsedProfile.socialMedia) {
+            parsedProfile.socialMedia = [];
+          }
+
+          setUserProfile(parsedProfile);
+        } else {
+          hasCachedProfileRef.current = false; // ← No cache found (fresh install)
+          console.log('📱 No cached profile found - fresh install detected');
+        }
+
+        // ✅ CHANGE 2: Load profile photo from AsyncStorage
+        const cachedPhoto = await AsyncStorage.getItem('profilePhotoUri');
+        if (cachedPhoto) {
+          console.log('📱 Profile photo loaded from cache:', cachedPhoto);
+          setProfilePhotoUri(cachedPhoto);
+        } else {
+          console.log('📱 No cached profile photo found');
+        }
+      } catch (error) {
+        console.error('📱 Failed to load profile from AsyncStorage:', error);
+      }
+    };
+
+    loadProfileFromCache();
+  }, []); // Run once on mount
+
+  // ✅ NEW: Auto-save profile to AsyncStorage whenever it changes
+  useEffect(() => {
+    const saveProfileToCache = async () => {
+      try {
+        // Only save if profile has actual data (not just initial empty state)
+        if (userProfile.name !== 'Your Name' || userProfile.phone !== '(555) 123-4567' || userProfile.bio !== 'Add bio' || userProfile.email !== 'user@example.com') {
+          console.log('💾 Saving profile to AsyncStorage:', userProfile);
+          await AsyncStorage.setItem('userProfile', JSON.stringify(userProfile));
+          console.log('💾 Profile saved successfully');
+        }
+      } catch (error) {
+        console.error('💾 Failed to save profile to AsyncStorage:', error);
+      }
+    };
+
+    saveProfileToCache();
+  }, [userProfile]); // Run every time userProfile changes
+
+  // ✅ NEW: Auto-save profile photo to AsyncStorage whenever it changes
+  useEffect(() => {
+    const savePhotoToCache = async () => {
+      try {
+        if (profilePhotoUri) {
+          console.log('💾 Saving profile photo to AsyncStorage:', profilePhotoUri);
+          await AsyncStorage.setItem('profilePhotoUri', profilePhotoUri);
+          console.log('💾 Profile photo saved successfully');
+        }
+      } catch (error) {
+        console.error('💾 Failed to save profile photo to AsyncStorage:', error);
+      }
+    };
+
+    savePhotoToCache();
+  }, [profilePhotoUri]); // Run every time profilePhotoUri changes
+
+  // Check for OTA updates on app launch
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+          await Updates.reloadAsync();
+        }
+      } catch (error) {
+        console.log('Error checking for updates:', error);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
+
+  // Initialize activity monitor on app launch
+  useEffect(() => {
+    initMonitor();
+  }, []);
+
   // Function to load all user data from backend
-  const loadUserData = async () => {
+  // Wrapped in useCallback to provide stable reference for useEffect dependencies
+  const loadUserData = useCallback(async (options?: { onlyPhoto?: boolean }) => {
     if (!isAuthenticated || !userId) return;
-    
+
     try {
       console.log('📥 Loading user data from backend...');
-      
+
       // Load user profile
-      const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-      if (profileData && (profileData.name || profileData.email || profileData.phone || profileData.bio)) {
-        console.log('✅ Loaded profile:', profileData);
-        setUserProfile({
-          name: profileData.name || 'Your Name',
-          phoneNumber: profileData.phone || '(555) 123-4567',
-          email: profileData.email || 'user@example.com',
-          bio: profileData.bio || 'Bio will display here once created.',
-          socialMedia: profileData.socialMedia || [],
-        });
-        
-        // Load profile photo if exists
-        if (profileData.profile_photo) {
-          console.log('✅ Loaded profile photo:', profileData.profile_photo);
-          setProfilePhotoUri(profileData.profile_photo);
+      try {
+        console.log('🔍 Attempting to load profile data...');
+        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
+        console.log('📦 Profile response:', profileData);
+        console.log('🔍 RAW BACKEND RESPONSE:', JSON.stringify(profileData, null, 2));
+        console.log('🔍 hasCachedProfileRef:', hasCachedProfileRef.current);
+
+        if (profileData) {
+          console.log('✅ Setting profile state with:', {
+            name: profileData.name,
+            phone: profileData.phone,
+            email: profileData.email,
+            bio: profileData.bio,
+            profile_photo: profileData.profile_photo
+          });
+
+          // If onlyPhoto flag is set, only update photo (skip profile data)
+          if (options?.onlyPhoto) {
+            // Only update if backend has a value (don't overwrite with null)
+            if (profileData.profile_photo !== undefined) {
+              console.log('✅ Loaded profile photo:', profileData.profile_photo);
+              setProfilePhotoUri(profileData.profile_photo);
+            } else {
+              console.log('ℹ️ No profile photo in response, preserving existing state');
+            }
+            return; // Skip profile data update
+          }
+
+          // ✅ CONDITIONAL LOGIC: Fresh install vs cached data
+          if (!hasCachedProfileRef.current) {
+            // 🆕 FRESH INSTALL PATH: Replace with backend data (use ?? for fallbacks)
+            console.log('🔍 SETTING STATE (REPLACE):', {
+              name: profileData.name ?? '',
+              email: profileData.email ?? '',
+              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : ''
+            });
+            
+            setUserProfile({
+              name: profileData.name ?? '',
+              email: profileData.email ?? '',
+              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
+              bio: profileData.bio ?? '',
+              socialMedia: profileData.socialMedia ?? [],
+              profilePhoto: profileData.profilePhoto,
+            });
+            
+            hasCachedProfileRef.current = true; // Mark as cached for next time
+          } else {
+            // 💾 HAS CACHE: Defensive merge (don't overwrite with empty/undefined)
+            setUserProfile(prev => ({
+              name: profileData.name !== undefined ? profileData.name : prev.name,
+              phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
+              email: profileData.email !== undefined ? profileData.email : prev.email,
+              bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
+              socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
+              profilePhoto: profileData.profilePhoto !== undefined ? profileData.profilePhoto : prev.profilePhoto,
+            }));
+          }
+
+          // Load profile photo - only update if backend provides a value
+          if (profileData.profile_photo !== undefined) {
+            console.log('✅ Loaded profile photo:', profileData.profile_photo);
+            setProfilePhotoUri(profileData.profile_photo);
+          } else {
+            console.log('ℹ️ No profile photo in response, preserving existing state');
+          }
+        } else {
+          console.log('⚠️ Profile response was null/undefined');
         }
+      } catch (error) {
+        console.error('❌ Failed to load profile:', error);
       }
-      
+
       // Load settings
       const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
       if (settingsData) {
@@ -212,7 +386,7 @@ function MainApp() {
       const devicesData = await import('./src/services/api').then(m => m.getDevices());
       if (devicesData && devicesData.length > 0) {
         console.log('✅ Loaded devices:', devicesData.length, 'contacts');
-        
+
         // Convert devices to link notifications for accepted/returned contacts
         const notifications: LinkNotification[] = devicesData
           .filter(device => device.action === 'accepted' || device.action === 'returned')
@@ -228,7 +402,7 @@ function MainApp() {
             dismissed: false,
             deviceId: device.id,
           }));
-        
+
         setLinkNotifications(notifications);
         console.log('✅ Loaded link notifications:', notifications.length);
       }
@@ -239,66 +413,133 @@ function MainApp() {
         console.log('✅ Loaded pinned contacts:', pinnedData);
         setPinnedIds(new Set(pinnedData));
       }
-      
+
       // Privacy Zones feature removed
       // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
       // if (zonesData) {
       //   console.log('✅ Loaded privacy zones:', zonesData);
       //   setPrivacyZones(zonesData);
       // }
-      
+
       console.log('✅ All user data loaded successfully');
     } catch (error) {
       console.error('❌ Failed to load user data:', error);
     }
-  };
+  }, []); // Empty deps: function only uses stable API imports and setState functions
 
   // Load user data when authenticated
+  // Skip during signup to prevent race condition with profile save
   useEffect(() => {
-    if (isAuthenticated && userId) {
+    if (isAuthenticated && userId && !isSignupInProgress) {
       loadUserData();
     }
-  }, [isAuthenticated, userId]);
+  }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
+
+  // Check for OTA updates on app launch
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        console.log('🔍 Checking for updates...');
+        const update = await Updates.checkForUpdateAsync();
+
+        if (update.isAvailable) {
+          console.log('📥 Update available! Downloading...');
+          await Updates.fetchUpdateAsync();
+          console.log('✅ Update downloaded! Reloading...');
+          await Updates.reloadAsync();
+        } else {
+          console.log('✅ App is up to date');
+        }
+      } catch (error) {
+        console.error('❌ Update check failed:', error);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
 
   // Auth handlers
-  const handleSignupSuccess = async (token: string, userId: number, username: string, email?: string) => {
-    console.log('✅ Signup successful:', username);
-    // Profile info is already saved in SignupScreen
-    // Now log them in and show profile photo prompt
+  const handleSignupSuccess = async (
+    token: string,
+    userId: number,
+    username: string,
+    email?: string,
+    profileData?: { name: string; phone: string; bio: string }
+  ) => {
+    console.log('✅ [App] Signup successful:', username);
+
+    // Set flag to prevent automatic data reload (prevents race condition)
+    setIsSignupInProgress(true);
+
+    // Set profile data directly from signup form instead of reloading from backend
+    // This prevents race condition where GET /profile happens before POST /profile completes
+    if (profileData) {
+      const phoneDigitsOnly = profileData.phone.replace(/\D/g, '');
+
+      setUserProfile({
+        name: profileData.name || 'Your Name',
+        phone: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
+        email: email || 'user@example.com',
+        bio: profileData.bio || 'Add bio',
+        socialMedia: [],
+      });
+      console.log('✅ [App] Profile data set from signup form:', {
+        name: profileData.name,
+        phone: phoneDigitsOnly,
+        email: email
+      });
+    }
+
     setIsFirstTimeUser(true);
+    console.log('✅ [App] Calling login()');
     await login(token, userId, username);
-    // Show profile photo prompt instead of going directly to main app
+
+    // Reset flag - normal data loads can proceed from here
+    setIsSignupInProgress(false);
+    console.log('✅ [App] Signup flow complete, flag reset');
+
+    console.log('✅ [App] Setting showProfilePhotoPrompt = true');
     setShowProfilePhotoPrompt(true);
   };
 
   const handleLoginSuccess = async (token: string, userId: number, username: string) => {
     console.log('✅ Login successful:', username);
     await login(token, userId, username);
-    // User goes directly to main app
+
+    // Navigate to Home tab
+    setTab('Home');
+    setSubScreen(null);
+
+    // Show success message
+    showToast({
+      message: 'Successfully logged in!',
+      type: 'success',
+      duration: 3000,
+    });
   };
 
-  const handleProfilePhotoPromptComplete = async () => {
-    console.log('✅ Profile photo prompt completed');
+  const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
+    console.log('✅ [App] Profile photo prompt completed');
+    console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
-    // Load user data to get the new profile photo if uploaded
-    await loadUserData();
-    
-    // For first-time users, clear tutorial state to ensure tutorials show
-    if (isFirstTimeUser) {
-      try {
-        const AsyncStorage = await import('@react-native-async-storage/async-storage').then(m => m.default);
-        await AsyncStorage.removeItem('@droplink_tutorial_screens');
-        console.log('✅ Tutorial state cleared for first-time user');
-      } catch (error) {
-        console.error('Failed to clear tutorial state:', error);
-      }
-      
-      // Reset navigation to Home tab and clear any subScreens
-      setTab('Home');
-      setSubScreen(null);
-      console.log('✅ Navigation reset to Home tab');
+
+    // Use uploaded URI if provided (prevents race condition)
+    // Otherwise load from backend (for skip button case)
+    if (uploadedPhotoUri) {
+      console.log('✅ [App] Using uploaded photo URI directly:', uploadedPhotoUri);
+      setProfilePhotoUri(uploadedPhotoUri);
+    } else {
+      console.log('✅ [App] Loading profile photo from backend...');
+      await loadUserData({ onlyPhoto: true });
+      console.log('✅ [App] Profile photo loaded');
     }
-    
+
+    // Always navigate to Home tab after profile photo prompt
+    console.log('✅ [App] Navigating to Home tab');
+    setTab('Home');
+    setSubScreen(null);
+    console.log('✅ [App] Navigation complete - HomeScreen should mount now');
+
     showToast({
       message: 'Welcome to DropLink!',
       type: 'success',
@@ -309,7 +550,7 @@ function MainApp() {
   const toggleDarkMode = async () => {
     const newValue = !isDarkMode;
     setIsDarkMode(newValue);
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -336,7 +577,7 @@ function MainApp() {
       }
       return newSet;
     });
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -354,21 +595,39 @@ function MainApp() {
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     const newProfile = { ...userProfile, ...updates };
-    setUserProfile(newProfile);
-    
-    // Save to backend
+
+    // Save to backend FIRST (pessimistic update - ensures data integrity)
     try {
       const api = await import('./src/services/api');
       await api.saveUserProfile({
         name: newProfile.name,
         email: newProfile.email,
-        phone: newProfile.phoneNumber,
+        phone: newProfile.phone,
         bio: newProfile.bio,
         socialMedia: newProfile.socialMedia,
       });
+
       console.log('✅ Profile saved to backend:', newProfile);
-    } catch (error) {
+
+      // Only update local state AFTER successful backend save
+      // AsyncStorage auto-save will trigger from the useEffect
+      setUserProfile(newProfile);
+
+      // Success toast only after confirmed save
+      showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
+
+    } catch (error: any) {
       console.error('❌ Failed to save profile:', error);
+
+      // Show error with message from backend (ERROR 7 will improve this)
+      const errorMessage = error.message || 'Failed to save profile';
+      showToast({
+        message: errorMessage,
+        type: 'error',
+        duration: 3000
+      });
+
+      // NOTE: Local state was never changed, so no rollback needed
     }
   };
 
@@ -378,7 +637,7 @@ function MainApp() {
 
   const updateMaxDistance = async (distance: number) => {
     setMaxDistance(distance);
-    
+
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -448,7 +707,7 @@ function MainApp() {
   if (!fontsReady || authLoading) {
     return (
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-        <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor: theme.colors.bg }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
           <Text style={{ color: theme.colors.text }}>Loading…</Text>
         </View>
       </DarkModeContext.Provider>
@@ -492,24 +751,24 @@ function MainApp() {
   // Show profile photo prompt after signup (authenticated but before main app)
   if (isAuthenticated && showProfilePhotoPrompt) {
     const promptNavigation = {
-      navigate: () => {},
+      navigate: () => { },
       goBack: handleProfilePhotoPromptComplete,
     };
-    
+
     return (
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <View style={{ flex: 1, backgroundColor: getTheme(isDarkMode).colors.bg }}>
           {/* Header with Skip button */}
-          <View style={{ 
-            flexDirection: 'row', 
-            justifyContent: 'space-between', 
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
             alignItems: 'center',
             paddingHorizontal: 20,
             paddingTop: 60,
             paddingBottom: 20,
           }}>
-            <Text style={{ 
-              fontSize: 20, 
+            <Text style={{
+              fontSize: 20,
               fontWeight: '600',
               color: getTheme(isDarkMode).colors.text,
               fontFamily: 'Inter_600SemiBold',
@@ -517,7 +776,7 @@ function MainApp() {
               Profile Photo
             </Text>
             <Pressable onPress={handleProfilePhotoPromptComplete}>
-              <Text style={{ 
+              <Text style={{
                 color: getTheme(isDarkMode).colors.muted,
                 fontSize: 16,
                 fontFamily: 'Inter_400Regular',
@@ -526,12 +785,12 @@ function MainApp() {
               </Text>
             </Pressable>
           </View>
-          <ProfilePhotoScreen 
-            navigation={promptNavigation} 
+          <ProfilePhotoScreen
+            navigation={promptNavigation}
             onPhotoSaved={(uri) => {
-              setProfilePhotoUri(uri);
-              handleProfilePhotoPromptComplete();
-            }} 
+              // Pass URI to handler to avoid race condition
+              handleProfilePhotoPromptComplete(uri);
+            }}
           />
         </View>
       </DarkModeContext.Provider>
@@ -550,9 +809,18 @@ function MainApp() {
     // if (subScreen === 'PrivacyZones') {
     //   return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
     // }
-    
+
     if (subScreen === 'ProfilePhoto') {
-      return <ProfilePhotoScreen navigation={navigation} onPhotoSaved={setProfilePhotoUri} />;
+      return <ProfilePhotoScreen
+        navigation={navigation}
+        onPhotoSaved={async (uri) => {
+          // Optimistic update for immediate feedback
+          setProfilePhotoUri(uri);
+
+          // Verify database actually has it (defensive merge won't overwrite on failure)
+          await loadUserData({ onlyPhoto: true });
+        }}
+      />;
     }
 
     if (subScreen === 'SecuritySettings') {
@@ -573,107 +841,120 @@ function MainApp() {
           <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
             <ToastContext.Provider value={{ showToast }}>
               <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
-                <LinkNotificationsContext.Provider value={{ 
-                  linkNotifications, 
-                  addLinkNotification, 
-                  markAsViewed, 
-                  dismissNotification, 
-                  hasUnviewedLinks 
+                <LinkNotificationsContext.Provider value={{
+                  linkNotifications,
+                  addLinkNotification,
+                  markAsViewed,
+                  dismissNotification,
+                  hasUnviewedLinks
                 }}>
-          <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-          <Screen />
-        </View>
+                  <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+                      <Screen />
+                    </View>
 
-        {/* Bottom nav - Hide when sub-screen is active */}
-        {!subScreen && (
-          <View style={{
-            flexDirection: 'row',
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-            backgroundColor: theme.colors.white
-          }}>
-           {/* Home */}
-           <Pressable
-             onPress={() => setTab('Home')}
-             style={{
-               flex: 1, paddingVertical: 14, alignItems:'center',
-               backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
-             }}
-           >
-             <MaterialCommunityIcons 
-               name="home-outline" 
-               size={24} 
-               color="#FF6B4A" 
-               style={{ fontWeight: '100' }}
-             />
-           </Pressable>
+                    {/* Bottom nav - Hide when sub-screen is active */}
+                    {!subScreen && (
+                      <View style={{
+                        flexDirection: 'row',
+                        borderTopWidth: 1,
+                        borderTopColor: theme.colors.border,
+                        backgroundColor: theme.colors.white,
+                        paddingBottom: insets.bottom
+                      }}>
+                        {/* Home */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Home Tab');
+                            setTab('Home');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="home-outline"
+                            size={24}
+                            color="#FF6B4A"
+                            style={{ fontWeight: '100' }}
+                          />
+                        </Pressable>
 
-          {/* Drop */}
-          <Pressable
-            onPress={() => setTab('Drop')}
-            style={{
-              flex: 1, paddingVertical: 14, alignItems:'center',
-              backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="water-outline" 
-              size={24} 
-              color={theme.colors.blue} 
-            />
-          </Pressable>
+                        {/* Drop */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Drop Tab');
+                            setTab('Drop');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="water-outline"
+                            size={24}
+                            color={theme.colors.blue}
+                          />
+                        </Pressable>
 
-        {/* History */}
-        <Pressable
-          onPress={() => setTab('History')}
-          style={{
-            flex: 1, paddingVertical: 14, alignItems:'center',
-            backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
-          }}
-        >
-          <MaterialCommunityIcons
-            name="link-variant"
-            size={24}
-            color="#FF6B4A"
-          />
-        </Pressable>
+                        {/* History */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'History Tab');
+                            setTab('History');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="link-variant"
+                            size={24}
+                            color="#FF6B4A"
+                          />
+                        </Pressable>
 
-          {/* Account */}
-          <Pressable
-            onPress={() => setTab('Account')}
-            style={{
-              flex: 1, paddingVertical: 14, alignItems:'center',
-              backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
-            }}
-          >
-            <MaterialCommunityIcons 
-              name="account-outline" 
-              size={24} 
-              color={theme.colors.blue} 
-            />
-          </Pressable>
-        </View>
-        )}
+                        {/* Account */}
+                        <Pressable
+                          onPress={() => {
+                            logAction('Navigation', 'Account Tab');
+                            setTab('Account');
+                          }}
+                          style={{
+                            flex: 1, paddingVertical: 14, alignItems: 'center',
+                            backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
+                          }}
+                        >
+                          <MaterialCommunityIcons
+                            name="account-outline"
+                            size={24}
+                            color={theme.colors.blue}
+                          />
+                        </Pressable>
+                      </View>
+                    )}
 
-        {/* Toast Notification */}
-        {toastConfig && (
-          <Toast
-            message={toastConfig.message}
-            type={toastConfig.type}
-            duration={toastConfig.duration}
-            actionLabel={toastConfig.actionLabel}
-            onAction={toastConfig.onAction}
-            onDismiss={() => setToastConfig(null)}
-          />
-        )}
-      </View>
-              </LinkNotificationsContext.Provider>
-            </SettingsContext.Provider>
-          </ToastContext.Provider>
-        </UserProfileContext.Provider>
-      </PinnedProfilesContext.Provider>
-    </DarkModeContext.Provider>
+                    {/* Toast Notification */}
+                    {toastConfig && (
+                      <Toast
+                        message={toastConfig.message}
+                        type={toastConfig.type}
+                        duration={toastConfig.duration}
+                        actionLabel={toastConfig.actionLabel}
+                        onAction={toastConfig.onAction}
+                        onDismiss={() => setToastConfig(null)}
+                      />
+                    )}
+                  </View>
+                </LinkNotificationsContext.Provider>
+              </SettingsContext.Provider>
+            </ToastContext.Provider>
+          </UserProfileContext.Provider>
+        </PinnedProfilesContext.Provider>
+      </DarkModeContext.Provider>
     </TutorialProvider>
   );
 }
@@ -681,8 +962,14 @@ function MainApp() {
 // Export App wrapped with AuthProvider
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <UserProvider>
+            <MainApp />
+          </UserProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

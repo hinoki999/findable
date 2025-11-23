@@ -1,0 +1,46 @@
+# EAS Workflow: Auto-build Android preview AND auto-publish OTA updates
+# This workflow automatically triggers:
+# - Android preview builds for native changes (15-20 min)
+# - OTA updates for JavaScript-only changes (1-2 min)
+
+# Workflow name (displayed in Expo dashboard)
+name: Preview Build and OTA Updates
+
+# Trigger: Run this workflow when code is pushed to any branch
+on:
+  push:
+    branches:
+      - '**'
+
+# Jobs: Define what builds/updates to run
+jobs:
+  # Build job for native changes (15-20 min)
+  build:
+    # Job name shown in dashboard
+    name: Build Android Preview
+    
+    # Build type: creates installable app
+    type: build
+    
+    # Platform: Android only (iOS excluded for faster builds)
+    platform: android
+    
+    # Profile: Uses "preview" profile from eas.json
+    # This profile has "distribution": "internal" for testing
+    profile: preview
+    
+    # Auto-submit: false (manual testing via QR code)
+    autoSubmit: false
+    
+    # Notifications: EAS sends email notifications by default
+    # - Build started
+    # - Build completed successfully (with QR code)
+    # - Build failed (with error details)
+
+  # OTA Update job for fast JavaScript-only changes (1-2 min)
+  update:
+    name: Publish OTA Update
+    type: update
+    branch: preview
+    message: "Auto-update: ${{ github.event.head_commit.message }}"
+
