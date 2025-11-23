@@ -1,0 +1,10 @@
+[33m76c6221[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Add EAS workflow for automated Android preview builds on all branches
+[33m44ea8b4[m Fix: Add error handling to profile save during sign up
+[33m6e7b246[m Fix: Remove placeholder text and enforce phone number formatting on sign up
+[33md03b11f[m [Fix]: Implement working zoom and rotation gestures for mobile
+[33mf6f68a8[m Add comprehensive documentation for PostgreSQL composite type conflict fix
+[33m980fba3[m[33m ([m[1;31morigin/albert/full-integration[m[33m, [m[1;32malbert/full-integration[m[33m)[m Fix PostgreSQL composite type conflict for verification_codes table
+[33m3d5952d[m Add comprehensive documentation for verification code persistence fix
+[33mdb4e993[m Fix verification code persistence across Railway restarts
+[33m134f2f6[m Consolidate storage access with centralized storage module
+[33m5dcb8b3[m Fix window object references for native platforms (Critical Issue #2)

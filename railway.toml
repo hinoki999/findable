@@ -1,0 +1,15 @@
+[deploy]
+# Run migration fix before starting the server
+startCommand = "cd backend && python migrations/fix_migrations.py && uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+[healthcheck]
+# Railway will ping this endpoint every 30 seconds
+path = "/health"
+interval = 30
+
+[build]
+# Use Nixpacks builder (automatic for Python)
+builder = "NIXPACKS"
+# Install dependencies from requirements.txt
+buildCommand = "pip install -r backend/requirements.txt"
+
