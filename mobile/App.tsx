@@ -485,7 +485,13 @@ function MainApp() {
     } catch (error) {
       console.error('❌ OUTER CATCH: Unexpected error in loadUserData');
       console.error('❌ Failed to load user data:', error);
-      console.error('❌ This should not happen - all errors should be caught by inner try/catch');
+      console.error('❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
+      console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'N/A');
+      
+      // Show crash error in Guard Status panel (visible on screen)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setDebugGuardStatus(`CRASH: ${errorMsg}`);
     }
   }, []); // Empty deps: function only uses stable API imports and setState functions
 
