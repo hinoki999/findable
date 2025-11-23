@@ -883,6 +883,16 @@ function MainApp() {
                   hasUnviewedLinks
                 }}>
                   <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                    {/* 🔍 DEBUG PANEL - useEffect Trigger Conditions */}
+                    <View style={{position: 'absolute', top: 0, left: 0, backgroundColor: 'blue', padding: 5, zIndex: 10000}}>
+                      <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
+                        Auth: {String(isAuthenticated)} | UserID: {userId || 'null'} | Signup: {String(isSignupInProgress)}
+                      </Text>
+                      <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
+                        Should load: {String(isAuthenticated && userId && !isSignupInProgress)}
+                      </Text>
+                    </View>
+                    
                     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
                       <Screen />
                     </View>
