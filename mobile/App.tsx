@@ -200,6 +200,9 @@ function MainApp() {
 
   // 🔍 DEBUG COUNTER: Track how many times setUserProfile is called
   const [debugSetProfileCalls, setDebugSetProfileCalls] = useState(0);
+  
+  // 🔍 DEBUG STATUS: Track which guard is blocking loadUserData
+  const [debugGuardStatus, setDebugGuardStatus] = useState('Not started');
 
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
@@ -313,9 +316,11 @@ function MainApp() {
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
   const loadUserData = useCallback(async (options?: { onlyPhoto?: boolean }) => {
     console.log('🚀 loadUserData CALLED - Starting execution');
+    setDebugGuardStatus('Started');
     
     if (!isAuthenticated || !userId) {
       console.log('❌ GUARD #1 TRIGGERED: Not authenticated or no userId');
+      setDebugGuardStatus('FAILED: Not authenticated or no userId');
       return;
     }
 
@@ -334,6 +339,8 @@ function MainApp() {
         console.log('🔍 GUARD #2 CHECK: typeof profileData =', typeof profileData);
         console.log('🔍 GUARD #2 CHECK: profileData is truthy?', !!profileData);
         
+        setDebugGuardStatus(profileData ? 'Guard #2 PASSED' : 'FAILED: profileData null');
+        
         if (profileData) {
           console.log('✅ GUARD #2 PASSED: profileData exists, entering block');
           console.log('✅ Setting profile state with:', {
@@ -347,6 +354,7 @@ function MainApp() {
           // If onlyPhoto flag is set, only update photo (skip profile data)
           if (options?.onlyPhoto) {
             console.log('⚠️ GUARD #3 TRIGGERED: onlyPhoto flag set, skipping profile data update');
+            setDebugGuardStatus('Guard #3 triggered: onlyPhoto');
             // Only update if backend has a value (don't overwrite with null)
             if (profileData.profilePhoto !== undefined) {
               console.log('✅ Loaded profile photo:', profileData.profilePhoto);
@@ -358,6 +366,7 @@ function MainApp() {
           }
           
           console.log('✅ GUARD #3 PASSED: onlyPhoto flag not set, continuing');
+          setDebugGuardStatus('Guard #3 PASSED - About to call setUserProfile');
 
           // ✅ CONDITIONAL LOGIC: Fresh install vs cached data
           if (!hasCachedProfileRef.current) {
@@ -416,9 +425,11 @@ function MainApp() {
         }
       } catch (error) {
         console.error('❌ GUARD #4 TRIGGERED: API call threw error');
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        setDebugGuardStatus(`FAILED: API error - ${errorMsg}`);
         console.error('❌ Failed to load profile:', error);
         console.error('❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
-        console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
+        console.error('❌ Error message:', errorMsg);
       }
 
       // Load settings
@@ -470,6 +481,7 @@ function MainApp() {
 
       console.log('✅ All user data loaded successfully');
       console.log('🏁 loadUserData COMPLETED - Exiting function normally');
+      setDebugGuardStatus('✅ Completed successfully');
     } catch (error) {
       console.error('❌ OUTER CATCH: Unexpected error in loadUserData');
       console.error('❌ Failed to load user data:', error);
@@ -910,6 +922,9 @@ function MainApp() {
                       </Text>
                       <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
                         Should load: {String(isAuthenticated && userId && !isSignupInProgress)}
+                      </Text>
+                      <Text style={{color: 'yellow', fontSize: 11, fontWeight: 'bold', marginTop: 3}}>
+                        Guard Status: {debugGuardStatus}
                       </Text>
                     </View>
                     
