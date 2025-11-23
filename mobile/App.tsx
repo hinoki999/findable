@@ -1,6 +1,6 @@
 ﻿import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -57,6 +57,7 @@ interface UserProfile {
   email: string;
   bio: string;
   socialMedia: SocialMediaAccount[];
+  profilePhoto?: string;
 }
 
 const UserProfileContext = createContext<{
@@ -192,6 +193,9 @@ function MainApp() {
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false); // Track if user just signed up
   const [showProfilePhotoPrompt, setShowProfilePhotoPrompt] = useState(false); // Show profile photo setup after signup
 
+  // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
+  const hasCachedProfileRef = useRef(false);
+
   // ✅ NEW: Load profile AND photo from AsyncStorage when app starts
   useEffect(() => {
     const loadProfileFromCache = async () => {
@@ -200,6 +204,7 @@ function MainApp() {
         const cachedProfile = await AsyncStorage.getItem('userProfile');
 
         if (cachedProfile) {
+          hasCachedProfileRef.current = true; // ← Track cache existence
           const parsedProfile = JSON.parse(cachedProfile);
           console.log('📱 Profile loaded from cache:', parsedProfile);
 
@@ -210,7 +215,8 @@ function MainApp() {
 
           setUserProfile(parsedProfile);
         } else {
-          console.log('📱 No cached profile found');
+          hasCachedProfileRef.current = false; // ← No cache found (fresh install)
+          console.log('📱 No cached profile found - fresh install detected');
         }
 
         // ✅ CHANGE 2: Load profile photo from AsyncStorage
@@ -299,6 +305,8 @@ function MainApp() {
         console.log('🔍 Attempting to load profile data...');
         const profileData = await import('./src/services/api').then(m => m.getUserProfile());
         console.log('📦 Profile response:', profileData);
+        console.log('🔍 RAW BACKEND RESPONSE:', JSON.stringify(profileData, null, 2));
+        console.log('🔍 hasCachedProfileRef:', hasCachedProfileRef.current);
 
         if (profileData) {
           console.log('✅ Setting profile state with:', {
@@ -321,15 +329,36 @@ function MainApp() {
             return; // Skip profile data update
           }
 
-          // Merge with existing data - don't overwrite with empty/undefined values
-          // Use !== undefined to allow intentionally empty strings
-          setUserProfile(prev => ({
-            name: profileData.name !== undefined ? profileData.name : prev.name,
-            phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
-            email: profileData.email !== undefined ? profileData.email : prev.email,
-            bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
-            socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
-          }));
+          // ✅ CONDITIONAL LOGIC: Fresh install vs cached data
+          if (!hasCachedProfileRef.current) {
+            // 🆕 FRESH INSTALL PATH: Replace with backend data (use ?? for fallbacks)
+            console.log('🔍 SETTING STATE (REPLACE):', {
+              name: profileData.name ?? '',
+              email: profileData.email ?? '',
+              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : ''
+            });
+            
+            setUserProfile({
+              name: profileData.name ?? '',
+              email: profileData.email ?? '',
+              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
+              bio: profileData.bio ?? '',
+              socialMedia: profileData.socialMedia ?? [],
+              profilePhoto: profileData.profilePhoto,
+            });
+            
+            hasCachedProfileRef.current = true; // Mark as cached for next time
+          } else {
+            // 💾 HAS CACHE: Defensive merge (don't overwrite with empty/undefined)
+            setUserProfile(prev => ({
+              name: profileData.name !== undefined ? profileData.name : prev.name,
+              phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
+              email: profileData.email !== undefined ? profileData.email : prev.email,
+              bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
+              socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
+              profilePhoto: profileData.profilePhoto !== undefined ? profileData.profilePhoto : prev.profilePhoto,
+            }));
+          }
 
           // Load profile photo - only update if backend provides a value
           if (profileData.profile_photo !== undefined) {
