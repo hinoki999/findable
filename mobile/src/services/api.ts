@@ -337,7 +337,7 @@ export interface UserProfile {
   email: string;
   phone: string;
   bio: string;
-  profile_photo?: string;
+  profilePhoto?: string;
   socialMedia?: Array<{ platform: string; handle: string }>;
 }
 

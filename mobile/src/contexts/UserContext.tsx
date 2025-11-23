@@ -45,7 +45,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         phone: data?.phone || '',
         bio: data?.bio || '',
         socialMedia: data?.socialMedia || [],
-        profile_photo: data?.profile_photo
+        profilePhoto: data?.profilePhoto
       });
     } catch (error) {
       console.error('Failed to load profile:', error);
