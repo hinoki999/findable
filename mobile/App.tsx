@@ -314,15 +314,15 @@ function MainApp() {
             phone: profileData.phone,
             email: profileData.email,
             bio: profileData.bio,
-            profile_photo: profileData.profile_photo
+            profilePhoto: profileData.profilePhoto
           });
 
           // If onlyPhoto flag is set, only update photo (skip profile data)
           if (options?.onlyPhoto) {
             // Only update if backend has a value (don't overwrite with null)
-            if (profileData.profile_photo !== undefined) {
-              console.log('✅ Loaded profile photo:', profileData.profile_photo);
-              setProfilePhotoUri(profileData.profile_photo);
+            if (profileData.profilePhoto !== undefined) {
+              console.log('✅ Loaded profile photo:', profileData.profilePhoto);
+              setProfilePhotoUri(profileData.profilePhoto);
             } else {
               console.log('ℹ️ No profile photo in response, preserving existing state');
             }
@@ -361,9 +361,9 @@ function MainApp() {
           }
 
           // Load profile photo - only update if backend provides a value
-          if (profileData.profile_photo !== undefined) {
-            console.log('✅ Loaded profile photo:', profileData.profile_photo);
-            setProfilePhotoUri(profileData.profile_photo);
+          if (profileData.profilePhoto !== undefined) {
+            console.log('✅ Loaded profile photo:', profileData.profilePhoto);
+            setProfilePhotoUri(profileData.profilePhoto);
           } else {
             console.log('ℹ️ No profile photo in response, preserving existing state');
           }
