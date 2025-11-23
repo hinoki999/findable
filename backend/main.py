@@ -1352,6 +1352,12 @@ def register(register_request: RegisterRequest, request: Request):
             VALUES (?, ?, ?)
         ''', (user_id, 1, 33))
         
+        # Create initial user profile row to ensure GET /user/profile always has data
+        execute_query(cursor, '''
+            INSERT INTO user_profiles (user_id, email, has_completed_onboarding)
+            VALUES (?, ?, ?)
+        ''', (user_id, register_request.email, 0))
+        
         conn.commit()
         conn.close()
         
