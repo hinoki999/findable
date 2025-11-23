@@ -312,7 +312,12 @@ function MainApp() {
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
   const loadUserData = useCallback(async (options?: { onlyPhoto?: boolean }) => {
-    if (!isAuthenticated || !userId) return;
+    console.log('🚀 loadUserData CALLED - Starting execution');
+    
+    if (!isAuthenticated || !userId) {
+      console.log('❌ GUARD #1 TRIGGERED: Not authenticated or no userId');
+      return;
+    }
 
     try {
       console.log('📥 Loading user data from backend...');
@@ -325,7 +330,12 @@ function MainApp() {
         console.log('🔍 RAW BACKEND RESPONSE:', JSON.stringify(profileData, null, 2));
         console.log('🔍 hasCachedProfileRef:', hasCachedProfileRef.current);
 
+        console.log('🔍 GUARD #2 CHECK: profileData =', profileData);
+        console.log('🔍 GUARD #2 CHECK: typeof profileData =', typeof profileData);
+        console.log('🔍 GUARD #2 CHECK: profileData is truthy?', !!profileData);
+        
         if (profileData) {
+          console.log('✅ GUARD #2 PASSED: profileData exists, entering block');
           console.log('✅ Setting profile state with:', {
             name: profileData.name,
             phone: profileData.phone,
