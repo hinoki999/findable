@@ -12,6 +12,7 @@ import { storage } from '../services/storage';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
+  if (!name) return '';
   const parts = name.trim().split(' ');
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -67,29 +68,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const theme = getTheme(isDarkMode);
-
-  // Load profile from backend on mount
-  useEffect(() => {
-    const loadProfile = async () => {
-      // Add guard to prevent loading when not authenticated
-      const hasToken = await storage.getItem('authToken');
-      if (!hasToken) {
-        console.log('No auth token, skipping profile load');
-        return;
-      }
-
-      try {
-        console.log('🔄 Loading profile from backend...');
-        const profile = await getUserProfile();
-        setProfile(profile);
-        console.log('✅ Profile loaded:', profile);
-      } catch (error) {
-        console.error('❌ Failed to load profile:', error);
-      }
-    };
-    loadProfile();
-  }, []);
-
 
   // Format phone number as (###) ###-####
   const formatPhoneNumber = (text: string) => {
