@@ -339,6 +339,16 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+      {/* 🔍 DEBUG PANEL - REMOVE AFTER TESTING */}
+      <View style={{backgroundColor: 'red', padding: 10, zIndex: 9999}}>
+        <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
+          DEBUG: name="{name}" | email="{email}" | phone="{phone}"
+        </Text>
+        <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
+          from context: {JSON.stringify(profile).substring(0, 100)}
+        </Text>
+      </View>
+      
       <TopBar
         logoMode={true}
         logoIcon="account-outline"
