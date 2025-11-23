@@ -346,6 +346,7 @@ function MainApp() {
 
           // If onlyPhoto flag is set, only update photo (skip profile data)
           if (options?.onlyPhoto) {
+            console.log('⚠️ GUARD #3 TRIGGERED: onlyPhoto flag set, skipping profile data update');
             // Only update if backend has a value (don't overwrite with null)
             if (profileData.profilePhoto !== undefined) {
               console.log('✅ Loaded profile photo:', profileData.profilePhoto);
@@ -355,6 +356,8 @@ function MainApp() {
             }
             return; // Skip profile data update
           }
+          
+          console.log('✅ GUARD #3 PASSED: onlyPhoto flag not set, continuing');
 
           // ✅ CONDITIONAL LOGIC: Fresh install vs cached data
           if (!hasCachedProfileRef.current) {
@@ -408,10 +411,14 @@ function MainApp() {
             console.log('ℹ️ No profile photo in response, preserving existing state');
           }
         } else {
-          console.log('⚠️ Profile response was null/undefined');
+          console.log('❌ GUARD #2 FAILED: profileData is null/undefined/falsy');
+          console.log('⚠️ Profile response was null/undefined - setUserProfile will NOT be called!');
         }
       } catch (error) {
+        console.error('❌ GUARD #4 TRIGGERED: API call threw error');
         console.error('❌ Failed to load profile:', error);
+        console.error('❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
+        console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
       }
 
       // Load settings
@@ -462,8 +469,11 @@ function MainApp() {
       // }
 
       console.log('✅ All user data loaded successfully');
+      console.log('🏁 loadUserData COMPLETED - Exiting function normally');
     } catch (error) {
+      console.error('❌ OUTER CATCH: Unexpected error in loadUserData');
       console.error('❌ Failed to load user data:', error);
+      console.error('❌ This should not happen - all errors should be caught by inner try/catch');
     }
   }, []); // Empty deps: function only uses stable API imports and setState functions
 
