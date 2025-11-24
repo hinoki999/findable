@@ -3079,8 +3079,8 @@ def get_user_settings(user_id: int = Depends(get_current_user)):
             return {"darkMode": True, "maxDistance": 33}
         
         return {
-            "darkMode": bool(row[0]),
-            "maxDistance": row[1]
+            "darkMode": bool(get_value(row, 'dark_mode' if USE_POSTGRES else 0)),
+            "maxDistance": get_value(row, 'max_distance' if USE_POSTGRES else 1)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
