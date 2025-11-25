@@ -636,10 +636,8 @@ export default function HomeScreen() {
   useEffect(() => {
     const testConnection = async () => {
       const { error } = await supabase.from('_test').select('*').limit(1);
-      if (error && error.message.includes('does not exist')) {
-        setSupabaseStatus('Connected ✓');
-      } else if (error) {
-        setSupabaseStatus('Failed ✗');
+      if (error) {
+        setSupabaseStatus(`Error: ${error.message}`);
       } else {
         setSupabaseStatus('Connected ✓');
       }
