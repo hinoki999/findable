@@ -572,14 +572,15 @@ function MainApp() {
     setShowProfilePhotoPrompt(true);
   };
 
-  const handleLoginSuccess = async (token: string, userId: number, username: string) => {
-    console.log('✅ Login successful:', username);
-    await login(token, userId, username);
-
+  const handleLoginSuccess = () => {
+    console.log('✅ Login successful');
+    // Auth state is already set by AuthContext.login() called in LoginScreen
+    // loadUserData will be triggered by useEffect that watches isAuthenticated
+    
     // Navigate to Home tab
     setTab('Home');
     setSubScreen(null);
-
+    
     // Show success message
     showToast({
       message: 'Successfully logged in!',
