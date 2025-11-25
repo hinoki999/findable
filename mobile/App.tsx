@@ -22,6 +22,7 @@ import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
+import { supabase } from './src/services/supabase';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -213,6 +214,20 @@ function MainApp() {
       bio: userProfile.bio
     });
   }, [userProfile]);
+
+  // 🧪 TEST: Verify Supabase connection
+  useEffect(() => {
+    const testSupabaseConnection = async () => {
+      console.log('Testing Supabase connection...');
+      const { data, error } = await supabase.from('_test').select('*').limit(1);
+      if (error) {
+        console.log('Supabase connection test - Expected error (table does not exist yet):', error.message);
+      } else {
+        console.log('Supabase connection successful:', data);
+      }
+    };
+    testSupabaseConnection();
+  }, []);
 
   // ✅ NEW: Load profile AND photo from AsyncStorage when app starts
   useEffect(() => {
