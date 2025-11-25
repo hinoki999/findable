@@ -1,47 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Platform } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import { logAuth, logStateChange } from '../services/activityMonitor';
+import { supabase } from '../services/supabase';
 
 interface AuthState {
   isAuthenticated: boolean;
-  userId: number | null;
+  userId: string | null;
   username: string | null;
   token: string | null;
   loading: boolean;
 }
 
 interface AuthContextType extends AuthState {
-  login: (token: string, userId: number, username: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string, username: string) => Promise<{ success: boolean; userId?: string; error?: string }>;
   logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Storage helpers that work on both web and native
-const storage = {
-  async getItem(key: string): Promise<string | null> {
-    if (Platform.OS === 'web') {
-      return localStorage.getItem(key);
-    }
-    return await SecureStore.getItemAsync(key);
-  },
-  async setItem(key: string, value: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      localStorage.setItem(key, value);
-    } else {
-      await SecureStore.setItemAsync(key, value);
-    }
-  },
-  async deleteItem(key: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(key);
-    } else {
-      await SecureStore.deleteItemAsync(key);
-    }
-  },
-};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
@@ -59,16 +35,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkStoredAuth = async () => {
     try {
-      const token = await storage.getItem('authToken');
-      const userId = await storage.getItem('userId');
-      const username = await storage.getItem('username');
-
-      if (token && userId && username) {
+      // Check for Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
         setState({
           isAuthenticated: true,
-          userId: parseInt(userId),
-          username,
-          token,
+          userId: session.user.id,
+          username: session.user.email || null,
+          token: session.access_token,
           loading: false,
         });
       } else {
@@ -80,67 +55,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (token: string, userId: number, username: string) => {
+  const login = async (email: string, password: string) => {
     try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
+        password,
+      });
       
-      // 🔍 POINT B: Before storage write
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT B: AuthContext - Before Storage Write');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  token param:', token);
-      console.log('  typeof token:', typeof token);
-      console.log('  token length:', token?.length);
-      console.log('  is null?:', token === null);
-      console.log('  is string "null"?:', token === 'null');
-      console.log('  is undefined?:', token === undefined);
-      console.log('  JWT segments:', token?.split('.').length);
-      console.log('═══════════════════════════════════════════════════════');
+      if (error) throw error;
       
-      await storage.setItem('authToken', token);
+      // Supabase user ID is UUID string
+      const userId = data.user.id;
       
-      // 🔍 POINT C: After storage write - verify what was saved
-      const storedToken = await storage.getItem('authToken');
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT C: AuthContext - After Storage Write (Verification)');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  storedToken:', storedToken);
-      console.log('  typeof storedToken:', typeof storedToken);
-      console.log('  token length:', storedToken?.length);
-      console.log('  is null?:', storedToken === null);
-      console.log('  is string "null"?:', storedToken === 'null');
-      console.log('  is undefined?:', storedToken === undefined);
-      console.log('  JWT segments:', storedToken?.split('.').length);
-      console.log('  MATCHES ORIGINAL?:', token === storedToken);
-      console.log('═══════════════════════════════════════════════════════');
-
-      await storage.setItem('userId', userId.toString());
-      await storage.setItem('username', username);
-
-      logAuth('Login', { userId, username });
-      logStateChange('auth.isAuthenticated', false, true);
-
       setState({
         isAuthenticated: true,
-        userId,
-        username,
-        token,
+        userId: userId,
+        username: data.user.email || null,
+        token: data.session?.access_token || null,
         loading: false,
       });
+      
+      return { success: true };
     } catch (error) {
-      console.error('Error saving auth data:', error);
-      throw error;
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Login failed' 
+      };
+    }
+  };
+
+  const signup = async (email: string, password: string, username: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.toLowerCase().trim(),
+        password,
+        options: {
+          data: { username }
+        }
+      });
+      
+      if (error) throw error;
+      
+      // Auto-login after signup
+      if (data.user) {
+        setState({
+          isAuthenticated: true,
+          userId: data.user.id,
+          username: data.user.email || null,
+          token: data.session?.access_token || null,
+          loading: false,
+        });
+      }
+      
+      return { success: true, userId: data.user?.id };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Signup failed' 
+      };
     }
   };
 
   const logout = async () => {
     try {
-      await storage.deleteItem('authToken');
-      await storage.deleteItem('userId');
-      await storage.deleteItem('username');
-
+      await supabase.auth.signOut();
       logAuth('Logout');
       logStateChange('auth.isAuthenticated', true, false);
-
       setState({
         isAuthenticated: false,
         userId: null,
@@ -149,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading: false,
       });
     } catch (error) {
-      console.error('Error clearing auth data:', error);
+      console.error('Error logging out:', error);
     }
   };
 
@@ -158,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, setLoading }}>
+    <AuthContext.Provider value={{ ...state, login, signup, logout, setLoading }}>
       {children}
     </AuthContext.Provider>
   );
