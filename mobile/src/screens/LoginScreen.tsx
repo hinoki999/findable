@@ -4,9 +4,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { BASE_URL, secureFetch } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LoginScreenProps {
-  onLoginSuccess: (token: string, userId: number, username: string) => void;
+  onLoginSuccess: () => void;
   onSignupPress: () => void;
   onBack: () => void;
 }
@@ -14,8 +15,9 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: LoginScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
+  const { login } = useAuth();
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,50 +38,25 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
   const [forgotError, setForgotError] = useState('');
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      setError('Please enter username and password');
+    if (!email || !password) {
+      setError('Please enter email and password');
       return;
     }
 
     setLoading(true);
     setError('');
 
-    try {
-      const response = await secureFetch(`${BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
+    const result = await login(email, password);
 
-      const data = await response.json();
-      // 🔍 POINT A: Check token immediately after API response
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT A: LoginScreen API Response');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  data.token:', data.token);
-      console.log('  typeof token:', typeof data.token);
-      console.log('  token length:', data.token?.length);
-      console.log('  is null?:', data.token === null);
-      console.log('  is string "null"?:', data.token === 'null');
-      console.log('  is undefined?:', data.token === undefined);
-      console.log('  JWT segments:', data.token?.split('.').length);
-      console.log('═══════════════════════════════════════════════════════');
-
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Login failed');
-      }
-
-      // Success!
-      console.log("🔍 LOGIN RESPONSE:", JSON.stringify(data));
-      console.log("🔍 TOKEN VALUE:", data.token);
-      console.log("🔍 TOKEN TYPE:", typeof data.token);
-      onLoginSuccess(data.token, data.user_id, data.username);
-    } catch (err: any) {
-      setError(err.message || 'Invalid username or password');
-    } finally {
+    if (!result.success) {
+      setError(result.error || 'Login failed');
       setLoading(false);
+      return;
     }
+
+    // Navigate to home on success
+    setLoading(false);
+    onLoginSuccess();
   };
 
   const handleForgotPassword = () => {
@@ -245,7 +222,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
       // Success! Close modal and show success message
       setShowForgotModal(false);
       setError('');
-      setUsername('');
+      setEmail('');
       setPassword('');
       alert('Password reset successfully! Please log in with your new password.');
     } catch (err: any) {
@@ -296,22 +273,23 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Username */}
+          {/* Email */}
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: theme.colors.text }]}>Username</Text>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Email</Text>
             <View style={[
               styles.inputContainer,
               { backgroundColor: theme.colors.white, borderColor: theme.colors.border }
             ]}>
               <TextInput
                 style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
-                value={username}
+                value={email}
                 onChangeText={(text) => {
-                  setUsername(text);
+                  setEmail(text);
                   setError('');
                 }}
                 placeholder=""
                 placeholderTextColor={theme.colors.muted}
+                keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!loading}
@@ -367,12 +345,12 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
             style={({ pressed }) => [
               styles.submitButton,
               {
-                backgroundColor: username && password && !loading ? theme.colors.blue : theme.colors.muted,
-                opacity: pressed && username && password ? 0.8 : 1,
+                backgroundColor: email && password && !loading ? theme.colors.blue : theme.colors.muted,
+                opacity: pressed && email && password ? 0.8 : 1,
               }
             ]}
             onPress={handleLogin}
-            disabled={!username || !password || loading}
+            disabled={!email || !password || loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
