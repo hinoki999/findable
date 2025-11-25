@@ -314,7 +314,7 @@ function MainApp() {
 
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
-  const loadUserData = useCallback(async (auth: boolean, uid: number | null, options?: { onlyPhoto?: boolean }) => {
+  const loadUserData = useCallback(async (auth: boolean, uid: string | null, options?: { onlyPhoto?: boolean }) => {
     console.log('🚀 loadUserData CALLED - Starting execution');
     setDebugGuardStatus(`Function sees: Auth:${auth} ID:${uid}`);
     
@@ -528,13 +528,10 @@ function MainApp() {
 
   // Auth handlers
   const handleSignupSuccess = async (
-    token: string,
-    userId: number,
-    username: string,
-    email?: string,
     profileData?: { name: string; phone: string; bio: string }
   ) => {
-    console.log('✅ [App] Signup successful:', username);
+    console.log('✅ [App] Signup successful');
+    // Auth state is already set by AuthContext.signup() called in SignupScreen
 
     // Set flag to prevent automatic data reload (prevents race condition)
     setIsSignupInProgress(true);
@@ -549,20 +546,13 @@ function MainApp() {
       setUserProfile({
         name: profileData.name || 'Your Name',
         phone: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
-        email: email || 'user@example.com',
+        email: 'user@example.com',  // Will be set from auth context
         bio: profileData.bio || 'Add bio',
         socialMedia: [],
-      });
-      console.log('✅ [App] Profile data set from signup form:', {
-        name: profileData.name,
-        phone: phoneDigitsOnly,
-        email: email
       });
     }
 
     setIsFirstTimeUser(true);
-    console.log('✅ [App] Calling login()');
-    await login(token, userId, username);
 
     // Reset flag - normal data loads can proceed from here
     setIsSignupInProgress(false);
@@ -793,8 +783,10 @@ function MainApp() {
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         {authScreen === 'signup' && (
           <SignupScreen
-            onSignupSuccess={(token, userId, username, email) => {
-              handleSignupSuccess(token, userId, username, email);
+            onSignupSuccess={(token: string, userId: number, username: string, email?: string) => {
+              // TODO: SignupScreen needs migration to Supabase auth
+              // For now, keep old signature but handleSignupSuccess doesn't use these params
+              handleSignupSuccess(undefined);
             }}
             onLoginPress={() => setAuthScreen('login')}
             onBack={() => setAuthScreen('welcome')}
