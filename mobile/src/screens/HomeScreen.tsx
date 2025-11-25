@@ -9,7 +9,6 @@ import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
-import { supabase } from '../services/supabase';
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
@@ -567,7 +566,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
   const [showBlipModal, setShowBlipModal] = useState(false);
-  const [supabaseStatus, setSupabaseStatus] = useState('Testing...');
   
   // Link markers state (accepted links only, not returned drops)
   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
@@ -630,19 +628,6 @@ export default function HomeScreen() {
     });
 
     return () => subscription?.remove();
-  }, []);
-
-  // Test Supabase connection
-  useEffect(() => {
-    const testConnection = async () => {
-      const { error } = await supabase.from('_test').select('*').limit(1);
-      if (error) {
-        setSupabaseStatus(`Error: ${error.message}`);
-      } else {
-        setSupabaseStatus('Connected ✓');
-      }
-    };
-    testConnection();
   }, []);
   
   // MATHEMATICAL CONSTANTS FOR UI LAYOUT
@@ -1426,9 +1411,6 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      <Text style={{ position: 'absolute', top: 50, left: 20, color: 'white', fontSize: 12, zIndex: 9999 }}>
-        Supabase: {supabaseStatus}
-      </Text>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
         style={{ flex: 1 }}
