@@ -6,6 +6,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast, useUserProfile } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import { sendOtpCode, verifyOtpCode } from '../services/api';
 import * as Updates from 'expo-updates';
 
 interface SecuritySettingsScreenProps {
@@ -203,16 +204,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
     setSendingDeleteCode(true);
     try {
-      const response = await fetch(`${api.BASE_URL}/auth/send-verification-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: userEmail, type: 'account_deletion' }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send code');
-      }
-
+      await sendOtpCode(userEmail, 'recovery');
       // Don't show toast - keep modal open
       // Code sent successfully, user can now enter it
       setCodeSent(true);
@@ -238,24 +230,12 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
     }
 
     try {
-      // Verify the code
-      const verifyResponse = await fetch(`${api.BASE_URL}/auth/verify-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: userEmail,
-          code: deleteVerificationCode,
-          type: 'account_deletion',
-        }),
-      });
-
-      if (!verifyResponse.ok) {
-        throw new Error('Invalid verification code');
-      }
+      // Verify the OTP code
+      await verifyOtpCode(userEmail, deleteVerificationCode);
 
       // Delete the account
       console.log('🗑️ Attempting to delete account...');
-      await api.deleteAccount();
+      await api.deleteAccount(userId!);
       console.log('✅ Account deleted successfully from backend');
 
       // Show success toast first

@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import { BASE_URL, secureFetch } from '../services/api';
+import { sendOtpCode, verifyOtpCode, resetPasswordWithOtp, getUsernameByEmail } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LoginScreenProps {
@@ -90,31 +90,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await secureFetch(`${BASE_URL}/auth/send-recovery-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail, type: forgotType }),
-      });
-
-      const data = await response.json();
-      // 🔍 POINT A: Check token immediately after API response
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT A: LoginScreen API Response');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  data.token:', data.token);
-      console.log('  typeof token:', typeof data.token);
-      console.log('  token length:', data.token?.length);
-      console.log('  is null?:', data.token === null);
-      console.log('  is string "null"?:', data.token === 'null');
-      console.log('  is undefined?:', data.token === undefined);
-      console.log('  JWT segments:', data.token?.split('.').length);
-      console.log('═══════════════════════════════════════════════════════');
-
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to send code');
-      }
-
+      await sendOtpCode(forgotEmail, 'recovery');
       setForgotStep('code');
     } catch (err: any) {
       setForgotError(err.message || 'Failed to send recovery code');
@@ -133,37 +109,12 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await secureFetch(`${BASE_URL}/auth/verify-recovery-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: forgotEmail, 
-          code: recoveryCode,
-          type: forgotType
-        }),
-      });
-
-      const data = await response.json();
-      // 🔍 POINT A: Check token immediately after API response
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT A: LoginScreen API Response');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  data.token:', data.token);
-      console.log('  typeof token:', typeof data.token);
-      console.log('  token length:', data.token?.length);
-      console.log('  is null?:', data.token === null);
-      console.log('  is string "null"?:', data.token === 'null');
-      console.log('  is undefined?:', data.token === undefined);
-      console.log('  JWT segments:', data.token?.split('.').length);
-      console.log('═══════════════════════════════════════════════════════');
-
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Invalid code');
-      }
+      await verifyOtpCode(forgotEmail, recoveryCode);
 
       if (forgotType === 'username') {
-        setRecoveredUsername(data.username);
+        // For username recovery, get the username from database
+        const username = await getUsernameByEmail(forgotEmail);
+        setRecoveredUsername(username);
         setForgotStep('showUsername');
       } else {
         setForgotStep('newPassword');
@@ -190,34 +141,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      const response = await secureFetch(`${BASE_URL}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: forgotEmail,
-          code: recoveryCode,
-          new_password: newPassword,
-        }),
-      });
-
-      const data = await response.json();
-      // 🔍 POINT A: Check token immediately after API response
-      console.log('═══════════════════════════════════════════════════════');
-      console.log('🔍 POINT A: LoginScreen API Response');
-      console.log('  timestamp:', new Date().toISOString());
-      console.log('  data.token:', data.token);
-      console.log('  typeof token:', typeof data.token);
-      console.log('  token length:', data.token?.length);
-      console.log('  is null?:', data.token === null);
-      console.log('  is string "null"?:', data.token === 'null');
-      console.log('  is undefined?:', data.token === undefined);
-      console.log('  JWT segments:', data.token?.split('.').length);
-      console.log('═══════════════════════════════════════════════════════');
-
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to reset password');
-      }
+      await resetPasswordWithOtp(forgotEmail, recoveryCode, newPassword);
 
       // Success! Close modal and show success message
       setShowForgotModal(false);

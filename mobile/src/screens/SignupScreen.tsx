@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import { checkUsernameAvailability, checkEmailAvailability, BASE_URL, secureFetch } from '../services/api';
+import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyOtpCode } from '../services/api';
 import { useTutorial } from '../contexts/TutorialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -219,18 +219,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setError('');
 
     try {
-      const response = await secureFetch(`${BASE_URL}/auth/send-verification-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || 'Failed to send verification code');
-      }
-
+      await sendOtpCode(email, 'signup');
       // Move to code entry step
       setVerificationStep('enter-code');
     } catch (err: any) {
@@ -251,21 +240,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setError('');
 
     try {
-      // First verify the code
-      const verifyResponse = await secureFetch(`${BASE_URL}/auth/verify-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          code: verificationCode,
-        }),
-      });
-
-      const verifyData = await verifyResponse.json();
-
-      if (!verifyResponse.ok) {
-        throw new Error(verifyData.detail || 'Invalid verification code');
-      }
+      // Verify the OTP code
+      await verifyOtpCode(email, verificationCode);
+      console.log('✅ OTP verified successfully');
 
       // Code verified, now create the account with Supabase
       const result = await signup(email, password, username);
