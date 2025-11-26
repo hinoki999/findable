@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
+import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
 const USE_STUB = false; // Connected to backend!
@@ -564,102 +567,71 @@ export async function deleteAccount(): Promise<void> {
 }
 
 // ==================== PROFILE PHOTO ====================
-export async function uploadProfilePhoto(imageUri: string): Promise<{ success: boolean; url: string }> {
-  console.log('📸 Starting profile photo upload...');
-  console.log('Image URI:', imageUri);
+export async function uploadProfilePhoto(imageUri: string, userId: string): Promise<string> {
+  // Validate inputs
+  if (!imageUri) {
+    throw new Error('Please select an image first');
+  }
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
 
-  // Validate file size (max 10MB)
-  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+  // Extract file extension from imageUri
+  const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+  
+  // Generate file path (userId.extension, will overwrite previous photo)
+  const filePath = `${userId}.${extension}`;
 
   try {
-    // Check if file exists and get info
-    if (Platform.OS !== 'web') {
-      // For native, we'll validate size after FormData creation
-      console.log('⚠️ Skipping size validation for native (will validate on backend)');
-    }
-
-    // Create FormData
-    const formData = new FormData();
-
-    if (Platform.OS === 'web') {
-      console.log('🌐 Web platform - fetching blob...');
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-
-      // Validate size on web
-      if (blob.size > MAX_SIZE) {
-        throw new Error('File too large. Maximum size is 10MB');
-      }
-
-      formData.append('file', blob, 'profile.jpg');
-    } else {
-      // For mobile (Android/iOS)
-      console.log('📱 Mobile platform - preparing file...');
-      const filename = imageUri.split('/').pop() || 'profile.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-      console.log('File name:', filename);
-      console.log('File type:', type);
-
-      // Create proper file object for React Native
-      formData.append('file', {
-        uri: imageUri,
-        name: filename,
-        type: type,
-      } as any);
-    }
-
-    // Get auth headers
-    console.log('🔑 Getting auth token...');
-    const headers = await getAuthHeaders();
-
-    // Remove Content-Type header - let browser/RN set it with boundary for FormData
-    const uploadHeaders: any = { ...headers };
-    delete uploadHeaders['Content-Type'];
-
-    console.log('📤 Uploading to backend...');
-
-    // Upload with timeout and retry
-    const res = await secureFetch(`${BASE_URL}/user/profile/photo`, {
-      method: 'POST',
-      headers: uploadHeaders,
-      body: formData,
+    // Read file as base64
+    const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: FileSystem.EncodingType.Base64,
     });
 
-    console.log('📥 Response status:', res.status);
+    // Convert base64 to ArrayBuffer
+    const arrayBuffer = decode(base64Data);
 
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error('❌ Upload failed. Response:', errorText);
-      try {
-        const error = JSON.parse(errorText);
-        throw new Error(error.detail || `Upload failed: ${res.status}`);
-      } catch {
-        throw new Error(`Upload failed: ${res.status} - ${errorText}`);
-      }
+    // Upload to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('PROFILE_PHOTOS')
+      .upload(filePath, arrayBuffer, {
+        contentType: `image/${extension}`,
+        upsert: true, // Overwrite existing file
+      });
+
+    if (uploadError) {
+      console.error('Supabase upload error:', uploadError);
+      throw new Error('Failed to upload photo. Please try again.');
     }
 
-    const result = await res.json();
-    console.log('✅ Photo uploaded successfully:', result);
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('PROFILE_PHOTOS')
+      .getPublicUrl(filePath);
 
-    return {
-      success: true,
-      url: result.url || imageUri,
-    };
+    // Update user_profiles table with new photo URL
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ profile_photo: publicUrl })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Database update error:', updateError);
+      throw new Error('Failed to save photo to profile. Please try again.');
+    }
+
+    console.log('✅ Photo uploaded successfully:', publicUrl);
+    return publicUrl;
   } catch (error: any) {
     console.error('❌ Upload error:', error);
-    console.error('Error details:', error.message);
-
+    
     // Provide user-friendly error messages
-    if (error.message?.includes('too large')) {
-      throw new Error('Photo too large. Please choose a smaller photo (max 10MB)');
-    } else if (error.message?.includes('timeout') || error.message?.includes('Timeout')) {
-      throw new Error('Upload timed out. Please check your internet connection and try again');
-    } else if (error.message?.includes('Network')) {
-      throw new Error('Network error. Please check your internet connection');
+    if (error.message?.includes('Failed to read')) {
+      throw new Error('Failed to read image file');
+    } else if (error.message?.includes('User not authenticated') || error.message?.includes('Please select an image')) {
+      throw error; // Re-throw validation errors as-is
     } else {
-      throw new Error(error.message || 'Failed to upload photo. Please try again');
+      throw new Error(error.message || 'Failed to upload photo. Please try again.');
     }
   }
 }

@@ -208,12 +208,20 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   // Save photo
   const handleSave = async () => {
     if (!selectedImage) return;
+    if (!userId) {
+      showToast({
+        message: 'User not authenticated',
+        type: 'error',
+        duration: 3000,
+      });
+      return;
+    }
 
     setUploading(true);
     try {
-      const result = await uploadProfilePhoto(selectedImage);
+      const photoUrl = await uploadProfilePhoto(selectedImage, userId);
 
-      console.log('✅ Photo uploaded successfully');
+      console.log('✅ Photo uploaded successfully:', photoUrl);
 
       showToast({
         message: 'Profile photo updated!',
@@ -221,7 +229,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         duration: 2000,
       });
 
-      onPhotoSaved(result.url);
+      onPhotoSaved(photoUrl);
       navigation.goBack();
     } catch (error: any) {
       console.error('❌ Upload error:', error);

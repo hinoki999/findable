@@ -47,12 +47,16 @@ export default function ProfilePhotoPromptScreen({ onComplete }: ProfilePhotoPro
 
   const handleUpload = async () => {
     if (!selectedImage) return;
+    if (!userId) {
+      alert('User not authenticated');
+      return;
+    }
 
     setUploading(true);
     try {
-      await uploadProfilePhoto(selectedImage);
+      const photoUrl = await uploadProfilePhoto(selectedImage, userId);
 
-      console.log('✅ Profile photo uploaded successfully');
+      console.log('✅ Profile photo uploaded successfully:', photoUrl);
       onComplete();
     } catch (error: any) {
       console.error('❌ Upload error:', error);
