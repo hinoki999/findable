@@ -542,41 +542,35 @@ function MainApp() {
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     const newProfile = { ...userProfile, ...updates };
-
-    // Save to backend FIRST (pessimistic update - ensures data integrity)
+    
     try {
-      const api = await import('./src/services/api');
-      await api.saveUserProfile({
-        name: newProfile.name,
-        email: newProfile.email,
-        phone: newProfile.phone,
-        bio: newProfile.bio,
-        socialMedia: newProfile.socialMedia,
-      });
-
-      console.log('✅ Profile saved to backend:', newProfile);
-
-      // Only update local state AFTER successful backend save
-      // AsyncStorage auto-save will trigger from the useEffect
-      console.log('🔢 [DEBUG] setUserProfile CALL #5: updateProfile function');
-      setDebugSetProfileCalls(prev => prev + 1);
+      if (!userId) return;
+      
+      // Update user_profiles in Supabase
+      await supabase
+        .from('user_profiles')
+        .update({
+          name: newProfile.name,
+          email: newProfile.email,
+          phone: newProfile.phone,
+          bio: newProfile.bio,
+          social_media: newProfile.socialMedia,
+        })
+        .eq('user_id', userId);
+      
+      // Update local state
       setUserProfile(newProfile);
-
-      // Success toast only after confirmed save
+      
+      console.log('✅ Profile updated successfully');
       showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
-
     } catch (error: any) {
-      console.error('❌ Failed to save profile:', error);
-
-      // Show error with message from backend (ERROR 7 will improve this)
-      const errorMessage = error.message || 'Failed to save profile';
+      console.error('Error updating profile:', error);
       showToast({
-        message: errorMessage,
+        message: error.message || 'Failed to update profile',
         type: 'error',
         duration: 3000
       });
-
-      // NOTE: Local state was never changed, so no rollback needed
+      throw error;
     }
   };
 
