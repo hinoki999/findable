@@ -5,9 +5,11 @@ import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { BASE_URL, secureFetch } from '../services/api';
 import { useTutorial } from '../contexts/TutorialContext';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../services/supabase';
 
 interface SignupScreenProps {
-  onSignupSuccess: (token: string, userId: number, username: string, email?: string) => void;
+  onSignupSuccess: (profileData?: { name: string; phone: string; bio: string }) => void;
   onLoginPress: () => void;
   onBack: () => void;
 }
@@ -16,6 +18,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
   const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
+  const { signup } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -276,23 +279,37 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(verifyData.detail || 'Invalid verification code');
       }
 
-      // Code verified, now create the account
-      const response = await secureFetch(`${BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          password,
-          email,
-        }),
+      // Code verified, now create the account with Supabase
+      const result = await signup(email, password, username);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Signup failed');
+      }
+      
+      console.log('✅ Supabase signup successful, userId:', result.userId);
+      
+      const userId = result.userId;
+
+      // Create user_profiles record in Supabase
+      await supabase.from('user_profiles').insert({
+        user_id: userId,
+        email: email,
+        name: null,
+        phone: null,
+        bio: null,
+        profile_photo: null,
+        social_media: [],
+        has_completed_onboarding: false
       });
 
-      const data = await response.json();
+      // Create user_settings record in Supabase
+      await supabase.from('user_settings').insert({
+        user_id: userId,
+        dark_mode: true,
+        max_distance: 33
+      });
 
-      if (!response.ok) {
-        throw new Error(data.detail || 'Registration failed');
-      }
-
+      console.log('✅ Created user_profiles and user_settings records');
 
       // Enable tutorials for this new signup
       console.log('📚 Enabling tutorials for new signup...');
@@ -307,8 +324,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
       console.log('🚀 Calling onSignupSuccess - navigating to app...');
-      // Pass profile data to App to prevent race condition
-      onSignupSuccess(data.token, data.user_id, data.username, email);
+      
+      // SignupScreen doesn't collect name/phone/bio, so pass undefined
+      // Profile will be set up later via profile editing or onboarding
+      onSignupSuccess(undefined);
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
