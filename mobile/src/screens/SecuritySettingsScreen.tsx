@@ -3,7 +3,7 @@ import { View, Text, Pressable, TextInput, Modal, ScrollView, Alert, StyleSheet,
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
-import { useDarkMode, useToast } from '../../App';
+import { useDarkMode, useToast, useUserProfile } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
 import * as Updates from 'expo-updates';
@@ -15,9 +15,9 @@ interface SecuritySettingsScreenProps {
 export default function SecuritySettingsScreen({ navigation }: SecuritySettingsScreenProps) {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { showToast } = useToast();
-  const { logout, username, login } = useAuth();
+  const { logout, username, login, userId } = useAuth();
+  const { profile } = useUserProfile();
   const theme = getTheme(isDarkMode);
-  const [userEmail, setUserEmail] = useState('');
 
   // Modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -41,18 +41,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   const [sendingDeleteCode, setSendingDeleteCode] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
 
-  // Load user email on mount
-  React.useEffect(() => {
-    const loadUserEmail = async () => {
-      try {
-        const profile = await api.getUserProfile();
-        setUserEmail(profile.email || '');
-      } catch (error) {
-        console.error('Failed to load user email:', error);
-      }
-    };
-    loadUserEmail();
-  }, []);
+  // Get user email from profile context
+  const userEmail = profile.email;
 
   const handleEdit = (field: 'username' | 'password') => {
     setEditingField(field);
@@ -97,8 +87,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
           return;
         }
 
-        const result = await api.changeUsername(tempValue);
-        await login(result.token, 0, result.username);
+        await api.changeUsername(tempValue, userId!);
+        // Note: With Supabase, username changes don't require re-authentication
         
         showToast({
           message: 'Username updated successfully',

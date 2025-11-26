@@ -6,7 +6,6 @@ import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
-import { getUserProfile } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
 
@@ -224,10 +223,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
       // Call API to change username
       try {
-        const result = await api.changeUsername(tempValue.trim());
+        await api.changeUsername(tempValue.trim(), userId!);
         logAction('Username changed', { oldUsername: username, newUsername: tempValue.trim() });
-        // Update token in storage
-        await login(result.token, userId || 0, result.username);
+        // Note: With Supabase, username changes don't require re-authentication
 
         showToast({
           message: 'Username changed successfully!',

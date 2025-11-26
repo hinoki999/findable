@@ -18,7 +18,6 @@ import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
-import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
@@ -505,7 +504,7 @@ function MainApp() {
         darkMode: newValue,
         maxDistance,
         privacyZonesEnabled: false, // TODO: Get from actual state
-      });
+      }, userId!);
       console.log('✅ Dark mode saved to backend:', newValue);
     } catch (error) {
       console.error('❌ Failed to save dark mode:', error);
@@ -588,7 +587,7 @@ function MainApp() {
         darkMode: isDarkMode,
         maxDistance: distance,
         privacyZonesEnabled: false, // TODO: Get from actual state
-      });
+      }, userId!);
       console.log('✅ Max distance saved to backend:', distance);
     } catch (error) {
       console.error('❌ Failed to save max distance:', error);
@@ -921,9 +920,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <UserProvider>
-            <MainApp />
-          </UserProvider>
+          <MainApp />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

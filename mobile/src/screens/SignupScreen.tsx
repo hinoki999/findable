@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import { BASE_URL, secureFetch } from '../services/api';
+import { checkUsernameAvailability, checkEmailAvailability, BASE_URL, secureFetch } from '../services/api';
 import { useTutorial } from '../contexts/TutorialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
@@ -43,40 +43,28 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [verificationCode, setVerificationCode] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
 
-  const checkUsernameAvailability = async (username: string) => {
+  const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
       console.log('🔍 Checking username availability:', username);
-      const response = await secureFetch(`${BASE_URL}/auth/check-username`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
+      const available = await checkUsernameAvailability(username);
+      console.log('✅ Username availability result:', available);
 
-      const data = await response.json();
-      console.log('✅ Username check response:', data);
-
-      if (!data.available) {
-        setUsernameError(data.message);
+      if (!available) {
+        setUsernameError('Username is already taken');
       }
     } catch (err) {
       console.error('❌ Failed to check username:', err);
     }
   };
 
-  const checkEmailAvailability = async (email: string) => {
+  const checkEmailAvailabilityLocal = async (email: string) => {
     try {
       console.log('🔍 Checking email availability:', email);
-      const response = await secureFetch(`${BASE_URL}/auth/check-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+      const available = await checkEmailAvailability(email);
+      console.log('✅ Email availability result:', available);
 
-      const data = await response.json();
-      console.log('✅ Email check response:', data);
-
-      if (!data.available) {
-        setEmailError(data.message || 'Email is already in use');
+      if (!available) {
+        setEmailError('Email is already in use');
       }
     } catch (err) {
       console.error('❌ Failed to check email:', err);
@@ -107,7 +95,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   useEffect(() => {
     if (username.length >= 3 && username.length <= 20 && !usernameError) {
       const timer = setTimeout(() => {
-        checkUsernameAvailability(username);
+        checkUsernameAvailabilityLocal(username);
       }, 500); // Wait 500ms after user stops typing
 
       return () => clearTimeout(timer);
@@ -119,7 +107,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email.length > 0 && emailRegex.test(email) && !emailError) {
       const timer = setTimeout(() => {
-        checkEmailAvailability(email);
+        checkEmailAvailabilityLocal(email);
       }, 500); // Wait 500ms after user stops typing
 
       return () => clearTimeout(timer);

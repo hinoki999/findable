@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
@@ -52,6 +53,7 @@ export default function HistoryScreen() {
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { showToast } = useToast();
+  const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
   const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
   
@@ -111,7 +113,7 @@ export default function HistoryScreen() {
       lastDeletedItemRef.current = itemToDelete;
       
       // Delete from API/store
-      await deleteDevice(itemToDelete.id);
+      await deleteDevice(itemToDelete.id, userId!);
       // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
       console.log('🗑️ Device deleted from history and store');
@@ -136,7 +138,7 @@ export default function HistoryScreen() {
     console.log('🔄 UNDOING delete for:', lastDeletedItem.name);
     
     // Restore to API/store
-    await restoreDevice(lastDeletedItem);
+    await restoreDevice(lastDeletedItem, userId!);
     
     // Restore to local data
     setData(prevData => [...prevData, lastDeletedItem]);

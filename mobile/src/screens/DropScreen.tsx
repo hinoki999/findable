@@ -5,6 +5,7 @@ import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
 import { saveDevice } from '../services/api';
 import { useDarkMode, useLinkNotifications, useToast, useSettings } from '../../App';
+import { useAuth } from '../contexts/AuthContext';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -20,6 +21,7 @@ export default function DropScreen() {
   const { addLinkNotification } = useLinkNotifications();
   const { showToast } = useToast();
   const { maxDistance } = useSettings();
+  const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
   const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
   
@@ -63,7 +65,7 @@ export default function DropScreen() {
         rssi: device.rssi, 
         distanceFeet: device.distanceFeet, 
         action: 'dropped' 
-      });
+      }, userId!);
       setActive(null);
       showToast({
         message: `Drop sent to ${device.name}!`,
@@ -99,7 +101,7 @@ export default function DropScreen() {
           email: linkData.email,
           bio: linkData.bio,
           socialMedia: linkData.socialMedia,
-        });
+        }, userId!);
         
         // Add link notification with reference to the device id
         addLinkNotification({
@@ -149,7 +151,7 @@ export default function DropScreen() {
         rssi: -55, 
         distanceFeet: 18, 
         action 
-      });
+      }, userId!);
       setIncomingDrop(null);
     }
   };

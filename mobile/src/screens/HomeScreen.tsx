@@ -5,6 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
@@ -590,6 +591,7 @@ export default function HomeScreen() {
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
   const { showToast } = useToast();
+  const { userId } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
   const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
   const { maxDistance } = useSettings();
@@ -1254,7 +1256,7 @@ export default function HomeScreen() {
       rssi: -55, 
       distanceFeet: 18, 
       action 
-    });
+    }, userId!);
     
     // Remove the drop from the list
     setIncomingDrops(prev => prev.filter(d => d.name !== drop.name));
@@ -1303,7 +1305,7 @@ export default function HomeScreen() {
       togglePin(confirmCardId);
     } else if (actionType === 'delete') {
       // Delete from API/store (removes from Link page)
-      await deleteDevice(confirmCardId);
+      await deleteDevice(confirmCardId, userId!);
       // Remove from pinned profiles (removes from Home page)
       setPinnedProfiles(prev => prev.filter(p => p.id !== confirmCardId));
       // Unpin
@@ -1350,7 +1352,7 @@ export default function HomeScreen() {
       console.log('Starting restore process for:', lastAction.card.name);
       
       // Step 1: Restore to API/store first and wait for it
-      await restoreDevice(lastAction.card);
+      await restoreDevice(lastAction.card, userId!);
       console.log('✅ Device restored to API/store');
       
       // Step 2: Re-add to pinnedProfiles immediately for instant UI feedback
@@ -2730,7 +2732,7 @@ export default function HomeScreen() {
                       rssi: selectedBlipDevice.rssi, 
                       distanceFeet: selectedBlipDevice.distanceFeet, 
                       action: 'dropped' 
-                    });
+                    }, userId!);
                     setShowBlipModal(false);
                     showToast({
                       message: `Drop sent to ${selectedBlipDevice.name}!`,
@@ -2761,7 +2763,7 @@ export default function HomeScreen() {
                         email: linkData.email,
                         bio: linkData.bio,
                         socialMedia: linkData.socialMedia,
-                      });
+                      }, userId!);
                       
                       addLinkNotification({
                         deviceId: uniqueId,

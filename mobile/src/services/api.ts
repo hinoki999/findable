@@ -248,43 +248,67 @@ export type Device = {
 const _store: Device[] = [];
 const sleep = (ms:number) => new Promise(r => setTimeout(r, ms));
 
-export async function saveDevice(d: Device) {
-  if (USE_STUB) {
-    await sleep(150);
-    const item = { 
-      id: d.id || Date.now(), // Use provided id if available
+export async function saveDevice(d: Device, userId: string): Promise<any> {
+  // Validate userId parameter
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
+
+  try {
+    // Map frontend format to database format (camelCase to snake_case)
+    const dbData = {
+      user_id: userId,
+      device_name: d.name,
+      rssi: d.rssi,
+      distance_feet: d.distanceFeet,
       action: d.action || 'dropped',
-      timestamp: d.timestamp || new Date(),
-      ...d 
+      last_seen: d.timestamp ? new Date(d.timestamp).toISOString() : new Date().toISOString(),
+      phone_number: d.phoneNumber || null,
+      email: d.email || null,
+      bio: d.bio || null,
+      social_media: d.socialMedia || null,
+      profile_photo: d.profilePhoto || null,
     };
-    // Check if device with this id already exists, update instead of adding duplicate
-    const existingIndex = _store.findIndex(device => device.id === item.id);
-    if (existingIndex !== -1) {
-      _store[existingIndex] = item;
+
+    let data, error;
+
+    if (d.id) {
+      // Update existing record using upsert
+      const result = await supabase
+        .from('devices')
+        .upsert({ ...dbData, id: d.id })
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
     } else {
-      _store.unshift(item);
+      // Insert new record
+      const result = await supabase
+        .from('devices')
+        .insert(dbData)
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
     }
-    return item;
+
+    if (error) {
+      console.error('Supabase device save error:', error);
+      throw new Error('Failed to save device. Please try again.');
+    }
+
+    console.log('✅ Device saved successfully:', data?.id);
+    return data;
+  } catch (error: any) {
+    console.error('❌ Device save error:', error);
+    
+    // Re-throw validation errors as-is
+    if (error.message?.includes('User not authenticated')) {
+      throw error;
+    }
+    
+    throw new Error(error.message || 'Failed to save device. Please try again.');
   }
-  
-  // Map frontend format to backend format
-  const backendData = {
-    name: d.name,
-    rssi: d.rssi,
-    distance: d.distanceFeet, // Backend expects distance in feet
-  };
-  
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/devices`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(backendData),
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-    throw new Error(error.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
 }
 
 export async function getDevices(): Promise<Device[]> {
@@ -298,40 +322,41 @@ export async function getDevices(): Promise<Device[]> {
   return res.json();
 }
 
-export async function deleteDevice(deviceId: number): Promise<void> {
-  if (USE_STUB) {
-    await sleep(100);
-    const index = _store.findIndex(d => d.id === deviceId);
-    if (index !== -1) {
-      _store.splice(index, 1);
-      console.log(`✅ Device ${deviceId} deleted from store`);
-    }
-    return;
+export async function deleteDevice(deviceId: number, userId: string): Promise<void> {
+  // Validate userId parameter
+  if (!userId) {
+    throw new Error('User not authenticated');
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/devices/${deviceId}`, {
-    method: "DELETE",
-    headers,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  try {
+    // Delete from Supabase (with user_id filter for security)
+    const { error } = await supabase
+      .from('devices')
+      .delete()
+      .eq('id', deviceId)
+      .eq('user_id', userId); // Security: only delete own devices
+
+    if (error) {
+      console.error('Supabase device delete error:', error);
+      throw new Error('Failed to delete device. Please try again.');
+    }
+
+    console.log(`✅ Device ${deviceId} deleted successfully`);
+  } catch (error: any) {
+    console.error('❌ Device delete error:', error);
+    
+    // Re-throw validation errors as-is
+    if (error.message?.includes('User not authenticated')) {
+      throw error;
+    }
+    
+    throw new Error(error.message || 'Failed to delete device. Please try again.');
+  }
 }
 
-export async function restoreDevice(device: Device): Promise<void> {
-  if (USE_STUB) {
-    await sleep(100);
-    // Add back to store
-    _store.unshift(device);
-    console.log(`✅ Device ${device.id} restored to store`);
-    return;
-  }
-  // For real API, would need to POST it back
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/devices`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(device),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+export async function restoreDevice(device: Device, userId: string): Promise<void> {
+  // Restore is the same as saving - just call saveDevice
+  await saveDevice(device, userId);
 }
 
 // ==================== USER PROFILE ====================
@@ -342,59 +367,6 @@ export interface UserProfile {
   bio: string;
   profilePhoto?: string;
   socialMedia?: Array<{ platform: string; handle: string }>;
-}
-
-export async function getUserProfile(): Promise<UserProfile> {
-  if (USE_STUB) {
-    await sleep(100);
-    return { name: '', email: '', phone: '', bio: '' };
-  }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/profile`, { headers });
-
-  // Better error handling
-  if (!res.ok) {
-    let errorMessage = `Failed to load profile: HTTP ${res.status}`;
-    try {
-      const errorData = await res.json();
-      if (errorData.detail) {
-        errorMessage = errorData.detail;
-      }
-    } catch (parseError) {
-      // Response wasn't JSON, use default message
-    }
-    throw new Error(errorMessage);
-  }
-
-  return res.json();
-}
-
-export async function saveUserProfile(profile: UserProfile): Promise<void> {
-  if (USE_STUB) {
-    await sleep(100);
-    return;
-  }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/profile`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(profile),
-  });
-
-  // Parse backend error response for detailed message
-  if (!res.ok) {
-    let errorMessage = `HTTP ${res.status}`;
-    try {
-      const errorData = await res.json();
-      // Backend returns { detail: "error message" }
-      if (errorData.detail) {
-        errorMessage = errorData.detail;
-      }
-    } catch (parseError) {
-      // Response wasn't JSON, use default message
-    }
-    throw new Error(errorMessage);
-  }
 }
 
 // ==================== USER SETTINGS ====================
@@ -415,18 +387,40 @@ export async function getUserSettings(): Promise<UserSettings> {
   return res.json();
 }
 
-export async function saveUserSettings(settings: UserSettings): Promise<void> {
-  if (USE_STUB) {
-    await sleep(100);
-    return;
+export async function saveUserSettings(settings: UserSettings, userId: string): Promise<void> {
+  // Validate userId parameter
+  if (!userId) {
+    throw new Error('User not authenticated');
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/settings`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(settings),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  try {
+    // Map camelCase to snake_case for Supabase
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({
+        user_id: userId,
+        dark_mode: settings.darkMode,
+        max_distance: settings.maxDistance,
+        privacy_zones_enabled: settings.privacyZonesEnabled,
+      })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Supabase settings update error:', error);
+      throw new Error('Failed to save settings. Please try again.');
+    }
+
+    console.log('✅ Settings saved successfully');
+  } catch (error: any) {
+    console.error('❌ Settings save error:', error);
+    
+    // Re-throw validation errors as-is
+    if (error.message?.includes('User not authenticated')) {
+      throw error;
+    }
+    
+    throw new Error(error.message || 'Failed to save settings. Please try again.');
+  }
 }
 
 // ==================== PRIVACY ZONES ====================
@@ -514,28 +508,101 @@ export async function unpinContact(deviceId: number): Promise<void> {
 }
 
 // ==================== AUTH MANAGEMENT ====================
-export async function changeUsername(newUsername: string): Promise<{ token: string; username: string }> {
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/auth/change-username?new_username=${encodeURIComponent(newUsername)}`, {
-    method: "POST",
-    headers,
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || `HTTP ${res.status}`);
+// Check if username is available (for signup validation)
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('name', username)
+      .single();
+    
+    // If data exists, username is taken
+    // If error.code is 'PGRST116' (not found), username is available
+    return !data;
+  } catch (error) {
+    console.error('Username check error:', error);
+    // On error, assume available (don't block signup)
+    return true;
   }
-  return res.json();
+}
+
+// Check if email is available (for signup validation)
+export async function checkEmailAvailability(email: string): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .single();
+    
+    // If data exists, email is taken
+    return !data;
+  } catch (error) {
+    console.error('Email check error:', error);
+    // On error, assume available (don't block signup)
+    return true;
+  }
+}
+
+
+export async function changeUsername(newUsername: string, userId: string): Promise<void> {
+  try {
+    // Validate userId parameter
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    // Update username in user_profiles table
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .update({ name: newUsername })
+      .eq('user_id', userId);
+
+    if (profileError) {
+      console.error('Failed to update username in profile:', profileError);
+      throw new Error('Failed to change username. Please try again.');
+    }
+
+    // Update username in Supabase Auth metadata (optional but recommended)
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { username: newUsername }
+    });
+
+    if (authError) {
+      console.error('Failed to update username in auth:', authError);
+      // Don't throw - profile update succeeded, metadata update is optional
+    }
+
+    console.log('✅ Username changed successfully');
+  } catch (error: any) {
+    console.error('❌ Change username error:', error);
+    
+    // Re-throw validation errors as-is
+    if (error.message?.includes('User not authenticated')) {
+      throw error;
+    }
+    
+    throw new Error(error.message || 'Failed to change username. Please try again.');
+  }
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/auth/change-password?current_password=${encodeURIComponent(currentPassword)}&new_password=${encodeURIComponent(newPassword)}`, {
-    method: "POST",
-    headers,
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.detail || `HTTP ${res.status}`);
+  try {
+    // Supabase built-in password update
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    if (error) {
+      console.error('Failed to change password:', error);
+      throw new Error('Failed to change password. Please try again.');
+    }
+
+    console.log('✅ Password changed successfully');
+  } catch (error: any) {
+    console.error('❌ Change password error:', error);
+    throw new Error(error.message || 'Failed to change password. Please try again.');
   }
 }
 
