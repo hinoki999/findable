@@ -22,6 +22,7 @@ import { UserProvider } from './src/contexts/UserContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
+import { supabase } from './src/services/supabase';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -315,185 +316,70 @@ function MainApp() {
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
   const loadUserData = useCallback(async (auth: boolean, uid: string | null, options?: { onlyPhoto?: boolean }) => {
-    console.log('🚀 loadUserData CALLED - Starting execution');
-    setDebugGuardStatus(`Function sees: Auth:${auth} ID:${uid}`);
+    if (!auth || !uid) return;
     
-    if (!auth || !uid) {
-      console.log('❌ GUARD #1 TRIGGERED: Not authenticated or no userId');
-      setDebugGuardStatus('FAILED: Not authenticated or no userId');
-      return;
-    }
-
     try {
-      console.log('📥 Loading user data from backend...');
-
-      // Load user profile
-      try {
-        console.log('🔍 Attempting to load profile data...');
-        const profileData = await import('./src/services/api').then(m => m.getUserProfile());
-        console.log('📦 Profile response:', profileData);
-        console.log('🔍 RAW BACKEND RESPONSE:', JSON.stringify(profileData, null, 2));
-        console.log('🔍 hasCachedProfileRef:', hasCachedProfileRef.current);
-
-        console.log('🔍 GUARD #2 CHECK: profileData =', profileData);
-        console.log('🔍 GUARD #2 CHECK: typeof profileData =', typeof profileData);
-        console.log('🔍 GUARD #2 CHECK: profileData is truthy?', !!profileData);
-        
-        setDebugGuardStatus(profileData ? 'Guard #2 PASSED' : 'FAILED: profileData null');
-        
-        if (profileData) {
-          console.log('✅ GUARD #2 PASSED: profileData exists, entering block');
-          console.log('✅ Setting profile state with:', {
-            name: profileData.name,
-            phone: profileData.phone,
-            email: profileData.email,
-            bio: profileData.bio,
-            profilePhoto: profileData.profilePhoto
-          });
-
-          // If onlyPhoto flag is set, only update photo (skip profile data)
-          if (options?.onlyPhoto) {
-            console.log('⚠️ GUARD #3 TRIGGERED: onlyPhoto flag set, skipping profile data update');
-            setDebugGuardStatus('Guard #3 triggered: onlyPhoto');
-            // Only update if backend has a value (don't overwrite with null)
-            if (profileData.profilePhoto !== undefined) {
-              console.log('✅ Loaded profile photo:', profileData.profilePhoto);
-              setProfilePhotoUri(profileData.profilePhoto);
-            } else {
-              console.log('ℹ️ No profile photo in response, preserving existing state');
-            }
-            return; // Skip profile data update
-          }
-          
-          console.log('✅ GUARD #3 PASSED: onlyPhoto flag not set, continuing');
-          setDebugGuardStatus('Guard #3 PASSED - About to call setUserProfile');
-
-          // ✅ CONDITIONAL LOGIC: Fresh install vs cached data
-          if (!hasCachedProfileRef.current) {
-            // 🆕 FRESH INSTALL PATH: Replace with backend data (use ?? for fallbacks)
-            console.log('🔍 SETTING STATE (REPLACE):', {
-              name: profileData.name ?? '',
-              email: profileData.email ?? '',
-              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : ''
-            });
-            
-            const newProfileData = {
-              name: profileData.name ?? '',
-              email: profileData.email ?? '',
-              phone: profileData.phone ? formatPhoneNumber(profileData.phone) : '',
-              bio: profileData.bio ?? '',
-              socialMedia: profileData.socialMedia ?? [],
-              profilePhoto: profileData.profilePhoto,
-            };
-            
-            console.log('🔄 CALLING setUserProfile with:', newProfileData);
-            console.log('🔢 [DEBUG] setUserProfile CALL #2: REPLACE path (fresh install)');
-            setDebugSetProfileCalls(prev => prev + 1);
-            setUserProfile(newProfileData);
-            console.log('✅ setUserProfile CALLED - state should update now');
-            
-            hasCachedProfileRef.current = true; // Mark as cached for next time
-          } else {
-            // 💾 HAS CACHE: Defensive merge (don't overwrite with empty/undefined)
-            console.log('🔄 MERGE PATH - Previous state:', userProfile);
-            console.log('🔢 [DEBUG] setUserProfile CALL #3: MERGE path (has cache)');
-            setDebugSetProfileCalls(prev => prev + 1);
-            setUserProfile(prev => {
-              const merged = {
-                name: profileData.name !== undefined ? profileData.name : prev.name,
-                phone: profileData.phone !== undefined ? (profileData.phone ? formatPhoneNumber(profileData.phone) : prev.phone) : prev.phone,
-                email: profileData.email !== undefined ? profileData.email : prev.email,
-                bio: profileData.bio !== undefined ? profileData.bio : prev.bio,
-                socialMedia: profileData.socialMedia !== undefined ? profileData.socialMedia : prev.socialMedia,
-                profilePhoto: profileData.profilePhoto !== undefined ? profileData.profilePhoto : prev.profilePhoto,
-              };
-              console.log('🔄 MERGE PATH - Merged result:', merged);
-              return merged;
-            });
-          }
-
-          // Load profile photo - only update if backend provides a value
-          if (profileData.profilePhoto !== undefined) {
-            console.log('✅ Loaded profile photo:', profileData.profilePhoto);
-            setProfilePhotoUri(profileData.profilePhoto);
-          } else {
-            console.log('ℹ️ No profile photo in response, preserving existing state');
-          }
-        } else {
-          console.log('❌ GUARD #2 FAILED: profileData is null/undefined/falsy');
-          console.log('⚠️ Profile response was null/undefined - setUserProfile will NOT be called!');
-        }
-      } catch (error) {
-        console.error('❌ GUARD #4 TRIGGERED: API call threw error');
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        setDebugGuardStatus(`FAILED: API error - ${errorMsg}`);
-        console.error('❌ Failed to load profile:', error);
-        console.error('❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
-        console.error('❌ Error message:', errorMsg);
-      }
-
-      // Load settings
-      const settingsData = await import('./src/services/api').then(m => m.getUserSettings());
-      if (settingsData) {
-        console.log('✅ Loaded settings:', settingsData);
-        setIsDarkMode(settingsData.darkMode);
-        setMaxDistance(settingsData.maxDistance);
-      }
-
-      // Load linked devices/contacts
-      const devicesData = await import('./src/services/api').then(m => m.getDevices());
-      if (devicesData && devicesData.length > 0) {
-        console.log('✅ Loaded devices:', devicesData.length, 'contacts');
-
-        // Convert devices to link notifications for accepted/returned contacts
-        const notifications: LinkNotification[] = devicesData
-          .filter(device => device.action === 'accepted' || device.action === 'returned')
-          .map((device, index) => ({
-            id: device.id || index,
-            name: device.name,
-            phoneNumber: device.phoneNumber || '',
-            email: device.email || '',
-            bio: device.bio || '',
-            socialMedia: device.socialMedia || [],
-            timestamp: device.timestamp ? new Date(device.timestamp).getTime() : Date.now(),
-            viewed: true, // Mark as viewed since they're from backend
-            dismissed: false,
-            deviceId: device.id,
-          }));
-
-        setLinkNotifications(notifications);
-        console.log('✅ Loaded link notifications:', notifications.length);
-      }
-
-      // Load pinned contacts
-      const pinnedData = await import('./src/services/api').then(m => m.getPinnedContacts());
-      if (pinnedData && pinnedData.length > 0) {
-        console.log('✅ Loaded pinned contacts:', pinnedData);
-        setPinnedIds(new Set(pinnedData));
-      }
-
-      // Privacy Zones feature removed
-      // const zonesData = await import('./src/services/api').then(m => m.getPrivacyZones());
-      // if (zonesData) {
-      //   console.log('✅ Loaded privacy zones:', zonesData);
-      //   setPrivacyZones(zonesData);
-      // }
-
-      console.log('✅ All user data loaded successfully');
-      console.log('🏁 loadUserData COMPLETED - Exiting function normally');
-      setDebugGuardStatus('✅ Completed successfully');
-    } catch (error) {
-      console.error('❌ OUTER CATCH: Unexpected error in loadUserData');
-      console.error('❌ Failed to load user data:', error);
-      console.error('❌ Error type:', error instanceof Error ? error.constructor.name : typeof error);
-      console.error('❌ Error message:', error instanceof Error ? error.message : String(error));
-      console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'N/A');
+      // Load profile from Supabase
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', uid)
+        .single();
       
-      // Show crash error in Guard Status panel (visible on screen)
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      setDebugGuardStatus(`CRASH: ${errorMsg}`);
+      // Handle onlyPhoto option
+      if (options?.onlyPhoto && profile) {
+        setProfilePhotoUri(profile.profile_photo);
+        return;
+      }
+      
+      // Load settings from Supabase
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', uid)
+        .single();
+      
+      // Load devices/contacts from Supabase
+      const { data: devices } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('user_id', uid)
+        .order('last_seen', { ascending: false });
+      
+      if (profile) {
+        setUserProfile({
+          name: profile.name || 'Your Name',
+          phone: profile.phone || '(555) 123-4567',
+          email: profile.email || 'user@example.com',
+          bio: profile.bio || 'Add bio',
+          profilePhoto: profile.profile_photo,
+          socialMedia: profile.social_media || [],
+        });
+      }
+      
+      if (settings) {
+        setIsDarkMode(settings.dark_mode);
+        setMaxDistance(settings.max_distance);
+      }
+      
+      if (devices) {
+        setLinkNotifications(devices.map(d => ({
+          id: d.id,
+          name: d.device_name,
+          phoneNumber: '',
+          email: '',
+          bio: '',
+          socialMedia: [],
+          timestamp: new Date(d.last_seen).getTime(),
+          viewed: false,
+          dismissed: false,
+          deviceId: d.id
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
     }
-  }, []); // Empty deps: function only uses stable API imports and setState functions
+  }, []);
 
   // Load user data when authenticated
   // Skip during signup to prevent race condition with profile save
@@ -783,10 +669,8 @@ function MainApp() {
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         {authScreen === 'signup' && (
           <SignupScreen
-            onSignupSuccess={(token: string, userId: number, username: string, email?: string) => {
-              // TODO: SignupScreen needs migration to Supabase auth
-              // For now, keep old signature but handleSignupSuccess doesn't use these params
-              handleSignupSuccess(undefined);
+            onSignupSuccess={(profileData) => {
+              handleSignupSuccess(profileData);
             }}
             onLoginPress={() => setAuthScreen('login')}
             onBack={() => setAuthScreen('welcome')}
