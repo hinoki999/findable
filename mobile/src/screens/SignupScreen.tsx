@@ -53,9 +53,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
-      console.log('🔍 Checking username availability:', username);
       const available = await checkUsernameAvailability(username);
-      console.log('✅ Username availability result:', available);
 
       if (!available) {
         setUsernameError('Username is already taken');
@@ -67,9 +65,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const checkEmailAvailabilityLocal = async (email: string) => {
     try {
-      console.log('🔍 Checking email availability:', email);
       const available = await checkEmailAvailability(email);
-      console.log('✅ Email availability result:', available);
 
       if (!available) {
         setEmailError('Email is already in use');
@@ -225,6 +221,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const handleSendCode = async () => {
     setSendingCode(true);
     setError('');
+    setDebugLog(''); // Clear previous logs
 
     try {
       await sendOtpCode(email, 'signup');
@@ -689,6 +686,28 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                     </Text>
                   )}
                 </Pressable>
+
+                {/* Visible Debug Log */}
+                {debugLog ? (
+                  <View style={{
+                    marginTop: 20,
+                    padding: 10,
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: 8,
+                    maxHeight: 200,
+                  }}>
+                    <ScrollView>
+                      <Text style={{
+                        fontSize: 10,
+                        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+                        color: '#333',
+                      }}>
+                        Debug Log:{'\n'}
+                        {debugLog}
+                      </Text>
+                    </ScrollView>
+                  </View>
+                ) : null}
               </>
             )}
           </View>
