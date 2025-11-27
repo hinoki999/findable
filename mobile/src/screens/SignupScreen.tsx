@@ -246,7 +246,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
     try {
       // Verify the OTP code (this logs user in)
-      await verifyOtpCode(email, verificationCode);
+      // Use 'signup' type for signup OTP verification
+      await verifyOtpCode(email, verificationCode, 'signup');
       addLog('✅ OTP verified successfully');
 
       // User already created by OTP - now set password

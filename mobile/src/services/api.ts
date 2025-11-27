@@ -630,16 +630,23 @@ export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): P
 }
 
 // Verify OTP code
-export async function verifyOtpCode(email: string, code: string): Promise<{ userId: string }> {
+export async function verifyOtpCode(
+  email: string, 
+  code: string, 
+  verificationType: 'email' | 'signup' = 'email'
+): Promise<{ userId: string }> {
   try {
+    console.log(`🔍 Verifying OTP with type: ${verificationType}`);
+    
     const { data, error } = await supabase.auth.verifyOtp({
       email: email.toLowerCase(),
       token: code,
-      type: 'email'
+      type: verificationType
     });
 
     if (error) {
       console.error('Failed to verify OTP:', error);
+      console.error('Error details:', { code: error.code, message: error.message, status: error.status });
       throw new Error('Invalid or expired code. Please try again.');
     }
 
