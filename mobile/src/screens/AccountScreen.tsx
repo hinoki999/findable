@@ -39,20 +39,15 @@ interface AccountScreenProps {
 
 export default function AccountScreen({ navigation, profilePhotoUri }: AccountScreenProps) {
   const [isPublic, setIsPublic] = useState(true);
+  
+  // Get contexts with error handling
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile, debugSetProfileCalls } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
-  const { name, phone, email, bio, socialMedia } = profile;
+  
+  const { name, phone, email, bio, socialMedia } = profile || {};
 
-  // 🔍 DIAGNOSTIC: Log what AccountScreen receives from context
-  console.log('👤 [AccountScreen] Received from context:', {
-    name,
-    phone,
-    email,
-    bio,
-    hasProfile: !!profile
-  });
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
@@ -130,48 +125,63 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   };
 
   const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password', socialIndex?: number) => {
-    setEditingField(field);
-    logAction(`Edit ${field} clicked`, { field, currentValue: field === 'phone' ? phone : field === 'email' ? email : field === 'name' ? name : field === 'bio' ? bio : undefined });
-    setValidationError(''); // Clear any previous errors
-    if (field === 'phone') {
-      // Remove formatting for editing, keep only the formatted value
-      setTempValue(phone);
-    } else if (field === 'email') {
-      setTempValue(email);
-    } else if (field === 'name') {
-      setTempValue(name);
-    } else if (field === 'bio') {
-      // If bio is the placeholder text, start with empty string
-      setTempValue(bio === 'Add bio' ? '' : bio);
-    } else if (field === 'social-media' && socialIndex !== undefined) {
-      setTempSocialIndex(socialIndex);
-      setTempSocialPlatform(socialMedia[socialIndex].platform);
-      setTempSocialHandle(socialMedia[socialIndex].handle);
-    } else if (field === 'username') {
-      setTempValue(username || '');
-    } else if (field === 'password') {
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setShowCurrentPassword(false);
-      setShowNewPassword(false);
-      setShowConfirmPassword(false);
+    try {
+      console.log('✏️ [AccountScreen] handleEdit called:', { field, socialIndex });
+      
+      setEditingField(field);
+      logAction(`Edit ${field} clicked`, { field, currentValue: field === 'phone' ? phone : field === 'email' ? email : field === 'name' ? name : field === 'bio' ? bio : undefined });
+      setValidationError(''); // Clear any previous errors
+      if (field === 'phone') {
+        // Remove formatting for editing, keep only the formatted value
+        setTempValue(phone || '');
+      } else if (field === 'email') {
+        setTempValue(email || '');
+      } else if (field === 'name') {
+        setTempValue(name || '');
+      } else if (field === 'bio') {
+        // If bio is the placeholder text, start with empty string
+        setTempValue(bio === 'Add bio' ? '' : (bio || ''));
+      } else if (field === 'social-media' && socialIndex !== undefined) {
+        setTempSocialIndex(socialIndex);
+        if (socialMedia && socialMedia[socialIndex]) {
+          setTempSocialPlatform(socialMedia[socialIndex].platform);
+          setTempSocialHandle(socialMedia[socialIndex].handle);
+        }
+      } else if (field === 'username') {
+        setTempValue(username || '');
+      } else if (field === 'password') {
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
+      }
+      setEditModalVisible(true);
+    } catch (err: any) {
+      console.error('❌ [AccountScreen] handleEdit error:', err);
+      Alert.alert('Error', err.message || 'Failed to open editor');
     }
-    setEditModalVisible(true);
   };
 
   const handleSave = async () => {
-    // Validate based on field type
-    let error = '';
-    if (editingField === 'phone') {
-      error = validatePhone(tempValue);
-      if (error) {
-        setValidationError(error);
-        return;
-      }
-      logStateChange('profile.phone', phone, tempValue);
-      logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
-      updateProfile({ phone: tempValue });
+    try {
+      console.log('💾 [AccountScreen] handleSave called:', { editingField, tempValue });
+      
+      // Validate based on field type
+      let error = '';
+      if (editingField === 'phone') {
+        error = validatePhone(tempValue);
+        if (error) {
+          setValidationError(error);
+          return;
+        }
+        logStateChange('profile.phone', phone, tempValue);
+        logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
+        
+        console.log('💾 [AccountScreen] Calling updateProfile for phone');
+        await updateProfile({ phone: tempValue });
+        console.log('✅ [AccountScreen] Phone updated successfully');
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
       if (error) {
@@ -204,7 +214,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError('Handle is required');
         return;
       }
-      const updatedSocial = [...socialMedia];
+      const updatedSocial = [...(socialMedia || [])];
       updatedSocial[tempSocialIndex] = {
         platform: tempSocialPlatform.trim(),
         handle: tempSocialHandle.trim(),
@@ -299,6 +309,15 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       type: 'success',
       duration: 2000,
     });
+    } catch (err: any) {
+      console.error('❌ [AccountScreen] handleSave error:', err);
+      setValidationError(err.message || 'Failed to save changes');
+      showToast({
+        message: err.message || 'Failed to save changes',
+        type: 'error',
+        duration: 3000,
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -336,20 +355,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   // };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-      {/* 🔍 DEBUG PANEL - REMOVE AFTER TESTING */}
-      <View style={{backgroundColor: 'red', padding: 10, zIndex: 9999}}>
-        <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
-          DEBUG: name="{name}" | email="{email}" | phone="{phone}"
-        </Text>
-        <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
-          from context: {JSON.stringify(profile).substring(0, 100)}
-        </Text>
-        <Text style={{color: 'yellow', fontSize: 12, fontWeight: 'bold', marginTop: 5}}>
-          ⚡ setUserProfile called: {debugSetProfileCalls} times
-        </Text>
-      </View>
-      
+    <View style={{ flex: 1, backgroundColor: theme?.colors?.bg || '#000000' }}>
       <TopBar
         logoMode={true}
         logoIcon="account-outline"
@@ -417,7 +423,13 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 overflow: 'hidden',
               }}>
                 {profilePhotoUri ? (
-                  <Image source={{ uri: profilePhotoUri }} style={{ width: 50, height: 50 }} />
+                  <Image 
+                    source={{ uri: profilePhotoUri }} 
+                    style={{ width: 50, height: 50 }}
+                    onError={(err) => {
+                      console.error('❌ [AccountScreen] Profile photo load error:', err.nativeEvent.error);
+                    }}
+                  />
                 ) : (
                   <MaterialCommunityIcons name="account" size={24} color={theme.colors.blue} />
                 )}
@@ -458,9 +470,15 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             <Text style={[theme.type.muted, { flex: 1 }]}>Social Media</Text>
             <Pressable
               onPress={() => {
-                const newSocial = [...socialMedia, { platform: '', handle: '' }];
-                if (newSocial.length <= 3) {
-                  updateProfile({ socialMedia: newSocial });
+                try {
+                  const currentSocial = socialMedia || [];
+                  const newSocial = [...currentSocial, { platform: '', handle: '' }];
+                  if (newSocial.length <= 3) {
+                    updateProfile({ socialMedia: newSocial });
+                  }
+                } catch (err: any) {
+                  console.error('❌ [AccountScreen] Add social media error:', err);
+                  Alert.alert('Error', 'Failed to add social media. Please try again.');
                 }
               }}
               style={{ padding: 4 }}
@@ -470,12 +488,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           </View>
 
           {/* Social Media Accounts */}
-          {socialMedia.length === 0 && (
+          {(!socialMedia || socialMedia.length === 0) && (
             <Text style={[theme.type.muted, { textAlign: 'center', paddingVertical: 8, fontStyle: 'italic' }]}>
               No social media accounts added yet. Tap the + to add one.
             </Text>
           )}
-          {socialMedia.map((social, index) => (
+          {(socialMedia || []).map((social, index) => (
             <View key={index} style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -500,8 +518,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 <Pressable
                   style={{ padding: 4, marginLeft: 4 }}
                   onPress={() => {
-                    const updatedSocial = socialMedia.filter((_, i) => i !== index);
-                    updateProfile({ socialMedia: updatedSocial });
+                    try {
+                      const currentSocial = socialMedia || [];
+                      const updatedSocial = currentSocial.filter((_, i) => i !== index);
+                      updateProfile({ socialMedia: updatedSocial });
+                    } catch (err: any) {
+                      console.error('❌ [AccountScreen] Delete social media error:', err);
+                      Alert.alert('Error', 'Failed to delete social media. Please try again.');
+                    }
                   }}
                 >
                   <MaterialCommunityIcons name="close" size={16} color={theme.colors.muted} />
