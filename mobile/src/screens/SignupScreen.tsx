@@ -356,11 +356,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       
       addLog('🚀 Calling onSignupSuccess...');
+      console.log('🚀 [SignupScreen] About to call onSignupSuccess');
       
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
       // Profile will be set up later via profile editing or onboarding
       try {
         onSignupSuccess(undefined);
+        console.log('✅ [SignupScreen] onSignupSuccess returned');
         addLog('✅ onSignupSuccess called successfully!');
       } catch (navError: any) {
         addLog(`❌ onSignupSuccess threw error: ${navError.message}`);
