@@ -658,7 +658,7 @@ export async function verifyOtpCode(email: string, code: string): Promise<{ user
 // Reset password after OTP verification
 export async function resetPasswordWithOtp(email: string, code: string, newPassword: string): Promise<void> {
   try {
-    // First verify the OTP
+    // First verify the OTP (this creates a session and logs user in)
     await verifyOtpCode(email, code);
 
     // Then update password
@@ -670,6 +670,10 @@ export async function resetPasswordWithOtp(email: string, code: string, newPassw
       console.error('Failed to reset password:', error);
       throw new Error('Failed to reset password. Please try again.');
     }
+
+    // Sign out the user so they return to clean unauthenticated state
+    await supabase.auth.signOut();
+    console.log('✅ User signed out after password reset');
 
     console.log('✅ Password reset successfully');
   } catch (error: any) {
