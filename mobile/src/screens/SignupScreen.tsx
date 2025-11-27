@@ -265,7 +265,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log('✅ Password set successfully, userId:', userId);
 
       // Create user_profiles record in Supabase
-      await supabase.from('user_profiles').insert({
+      console.log('📝 Creating user_profiles record...');
+      const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
         name: null,
@@ -276,36 +277,65 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         has_completed_onboarding: false
       });
 
+      if (profileError) {
+        console.error('❌ Failed to create user_profiles:', profileError);
+        throw new Error(`Failed to create profile: ${profileError.message}`);
+      }
+      console.log('✅ user_profiles record created');
+
       // Create user_settings record in Supabase
-      await supabase.from('user_settings').insert({
+      console.log('📝 Creating user_settings record...');
+      const { error: settingsError } = await supabase.from('user_settings').insert({
         user_id: userId,
         dark_mode: true,
         max_distance: 33
       });
 
-      console.log('✅ Created user_profiles and user_settings records');
+      if (settingsError) {
+        console.error('❌ Failed to create user_settings:', settingsError);
+        throw new Error(`Failed to create settings: ${settingsError.message}`);
+      }
+      console.log('✅ user_settings record created');
 
       // Enable tutorials for this new signup
       console.log('📚 Enabling tutorials for new signup...');
-      await enableTutorialsForSignup();
-      console.log('✅ Tutorials enabled successfully');
-      await startScreenTutorial('Home', 5);
+      try {
+        await enableTutorialsForSignup();
+        console.log('✅ Tutorials enabled successfully');
+        await startScreenTutorial('Home', 5);
+        console.log('✅ Home screen tutorial started');
+      } catch (tutorialError: any) {
+        console.error('⚠️ Tutorial setup failed (non-critical):', tutorialError);
+        // Don't throw - tutorials are not critical for signup
+      }
 
       // Small delay to ensure AsyncStorage operations complete
       await new Promise(resolve => setTimeout(resolve, 200));
       console.log('✅ AsyncStorage operations should be complete');
 
       // Success! Close modal and navigate
+      console.log('🚪 Closing verification modal...');
       setShowVerificationModal(false);
-      console.log('🚀 Calling onSignupSuccess - navigating to app...');
+      console.log('✅ Modal closed');
+      
+      console.log('🚀 About to call onSignupSuccess...');
       
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
       // Profile will be set up later via profile editing or onboarding
       onSignupSuccess(undefined);
+      
+      console.log('✅ onSignupSuccess called - navigation should happen now!');
     } catch (err: any) {
+      console.error('❌ [SignupScreen] handleVerifyAndSignup error:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+      console.log('🔄 Loading state set to false');
     }
   };
 
