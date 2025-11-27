@@ -4,7 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyOtpCode } from '../services/api';
-import { useTutorial } from '../contexts/TutorialContext';
+// TODO: Re-enable after fixing tutorial blocking issue
+// import { useTutorial } from '../contexts/TutorialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 
@@ -17,7 +18,8 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
+  // TODO: Re-enable after fixing tutorial blocking issue
+  // const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
   const { signup } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -303,7 +305,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       addLog('✅ user_settings record created');
 
-      // Enable tutorials for this new signup (with defensive checks)
+      // TODO: Re-implement tutorials after signup flow is stable
+      // Tutorial setup temporarily disabled - was blocking signup navigation
+      // Original code preserved below for re-implementation:
+      /*
       addLog('📚 Setting up tutorials...');
       if (typeof enableTutorialsForSignup === 'function') {
         try {
@@ -333,6 +338,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       addLog('⏳ Waiting for AsyncStorage operations...');
       await new Promise(resolve => setTimeout(resolve, 200));
       addLog('✅ AsyncStorage operations should be complete');
+      */
+
+      addLog('⏭️ Tutorial setup skipped (temporarily disabled)');
 
       // Success! Close modal and navigate
       addLog('🚪 Closing verification modal...');
