@@ -42,6 +42,14 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [verificationStep, setVerificationStep] = useState<'confirm' | 'enter-code'>('confirm');
   const [verificationCode, setVerificationCode] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
+  const [debugLog, setDebugLog] = useState<string>('');
+
+  // Helper function to add visible logs
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugLog(prev => `${prev}\n[${timestamp}] ${message}`);
+    console.log(message); // Keep console logs too
+  };
 
   const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
@@ -242,7 +250,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     try {
       // Verify the OTP code (this logs user in)
       await verifyOtpCode(email, verificationCode);
-      console.log('✅ OTP verified successfully');
+      addLog('✅ OTP verified successfully');
 
       // User already created by OTP - now set password
       const { error: passwordError } = await supabase.auth.updateUser({
@@ -262,10 +270,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error('Failed to get user session');
       }
 
-      console.log('✅ Password set successfully, userId:', userId);
+      addLog(`✅ Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
-      console.log('📝 Creating user_profiles record...');
+      addLog('📝 Creating user_profiles record...');
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
@@ -278,13 +286,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (profileError) {
-        console.error('❌ Failed to create user_profiles:', profileError);
+        addLog(`❌ Failed to create user_profiles: ${profileError.message}`);
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
-      console.log('✅ user_profiles record created');
+      addLog('✅ user_profiles record created');
 
       // Create user_settings record in Supabase
-      console.log('📝 Creating user_settings record...');
+      addLog('📝 Creating user_settings record...');
       const { error: settingsError } = await supabase.from('user_settings').insert({
         user_id: userId,
         dark_mode: true,
@@ -292,50 +300,46 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (settingsError) {
-        console.error('❌ Failed to create user_settings:', settingsError);
+        addLog(`❌ Failed to create user_settings: ${settingsError.message}`);
         throw new Error(`Failed to create settings: ${settingsError.message}`);
       }
-      console.log('✅ user_settings record created');
+      addLog('✅ user_settings record created');
 
       // Enable tutorials for this new signup
-      console.log('📚 Enabling tutorials for new signup...');
+      addLog('📚 Enabling tutorials for new signup...');
       try {
         await enableTutorialsForSignup();
-        console.log('✅ Tutorials enabled successfully');
+        addLog('✅ Tutorials enabled successfully');
         await startScreenTutorial('Home', 5);
-        console.log('✅ Home screen tutorial started');
+        addLog('✅ Home screen tutorial started');
       } catch (tutorialError: any) {
-        console.error('⚠️ Tutorial setup failed (non-critical):', tutorialError);
+        addLog(`⚠️ Tutorial setup failed (non-critical): ${tutorialError.message}`);
         // Don't throw - tutorials are not critical for signup
       }
 
       // Small delay to ensure AsyncStorage operations complete
       await new Promise(resolve => setTimeout(resolve, 200));
-      console.log('✅ AsyncStorage operations should be complete');
+      addLog('✅ AsyncStorage operations should be complete');
 
       // Success! Close modal and navigate
-      console.log('🚪 Closing verification modal...');
+      addLog('🚪 Closing verification modal...');
       setShowVerificationModal(false);
-      console.log('✅ Modal closed');
+      addLog('✅ Modal closed');
       
-      console.log('🚀 About to call onSignupSuccess...');
+      addLog('🚀 About to call onSignupSuccess...');
       
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
       // Profile will be set up later via profile editing or onboarding
       onSignupSuccess(undefined);
       
-      console.log('✅ onSignupSuccess called - navigation should happen now!');
+      addLog('✅ onSignupSuccess called - navigation should happen now!');
     } catch (err: any) {
-      console.error('❌ [SignupScreen] handleVerifyAndSignup error:', err);
-      console.error('❌ Error details:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name
-      });
+      addLog(`❌ [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
+      addLog(`❌ Error details: ${err.name} - ${err.stack?.substring(0, 100)}`);
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
-      console.log('🔄 Loading state set to false');
+      addLog('🔄 Loading state set to false');
     }
   };
 
