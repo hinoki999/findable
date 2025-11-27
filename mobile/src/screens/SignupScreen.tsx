@@ -240,20 +240,29 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setError('');
 
     try {
-      // Verify the OTP code
+      // Verify the OTP code (this logs user in)
       await verifyOtpCode(email, verificationCode);
       console.log('✅ OTP verified successfully');
 
-      // Code verified, now create the account with Supabase
-      const result = await signup(email, password, username);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Signup failed');
+      // User already created by OTP - now set password
+      const { error: passwordError } = await supabase.auth.updateUser({
+        password: password,
+        data: { username: username }
+      });
+
+      if (passwordError) {
+        throw new Error(passwordError.message || 'Failed to set password');
       }
-      
-      console.log('✅ Supabase signup successful, userId:', result.userId);
-      
-      const userId = result.userId;
+
+      // Get user ID from current session
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        throw new Error('Failed to get user session');
+      }
+
+      console.log('✅ Password set successfully, userId:', userId);
 
       // Create user_profiles record in Supabase
       await supabase.from('user_profiles').insert({
