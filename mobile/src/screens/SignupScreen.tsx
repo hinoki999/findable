@@ -302,19 +302,34 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       addLog('✅ user_settings record created');
 
-      // Enable tutorials for this new signup
-      addLog('📚 Enabling tutorials for new signup...');
-      try {
-        await enableTutorialsForSignup();
-        addLog('✅ Tutorials enabled successfully');
-        await startScreenTutorial('Home', 5);
-        addLog('✅ Home screen tutorial started');
-      } catch (tutorialError: any) {
-        addLog(`⚠️ Tutorial setup failed (non-critical): ${tutorialError.message}`);
-        // Don't throw - tutorials are not critical for signup
+      // Enable tutorials for this new signup (with defensive checks)
+      addLog('📚 Setting up tutorials...');
+      if (typeof enableTutorialsForSignup === 'function') {
+        try {
+          await enableTutorialsForSignup();
+          addLog('✅ Tutorials enabled successfully');
+        } catch (tutorialError: any) {
+          addLog(`⚠️ enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
+          // Don't throw - tutorials are not critical for signup
+        }
+      } else {
+        addLog('⚠️ enableTutorialsForSignup not available (skipping)');
+      }
+
+      if (typeof startScreenTutorial === 'function') {
+        try {
+          await startScreenTutorial('Home', 5);
+          addLog('✅ Home screen tutorial started');
+        } catch (tutorialError: any) {
+          addLog(`⚠️ startScreenTutorial error (non-critical): ${tutorialError.message || 'Unknown error'}`);
+          // Don't throw - tutorials are not critical for signup
+        }
+      } else {
+        addLog('⚠️ startScreenTutorial not available (skipping)');
       }
 
       // Small delay to ensure AsyncStorage operations complete
+      addLog('⏳ Waiting for AsyncStorage operations...');
       await new Promise(resolve => setTimeout(resolve, 200));
       addLog('✅ AsyncStorage operations should be complete');
 
@@ -323,13 +338,27 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       setShowVerificationModal(false);
       addLog('✅ Modal closed');
       
-      addLog('🚀 About to call onSignupSuccess...');
+      // Validate navigation handler before calling
+      addLog('🔍 Validating navigation handler...');
+      if (typeof onSignupSuccess !== 'function') {
+        addLog('❌ ERROR: onSignupSuccess is not a function!');
+        addLog(`❌ Type: ${typeof onSignupSuccess}, Value: ${onSignupSuccess}`);
+        throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
+      }
+      
+      addLog('🚀 Calling onSignupSuccess...');
       
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
       // Profile will be set up later via profile editing or onboarding
-      onSignupSuccess(undefined);
+      try {
+        onSignupSuccess(undefined);
+        addLog('✅ onSignupSuccess called successfully!');
+      } catch (navError: any) {
+        addLog(`❌ onSignupSuccess threw error: ${navError.message}`);
+        throw navError;
+      }
       
-      addLog('✅ onSignupSuccess called - navigation should happen now!');
+      addLog('✅ Navigation should happen now!');
     } catch (err: any) {
       addLog(`❌ [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
       addLog(`❌ Error details: ${err.name} - ${err.stack?.substring(0, 100)}`);
