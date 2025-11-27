@@ -157,7 +157,7 @@ const formatPhoneNumber = (text: string): string => {
 
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
-  const { isAuthenticated, loading: authLoading, login, userId } = useAuth();
+  const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
 
   const [fontsReady] = useFonts({
     Inter_300Light,
@@ -416,7 +416,11 @@ function MainApp() {
     profileData?: { name: string; phone: string; bio: string }
   ) => {
     console.log('✅ [App] Signup successful');
-    // Auth state is already set by AuthContext.signup() called in SignupScreen
+    
+    // Refresh auth state to detect the new Supabase session created during signup
+    console.log('🔄 [App] Refreshing auth state after signup...');
+    await refreshAuth();
+    console.log('✅ [App] Auth state refreshed');
 
     // Set flag to prevent automatic data reload (prevents race condition)
     setIsSignupInProgress(true);

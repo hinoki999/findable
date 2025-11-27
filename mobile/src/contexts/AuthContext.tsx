@@ -15,6 +15,7 @@ interface AuthContextType extends AuthState {
   signup: (email: string, password: string, username: string) => Promise<{ success: boolean; userId?: string; error?: string }>;
   logout: () => Promise<void>;
   setLoading: (loading: boolean) => void;
+  refreshAuth: () => Promise<void>; // Added to allow manual auth state refresh
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,10 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkStoredAuth = async () => {
     try {
+      console.log('🔍 [AuthContext] Checking for stored auth session...');
       // Check for Supabase session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
+        console.log('✅ [AuthContext] Session found, setting authenticated state');
         setState({
           isAuthenticated: true,
           userId: session.user.id,
@@ -47,10 +50,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           loading: false,
         });
       } else {
+        console.log('⚠️ [AuthContext] No session found');
         setState(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      console.error('Error checking stored auth:', error);
+      console.error('❌ [AuthContext] Error checking stored auth:', error);
       setState(prev => ({ ...prev, loading: false }));
     }
   };
@@ -150,8 +154,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setState(prev => ({ ...prev, loading }));
   };
 
+  // Allow manual refresh of auth state (e.g., after signup creates a session)
+  const refreshAuth = async () => {
+    console.log('🔄 [AuthContext] Manually refreshing auth state...');
+    await checkStoredAuth();
+  };
+
   return (
-    <AuthContext.Provider value={{ ...state, login, signup, logout, setLoading }}>
+    <AuthContext.Provider value={{ ...state, login, signup, logout, setLoading, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );
