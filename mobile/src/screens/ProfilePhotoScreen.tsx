@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, Pressable, Image, Animated, StyleSheet, Dimensions, PanResponder, Platform } from 'react-native';
+import { View, Text, Pressable, Image, Animated, StyleSheet, Dimensions, PanResponder, Platform, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, useToast } from '../../App';
@@ -232,12 +232,26 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
       onPhotoSaved(photoUrl);
       navigation.goBack();
     } catch (error: any) {
-      console.error('❌ Upload error:', error);
+      console.error('❌ Profile photo upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      
       showToast({
         message: error.message || 'Failed to upload photo',
         type: 'error',
         duration: 3000,
       });
+      
+      // Also show alert with more details for debugging
+      Alert.alert(
+        'Upload Failed',
+        `Error: ${error.message}\n\nPlease try again or contact support if this persists.\n\nDebug info: ${error.name}`,
+        [{ text: 'OK' }]
+      );
     } finally {
       setUploading(false);
     }

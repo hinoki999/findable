@@ -459,7 +459,6 @@ const DeviceBlip: React.FC<{
     <Pressable
       onPress={(e) => {
         e.stopPropagation();
-        console.log('🔵 Blip clicked:', device.name, 'at distance:', device.distanceFeet);
         onPress();
       }}
       style={{
@@ -516,7 +515,6 @@ const LinkMarker: React.FC<{
     <Pressable
       onPress={(e) => {
         e.stopPropagation();
-        console.log('🔗 Link clicked:', device.name, 'at distance:', device.distanceFeet);
         onPress();
       }}
       style={{
@@ -597,14 +595,6 @@ export default function HomeScreen() {
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
-  // Log tutorial state on every render
-  console.log(`🏠 [HomeScreen] RENDER - Tutorial State:`, {
-    isActive,
-    currentScreen,
-    currentStep,
-    totalSteps
-  });
-  
   // Safe area insets for Android/iOS system UI
   const insets = useSafeAreaInsets();
   
@@ -681,15 +671,12 @@ export default function HomeScreen() {
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
-    console.log('🏠 [HomeScreen] useEffect fired - will start tutorial in 100ms');
     // Small delay to ensure AsyncStorage operations from signup have completed
     const timer = setTimeout(() => {
-      console.log('🏠 [HomeScreen] Calling startScreenTutorial("Home", 6)');
       startScreenTutorial('Home', 6);
     }, 100);
     
     return () => {
-      console.log('🏠 [HomeScreen] useEffect cleanup');
       clearTimeout(timer);
     };
   }, []);
@@ -973,61 +960,7 @@ export default function HomeScreen() {
     return spatialTensor.velocity;
   };
 
-  // Log view transformation changes
-  useEffect(() => {
-    if (viewScale !== 1 || viewRotation !== 0) {
-      console.log('🔄 VIEW TRANSFORMATION UPDATE:');
-      console.log(`   Scale: ${viewScale.toFixed(3)}x`);
-      console.log(`   Rotation: ${(viewRotation * 180 / Math.PI).toFixed(1)}° (${viewRotation.toFixed(3)} rad)`);
-      console.log(`   Transform Tensor: [[${viewTransformTensor.m11.toFixed(3)}, ${viewTransformTensor.m12.toFixed(3)}], [${viewTransformTensor.m21.toFixed(3)}, ${viewTransformTensor.m22.toFixed(3)}]]`);
-    }
-  }, [viewScale, viewRotation, viewTransformTensor]);
-
-  // Demonstrate tensor system capabilities (logs to console)
-  useEffect(() => {
-    if (filteredDevices.length > 0) {
-      console.log('🧮 TENSOR MATHEMATICS SYSTEM ACTIVE 🧮');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
-      // Log spatial tensors
-      console.log('📐 Spatial Transformation Tensors:');
-      console.log(`   Pixels per foot: ${spatialTensors.pixelsPerFoot.toFixed(2)}px`);
-      console.log(`   Max radius: ${spatialTensors.maxRadiusPixels.toFixed(2)}px`);
-      console.log(`   Scaling tensor: [[${spatialTensors.feetToPixels.m11.toFixed(2)}, ${spatialTensors.feetToPixels.m12}], [${spatialTensors.feetToPixels.m21}, ${spatialTensors.feetToPixels.m22.toFixed(2)}]]`);
-      
-      // Log first device's tensor data
-      const firstDevice = filteredDevices[0];
-      const deviceId = firstDevice.id || firstDevice.name;
-      const spatialTensor = deviceSpatialTensors.current.get(deviceId);
-      
-      if (spatialTensor) {
-        console.log(`\n📍 Device Tensor: "${firstDevice.name}"`);
-        console.log(`   Position: (${spatialTensor.position.x.toFixed(1)}px, ${spatialTensor.position.y.toFixed(1)}px)`);
-        console.log(`   Velocity: (${spatialTensor.velocity.x.toFixed(2)}px/s, ${spatialTensor.velocity.y.toFixed(2)}px/s)`);
-        console.log(`   Acceleration: (${spatialTensor.acceleration.x.toFixed(2)}px/s², ${spatialTensor.acceleration.y.toFixed(2)}px/s²)`);
-        console.log(`   Distance: ${spatialTensor.distance.toFixed(1)} ft`);
-        console.log(`   Angle: ${(spatialTensor.angle * 180 / Math.PI).toFixed(1)}°`);
-        
-        // Predict future position
-        const future = predictFuturePosition(firstDevice, 1.0); // 1 second ahead
-        if (future) {
-          console.log(`   Predicted position (1s): (${future.x.toFixed(1)}px, ${future.y.toFixed(1)}px)`);
-        }
-      }
-      
-      // Log interaction strengths
-      if (filteredDevices.length >= 2) {
-        const interaction = calculateInteractionStrength(filteredDevices[0], filteredDevices[1]);
-        console.log(`\n🔗 Interaction Strength: ${(interaction * 100).toFixed(1)}%`);
-      }
-      
-      // Log spatial density at nucleus
-      const nucleusDensity = calculateSpatialDensity({ x: 0, y: 0 });
-      console.log(`\n🌡️ Spatial Density at Nucleus: ${(nucleusDensity * 100).toFixed(1)}%`);
-      
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    }
-  }, [filteredDevices, spatialTensors, calculateSpatialDensity]);
+  // Tensor system is active but logging removed for production
 
   // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
   

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image, ActivityIndicator, Platform, Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
@@ -59,8 +59,20 @@ export default function ProfilePhotoPromptScreen({ onComplete }: ProfilePhotoPro
       console.log('✅ Profile photo uploaded successfully:', photoUrl);
       onComplete();
     } catch (error: any) {
-      console.error('❌ Upload error:', error);
-      alert(error.message || 'Failed to upload photo. Please try again.');
+      console.error('❌ Profile photo upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      
+      // Show detailed error to user for debugging
+      Alert.alert(
+        'Upload Failed',
+        `Error: ${error.message}\n\nPlease try again or contact support if this persists.\n\nDebug info: ${error.name}`,
+        [{ text: 'OK' }]
+      );
     } finally {
       setUploading(false);
     }
