@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from './supabase';
 
