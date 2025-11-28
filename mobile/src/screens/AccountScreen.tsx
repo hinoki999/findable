@@ -372,13 +372,13 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         {/* Name and Bio Card */}
         <View style={theme.card}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={theme.type.h1}>{name}</Text>
+            <Text style={theme.type.h1}>{name || 'Your Name'}</Text>
             <Pressable onPress={() => handleEdit('name')} style={{ padding: 4 }}>
               <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
             </Pressable>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ ...theme.type.muted, flex: 1 }}>{bio}</Text>
+            <Text style={{ ...theme.type.muted, flex: 1 }}>{bio || 'Add bio'}</Text>
             <Pressable onPress={() => handleEdit('bio')} style={{ padding: 4 }}>
               <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
             </Pressable>
@@ -448,7 +448,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone}</Text>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -459,7 +459,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Email</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{email}</Text>
+              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{email || 'user@example.com'}</Text>
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('email')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -877,7 +877,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               alignItems: 'center',
             }}>
               <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                {name}
+                {name || 'Your Name'}
               </Text>
             </View>
 
