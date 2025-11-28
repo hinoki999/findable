@@ -609,11 +609,11 @@ export async function changePassword(currentPassword: string, newPassword: strin
 // Send OTP code to email (works for all verification types)
 export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): Promise<void> {
   try {
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error} = await supabase.auth.signInWithOtp({
       email: email.toLowerCase(),
       options: {
         shouldCreateUser: type === 'signup', // Only create user for signup verification
-      }
+      },
     });
 
     if (error) {
@@ -635,12 +635,15 @@ export async function verifyOtpCode(
   verificationType: 'email' | 'signup' = 'email'
 ): Promise<{ userId: string }> {
   try {
-    console.log(`🔍 Verifying OTP with type: ${verificationType}`);
+    // Supabase only supports 'email', 'sms', 'phone_change'
+    // For signup OTPs, we still use 'email' type
+    const supabaseType = 'email';
+    console.log(`🔍 Verifying OTP with type: ${supabaseType} (requested: ${verificationType})`);
     
     const { data, error } = await supabase.auth.verifyOtp({
       email: email.toLowerCase(),
       token: code,
-      type: verificationType
+      type: supabaseType
     });
 
     if (error) {
