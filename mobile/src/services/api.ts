@@ -833,7 +833,7 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('PROFILE_PHOTOS')
+      .from('profile_photos')
       .upload(filePath, arrayBuffer, {
         contentType: `image/${extension}`,
         upsert: true, // Overwrite existing file
@@ -848,7 +848,7 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-      .from('PROFILE_PHOTOS')
+      .from('profile_photos')
       .getPublicUrl(filePath);
 
     console.log('✅ Public URL generated:', publicUrl);
