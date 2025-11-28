@@ -10,7 +10,7 @@ import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
 
 // Helper function to get initials from name
-const getInitials = (name: string): string => {
+const getInitials = (name: string | null | undefined): string => {
   if (!name) return '';
   const parts = name.trim().split(' ');
   if (parts.length >= 2) {
@@ -20,7 +20,8 @@ const getInitials = (name: string): string => {
 };
 
 // Helper function to generate consistent color from name
-const getAvatarColor = (name: string): string => {
+const getAvatarColor = (name: string | null | undefined): string => {
+  if (!name) name = 'User'; // Default to prevent hash from empty string
   const colors = [
     '#FF6B4A', '#4A90FF', '#FF4A7F', '#4AFF8C',
     '#FF4AE8', '#FFA84A', '#4AFFEF', '#A84AFF',
