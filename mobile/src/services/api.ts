@@ -805,8 +805,9 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
   try {
     // Read file as base64
+    // Note: For Expo SDK 54, use string constant 'base64' instead of FileSystem.EncodingType.Base64
     const base64Data = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
+      encoding: 'base64',
     });
 
     // Convert base64 to ArrayBuffer
