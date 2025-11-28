@@ -846,15 +846,15 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     return publicUrl;
   } catch (error: any) {
     console.error('❌ Upload error:', error);
+    console.error('❌ Error type:', typeof error);
+    console.error('❌ Error name:', error?.name);
+    console.error('❌ Error message:', error?.message);
+    console.error('❌ Error stack:', error?.stack);
+    console.error('❌ Full error object:', JSON.stringify(error, null, 2));
     
-    // Provide user-friendly error messages
-    if (error.message?.includes('Failed to read')) {
-      throw new Error('Failed to read image file');
-    } else if (error.message?.includes('User not authenticated') || error.message?.includes('Please select an image')) {
-      throw error; // Re-throw validation errors as-is
-    } else {
-      throw new Error(error.message || 'Failed to upload photo. Please try again.');
-    }
+    // Re-throw the ORIGINAL error with all details intact
+    // DO NOT wrap in generic error - we need to see what's actually failing
+    throw error;
   }
 }
 
