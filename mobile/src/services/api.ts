@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
@@ -786,6 +787,17 @@ export async function deleteAccount(userId: string): Promise<void> {
 }
 
 // ==================== PROFILE PHOTO ====================
+
+// Helper function to convert base64 string to ArrayBuffer for Supabase
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
 export async function uploadProfilePhoto(imageUri: string, userId: string): Promise<string> {
   // Validate inputs
   if (!imageUri) {
@@ -806,21 +818,23 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     console.log('   Image URI:', imageUri);
     console.log('   File path:', filePath);
     
-    // NEW: Fetch image as blob using built-in fetch API
-    // This replaces FileSystem.readAsStringAsync() + decode()
-    const response = await fetch(imageUri);
+    // NEW: Use react-native-blob-util to read file as base64
+    // Remove 'file://' prefix if present (common in RN image URIs)
+    const cleanUri = imageUri.replace('file://', '');
+    console.log('   Clean URI:', cleanUri);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
-    }
+    // Read file as base64 using react-native-blob-util
+    const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
+    console.log('✅ File read as base64, length:', base64Data.length);
     
-    const blob = await response.blob();
-    console.log('✅ Image fetched as blob:', blob.size, 'bytes, type:', blob.type);
+    // Convert base64 to ArrayBuffer for Supabase Storage
+    const arrayBuffer = base64ToArrayBuffer(base64Data);
+    console.log('✅ Converted to ArrayBuffer:', arrayBuffer.byteLength, 'bytes');
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('PROFILE_PHOTOS')
-      .upload(filePath, blob, {
+      .upload(filePath, arrayBuffer, {
         contentType: `image/${extension}`,
         upsert: true, // Overwrite existing file
       });
