@@ -25,6 +25,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
   const [step, setStep] = useState<'permission' | 'source' | 'edit'>('permission');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState(false);
+  const [errorText, setErrorText] = useState<string>('');
   
   // Image manipulation states
   const pan = useRef(new Animated.ValueXY()).current;
@@ -207,8 +208,19 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
   // Save photo
   const handleSave = async () => {
-    if (!selectedImage) return;
+    let debugLog = '';
+    
+    if (!selectedImage) {
+      debugLog = 'ERROR: No image selected';
+      setErrorText(debugLog);
+      Alert.alert('ERROR', debugLog);
+      return;
+    }
+    
     if (!userId) {
+      debugLog = 'ERROR: User not authenticated';
+      setErrorText(debugLog);
+      Alert.alert('ERROR', debugLog);
       showToast({
         message: 'User not authenticated',
         type: 'error',
@@ -218,10 +230,22 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
     }
 
     setUploading(true);
+    setErrorText(''); // Clear previous errors
+    
     try {
+      debugLog += '✅ Step 1: Starting upload...\n';
+      debugLog += `   Image URI: ${selectedImage.substring(0, 50)}...\n`;
+      debugLog += `   User ID: ${userId}\n\n`;
+      
+      debugLog += '✅ Step 2: Calling uploadProfilePhoto()...\n';
       const photoUrl = await uploadProfilePhoto(selectedImage, userId);
+      
+      debugLog += `✅ Step 3: Upload complete!\n`;
+      debugLog += `   Photo URL: ${photoUrl}\n\n`;
+      debugLog += '✅ Step 4: Closing screen...\n';
 
       console.log('✅ Photo uploaded successfully:', photoUrl);
+      console.log('DEBUG LOG:\n', debugLog);
 
       showToast({
         message: 'Profile photo updated!',
@@ -231,27 +255,36 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
       onPhotoSaved(photoUrl);
       navigation.goBack();
+      
     } catch (error: any) {
-      console.error('❌ Profile photo upload error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        fullError: JSON.stringify(error, null, 2)
-      });
+      debugLog += `\n❌ UPLOAD FAILED AT STEP!\n\n`;
+      debugLog += `ERROR MESSAGE:\n${error.message}\n\n`;
+      debugLog += `ERROR NAME:\n${error.name}\n\n`;
+      debugLog += `ERROR STACK:\n${error.stack?.substring(0, 300)}\n\n`;
+      debugLog += `FULL ERROR:\n${JSON.stringify(error, null, 2)}`;
+      
+      // Display error in THREE ways (one MUST be visible)
+      console.error('❌❌❌ PROFILE PHOTO UPLOAD ERROR ❌❌❌');
+      console.error(debugLog);
+      console.error('Full error object:', error);
+      
+      setErrorText(debugLog);
       
       showToast({
-        message: error.message || 'Failed to upload photo',
+        message: 'UPLOAD FAILED - Check screen for details',
         type: 'error',
-        duration: 3000,
+        duration: 5000,
       });
       
-      // Also show alert with more details for debugging
       Alert.alert(
-        'Upload Failed',
-        `Error: ${error.message}\n\nPlease try again or contact support if this persists.\n\nDebug info: ${error.name}`,
-        [{ text: 'OK' }]
+        '🚨 UPLOAD ERROR',
+        debugLog,
+        [
+          { text: 'Copy Error', onPress: () => console.log('ERROR TO COPY:\n', debugLog) },
+          { text: 'OK' }
+        ]
       );
+      
     } finally {
       setUploading(false);
     }
@@ -272,6 +305,33 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+      {/* VISIBLE ERROR DISPLAY - Cannot be missed */}
+      {errorText && (
+        <View style={{ 
+          backgroundColor: '#FF0000', 
+          padding: 20, 
+          margin: 10,
+          borderWidth: 5,
+          borderColor: '#FFFF00',
+          zIndex: 9999,
+        }}>
+          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>
+            🚨 UPLOAD ERROR 🚨
+          </Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+            {errorText}
+          </Text>
+          <Pressable 
+            onPress={() => setErrorText('')}
+            style={{ backgroundColor: '#FFFFFF', padding: 10, marginTop: 10, borderRadius: 5 }}
+          >
+            <Text style={{ color: '#FF0000', fontSize: 14, fontWeight: 'bold', textAlign: 'center' }}>
+              DISMISS
+            </Text>
+          </Pressable>
+        </View>
+      )}
+      
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={15}>
