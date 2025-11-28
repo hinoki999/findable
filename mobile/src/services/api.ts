@@ -831,6 +831,32 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     const arrayBuffer = base64ToArrayBuffer(base64Data);
     console.log('✅ Converted to ArrayBuffer:', arrayBuffer.byteLength, 'bytes');
 
+    // CRITICAL: Verify authentication before upload
+    console.log('🔐 Checking Supabase authentication...');
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('❌ Session error:', sessionError);
+      throw new Error('Failed to verify authentication session');
+    }
+    
+    if (!session) {
+      console.error('❌ No active session found!');
+      throw new Error('User must be logged in to upload photos');
+    }
+    
+    console.log('✅ Session verified:');
+    console.log('   User ID:', session.user.id);
+    console.log('   User email:', session.user.email);
+    console.log('   Access token exists:', !!session.access_token);
+    console.log('   Token length:', session.access_token?.substring(0, 20) + '...');
+    
+    if (session.user.id !== userId) {
+      console.warn('⚠️ Warning: Session user ID does not match provided userId!');
+      console.warn('   Session user:', session.user.id);
+      console.warn('   Provided userId:', userId);
+    }
+
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('profile_photos')
@@ -840,7 +866,19 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
       });
 
     if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
+      console.error('❌ Supabase upload error:', uploadError);
+      console.error('   Error message:', uploadError.message);
+      console.error('   Error name:', uploadError.name);
+      console.error('   Full error:', JSON.stringify(uploadError, null, 2));
+      
+      // Check for RLS policy error
+      if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
+        console.error('🚨 RLS POLICY ERROR DETECTED!');
+        console.error('   This means auth.uid() is NULL in the storage policy');
+        console.error('   But we verified session exists above - this is a Supabase client issue');
+        console.error('   The session token may not be included in the storage request');
+      }
+      
       throw uploadError; // Throw original Supabase error for better debugging
     }
 
