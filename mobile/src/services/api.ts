@@ -3,8 +3,6 @@ import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
-import * as FileSystem from 'expo-file-system/legacy';
-import { decode } from 'base64-arraybuffer';
 import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
@@ -804,32 +802,42 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   const filePath = `${userId}.${extension}`;
 
   try {
-    // Read file as base64
-    // Note: For Expo SDK 54, use string constant 'base64' instead of FileSystem.EncodingType.Base64
-    const base64Data = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: 'base64',
-    });
-
-    // Convert base64 to ArrayBuffer
-    const arrayBuffer = decode(base64Data);
+    console.log('📸 Starting photo upload...');
+    console.log('   Image URI:', imageUri);
+    console.log('   File path:', filePath);
+    
+    // NEW: Fetch image as blob using built-in fetch API
+    // This replaces FileSystem.readAsStringAsync() + decode()
+    const response = await fetch(imageUri);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    console.log('✅ Image fetched as blob:', blob.size, 'bytes, type:', blob.type);
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('PROFILE_PHOTOS')
-      .upload(filePath, arrayBuffer, {
+      .upload(filePath, blob, {
         contentType: `image/${extension}`,
         upsert: true, // Overwrite existing file
       });
 
     if (uploadError) {
       console.error('Supabase upload error:', uploadError);
-      throw new Error('Failed to upload photo. Please try again.');
+      throw uploadError; // Throw original Supabase error for better debugging
     }
+
+    console.log('✅ Upload to storage successful');
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('PROFILE_PHOTOS')
       .getPublicUrl(filePath);
+
+    console.log('✅ Public URL generated:', publicUrl);
 
     // Update user_profiles table with new photo URL
     const { error: updateError } = await supabase
@@ -839,7 +847,7 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
     if (updateError) {
       console.error('Database update error:', updateError);
-      throw new Error('Failed to save photo to profile. Please try again.');
+      throw updateError; // Throw original database error for better debugging
     }
 
     console.log('✅ Photo uploaded successfully:', publicUrl);
