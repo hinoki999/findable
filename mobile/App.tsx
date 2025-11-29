@@ -803,7 +803,7 @@ function MainApp() {
                         fontWeight: 'bold',
                         fontFamily: 'Inter_600SemiBold',
                       }}>
-                        UPDATE APPLIED - {new Date().toLocaleString()}
+                        🔴 BUILD TEST {Math.random().toString(36).substring(7).toUpperCase()} 🔴
                       </Text>
                     </View>
                     
