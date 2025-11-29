@@ -889,34 +889,58 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
       console.log('   New token expiry:', new Date((freshSession.expires_at || 0) * 1000).toISOString());
     }
 
-    // Upload to Supabase Storage - let SDK handle auth automatically
-    console.log('📤 Uploading to Supabase Storage...');
-    console.log('   SDK will automatically use session token from auth context');
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('profile_photos')
-      .upload(filePath, arrayBuffer, {
-        contentType: `image/${extension}`,
-        upsert: true, // Overwrite existing file
-      });
-
-    if (uploadError) {
-      console.error('❌ Supabase upload error:', uploadError);
-      console.error('   Error message:', uploadError.message);
-      console.error('   Error name:', uploadError.name);
-      console.error('   Full error:', JSON.stringify(uploadError, null, 2));
+    // Upload to Supabase Storage using direct REST API (bypassing SDK)
+    console.log('📤 Uploading to Supabase Storage via direct REST API...');
+    console.log('   Bypassing SDK to test auth directly');
+    
+    const storageUrl = `https://jfuhplqtujaakksmixii.supabase.co/storage/v1/object/profile_photos/${filePath}`;
+    const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdWhwbHF0dWphYWtrc21peGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5Njk0NzEsImV4cCI6MjA3OTU0NTQ3MX0.YC_Xi5gmqZEi-DBjjAqLmcCik3ho2eZAa1UU2oXJ6QA';
+    
+    console.log('   Upload URL:', storageUrl);
+    console.log('   Content-Type:', `image/${extension}`);
+    console.log('   Authorization: Bearer [token]');
+    console.log('   Body size:', arrayBuffer.byteLength, 'bytes');
+    
+    const uploadResponse = await fetch(storageUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': anonKey,
+        'Content-Type': `image/${extension}`,
+        'x-upsert': 'true', // Enable overwrite
+      },
+      body: arrayBuffer,
+    });
+    
+    console.log('📡 Upload response status:', uploadResponse.status, uploadResponse.statusText);
+    
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('❌ Storage API error response:', errorText);
       
-      // Check for RLS policy error
-      if (uploadError.message?.includes('row-level security') || uploadError.message?.includes('policy')) {
-        console.error('🚨 RLS POLICY ERROR DETECTED!');
-        console.error('   This means auth.uid() is NULL in the storage policy');
-        console.error('   But we verified session exists above - this is a Supabase client issue');
-        console.error('   The session token may not be included in the storage request');
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { message: errorText };
       }
       
-      throw uploadError; // Throw original Supabase error for better debugging
+      console.error('   Error data:', JSON.stringify(errorData, null, 2));
+      
+      // Check for RLS policy error
+      if (errorText.includes('row-level security') || errorText.includes('policy') || uploadResponse.status === 403) {
+        console.error('🚨 RLS POLICY ERROR DETECTED!');
+        console.error('   Status: 403 Forbidden');
+        console.error('   This means auth.uid() is NULL in the storage policy');
+        console.error('   Token was manually sent in Authorization header');
+        console.error('   This confirms the issue is server-side, not SDK-related');
+      }
+      
+      throw new Error(`Storage upload failed: ${uploadResponse.status} ${uploadResponse.statusText} - ${errorText}`);
     }
-
-    console.log('✅ Upload to storage successful');
+    
+    const uploadResult = await uploadResponse.json();
+    console.log('✅ Upload successful, response:', JSON.stringify(uploadResult, null, 2));
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
