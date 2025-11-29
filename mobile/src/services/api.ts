@@ -853,23 +853,50 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     console.log('   User email:', session.user.email);
     console.log('   Access token exists:', !!session.access_token);
     console.log('   Token length:', session.access_token?.substring(0, 20) + '...');
+    console.log('   User role:', session.user.role);
+    console.log('   Token expiry:', new Date((session.expires_at || 0) * 1000).toISOString());
     
     if (session.user.id !== userId) {
       console.warn('⚠️ Warning: Session user ID does not match provided userId!');
       console.warn('   Session user:', session.user.id);
       console.warn('   Provided userId:', userId);
     }
+    
+    // Decode JWT to inspect claims (for debugging)
+    try {
+      const tokenParts = session.access_token.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        console.log('🔍 JWT Token Claims:');
+        console.log('   sub (user ID):', payload.sub);
+        console.log('   role:', payload.role);
+        console.log('   aud:', payload.aud);
+        console.log('   exp:', new Date(payload.exp * 1000).toISOString());
+        console.log('   iat:', new Date(payload.iat * 1000).toISOString());
+      }
+    } catch (e) {
+      console.warn('Could not decode JWT token:', e);
+    }
+    
+    // CRITICAL: Refresh session immediately before upload to ensure fresh token
+    console.log('🔄 Refreshing session to ensure fresh token...');
+    const { data: { session: freshSession }, error: refreshError } = await supabase.auth.refreshSession();
+    
+    if (refreshError) {
+      console.warn('⚠️ Session refresh failed (will try with existing token):', refreshError);
+    } else if (freshSession) {
+      console.log('✅ Session refreshed successfully');
+      console.log('   New token expiry:', new Date((freshSession.expires_at || 0) * 1000).toISOString());
+    }
 
-    // Upload to Supabase Storage with explicit auth header
-    console.log('📤 Uploading with explicit Authorization header...');
+    // Upload to Supabase Storage - let SDK handle auth automatically
+    console.log('📤 Uploading to Supabase Storage...');
+    console.log('   SDK will automatically use session token from auth context');
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('profile_photos')
       .upload(filePath, arrayBuffer, {
         contentType: `image/${extension}`,
         upsert: true, // Overwrite existing file
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
       });
 
     if (uploadError) {

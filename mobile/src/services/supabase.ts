@@ -13,11 +13,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-react-native',
+    },
+  },
 })
 
-// CRITICAL: Register AppState listener for React Native
+// CRITICAL: Start auto-refresh immediately on module load
+supabase.auth.startAutoRefresh()
+
+// Register AppState listener for React Native
 // This keeps the session alive and refreshes tokens properly
-// Without this, Storage API calls fail with RLS errors even when session exists
 AppState.addEventListener('change', (state) => {
   if (state === 'active') {
     supabase.auth.startAutoRefresh()
