@@ -3,7 +3,8 @@ import { Platform } from 'react-native';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
-import ReactNativeBlobUtil from 'react-native-blob-util';
+// TEMPORARILY DISABLED - Native module not in current build
+// import ReactNativeBlobUtil from 'react-native-blob-util';
 import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
@@ -802,6 +803,11 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 export async function uploadProfilePhoto(imageUri: string, userId: string): Promise<string> {
+  // TEMPORARILY DISABLED - Native module (react-native-blob-util) not in current build
+  // Need to do new EAS build to include native module
+  throw new Error('Photo upload temporarily disabled - native module not available in current build');
+  
+  /* ORIGINAL CODE - WILL BE RESTORED AFTER NEW BUILD
   // Validate inputs
   if (!imageUri) {
     throw new Error('Please select an image first');
@@ -881,6 +887,7 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   } catch (error: any) {
     throw error;
   }
+  */
 }
 
 
