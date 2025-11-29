@@ -63,7 +63,6 @@ interface UserProfile {
 const UserProfileContext = createContext<{
   profile: UserProfile;
   updateProfile: (updates: Partial<UserProfile>) => void;
-  debugSetProfileCalls: number;
 }>({
   profile: {
     name: 'Your Name',
@@ -73,7 +72,6 @@ const UserProfileContext = createContext<{
     socialMedia: [],
   },
   updateProfile: () => { },
-  debugSetProfileCalls: 0,
 });
 
 export const useUserProfile = () => useContext(UserProfileContext);
@@ -198,12 +196,6 @@ function MainApp() {
   // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
   const hasCachedProfileRef = useRef(false);
 
-  // 🔍 DEBUG COUNTER: Track how many times setUserProfile is called
-  const [debugSetProfileCalls, setDebugSetProfileCalls] = useState(0);
-  
-  // 🔍 DEBUG STATUS: Track which guard is blocking loadUserData
-  const [debugGuardStatus, setDebugGuardStatus] = useState('Not started');
-
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
     console.log('📊 [DIAGNOSTIC] userProfile state changed:', {
@@ -232,7 +224,6 @@ function MainApp() {
           }
 
           console.log('🔢 [DEBUG] setUserProfile CALL #1: Loading from AsyncStorage cache');
-          setDebugSetProfileCalls(prev => prev + 1);
           setUserProfile(parsedProfile);
         } else {
           hasCachedProfileRef.current = false; // ← No cache found (fresh install)
@@ -431,7 +422,6 @@ function MainApp() {
       const phoneDigitsOnly = profileData.phone.replace(/\D/g, '');
 
       console.log('🔢 [DEBUG] setUserProfile CALL #4: Signup flow');
-      setDebugSetProfileCalls(prev => prev + 1);
       setUserProfile({
         name: profileData.name || 'Your Name',
         phone: phoneDigitsOnly ? formatPhoneNumber(phoneDigitsOnly) : '(555) 123-4567',
@@ -721,7 +711,7 @@ function MainApp() {
             }}>
               Profile Photo
             </Text>
-            <Pressable onPress={handleProfilePhotoPromptComplete}>
+            <Pressable onPress={() => handleProfilePhotoPromptComplete()}>
               <Text style={{
                 color: getTheme(isDarkMode).colors.muted,
                 fontSize: 16,
@@ -784,7 +774,7 @@ function MainApp() {
     <TutorialProvider>
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
-          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile, debugSetProfileCalls }}>
+          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
             <ToastContext.Provider value={{ showToast }}>
               <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
                 <LinkNotificationsContext.Provider value={{
@@ -795,19 +785,6 @@ function MainApp() {
                   hasUnviewedLinks
                 }}>
                   <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-                    {/* 🔍 DEBUG PANEL - useEffect Trigger Conditions */}
-                    <View style={{position: 'absolute', top: 0, left: 0, backgroundColor: 'blue', padding: 5, zIndex: 10000}}>
-                      <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
-                        Auth: {String(isAuthenticated)} | UserID: {userId || 'null'} | Signup: {String(isSignupInProgress)}
-                      </Text>
-                      <Text style={{color: 'white', fontSize: 10, fontFamily: 'monospace'}}>
-                        Should load: {String(isAuthenticated && userId && !isSignupInProgress)}
-                      </Text>
-                      <Text style={{color: 'yellow', fontSize: 11, fontWeight: 'bold', marginTop: 3}}>
-                        Guard Status: {debugGuardStatus}
-                      </Text>
-                    </View>
-                    
                     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
                       <Screen />
                     </View>

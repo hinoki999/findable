@@ -817,89 +817,32 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   const filePath = `${userId}.${extension}`;
 
   try {
-    console.log('📸 Starting photo upload...');
-    console.log('   Image URI:', imageUri);
-    console.log('   File path:', filePath);
-    
-    // NEW: Use react-native-blob-util to read file as base64
     // Remove 'file://' prefix if present (common in RN image URIs)
     const cleanUri = imageUri.replace('file://', '');
-    console.log('   Clean URI:', cleanUri);
     
     // Read file as base64 using react-native-blob-util
     const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
-    console.log('✅ File read as base64, length:', base64Data.length);
     
     // Convert base64 to ArrayBuffer for Supabase Storage
     const arrayBuffer = base64ToArrayBuffer(base64Data);
-    console.log('✅ Converted to ArrayBuffer:', arrayBuffer.byteLength, 'bytes');
 
-    // CRITICAL: Verify authentication before upload
-    console.log('🔐 Checking Supabase authentication...');
+    // Verify authentication before upload
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError) {
-      console.error('❌ Session error:', sessionError);
       throw new Error('Failed to verify authentication session');
     }
     
     if (!session) {
-      console.error('❌ No active session found!');
       throw new Error('User must be logged in to upload photos');
     }
     
-    console.log('✅ Session verified:');
-    console.log('   User ID:', session.user.id);
-    console.log('   User email:', session.user.email);
-    console.log('   Access token exists:', !!session.access_token);
-    console.log('   Token length:', session.access_token?.substring(0, 20) + '...');
-    console.log('   User role:', session.user.role);
-    console.log('   Token expiry:', new Date((session.expires_at || 0) * 1000).toISOString());
-    
-    if (session.user.id !== userId) {
-      console.warn('⚠️ Warning: Session user ID does not match provided userId!');
-      console.warn('   Session user:', session.user.id);
-      console.warn('   Provided userId:', userId);
-    }
-    
-    // Decode JWT to inspect claims (for debugging)
-    try {
-      const tokenParts = session.access_token.split('.');
-      if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
-        console.log('🔍 JWT Token Claims:');
-        console.log('   sub (user ID):', payload.sub);
-        console.log('   role:', payload.role);
-        console.log('   aud:', payload.aud);
-        console.log('   exp:', new Date(payload.exp * 1000).toISOString());
-        console.log('   iat:', new Date(payload.iat * 1000).toISOString());
-      }
-    } catch (e) {
-      console.warn('Could not decode JWT token:', e);
-    }
-    
-    // CRITICAL: Refresh session immediately before upload to ensure fresh token
-    console.log('🔄 Refreshing session to ensure fresh token...');
-    const { data: { session: freshSession }, error: refreshError } = await supabase.auth.refreshSession();
-    
-    if (refreshError) {
-      console.warn('⚠️ Session refresh failed (will try with existing token):', refreshError);
-    } else if (freshSession) {
-      console.log('✅ Session refreshed successfully');
-      console.log('   New token expiry:', new Date((freshSession.expires_at || 0) * 1000).toISOString());
-    }
+    // Refresh session immediately before upload to ensure fresh token
+    await supabase.auth.refreshSession();
 
-    // Upload to Supabase Storage using direct REST API (bypassing SDK)
-    console.log('📤 Uploading to Supabase Storage via direct REST API...');
-    console.log('   Bypassing SDK to test auth directly');
-    
+    // Upload to Supabase Storage using direct REST API
     const storageUrl = `https://jfuhplqtujaakksmixii.supabase.co/storage/v1/object/profile_photos/${filePath}`;
     const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdWhwbHF0dWphYWtrc21peGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5Njk0NzEsImV4cCI6MjA3OTU0NTQ3MX0.YC_Xi5gmqZEi-DBjjAqLmcCik3ho2eZAa1UU2oXJ6QA';
-    
-    console.log('   Upload URL:', storageUrl);
-    console.log('   Content-Type:', `image/${extension}`);
-    console.log('   Authorization: Bearer [token]');
-    console.log('   Body size:', arrayBuffer.byteLength, 'bytes');
     
     const uploadResponse = await fetch(storageUrl, {
       method: 'POST',
@@ -907,47 +850,22 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
         'Authorization': `Bearer ${session.access_token}`,
         'apikey': anonKey,
         'Content-Type': `image/${extension}`,
-        'x-upsert': 'true', // Enable overwrite
+        'x-upsert': 'true',
       },
       body: arrayBuffer,
     });
     
-    console.log('📡 Upload response status:', uploadResponse.status, uploadResponse.statusText);
-    
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
-      console.error('❌ Storage API error response:', errorText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        errorData = { message: errorText };
-      }
-      
-      console.error('   Error data:', JSON.stringify(errorData, null, 2));
-      
-      // Check for RLS policy error
-      if (errorText.includes('row-level security') || errorText.includes('policy') || uploadResponse.status === 403) {
-        console.error('🚨 RLS POLICY ERROR DETECTED!');
-        console.error('   Status: 403 Forbidden');
-        console.error('   This means auth.uid() is NULL in the storage policy');
-        console.error('   Token was manually sent in Authorization header');
-        console.error('   This confirms the issue is server-side, not SDK-related');
-      }
-      
       throw new Error(`Storage upload failed: ${uploadResponse.status} ${uploadResponse.statusText} - ${errorText}`);
     }
     
-    const uploadResult = await uploadResponse.json();
-    console.log('✅ Upload successful, response:', JSON.stringify(uploadResult, null, 2));
+    await uploadResponse.json();
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
       .from('profile_photos')
       .getPublicUrl(filePath);
-
-    console.log('✅ Public URL generated:', publicUrl);
 
     // Update user_profiles table with new photo URL
     const { error: updateError } = await supabase
@@ -956,22 +874,11 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
       .eq('user_id', userId);
 
     if (updateError) {
-      console.error('Database update error:', updateError);
-      throw updateError; // Throw original database error for better debugging
+      throw updateError;
     }
 
-    console.log('✅ Photo uploaded successfully:', publicUrl);
     return publicUrl;
   } catch (error: any) {
-    console.error('❌ Upload error:', error);
-    console.error('❌ Error type:', typeof error);
-    console.error('❌ Error name:', error?.name);
-    console.error('❌ Error message:', error?.message);
-    console.error('❌ Error stack:', error?.stack);
-    console.error('❌ Full error object:', JSON.stringify(error, null, 2));
-    
-    // Re-throw the ORIGINAL error with all details intact
-    // DO NOT wrap in generic error - we need to see what's actually failing
     throw error;
   }
 }
