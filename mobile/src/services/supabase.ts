@@ -1,4 +1,3 @@
-import { Platform, AppState } from 'react-native'
 import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
@@ -18,17 +17,4 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       'X-Client-Info': 'supabase-js-react-native',
     },
   },
-})
-
-// CRITICAL: Start auto-refresh immediately on module load
-supabase.auth.startAutoRefresh()
-
-// Register AppState listener for React Native
-// This keeps the session alive and refreshes tokens properly
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh()
-  } else {
-    supabase.auth.stopAutoRefresh()
-  }
 })
