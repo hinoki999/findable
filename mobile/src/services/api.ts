@@ -860,12 +860,16 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
       console.warn('   Provided userId:', userId);
     }
 
-    // Upload to Supabase Storage
+    // Upload to Supabase Storage with explicit auth header
+    console.log('📤 Uploading with explicit Authorization header...');
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('profile_photos')
       .upload(filePath, arrayBuffer, {
         contentType: `image/${extension}`,
         upsert: true, // Overwrite existing file
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
     if (uploadError) {

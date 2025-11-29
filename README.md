@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** November 9, 2025
+**Last Updated:** November 29, 2025
 
 ---
 
@@ -20,12 +20,13 @@
 - Tutorial system for first-time users
 
 **Tech Stack:**
-- **Frontend:** React Native with Expo (TypeScript)
-- **Backend:** Python with FastAPI
-- **Database:** PostgreSQL (hosted on Railway)
-- **Image Storage:** Cloudinary
-- **Authentication:** JWT tokens with SecureStore
-- **Deployment:** Railway (backend), Expo Application Services (frontend OTA updates)
+- **Frontend:** React Native 0.81.5 with Expo SDK 54 (TypeScript)
+- **Backend:** Python with FastAPI (Railway - being deprecated)
+- **Database:** Supabase PostgreSQL
+- **Image Storage:** Supabase Storage (profile_photos bucket)
+- **Authentication:** Supabase Auth with AsyncStorage (migrated from Railway JWT)
+- **Deployment:** Supabase (auth/database/storage), EAS (frontend OTA updates)
+- **Key Libraries:** react-native-gesture-handler, react-native-blob-util, @supabase/supabase-js@2.84.0
 
 ---
 
@@ -35,18 +36,21 @@
 droplin/
 ├── mobile/               # React Native/Expo app
 │   ├── src/
-│   │   ├── screens/     # App screens (Home, Account, History, etc.)
-│   │   ├── contexts/    # React contexts (Auth, User, Tutorial, etc.)
-│   │   ├── services/    # API calls, storage, BLE
+│   │   ├── screens/     # App screens (Home, Drop, Account, History)
+│   │   ├── contexts/    # React contexts (AuthContext, TutorialContext)
+│   │   ├── services/    # api.ts (930 lines), supabase.ts, storage.ts, BLE
+│   │   ├── components/  # TopBar, TutorialOverlay
 │   │   └── theme.ts     # Theme/styling
-│   ├── App.tsx          # Root component
+│   ├── App.tsx          # Root component (932 lines)
+│   ├── eas.json         # EAS build config (APK output)
 │   └── package.json
 │
-├── backend/             # Python FastAPI backend
-│   ├── main.py          # Main application file (~3000 lines)
+├── backend/             # Python FastAPI backend (Railway - deprecated)
+│   ├── main.py          # Main application file (~3400 lines)
 │   └── requirements.txt
 │
 └── testing/             # Automated test suite
+    ├── backend-tests/   # Pytest tests
     └── integration-tests/
         ├── auth-flow.test.js
         ├── profile-endpoints.test.js
@@ -137,6 +141,275 @@ npx eas update --branch preview --message "Description"
 ```
 - Users get update next time they manually open the app
 - Check Expo dashboard for update status
+
+---
+
+## Supabase Migration
+
+**Migration Period:** November 2025
+**Status:** 95% Complete
+**Goal:** Migrate authentication, user management, and file storage from Railway backend to Supabase
+
+### Supabase Configuration
+
+**Project URL:** `https://jfuhplqtujaakksmixii.supabase.co`
+**Client Config:** `mobile/src/services/supabase.ts`
+
+```typescript
+import { Platform, AppState } from 'react-native'
+import 'react-native-url-polyfill/auto'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { createClient } from '@supabase/supabase-js'
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+})
+
+// Required for React Native - keeps session alive
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh()
+  } else {
+    supabase.auth.stopAutoRefresh()
+  }
+})
+```
+
+### Migrated Functions
+
+**Authentication (mobile/src/services/api.ts):**
+- `checkUsernameAvailability()` - Line 503-541: Supabase `.from('user_profiles').select().eq().single()`
+- `checkEmailAvailability()` - Line 544-557: Supabase query instead of Railway POST
+- `changeUsername()` - Line 560-589: Updates both `user_profiles` table and auth metadata
+- `changePassword()` - Line 592-607: `supabase.auth.updateUser({ password })`
+- `sendOtpCode()` - Line 610-629: `supabase.auth.signInWithOtp()` with optional user creation
+- `verifyOtpCode()` - Line 632-665: Verify email OTP codes
+- `resetPasswordWithOtp()` - Line 668-687: Combines verify + updateUser + signOut
+- `getUsernameByEmail()` - Line 690-702: Query for username recovery
+- `deleteAccount()` - Line 756-789: Multi-table deletion + RPC call to delete auth user
+
+**File Upload (mobile/src/services/api.ts):**
+- `uploadProfilePhoto()` - Line 804-922: Supabase Storage upload with react-native-blob-util
+
+### Critical Bugs Fixed During Migration
+
+**Bug 1: OTP Verification Failed with "Invalid or expired code"**
+- UI Presentation: User enters valid 6-digit code, sees error message, but account is created in database
+- Root Cause: Code used `type: 'signup'` which doesn't exist in Supabase (only `'email'`, `'sms'`, `'phone_change'`)
+- Failed Fix (Commit 9d3ca59): Used `verificationType: 'email' | 'signup'` parameter but still passed 'signup' to Supabase
+- Working Fix (Commit 45a225e): Always use `type: 'email'` for email OTP verification
+
+```typescript
+// BEFORE (broken):
+const { data, error } = await supabase.auth.verifyOtp({
+  email: email.toLowerCase(),
+  token: code,
+  type: verificationType  // 'signup' is invalid
+});
+
+// AFTER (fixed):
+const supabaseType = 'email';  // Always use 'email' for email OTPs
+const { data, error } = await supabase.auth.verifyOtp({
+  email: email.toLowerCase(),
+  token: code,
+  type: supabaseType
+});
+```
+
+**Bug 2: Login Failed After Signup with "Invalid login credentials"**
+- UI Presentation: Signup completes successfully, user redirected to login, login fails immediately
+- Root Cause: `signInWithOtp()` with `shouldCreateUser: true` creates auth user WITHOUT password
+- Failed Fix: Attempted to call `signup()` after OTP verification (user already exists, throws error)
+- Working Fix: Use `updateUser()` to set password on existing OTP-created user
+
+```typescript
+// BEFORE (broken):
+await sendOtpCode(email, 'signup');  // Creates user without password
+await verifyOtpCode(email, code);
+await signup(email, password, username);  // Fails - user exists
+
+// AFTER (fixed):
+await sendOtpCode(email, 'signup');
+await verifyOtpCode(email, code);  
+await supabase.auth.updateUser({ password, data: { username } });  // Sets password on existing user
+```
+
+**Bug 3: Navigation Blocked After Signup**
+- UI Presentation: Verification modal stays open, "Loading..." spinner visible, no navigation to home screen
+- Root Cause: `AuthContext.isAuthenticated` remained false after OTP created session
+- Working Fix (Commit 07ff63d): Added `refreshAuth()` function to AuthContext, called after signup
+
+```typescript
+// mobile/src/contexts/AuthContext.tsx - Added function:
+const refreshAuth = async () => {
+  console.log('Manually refreshing auth state...');
+  await checkStoredAuth();
+};
+
+// mobile/App.tsx - Call after signup:
+const handleSignupSuccess = async () => {
+  await refreshAuth();  // Updates isAuthenticated state
+  setShowProfilePhotoPrompt(true);
+};
+```
+
+**Bug 4: AccountScreen Gray Screen Crash**
+- UI Presentation: After fresh signup/login, Account screen turns completely gray, app becomes unresponsive
+- Root Cause: React Native Text components cannot render `null` values (new users have `name: null`, `bio: null`, `phone: null`)
+- Failed Fix (Commit abb858b): Changed helper function signatures to accept `string | null | undefined` (partial fix)
+- Working Fix (Commit bb4fefd): Added fallback values to all Text component renders
+
+```typescript
+// BEFORE (crashed):
+<Text style={theme.type.h1}>{name}</Text>
+<Text style={theme.type.muted}>{bio}</Text>
+<Text style={theme.type.body}>{phone}</Text>
+<Text style={theme.type.body}>{email}</Text>
+
+// AFTER (fixed):
+<Text style={theme.type.h1}>{name || 'Your Name'}</Text>
+<Text style={theme.type.muted}>{bio || 'Add bio'}</Text>
+<Text style={theme.type.body}>{phone || '(555) 123-4567'}</Text>
+<Text style={theme.type.body}>{email || 'user@example.com'}</Text>
+```
+
+**Bug 5: Profile Photo Upload - Multiple Failed Attempts**
+
+**Attempt 1 (Failed - Commit 51172fc):** expo-file-system with `FileSystem.EncodingType.Base64`
+- Error: `Cannot read property 'Base64' of undefined`
+- Cause: SDK 54 changed API, EncodingType no longer exported
+- Fix attempted: Use string constant `'base64'` instead
+
+**Attempt 2 (Failed - Commit 60b5cdf):** expo-file-system/legacy
+- Error: Generic "Failed to upload photo" 
+- Cause: Error masking hid real issue
+- Fix attempted: Import from `'expo-file-system/legacy'`
+
+**Attempt 3 (Failed - Commit f1676a1):** fetch().blob()
+- Error: `blob() is not a function`
+- Cause: React Native 0.81.5 doesn't support Blob API
+- Fix attempted: Use Web API fetch
+
+**Attempt 4 (SUCCESS - Commit 9aad2c8):** react-native-blob-util
+- Working implementation:
+
+```typescript
+import ReactNativeBlobUtil from 'react-native-blob-util';
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+const cleanUri = imageUri.replace('file://', '');
+const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
+const arrayBuffer = base64ToArrayBuffer(base64Data);
+
+await supabase.storage.from('profile_photos').upload(filePath, arrayBuffer, {
+  contentType: `image/${extension}`,
+  upsert: true,
+});
+```
+
+**Bug 6: Bucket Name Typo (Commit 528cdfe)**
+- Error: 404 bucket not found
+- Cause: Code used `'PROFILE_PHOTOS'` but Supabase bucket was `'profile_photos'`
+- Fix: Changed to lowercase in 2 locations (upload and getPublicUrl)
+
+**Bug 7: Profile Photo Upload RLS Policy Error (CURRENT - STILL FAILING)**
+- UI Presentation: Upload button clicked, loading spinner appears briefly, error message "new row violates row-level security policy"
+- Root Cause: JWT token not included in Supabase Storage API request headers
+- Investigation (Commit be05010): Added session verification logging - confirmed session exists but Storage API receives NULL for `auth.uid()`
+- Fix Attempted (Not yet committed): Add explicit `Authorization` header to upload options
+
+```typescript
+// Current attempt:
+const { data: { session } } = await supabase.auth.getSession();
+
+const { data, error } = await supabase.storage
+  .from('profile_photos')
+  .upload(filePath, arrayBuffer, {
+    contentType: `image/${extension}`,
+    upsert: true,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,  // Explicit auth header
+    },
+  });
+```
+
+Status: Fix implemented, awaiting deployment and testing
+
+**Bug 8: Tutorial System Disabled (Commit 1152031)**
+- UI Presentation: New users complete signup, no tutorial overlays appear, proceed directly to home screen
+- Root Cause: Tutorial functions (`enableTutorialsForSignup`, `startScreenTutorial`) were throwing errors or undefined, blocking signup navigation
+- Solution: Temporarily commented out all tutorial integration in SignupScreen.tsx (lines 308-342)
+- Status: Original code preserved in comments, awaiting re-implementation after signup flow is stable
+
+### Supabase Database Schema
+
+**user_profiles:**
+```sql
+user_id UUID PRIMARY KEY REFERENCES auth.users(id)
+email TEXT
+name TEXT
+phone TEXT
+bio TEXT
+profile_photo TEXT
+social_media JSONB
+has_completed_onboarding BOOLEAN DEFAULT false
+created_at TIMESTAMP DEFAULT NOW()
+```
+
+**user_settings:**
+```sql
+user_id UUID PRIMARY KEY REFERENCES auth.users(id)
+dark_mode BOOLEAN DEFAULT true
+max_distance INTEGER DEFAULT 33
+created_at TIMESTAMP DEFAULT NOW()
+```
+
+**devices:**
+```sql
+id UUID PRIMARY KEY
+user_id UUID REFERENCES auth.users(id)
+device_name TEXT
+last_seen TIMESTAMP
+created_at TIMESTAMP DEFAULT NOW()
+```
+
+### Required Supabase RPC Functions
+
+**delete_user():** Must be created in Supabase to delete from `auth.users` table (requires service role)
+
+### Migration Commit History
+
+- `9d3ca59` - Fix OTP verification type for signup (incorrect - used 'signup')
+- `cf6f071` - Add defensive checks to signup flow
+- `36fe792` - Fix AccountScreen crash: protect socialMedia from undefined
+- `0caf2bc` - Fix signup navigation: error checking + non-blocking tutorials
+- `07ff63d` - Fix signup navigation by adding auth state refresh
+- `1152031` - Temporarily disable tutorial integration
+- `d2a00d2` - Add console.log verification around onSignupSuccess
+- `51172fc` - Fix profile photo: use 'base64' string constant
+- `60b5cdf` - Use expo-file-system/legacy
+- `6568cbb` - Add visible error tracking to photo upload
+- `cbfd442` - Fix uploadProfilePhoto: preserve original error
+- `f1676a1` - Rewrite uploadProfilePhoto: use fetch/blob (failed)
+- `9aad2c8` - Use react-native-blob-util for profile photo upload
+- `528cdfe` - Fix bucket name: profile_photos
+- `be05010` - Add session verification and RLS error detection
+- `45a225e` - Fix OTP verification: use 'email' type (correct)
+- `abb858b` - Fix AccountScreen: allow null/undefined name in helpers
+- `bb4fefd` - Fix AccountScreen: add null fallbacks for Text renderings
 
 ---
 
@@ -251,15 +524,15 @@ curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
 - Status: Pushed but not yet tested
 - Result: Tutorials still not showing at all
 
-**Current State:**
-- ❌ Broken after 4+ attempts
-- Backend has column but data not persisting
-- Frontend has multiple checks but not coordinated
-- Root cause: Coordination between frontend trigger and backend persistence
+**Current State (Post-Supabase Migration):**
+- Status: Temporarily disabled (Commit 1152031)
+- Reason: Was blocking signup navigation flow
+- Solution: Commented out tutorial integration, preserved original code
+- Next Steps: Re-implement with proper async handling after signup is stable
 
 ---
 
-#### Issue #2: Profile Information Not Saving
+#### Issue #2: Profile Information Not Saving (RESOLVED via Supabase)
 **Expected:** Name, email, phone save to backend and persist
 **Actual:** No error shown, but data doesn't save consistently
 
@@ -282,14 +555,14 @@ curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
 - Files modified: `main.py` (line 1296)
 - Status: Code exists locally but effectiveness unknown
 
-**Current State:**
-- ❌ Profile data saves inconsistently
-- ❌ Blocks testing of tutorial fixes
-- Backend endpoint exists but data not reliably reaching database
+**Resolution:**
+- Migrated to Supabase `user_profiles` table
+- Now saves reliably with proper error handling
+- Uses Supabase database queries instead of Railway endpoints
 
 ---
 
-#### Issue #3: Account Deletion Failing
+#### Issue #3: Account Deletion (Migrated to Supabase)
 **Expected:** Enter verification code → Account deleted
 **Actual:** "Failed to delete account" error
 
@@ -302,16 +575,81 @@ curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
 **Attempted Solutions:**
 None yet - need to investigate delete endpoint logic
 
-**Current State:**
-- ❌ Cannot delete test accounts reliably
-- ❌ Issue persists even when email is saved to profile
-- Need to debug delete endpoint directly
+**Current Implementation:**
+- Multi-table deletion: `devices`, `user_settings`, `user_profiles`
+- RPC call to `delete_user()` function for auth user deletion
+- Requires: Supabase RPC function to be created
+- Status: Awaiting testing
 
 ---
 
-### 🟡 Medium Priority Issues
+### Current Critical Issues (Post-Migration)
 
-#### Issue #4: Photo Upload File Type Restrictions
+#### Issue #4: Gray Screen Crash After Signup/Login (STILL OCCURRING)
+**Expected:** After signup/login, user sees Account screen with profile fields
+**Actual:** Screen turns completely gray, app becomes unresponsive, must force close
+
+**UI Presentation:**
+- User completes signup or logs in
+- Navigation occurs to Account screen
+- Brief flash of content
+- Screen fades to solid gray
+- No error message displayed
+- App frozen, requires force close
+
+**Fix Attempted (Commit bb4fefd):** Added null fallbacks to Text components
+**Status:** Fix implemented but issue persists
+**Possible Causes:**
+- Other components rendering null beyond Text elements
+- Image component receiving invalid URI
+- Array operations on undefined values
+- Component lifecycle issues with auth state
+
+**Files Modified:**
+- `mobile/src/screens/AccountScreen.tsx` - Lines 13-33 (helper functions), Lines 375, 381, 451, 462, 880 (Text fallbacks)
+
+---
+
+#### Issue #5: Profile Photo Upload RLS Error (STILL FAILING)
+**Expected:** User selects photo, upload completes, photo displays in profile
+**Actual:** Upload fails with "new row violates row-level security policy" error
+
+**UI Presentation:**
+- User taps profile photo edit button
+- Selects image from gallery
+- Upload button clicked
+- Loading spinner appears briefly (1-2 seconds)
+- Error message displays: "new row violates row-level security policy"
+- Photo does not upload
+- Previous photo (or placeholder) remains
+
+**Investigation:**
+- Session verification confirms: user logged in, valid token exists
+- Console logs show: `session.access_token` present and valid
+- Error indicates: Server receives NULL for `auth.uid()` in RLS policy check
+- Root cause: JWT token not included in Storage API request headers
+
+**Fix Attempted (Current):** Add explicit Authorization header
+```typescript
+await supabase.storage.from('profile_photos').upload(filePath, arrayBuffer, {
+  contentType: `image/${extension}`,
+  upsert: true,
+  headers: {
+    Authorization: `Bearer ${session.access_token}`,
+  },
+});
+```
+
+**Status:** Fix implemented in code, not yet deployed/tested
+
+**Files Modified:**
+- `mobile/src/services/api.ts` - Line 863-873 (upload with explicit auth header)
+
+---
+
+### Medium Priority Issues
+
+#### Issue #6: Photo Upload File Type Restrictions
 **Expected:** Accept various photo formats (JPEG, PNG, HEIC, WebP, etc.)
 **Actual:** Only accepts JPEG and PNG
 
@@ -329,11 +667,11 @@ Add support for additional formats:
 **Files to Modify:**
 - `backend/main.py` - Update `upload_profile_photo()` content type validation
 
-**Status:** Not yet implemented
+**Status:** Not yet implemented, needs Supabase Storage bucket policy update
 
 ---
 
-#### Issue #5: Blips Not Showing on Radar
+#### Issue #7: Blips Not Showing on Radar
 **Expected:** Nearby users appear as green blips
 **Actual:** No blips visible
 
@@ -344,21 +682,56 @@ Add support for additional formats:
 
 ---
 
+## Key Features Detail
+
+### Proximity Radar (HomeScreen.tsx - 3129 lines)
+- 3D curved grid with 6,440+ View components
+- Tensor mathematics for spatial positioning
+- Real-time BLE scanning (updates every 5 seconds)
+- Green pulsating dots for nearby users
+- Pinch-to-zoom and rotation gestures
+- Distance-based dot pulsation (closer = faster)
+- Grid snapping to 3-foot intersections
+- Performance issues during gestures (optimization in progress)
+
+### Drop Screen
+- List view of discovered users
+- Distance display in feet for each user
+- Profile photos, names, bios
+- Send contact info ("drop") to selected users
+
+### Account Screen
+- Profile photo (circular, editable)
+- Name, bio display in main card
+- Contact info section: phone, email
+- Social media accounts displayed with platform logo and handle text (not links)
+- "Preview My Card" button shows contact card view
+- Settings gear icon for security options
+
+### Profile Photo Upload Flow
+1. User taps profile photo or pencil edit icon
+2. Permission request (camera roll access)
+3. Image picker opens
+4. User selects image
+5. Upload initiated with loading spinner
+6. Error or success message displayed
+7. On success: Photo updates in profile display
+
 ## Pattern of Failures
 
 **Common Issues:**
-1. **Tutorial persistence** - 4+ attempts, still broken
-2. **Profile saving** - 3+ attempts, still inconsistent
-3. **Account deletion** - Fails even when data exists
-4. **Coordination issues** - Backend has code, frontend has code, but they don't communicate properly
-5. **Cascade failures** - Profile issues break other features
+1. **React Native Text components cannot render null** - Causes gray screen crashes
+2. **Supabase Storage RLS policies require explicit auth headers** - Token not auto-included
+3. **OTP type mismatch** - Supabase only supports 'email', 'sms', 'phone_change'
+4. **signInWithOtp creates users without passwords** - Must use updateUser to set password
+5. **Auth state doesn't auto-update** - Requires manual refreshAuth call
 
 **Root Causes Identified:**
-- Database migrations don't run automatically on Railway restart
-- AsyncStorage/backend data sync issues
-- Frontend state not properly reflecting backend data
-- Error handling too permissive (fails silently)
-- No structured logging makes debugging difficult
+- React Native 0.81.5 lacks modern Web APIs (Blob, fetch limitations)
+- Supabase client doesn't auto-include session tokens in Storage requests
+- TypeScript type guards don't prevent runtime null crashes
+- Auth context state management requires manual refresh
+- Error masking hides real issues (always re-throw original errors)
 
 ---
 
@@ -499,12 +872,15 @@ Settings → Actions → Disable "Error Monitoring" workflow
 
 ## Next Steps (Priority Order)
 
-1. **Fix account deletion** - Critical for managing test accounts
-2. **Fix tutorial display** - Core onboarding feature
-3. **Stabilize profile saving** - Foundational feature
-4. **Add photo format support** - User experience improvement
-5. **Investigate radar blips** - Core app functionality
-6. **Expand test coverage** - Add deletion, photo, BLE tests
+1. **Fix gray screen crash** - CRITICAL - App unusable after fresh signup/login
+2. **Fix profile photo RLS error** - CRITICAL - Deploy explicit auth header fix and test
+3. **Re-implement tutorial system** - Core onboarding feature, currently disabled
+4. **Create Supabase RPC function** - Required for account deletion
+5. **Complete Railway deprecation** - Remove all Railway backend dependencies
+6. **Add photo format support** - HEIC, WebP, HEIF
+7. **Investigate radar blips** - Core app functionality
+8. **Grid performance optimization** - Memoize 6,440 View components
+9. **Expand test coverage** - Update tests for Supabase endpoints
 
 ---
 
@@ -528,10 +904,102 @@ Settings → Actions → Disable "Error Monitoring" workflow
 
 ### Known Technical Debt
 - Tutorial logic spread across multiple files (needs consolidation)
+- Tutorial system temporarily disabled (blocking signup navigation)
 - FormData uses `as any` type cast (removes TypeScript type safety)
-- Database migrations don't auto-run (need manual trigger)
-- No structured logging on backend (using print)
-- Error messages too generic for debugging
+- Error messages too generic for debugging (improved during migration)
+- Gray screen crashes not fully resolved
+- Profile photo upload RLS policy error persists
+- Supabase Storage requires explicit auth headers (workaround in place)
+
+### Code Patterns (Supabase)
+
+**Authentication:**
+```typescript
+// Get current session
+const { data: { session } } = await supabase.auth.getSession();
+
+// Sign in
+const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+// Send OTP
+const { error } = await supabase.auth.signInWithOtp({
+  email,
+  options: { shouldCreateUser: true }  // For signup
+});
+
+// Verify OTP (always use 'email' type)
+const { data, error } = await supabase.auth.verifyOtp({
+  email,
+  token: code,
+  type: 'email'  // NOT 'signup' - that type doesn't exist
+});
+
+// Update user/password
+const { error } = await supabase.auth.updateUser({
+  password: newPassword,
+  data: { username }
+});
+
+// Sign out
+await supabase.auth.signOut();
+```
+
+**Database Operations:**
+```typescript
+// Query
+const { data, error } = await supabase
+  .from('user_profiles')
+  .select('*')
+  .eq('user_id', userId)
+  .single();
+
+// Insert
+const { error } = await supabase
+  .from('user_profiles')
+  .insert({ user_id: userId, email, name: null });
+
+// Update
+const { error } = await supabase
+  .from('user_profiles')
+  .update({ name, bio })
+  .eq('user_id', userId);
+```
+
+**Storage Upload with Auth:**
+```typescript
+const { data: { session } } = await supabase.auth.getSession();
+
+const { data, error } = await supabase.storage
+  .from('profile_photos')
+  .upload(filePath, arrayBuffer, {
+    contentType: `image/${extension}`,
+    upsert: true,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,  // Required for RLS
+    },
+  });
+```
+
+**File Handling (React Native):**
+```typescript
+import ReactNativeBlobUtil from 'react-native-blob-util';
+
+// Read file as base64
+const cleanUri = imageUri.replace('file://', '');
+const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
+
+// Convert to ArrayBuffer for Supabase
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+const arrayBuffer = base64ToArrayBuffer(base64Data);
+```
 
 ---
 
@@ -558,66 +1026,109 @@ Settings → Actions → Disable "Error Monitoring" workflow
 - Confirm test credentials still valid
 
 **Profile data not saving?**
-- Check if `has_completed_onboarding` column exists
-- Verify JWT token is valid and not expired
-- Check UserContext initialization in App.tsx
-- Inspect database directly via Railway CLI
+- Now using Supabase: Check `user_profiles` table in Supabase dashboard
+- Verify session exists: `await supabase.auth.getSession()`
+- Check browser console for Supabase errors
+- Confirm RLS policies allow authenticated users to update
 
 **Account deletion failing?**
-- Verify email exists in user profile
-- Check verification code was sent and received
-- Review Railway logs for delete endpoint errors
-- Confirm JWT token has correct user_id
-- Note: Issue persists even when email is saved correctly
+- Migrated to Supabase multi-table deletion
+- Requires RPC function `delete_user()` to be created in Supabase
+- Check Supabase Functions tab for RPC implementation
+- Verify all tables deleted: devices, user_settings, user_profiles
+
+**Gray screen crash after signup/login?**
+- Issue: React Native Text components rendering null values
+- Check: New users have null name/bio/phone in database
+- Fix: Add fallback values `{field || 'default'}` to all Text renders
+- Files: AccountScreen.tsx helper functions and Text components
+
+**Profile photo upload failing with RLS error?**
+- Issue: Storage API not receiving JWT token in headers
+- Check: Session verification logs confirm token exists
+- Fix: Add explicit Authorization header to upload options
+- Verify: AppState listener registered in supabase.ts
 
 ---
 
-## Environment Variables (Railway)
+## Environment Variables
 
-These are configured in the Railway dashboard:
+### Supabase (Current)
+**Configuration Location:** `mobile/src/services/supabase.ts`
+- `SUPABASE_URL`: `https://jfuhplqtujaakksmixii.supabase.co`
+- `SUPABASE_ANON_KEY`: Public anon key (in source code)
+- `SUPABASE_SERVICE_ROLE_KEY`: Server-side only (for RPC functions)
 
-**Required:**
-- `DATABASE_URL` - PostgreSQL connection (auto-managed by Railway)
+### Railway (Deprecated - Being Phased Out)
+- `DATABASE_URL` - PostgreSQL connection
 - `JWT_SECRET` - Secret for JWT token generation
-- `CLOUDINARY_CLOUD_NAME` - Image upload service
-- `CLOUDINARY_API_KEY` - Cloudinary authentication
-- `CLOUDINARY_API_SECRET` - Cloudinary authentication
 - `SMTP_SERVER` - Email service for verification codes
 - `SMTP_PORT` - Email service port
 - `SMTP_USERNAME` - Email service username
 - `SMTP_PASSWORD` - Email service password
 - `SMTP_FROM_EMAIL` - Sender email address
 
-**Frontend ENV (mobile/src/config/environment.ts):**
-- `BASE_URL` - Backend API URL
-- `ENFORCE_HTTPS` - Whether to force HTTPS in production
+### Frontend ENV (mobile/src/config/environment.ts)
+- `BASE_URL` - Backend API URL (Railway during migration)
+- `ENFORCE_HTTPS` - Force HTTPS in production
+
+### React Native Dependencies (package.json)
+- `@supabase/supabase-js`: `^2.84.0`
+- `@react-native-async-storage/async-storage`: `^1.x.x`
+- `react-native-blob-util`: `^0.24.4`
+- `react-native-url-polyfill`: `^3.0.0`
+- `react-native-gesture-handler`: For pinch/zoom/rotate
+- `expo-file-system`: `^19.0.19` (legacy API for SDK 54)
 
 ---
 
 ## Additional Resources
 
-**Railway Dashboard:** Monitor deployments and view logs (health checks configured)
+**Supabase Dashboard:** https://app.supabase.com/project/jfuhplqtujaakksmixii
+**Railway Dashboard:** Monitor deployments and view logs (deprecated, being phased out)
 **Expo Dashboard:** Track OTA updates and build status
 **GitHub Actions:** View automated test results and error monitoring
-**Cloudinary Dashboard:** Monitor image uploads and storage
 **Error Monitoring:** GitHub Actions → Error Monitoring workflow (runs 24/7)
+
+**Documentation:**
+- Supabase Auth Docs: https://supabase.com/docs/guides/auth
+- Supabase Storage Docs: https://supabase.com/docs/guides/storage
+- React Native Blob Util: https://github.com/RonRadtke/react-native-blob-util
+- Project Summary: `PROJECT_SUMMARY.md` - High-level overview
+- Data Pipeline: `testing/DATA_PIPELINE.md` - Complete data flow
 
 ---
 
 ## Notes for Future Development
 
 ### Architecture Improvements Needed
-- Move to TypeScript backend for better type safety
-- Implement proper database migration tool (Alembic for SQLAlchemy)
-- Add structured logging (replace print statements)
+- Complete Supabase migration (95% done)
+- Create Supabase RPC functions for admin operations
+- Document all Supabase RLS policies
 - Consolidate tutorial state management
+- Move to TypeScript backend for better type safety (long-term)
+- Add structured logging (replace print statements)
 - Implement proper retry logic for network requests
 - Add backend API documentation (Swagger/OpenAPI)
 
+### Lessons Learned (Supabase Migration)
+1. Supabase OTP types: only 'email', 'sms', 'phone_change' exist (not 'signup')
+2. signInWithOtp with shouldCreateUser creates users WITHOUT passwords
+3. React Native Text components cannot render null (causes gray screen)
+4. Supabase Storage requires explicit Authorization headers in React Native
+5. AppState listener required for proper session refresh in React Native
+6. Always re-throw original errors (don't mask with generic messages)
+7. Auth state doesn't auto-update - requires manual refreshAuth call
+8. TypeScript type guards don't prevent runtime null crashes
+
 ### Feature Requests / TODOs
+- [ ] Fix gray screen crash after signup/login (CRITICAL)
+- [ ] Fix profile photo RLS error (CRITICAL)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
-- [ ] Fix tutorial display on first signup
-- [ ] Stabilize account deletion
+- [ ] Re-implement tutorial system
+- [ ] Create Supabase RPC delete_user function
+- [ ] Update all tests for Supabase endpoints
 - [ ] Investigate radar blip visibility
-- [ ] Add automated tests for deletion/photos/BLE
-- [ ] Consider rate limiting on sensitive endpoints
+- [ ] Grid performance optimization (memoization)
+- [ ] Complete Railway backend deprecation
+- [ ] Add Supabase RLS policy documentation
