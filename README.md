@@ -614,6 +614,12 @@ None yet - need to investigate delete endpoint logic
 **Expected:** User selects photo, upload completes, photo displays in profile
 **Actual:** Upload fails with "new row violates row-level security policy" error
 
+**Error Details:**
+- Error Message: `new row violates row-level security policy`
+- Error Name: `StorageApiError`
+- Status Code: `403`
+- Meaning: Server-side RLS check fails because `auth.uid()` returns NULL (JWT token not recognized)
+
 **UI Presentation:**
 - User taps profile photo edit button
 - Selects image from gallery
@@ -623,27 +629,92 @@ None yet - need to investigate delete endpoint logic
 - Photo does not upload
 - Previous photo (or placeholder) remains
 
-**Investigation:**
-- Session verification confirms: user logged in, valid token exists
-- Console logs show: `session.access_token` present and valid
-- Error indicates: Server receives NULL for `auth.uid()` in RLS policy check
-- Root cause: JWT token not included in Storage API request headers
+**Verified Working Before Upload:**
+- User authenticated via Supabase Auth
+- `supabase.auth.getSession()` returns valid session with access_token
+- Session user ID matches userId parameter
+- Token exists and logged: "Access token exists: true"
+- All other Supabase operations work (database queries, auth operations)
 
-**Fix Attempted (Current):** Add explicit Authorization header
+**Current Implementation:**
 ```typescript
-await supabase.storage.from('profile_photos').upload(filePath, arrayBuffer, {
-  contentType: `image/${extension}`,
-  upsert: true,
-  headers: {
-    Authorization: `Bearer ${session.access_token}`,
-  },
-});
+// mobile/src/services/api.ts - uploadProfilePhoto()
+const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
+const arrayBuffer = base64ToArrayBuffer(base64Data);
+
+const { data: { session } } = await supabase.auth.getSession();
+if (!session) throw new Error('No active session');
+
+const { data, error } = await supabase.storage
+  .from('profile_photos')
+  .upload(filePath, arrayBuffer, {
+    contentType: `image/${extension}`,
+    upsert: true,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
 ```
 
-**Status:** Fix implemented in code, not yet deployed/tested
+**Attempted Fixes:**
 
-**Files Modified:**
-- `mobile/src/services/api.ts` - Line 863-873 (upload with explicit auth header)
+**Fix 1 - Simplified RLS Policy:**
+- Changed: FROM `(bucket_id = 'profile_photos') AND (auth.uid() IS NOT NULL)` TO `(bucket_id = 'profile_photos')`
+- Result: Same 403 error
+
+**Fix 2 - Added react-native-url-polyfill:**
+- Added: `import 'react-native-url-polyfill/auto'` to supabase.ts
+- Installed: `react-native-url-polyfill@3.0.0`
+- Result: Same 403 error
+
+**Fix 3 - AppState Listener for Auth Refresh:**
+```typescript
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh()
+  } else {
+    supabase.auth.stopAutoRefresh()
+  }
+})
+```
+- Result: Same 403 error
+
+**Fix 4 - Explicit Authorization Header:**
+```typescript
+headers: {
+  Authorization: `Bearer ${session.access_token}`,
+}
+```
+- Result: Same 403 error (even with manually passed JWT)
+
+**Fix 5 - Created Policy on storage.objects Table:**
+```sql
+CREATE POLICY "Allow authenticated users to upload profile photos"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'profile_photos');
+```
+- Result: Same 403 error
+
+**Active RLS Policies:**
+- Bucket-level policies (4 total): SELECT (anon), INSERT (authenticated), UPDATE (authenticated), DELETE (authenticated)
+- storage.objects policy: INSERT for authenticated with check `(bucket_id = 'profile_photos')`
+
+**The Mystery:**
+- Session exists
+- Token exists
+- Token manually passed in header
+- RLS policy allows authenticated users
+- BUT: Server still returns RLS policy violation
+- Indicates: `auth.uid()` returns NULL on server despite valid JWT in request
+
+**Status:** UNRESOLVED - Possible React Native + Supabase Storage incompatibility
+
+**Files Involved:**
+- `mobile/src/services/supabase.ts` - Client configuration with AppState listener
+- `mobile/src/services/api.ts` - Line 804-922 (uploadProfilePhoto function)
+- `mobile/package.json` - Dependencies: @supabase/supabase-js@2.84.0, react-native-blob-util@0.24.4
 
 ---
 
