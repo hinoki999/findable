@@ -785,6 +785,28 @@ function MainApp() {
                   hasUnviewedLinks
                 }}>
                   <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                    {/* 🔴 OTA UPDATE TEST BANNER - TEMPORARY */}
+                    <View style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: 50,
+                      backgroundColor: '#FF0000',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      zIndex: 9999,
+                    }}>
+                      <Text style={{
+                        color: '#FFFFFF',
+                        fontSize: 20,
+                        fontWeight: 'bold',
+                        fontFamily: 'Inter_600SemiBold',
+                      }}>
+                        UPDATE APPLIED - {new Date().toLocaleString()}
+                      </Text>
+                    </View>
+                    
                     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
                       <Screen />
                     </View>
