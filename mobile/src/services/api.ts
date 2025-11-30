@@ -507,10 +507,34 @@ export async function getPinnedContacts(): Promise<number[]> {
     await sleep(100);
     return [];
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/pinned`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+
+  try {
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    // Query pinned contacts from Supabase
+    const { data, error } = await supabase
+      .from('pinned_contacts')
+      .select('device_id')
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('Supabase pinned contacts query error:', error);
+      throw new Error('Failed to load pinned contacts. Please try again.');
+    }
+
+    console.log(`✅ Loaded ${data?.length || 0} pinned contacts from Supabase`);
+    
+    // Return array of device IDs
+    return (data || []).map((row: any) => row.device_id);
+  } catch (error: any) {
+    console.error('❌ Get pinned contacts error:', error);
+    throw new Error(error.message || 'Failed to load pinned contacts. Please try again.');
+  }
 }
 
 export async function pinContact(deviceId: number): Promise<void> {
@@ -518,12 +542,35 @@ export async function pinContact(deviceId: number): Promise<void> {
     await sleep(100);
     return;
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/pinned/${deviceId}`, {
-    method: "POST",
-    headers,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  try {
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    // Insert pinned contact into Supabase
+    const { error } = await supabase
+      .from('pinned_contacts')
+      .insert({
+        user_id: session.user.id,
+        device_id: deviceId,
+        pinned_at: new Date().toISOString()
+      });
+
+    // Ignore duplicate key error (23505) - contact already pinned
+    if (error && error.code !== '23505') {
+      console.error('Supabase pin contact error:', error);
+      throw new Error('Failed to pin contact. Please try again.');
+    }
+
+    console.log(`✅ Contact ${deviceId} pinned successfully`);
+  } catch (error: any) {
+    console.error('❌ Pin contact error:', error);
+    throw new Error(error.message || 'Failed to pin contact. Please try again.');
+  }
 }
 
 export async function unpinContact(deviceId: number): Promise<void> {
@@ -531,12 +578,32 @@ export async function unpinContact(deviceId: number): Promise<void> {
     await sleep(100);
     return;
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/pinned/${deviceId}`, {
-    method: "DELETE",
-    headers,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  try {
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    // Delete pinned contact from Supabase
+    const { error } = await supabase
+      .from('pinned_contacts')
+      .delete()
+      .eq('user_id', session.user.id)
+      .eq('device_id', deviceId);
+
+    if (error) {
+      console.error('Supabase unpin contact error:', error);
+      throw new Error('Failed to unpin contact. Please try again.');
+    }
+
+    console.log(`✅ Contact ${deviceId} unpinned successfully`);
+  } catch (error: any) {
+    console.error('❌ Unpin contact error:', error);
+    throw new Error(error.message || 'Failed to unpin contact. Please try again.');
+  }
 }
 
 // ==================== AUTH MANAGEMENT ====================
