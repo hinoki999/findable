@@ -319,6 +319,7 @@ function MainApp() {
           profilePhoto: profile.profile_photo,
           socialMedia: profile.social_media || [],
         });
+        setProfilePhotoUri(profile.profile_photo);
       }
       
       if (settings) {
