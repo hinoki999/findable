@@ -44,14 +44,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [verificationStep, setVerificationStep] = useState<'confirm' | 'enter-code'>('confirm');
   const [verificationCode, setVerificationCode] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
-  const [debugLog, setDebugLog] = useState<string>('');
-
-  // Helper function to add visible logs
-  const addLog = (message: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugLog(prev => `${prev}\n[${timestamp}] ${message}`);
-    console.log(message); // Keep console logs too
-  };
 
   const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
@@ -223,7 +215,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const handleSendCode = async () => {
     setSendingCode(true);
     setError('');
-    setDebugLog(''); // Clear previous logs
 
     try {
       await sendOtpCode(email, 'signup');
@@ -250,7 +241,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Verify the OTP code (this logs user in)
       // Use 'signup' type for signup OTP verification
       await verifyOtpCode(email, verificationCode, 'signup');
-      addLog('✅ OTP verified successfully');
+      console.log('✅ OTP verified successfully');
 
       // User already created by OTP - now set password
       const { error: passwordError } = await supabase.auth.updateUser({
@@ -270,10 +261,9 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error('Failed to get user session');
       }
 
-      addLog(`✅ Password set successfully, userId: ${userId}`);
+      console.log(`✅ Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
-      addLog('📝 Creating user_profiles record...');
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
@@ -286,13 +276,12 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (profileError) {
-        addLog(`❌ Failed to create user_profiles: ${profileError.message}`);
+        console.error(`❌ Failed to create user_profiles: ${profileError.message}`);
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
-      addLog('✅ user_profiles record created');
+      console.log('✅ user_profiles record created');
 
       // Create user_settings record in Supabase
-      addLog('📝 Creating user_settings record...');
       const { error: settingsError } = await supabase.from('user_settings').insert({
         user_id: userId,
         dark_mode: true,
@@ -300,10 +289,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (settingsError) {
-        addLog(`❌ Failed to create user_settings: ${settingsError.message}`);
+        console.error(`❌ Failed to create user_settings: ${settingsError.message}`);
         throw new Error(`Failed to create settings: ${settingsError.message}`);
       }
-      addLog('✅ user_settings record created');
+      console.log('✅ user_settings record created');
 
       // TODO: Re-implement tutorials after signup flow is stable
       // Tutorial setup temporarily disabled - was blocking signup navigation
@@ -340,22 +329,17 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       addLog('✅ AsyncStorage operations should be complete');
       */
 
-      addLog('⏭️ Tutorial setup skipped (temporarily disabled)');
+      console.log('⏭️ Tutorial setup skipped (temporarily disabled)');
 
       // Success! Close modal and navigate
-      addLog('🚪 Closing verification modal...');
       setShowVerificationModal(false);
-      addLog('✅ Modal closed');
       
       // Validate navigation handler before calling
-      addLog('🔍 Validating navigation handler...');
       if (typeof onSignupSuccess !== 'function') {
-        addLog('❌ ERROR: onSignupSuccess is not a function!');
-        addLog(`❌ Type: ${typeof onSignupSuccess}, Value: ${onSignupSuccess}`);
+        console.error('❌ ERROR: onSignupSuccess is not a function!');
         throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
       }
       
-      addLog('🚀 Calling onSignupSuccess...');
       console.log('🚀 [SignupScreen] About to call onSignupSuccess');
       
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
@@ -363,20 +347,15 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       try {
         onSignupSuccess(undefined);
         console.log('✅ [SignupScreen] onSignupSuccess returned');
-        addLog('✅ onSignupSuccess called successfully!');
       } catch (navError: any) {
-        addLog(`❌ onSignupSuccess threw error: ${navError.message}`);
+        console.error(`❌ onSignupSuccess threw error: ${navError.message}`);
         throw navError;
       }
-      
-      addLog('✅ Navigation should happen now!');
     } catch (err: any) {
-      addLog(`❌ [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
-      addLog(`❌ Error details: ${err.name} - ${err.stack?.substring(0, 100)}`);
+      console.error(`❌ [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
-      addLog('🔄 Loading state set to false');
     }
   };
 
@@ -726,28 +705,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                     </Text>
                   )}
                 </Pressable>
-
-                {/* Visible Debug Log */}
-                {debugLog ? (
-                  <View style={{
-                    marginTop: 20,
-                    padding: 10,
-                    backgroundColor: '#f5f5f5',
-                    borderRadius: 8,
-                    maxHeight: 200,
-                  }}>
-                    <ScrollView>
-                      <Text style={{
-                        fontSize: 10,
-                        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-                        color: '#333',
-                      }}>
-                        Debug Log:{'\n'}
-                        {debugLog}
-                      </Text>
-                    </ScrollView>
-                  </View>
-                ) : null}
               </>
             )}
           </View>
