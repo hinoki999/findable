@@ -315,10 +315,47 @@ export async function getDevices(): Promise<Device[]> {
     await sleep(120);
     return _store.slice();
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/devices`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+
+  try {
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    // Query devices from Supabase
+    const { data, error } = await supabase
+      .from('devices')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('last_seen', { ascending: false });
+
+    if (error) {
+      console.error('Supabase devices query error:', error);
+      throw new Error('Failed to load devices. Please try again.');
+    }
+
+    console.log(`✅ Loaded ${data?.length || 0} devices from Supabase`);
+    
+    // Map database format to frontend format (snake_case to camelCase)
+    return (data || []).map((d: any) => ({
+      id: d.id,
+      name: d.device_name,
+      rssi: d.rssi,
+      distanceFeet: d.distance_feet,
+      action: d.action,
+      timestamp: new Date(d.last_seen),
+      phoneNumber: d.phone_number,
+      email: d.email,
+      bio: d.bio,
+      socialMedia: d.social_media,
+      profilePhoto: d.profile_photo,
+    }));
+  } catch (error: any) {
+    console.error('❌ Get devices error:', error);
+    throw new Error(error.message || 'Failed to load devices. Please try again.');
+  }
 }
 
 export async function deleteDevice(deviceId: number, userId: string): Promise<void> {
