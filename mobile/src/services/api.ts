@@ -717,9 +717,9 @@ export async function deleteAccount(userId: string): Promise<void> {
     console.log('🗑️ Starting account deletion for user:', userId);
 
     // Validate userId parameter
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
 
     // Step 1: Delete from devices table
     const { error: devicesError } = await supabase
@@ -814,26 +814,26 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   const { error: uploadError } = await supabase.storage
     .from('profile_photos')
     .upload(filePath, bytes.buffer, {
-      contentType: `image/${extension}`,
+        contentType: `image/${extension}`,
       upsert: true
-    });
-  
+      });
+
   if (uploadError) throw uploadError;
-  
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
     .from('profile_photos')
-    .getPublicUrl(filePath);
-  
+      .getPublicUrl(filePath);
+
   // Update database
   const { error: dbError } = await supabase
-    .from('user_profiles')
-    .update({ profile_photo: publicUrl })
-    .eq('user_id', userId);
-  
+      .from('user_profiles')
+      .update({ profile_photo: publicUrl })
+      .eq('user_id', userId);
+
   if (dbError) throw dbError;
-  
-  return publicUrl;
+
+    return publicUrl;
 }
 
 
