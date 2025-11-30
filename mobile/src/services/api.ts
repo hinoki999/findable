@@ -4,7 +4,6 @@ import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
 import ReactNativeBlobUtil from 'react-native-blob-util';
-import { decode } from 'base-64';
 import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
@@ -804,10 +803,17 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   // Read as base64
   const base64 = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
   
+  // Convert base64 to Uint8Array (binary)
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  
   // Upload using Supabase SDK
   const { error: uploadError } = await supabase.storage
     .from('profile_photos')
-    .upload(filePath, decode(base64), {
+    .upload(filePath, bytes.buffer, {
       contentType: `image/${extension}`,
       upsert: true
     });
