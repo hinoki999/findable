@@ -229,15 +229,6 @@ function MainApp() {
           hasCachedProfileRef.current = false; // ← No cache found (fresh install)
           console.log('📱 No cached profile found - fresh install detected');
         }
-
-        // ✅ CHANGE 2: Load profile photo from AsyncStorage
-        const cachedPhoto = await AsyncStorage.getItem('profilePhotoUri');
-        if (cachedPhoto) {
-          console.log('📱 Profile photo loaded from cache:', cachedPhoto);
-          setProfilePhotoUri(cachedPhoto);
-        } else {
-          console.log('📱 No cached profile photo found');
-        }
       } catch (error) {
         console.error('📱 Failed to load profile from AsyncStorage:', error);
       }
@@ -263,23 +254,6 @@ function MainApp() {
 
     saveProfileToCache();
   }, [userProfile]); // Run every time userProfile changes
-
-  // ✅ NEW: Auto-save profile photo to AsyncStorage whenever it changes
-  useEffect(() => {
-    const savePhotoToCache = async () => {
-      try {
-        if (profilePhotoUri) {
-          console.log('💾 Saving profile photo to AsyncStorage:', profilePhotoUri);
-          await AsyncStorage.setItem('profilePhotoUri', profilePhotoUri);
-          console.log('💾 Profile photo saved successfully');
-        }
-      } catch (error) {
-        console.error('💾 Failed to save profile photo to AsyncStorage:', error);
-      }
-    };
-
-    savePhotoToCache();
-  }, [profilePhotoUri]); // Run every time profilePhotoUri changes
 
   // Check for OTA updates on app launch
   useEffect(() => {
