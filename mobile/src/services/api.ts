@@ -796,6 +796,15 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     throw new Error('Missing image or user ID');
   }
 
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw new Error('Not authenticated - please log out and log back in');
+  }
+
+  console.log('Session check - User ID:', session.user.id);
+  console.log('Session check - Matches userId param:', session.user.id === userId);
+
   const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
   const filePath = `${userId}.${extension}`;
   const cleanUri = imageUri.replace('file://', '');
