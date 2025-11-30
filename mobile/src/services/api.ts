@@ -4,6 +4,7 @@ import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import { decode } from 'base-64';
 import { supabase } from './supabase';
 
 export const BASE_URL = ENV.BASE_URL;
@@ -791,96 +792,42 @@ export async function deleteAccount(userId: string): Promise<void> {
 
 // ==================== PROFILE PHOTO ====================
 
-// Helper function to convert base64 string to ArrayBuffer for Supabase
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
 export async function uploadProfilePhoto(imageUri: string, userId: string): Promise<string> {
-  // Validate inputs
-  if (!imageUri) {
-    throw new Error('Please select an image first');
-  }
-  if (!userId) {
-    throw new Error('User not authenticated');
+  if (!imageUri || !userId) {
+    throw new Error('Missing image or user ID');
   }
 
-  // Extract file extension from imageUri
   const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-  
-  // Generate file path (userId.extension, will overwrite previous photo)
   const filePath = `${userId}.${extension}`;
-
-  try {
-    // Remove 'file://' prefix if present (common in RN image URIs)
-    const cleanUri = imageUri.replace('file://', '');
-    
-    // Read file as base64 using react-native-blob-util
-    const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
-    
-    // Convert base64 to ArrayBuffer for Supabase Storage
-    const arrayBuffer = base64ToArrayBuffer(base64Data);
-
-    // Verify authentication before upload
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      throw new Error('Failed to verify authentication session');
-    }
-    
-    if (!session) {
-      throw new Error('User must be logged in to upload photos');
-    }
-    
-    // Refresh session immediately before upload to ensure fresh token
-    await supabase.auth.refreshSession();
-
-    // Upload to Supabase Storage using direct REST API
-    const storageUrl = `https://jfuhplqtujaakksmixii.supabase.co/storage/v1/object/profile_photos/${filePath}`;
-    const anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdWhwbHF0dWphYWtrc21peGlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5Njk0NzEsImV4cCI6MjA3OTU0NTQ3MX0.YC_Xi5gmqZEi-DBjjAqLmcCik3ho2eZAa1UU2oXJ6QA';
-    
-    const uploadResponse = await fetch(storageUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': anonKey,
-        'Content-Type': `image/${extension}`,
-        'x-upsert': 'true',
-      },
-      body: arrayBuffer,
+  const cleanUri = imageUri.replace('file://', '');
+  
+  // Read as base64
+  const base64 = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
+  
+  // Upload using Supabase SDK
+  const { error: uploadError } = await supabase.storage
+    .from('profile_photos')
+    .upload(filePath, decode(base64), {
+      contentType: `image/${extension}`,
+      upsert: true
     });
-    
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      throw new Error(`Storage upload failed: ${uploadResponse.status} ${uploadResponse.statusText} - ${errorText}`);
-    }
-    
-    await uploadResponse.json();
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('profile_photos')
-      .getPublicUrl(filePath);
-
-    // Update user_profiles table with new photo URL
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({ profile_photo: publicUrl })
-      .eq('user_id', userId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    return publicUrl;
-  } catch (error: any) {
-    throw error;
-  }
+  
+  if (uploadError) throw uploadError;
+  
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from('profile_photos')
+    .getPublicUrl(filePath);
+  
+  // Update database
+  const { error: dbError } = await supabase
+    .from('user_profiles')
+    .update({ profile_photo: publicUrl })
+    .eq('user_id', userId);
+  
+  if (dbError) throw dbError;
+  
+  return publicUrl;
 }
 
 
