@@ -649,7 +649,6 @@ function MainApp() {
           <WelcomeScreen
             onGetStarted={() => setAuthScreen('signup')}
             onLogin={() => setAuthScreen('login')}
-            onGoogleLoginSuccess={handleLoginSuccess}
             showToast={showToast}
           />
         )}

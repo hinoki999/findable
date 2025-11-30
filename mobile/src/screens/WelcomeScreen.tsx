@@ -1,61 +1,22 @@
-import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
+import React from 'react';
+import { View, Text, Pressable, StyleSheet, Dimensions, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-// import { useGoogleAuth, authenticateWithGoogle } from '../services/googleAuth';
 
 const { width, height } = Dimensions.get('window');
 
 interface WelcomeScreenProps {
   onGetStarted: () => void;
   onLogin: () => void;
-  onGoogleLoginSuccess?: (token: string, userId: number, username: string) => void;
   showToast?: (config: { message: string; type?: 'success' | 'error' | 'info' }) => void;
 }
 
-export default function WelcomeScreen({ onGetStarted, onLogin, onGoogleLoginSuccess, showToast }: WelcomeScreenProps) {
+export default function WelcomeScreen({ onGetStarted, onLogin, showToast }: WelcomeScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  // const { request, response, promptAsync } = useGoogleAuth();
-  const [googleLoading, setGoogleLoading] = React.useState(false);
   const [dropPosition, setDropPosition] = React.useState({ x: 0, y: 0 });
-
-  // useEffect(() => {
-  //   if (response?.type === 'success') {
-  //     const { id_token } = response.params;
-  //     handleGoogleAuth(id_token);
-  //   }
-  // }, [response]);
-
-  // const handleGoogleAuth = async (idToken: string) => {
-  //   try {
-  //     setGoogleLoading(true);
-  //     const result = await authenticateWithGoogle(idToken);
-  //     
-  //     if (onGoogleLoginSuccess) {
-  //       onGoogleLoginSuccess(result.token, result.user_id, result.username);
-  //     }
-  //   } catch (error: any) {
-  //     console.error('Google auth error:', error);
-  //     Alert.alert('Authentication Failed', error.message || 'Failed to sign in with Google');
-  //   } finally {
-  //     setGoogleLoading(false);
-  //   }
-  // };
-
-  const handleGoogleSignIn = () => {
-    // promptAsync();
-    if (showToast) {
-      showToast({
-        message: 'Google Sign-In coming soon! Please use "Get Started" or "Log In" for now.',
-        type: 'info',
-        duration: 4000,
-      });
-    }
-    console.log('Google Sign-In clicked - feature coming soon');
-  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
@@ -267,23 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter_400Regular',
     marginHorizontal: 16,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  googleButtonText: {
-    color: '#000000',
-    fontSize: 17,
-    fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
   },
   loginContainer: {
     flexDirection: 'row',
