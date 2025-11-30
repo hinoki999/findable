@@ -962,6 +962,291 @@ be05010 Simplify uploadProfilePhoto - use Supabase SDK instead of manual REST AP
 
 ---
 
+### Session 2: Profile Photo Persistence & Username Display Fixes (Nov 30, 2024)
+
+**Follow-up session to address bugs discovered after Nov 30 refactor.**
+
+#### 1. Profile Photo Persistence Bug - IDENTIFIED AND FIXED
+
+**Problem Discovered:**
+- Photos uploaded successfully and displayed immediately
+- After app restart, photos disappeared (showed placeholder)
+- Root cause: Double state bug (`profilePhotoUri` vs `userProfile.profilePhoto`)
+- AsyncStorage removal in previous session exposed the underlying issue
+
+**Investigation Process:**
+1. Analyzed upload flow vs app restart flow
+2. Discovered `setProfilePhotoUri()` only called in `onlyPhoto` mode (line 295)
+3. Full data load (line 313-321) updated context but not local state
+4. Created `FILE_PATH_STRUCTURE_ANALYSIS.md` - confirmed only 1 line constructs paths
+5. Created `PROFILE_PHOTO_PERSISTENCE_BUG.md` - documented the missing link
+
+**Root Cause:**
+```typescript
+// mobile/App.tsx loadUserData() function
+if (profile) {
+  setUserProfile({
+    profilePhoto: profile.profile_photo,  // ✅ Sets context
+    // ...
+  });
+  // ❌ MISSING: setProfilePhotoUri(profile.profile_photo);
+}
+```
+
+**Solution Implemented (Commit 4d01f04):**
+```typescript
+// mobile/App.tsx line 322
+if (profile) {
+  setUserProfile({
+    profilePhoto: profile.profile_photo,
+    // ...
+  });
+  setProfilePhotoUri(profile.profile_photo);  // ✅ Added this line
+}
+```
+
+**Result:** ✅ Photos now persist correctly after app restart
+
+---
+
+#### 2. Folder-Based Storage Structure - IMPLEMENTED
+
+**Why Changed:**
+- Flat structure (`userId.jpg`) incompatible with Supabase Storage RLS
+- `storage.foldername()` function expects folder structure for ownership checks
+- Industry standard for user-generated content organization
+- Scales better for future features (thumbnails, multiple photos)
+
+**Code Change (Commit 50771b8):**
+```typescript
+// mobile/src/services/api.ts line 809
+// Before:
+const filePath = `${userId}.${extension}`;
+
+// After:
+const filePath = `${userId}/profile.${extension}`;
+```
+
+**Supabase Configuration:**
+
+**Storage Bucket:**
+- **Name:** `profile_photos`
+- **Visibility:** PUBLIC (required for `getPublicUrl()`)
+- **Structure:** `{userId}/profile.{extension}`
+
+**Storage RLS Policy:**
+```sql
+-- Allow users to manage their own folder
+CREATE POLICY "users_own_folder"
+ON storage.objects FOR ALL TO authenticated
+USING (
+  bucket_id = 'profile_photos' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+)
+WITH CHECK (
+  bucket_id = 'profile_photos' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Public read access
+CREATE POLICY "public_read"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'profile_photos');
+```
+
+**File Structure Comparison:**
+```
+Before: profile_photos/abc-123-def-456.jpg
+After:  profile_photos/abc-123-def-456/profile.jpg
+```
+
+**Result:** ✅ RLS policies work correctly, photos upload and display
+
+---
+
+#### 3. Username Display Bug - FIXED
+
+**Problem Discovered:**
+- AccountScreen TopBar showed `@user@example.com` instead of `@username`
+- Username collected during signup but not displayed correctly
+
+**Root Cause Analysis:**
+- Username stored in `auth.users.user_metadata.username` during signup ✅
+- `AuthContext` reading `user.email` instead of `user.user_metadata.username` ❌
+- Bug existed in 3 locations: `checkStoredAuth()`, `login()`, `signup()`
+
+**Data Flow:**
+```
+Signup:
+  username input → auth.users.user_metadata.username ✅
+
+Auth Check (BROKEN):
+  session.user.email → AuthContext.username ❌
+  
+Display:
+  AuthContext.username → AccountScreen TopBar
+  Result: @user@example.com ❌
+```
+
+**Solution Implemented (Commit 68d1bbe):**
+```typescript
+// mobile/src/contexts/AuthContext.tsx
+
+// Line 48 - checkStoredAuth()
+- username: session.user.email || null,
++ username: session.user.user_metadata?.username || null,
+
+// Line 90 - login()
+- username: data.user.email || null,
++ username: data.user.user_metadata?.username || null,
+
+// Line 121 - signup()
+- username: data.user.email || null,
++ username: data.user.user_metadata?.username || null,
+```
+
+**Important Note:** This change does NOT affect email retention or display:
+- Email still stored in `user_profiles.email` table
+- Email still displayed in contact info section
+- Email still used for login authentication
+- Only TopBar subtitle changed from email to username
+
+**Result:** ✅ AccountScreen now displays `@username` correctly
+
+---
+
+#### 4. Testing Process & Methodology
+
+**Systematic Debugging Approach:**
+1. Used code analysis instead of adding debug logs
+2. Created analysis documents for complex issues
+3. Verified fixes through EAS updates (OTA when possible)
+4. Tested on physical device after each change
+5. Confirmed no regression in related features
+
+**What Worked:**
+- Folder-based storage structure matched Supabase RLS expectations
+- Single state variable update fixed persistence bug
+- Reading from `user_metadata` fixed username display
+
+**Key Learning:**
+- Removing AsyncStorage was correct - it was masking the persistence bug
+- Supabase bucket must be PUBLIC when using `getPublicUrl()`
+- RLS policies require folder structure for `foldername()` function
+- Analysis documents help identify root causes without trial-and-error
+
+---
+
+#### 5. Supabase Configuration (Current State)
+
+**Storage:**
+- **Bucket:** `profile_photos` (PUBLIC)
+- **Structure:** `{userId}/profile.{extension}`
+- **RLS Policy:** `users_own_folder` (folder-based access control)
+- **Public URL:** `https://[project].supabase.co/storage/v1/object/public/profile_photos/{userId}/profile.jpg`
+
+**Database:**
+- **Table:** `user_profiles`
+- **Column:** `profile_photo` (TEXT - stores public URL)
+- **RLS Policies:** 
+  - INSERT: `auth.uid() = user_id`
+  - UPDATE: `auth.uid() = user_id`
+  - SELECT: `auth.uid() = user_id`
+
+**Authentication:**
+- **Username storage:** `auth.users.user_metadata.username`
+- **Email storage:** `auth.users.email`
+- **Session management:** Supabase SDK with AsyncStorage
+- **Token refresh:** Auto-enabled in SDK
+
+---
+
+#### 6. Code Changes Summary
+
+**Files Modified:**
+1. `mobile/src/services/api.ts` (line 809)
+   - Changed file path to folder structure
+   - 1 line modified
+
+2. `mobile/App.tsx` (line 322)
+   - Added `profilePhotoUri` state update
+   - 1 line added
+
+3. `mobile/src/contexts/AuthContext.tsx` (lines 48, 90, 121)
+   - Fixed username retrieval from metadata
+   - 3 lines modified
+
+**Total Changes:** 5 lines modified/added to fix 2 critical bugs
+
+**Commits:**
+```bash
+50771b8 Switch to folder-based file structure for Supabase Storage RLS
+4d01f04 Fix profile photo persistence - set profilePhotoUri on app restart
+68d1bbe Fix username display - use user_metadata.username instead of email
+```
+
+---
+
+#### 7. Current Status (Fully Functional)
+
+✅ **Profile Photo System:**
+- Upload to Supabase Storage (folder structure)
+- Display with proper public URLs
+- Persist after app restart
+- RLS policies protect user data
+- Single source of truth (Supabase)
+
+✅ **Username Display:**
+- AccountScreen shows `@username` (not email)
+- Email still displayed in contact info
+- Username collected during signup
+- Username retrieved from auth metadata
+
+✅ **Code Quality:**
+- 264 lines of debug logging removed (Session 1)
+- 5 lines changed to fix 2 bugs (Session 2)
+- Clean, maintainable codebase
+- No redundant caching layers
+
+---
+
+#### 8. Known Issues (To Address)
+
+⚠️ **Delete Account Feature:**
+- **Issue:** Works in UI but doesn't delete from Supabase database
+- **Impact:** User cannot create new account with same email after "deletion"
+- **Fix Needed:** Proper Supabase user deletion implementation
+- **Location:** AccountScreen.tsx delete account handler
+
+⚠️ **Visibility Toggle:**
+- **Issue:** UI exists on HomeScreen but not functional
+- **Impact:** Toggle should control user discoverability
+- **Fix Needed:** 
+  - User_settings table integration
+  - Backend functionality for visibility state
+  - BLE advertisement control based on visibility
+- **Location:** HomeScreen.tsx visibility toggle
+
+---
+
+#### 9. References
+
+**Video Tutorial:**
+- **Title:** "React Native File Upload with Supabase Storage and Expo"
+- **Source:** freeCodeCamp (12-hour mobile development course)
+- **Key Insight:** Folder-based structure required for Supabase Storage RLS
+
+**Supabase Documentation:**
+- Storage RLS: https://supabase.com/docs/guides/storage/security/access-control
+- `storage.foldername()`: Used in RLS policies for folder-based access
+
+**Analysis Documents Created:**
+- `FILE_PATH_STRUCTURE_ANALYSIS.md` - Profile photo path construction analysis
+- `PROFILE_PHOTO_PERSISTENCE_BUG.md` - Double state bug documentation
+- `PHOTO_UPLOAD_DATABASE_ANALYSIS.md` - Table access during upload
+
+---
+
 ## Pattern of Failures
 
 **Common Issues:**
