@@ -806,7 +806,7 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   console.log('Session check - Matches userId param:', session.user.id === userId);
 
   const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
-  const filePath = `${userId}.${extension}`;
+  const filePath = `${userId}/profile.${extension}`;
   const cleanUri = imageUri.replace('file://', '');
   
   // Read as base64
