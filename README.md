@@ -21,7 +21,7 @@
 
 **Tech Stack:**
 - **Frontend:** React Native 0.81.5 with Expo SDK 54 (TypeScript)
-- **Backend:** Python with FastAPI (Railway - being deprecated)
+- **Backend:** Python with FastAPI (Railway - deprecated, critical features migrated to Supabase)
 - **Database:** Supabase PostgreSQL
 - **Image Storage:** Supabase Storage (profile_photos bucket)
 - **Authentication:** Supabase Auth with AsyncStorage (migrated from Railway JWT)
@@ -1244,6 +1244,96 @@ Display:
 - `FILE_PATH_STRUCTURE_ANALYSIS.md` - Profile photo path construction analysis
 - `PROFILE_PHOTO_PERSISTENCE_BUG.md` - Double state bug documentation
 - `PHOTO_UPLOAD_DATABASE_ANALYSIS.md` - Table access during upload
+
+---
+
+#### 10. Railway Backend Migration - COMPLETED
+
+**Critical Features Migrated from Railway to Supabase (Nov 30, 2024)**
+
+**Problem:** App relied on Railway backend for 2 critical features:
+- Device/contact history management
+- User settings (dark mode, distance preferences)
+- Risk: App would break if Railway backend went down
+
+**Investigation:**
+- Analyzed all Railway API endpoints in `api.ts`
+- Found 5 features still using Railway:
+  - 🔴 Device management (CRITICAL)
+  - 🔴 User settings (CRITICAL)
+  - 🟡 Privacy zones (incomplete feature)
+  - 🟡 Pinned contacts (incomplete feature)
+  - 🟡 API logging (non-blocking)
+
+**Solution Implemented (Commits a72d283, ea78e40):**
+
+**1. Device Management Migration**
+```typescript
+// Before (Railway REST API):
+const res = await secureFetch(`${BASE_URL}/devices`, { headers });
+return res.json();
+
+// After (Supabase):
+const { data, error } = await supabase
+  .from('devices')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .order('last_seen', { ascending: false });
+```
+
+**2. User Settings Migration**
+```typescript
+// Before (Railway REST API):
+const res = await secureFetch(`${BASE_URL}/user/settings`, { headers });
+return res.json();
+
+// After (Supabase):
+const { data, error } = await supabase
+  .from('user_settings')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .single();
+```
+
+**Benefits:**
+- ✅ No dependency on Railway backend for critical features
+- ✅ Consistent auth system (all Supabase)
+- ✅ Better error handling
+- ✅ Automatic snake_case to camelCase conversion
+- ✅ Graceful fallbacks for missing data
+
+**Result:** App is now fully functional without Railway backend
+
+**Commits:**
+- `a72d283` - Migrate device management from Railway to Supabase
+- `ea78e40` - Migrate user settings from Railway to Supabase
+
+---
+
+#### 11. Privacy Zones Feature Removal
+
+**Obsolete Feature Removed (Commit 87ca819)**
+
+**Status:** Feature was incomplete and never fully implemented
+- UI existed but was commented out
+- Railway endpoints unused
+- No active navigation routes
+
+**Files Deleted:**
+- `mobile/src/screens/PrivacyZonesScreen.tsx` (592 lines)
+
+**Code Removed:**
+- `api.ts`: 46 lines (interface + 3 functions)
+- `App.tsx`: 9 lines (commented imports and routes)
+- `AccountScreen.tsx`: 11 lines (commented handlers)
+
+**Total Lines Removed:** 657 lines
+
+**What Was Kept:**
+- `UserSettings.privacyZonesEnabled` property (database compatibility)
+- Set to `false` everywhere - deprecated but not breaking
+
+**Result:** Cleaner codebase, 657 lines of obsolete code removed
 
 ---
 
