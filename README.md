@@ -325,28 +325,17 @@ await supabase.storage.from('profile_photos').upload(filePath, arrayBuffer, {
 - Cause: Code used `'PROFILE_PHOTOS'` but Supabase bucket was `'profile_photos'`
 - Fix: Changed to lowercase in 2 locations (upload and getPublicUrl)
 
-**Bug 7: Profile Photo Upload RLS Policy Error (CURRENT - STILL FAILING)**
+**Bug 7: Profile Photo Upload RLS Policy Error (RESOLVED)**
 - UI Presentation: Upload button clicked, loading spinner appears briefly, error message "new row violates row-level security policy"
 - Root Cause: JWT token not included in Supabase Storage API request headers
 - Investigation (Commit be05010): Added session verification logging - confirmed session exists but Storage API receives NULL for `auth.uid()`
-- Fix Attempted (Not yet committed): Add explicit `Authorization` header to upload options
+- **Solution (Commits a28815d, f73422b, 1520a6d):** 
+  - Simplified upload function to use Supabase SDK directly (removed manual REST API)
+  - Fixed base64 to binary conversion using native `atob()` + `Uint8Array`
+  - Removed debug logging and AsyncStorage caching layer
+  - Deleted legacy Cloudinary backend endpoints
 
-```typescript
-// Current attempt:
-const { data: { session } } = await supabase.auth.getSession();
-
-const { data, error } = await supabase.storage
-  .from('profile_photos')
-  .upload(filePath, arrayBuffer, {
-    contentType: `image/${extension}`,
-    upsert: true,
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,  // Explicit auth header
-    },
-  });
-```
-
-Status: Fix implemented, awaiting deployment and testing
+Status: ✅ **RESOLVED** - Profile photos now upload successfully to Supabase Storage
 
 **Bug 8: Tutorial System Disabled (Commit 1152031)**
 - UI Presentation: New users complete signup, no tutorial overlays appear, proceed directly to home screen
@@ -427,7 +416,6 @@ created_at TIMESTAMP DEFAULT NOW()
 ### Profile Management
 - `GET /user/profile` - Get user profile (includes `has_completed_onboarding`)
 - `POST /user/profile` - Update profile (name, email, phone, bio)
-- `POST /user/profile/photo` - Upload profile photo to Cloudinary
 - `DELETE /user/delete` - Delete account (requires verification code)
 
 ### Settings & Privacy
@@ -610,106 +598,42 @@ None yet - need to investigate delete endpoint logic
 
 ---
 
-#### Issue #5: Profile Photo Upload RLS Error (STILL FAILING)
-**Expected:** User selects photo, upload completes, photo displays in profile
-**Actual:** Upload fails with "new row violates row-level security policy" error
+#### Issue #5: Profile Photo Upload RLS Error ✅ **RESOLVED**
 
-**Error Details:**
-- Error Message: `new row violates row-level security policy`
-- Error Name: `StorageApiError`
-- Status Code: `403`
-- Meaning: Server-side RLS check fails because `auth.uid()` returns NULL (JWT token not recognized)
+**Problem:** Upload failed with "new row violates row-level security policy" error (403)
 
-**UI Presentation:**
-- User taps profile photo edit button
-- Selects image from gallery
-- Upload button clicked
-- Loading spinner appears briefly (1-2 seconds)
-- Error message displays: "new row violates row-level security policy"
-- Photo does not upload
-- Previous photo (or placeholder) remains
+**Root Cause:** The manual REST API approach was interfering with Supabase SDK's automatic auth header injection
 
-**Verified Working Before Upload:**
-- User authenticated via Supabase Auth
-- `supabase.auth.getSession()` returns valid session with access_token
-- Session user ID matches userId parameter
-- Token exists and logged: "Access token exists: true"
-- All other Supabase operations work (database queries, auth operations)
+**Solution (Commits a28815d → 2531d08):**
+1. Simplified `uploadProfilePhoto()` to use Supabase SDK directly (removed manual REST calls)
+2. Fixed base64→binary conversion using native `atob()` + `Uint8Array`
+3. Removed AsyncStorage caching layer (unnecessary complexity)
+4. Removed debug logging from upload handlers
+5. Deleted legacy Cloudinary backend endpoints
 
-**Current Implementation:**
+**Final Implementation:**
 ```typescript
-// mobile/src/services/api.ts - uploadProfilePhoto()
-const base64Data = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
-const arrayBuffer = base64ToArrayBuffer(base64Data);
+// mobile/src/services/api.ts
+const base64 = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
 
-const { data: { session } } = await supabase.auth.getSession();
-if (!session) throw new Error('No active session');
+// Convert base64 to Uint8Array (binary)
+const binaryString = atob(base64);
+const bytes = new Uint8Array(binaryString.length);
+for (let i = 0; i < binaryString.length; i++) {
+  bytes[i] = binaryString.charCodeAt(i);
+}
 
-const { data, error } = await supabase.storage
+// Upload using Supabase SDK (handles auth automatically)
+const { error: uploadError } = await supabase.storage
   .from('profile_photos')
-  .upload(filePath, arrayBuffer, {
+  .upload(filePath, bytes.buffer, {
     contentType: `image/${extension}`,
-    upsert: true,
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
+    upsert: true
   });
 ```
 
-**Attempted Fixes:**
-
-**Fix 1 - Simplified RLS Policy:**
-- Changed: FROM `(bucket_id = 'profile_photos') AND (auth.uid() IS NOT NULL)` TO `(bucket_id = 'profile_photos')`
-- Result: Same 403 error
-
-**Fix 2 - Added react-native-url-polyfill:**
-- Added: `import 'react-native-url-polyfill/auto'` to supabase.ts
-- Installed: `react-native-url-polyfill@3.0.0`
-- Result: Same 403 error
-
-**Fix 3 - AppState Listener for Auth Refresh:**
-```typescript
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh()
-  } else {
-    supabase.auth.stopAutoRefresh()
-  }
-})
-```
-- Result: Same 403 error
-
-**Fix 4 - Explicit Authorization Header:**
-```typescript
-headers: {
-  Authorization: `Bearer ${session.access_token}`,
-}
-```
-- Result: Same 403 error (even with manually passed JWT)
-
-**Fix 5 - Created Policy on storage.objects Table:**
-```sql
-CREATE POLICY "Allow authenticated users to upload profile photos"
-ON storage.objects
-FOR INSERT
-TO authenticated
-WITH CHECK (bucket_id = 'profile_photos');
-```
-- Result: Same 403 error
-
-**Active RLS Policies:**
-- Bucket-level policies (4 total): SELECT (anon), INSERT (authenticated), UPDATE (authenticated), DELETE (authenticated)
-- storage.objects policy: INSERT for authenticated with check `(bucket_id = 'profile_photos')`
-
-**The Mystery:**
-- Session exists
-- Token exists
-- Token manually passed in header
-- RLS policy allows authenticated users
-- BUT: Server still returns RLS policy violation
-- Indicates: `auth.uid()` returns NULL on server despite valid JWT in request
-
-**Status:** UNRESOLVED - Possible React Native + Supabase Storage incompatibility
+**Result:** ✅ Profile photos now upload successfully to Supabase Storage
+**Status:** RESOLVED - 264 lines of code removed, cleaner architecture
 
 **Files Involved:**
 - `mobile/src/services/supabase.ts` - Client configuration with AppState listener
@@ -779,14 +703,31 @@ Add support for additional formats:
 - "Preview My Card" button shows contact card view
 - Settings gear icon for security options
 
-### Profile Photo Upload Flow
-1. User taps profile photo or pencil edit icon
-2. Permission request (camera roll access)
-3. Image picker opens
-4. User selects image
-5. Upload initiated with loading spinner
-6. Error or success message displayed
-7. On success: Photo updates in profile display
+## Profile Photo Upload
+
+**Implementation:** Direct upload to Supabase Storage using SDK
+
+**Flow:**
+1. User selects image via camera/gallery (React Native Image Picker)
+2. File read as base64 via `react-native-blob-util`
+3. Convert to ArrayBuffer using native `atob()` + `Uint8Array`
+4. Upload to Supabase Storage bucket `profile_photos`
+5. Store public URL in `user_profiles.profile_photo` column
+6. Display via `<Image source={{ uri: profilePhotoUri }}>`
+
+**Storage:**
+- Bucket: `profile_photos` (public)
+- File naming: `{userId}.{extension}` (overwrites previous photo)
+- RLS Policy: Authenticated users can manage their own files
+
+**Dependencies:**
+- `react-native-blob-util` - File system access
+- `@supabase/supabase-js` - Storage SDK
+
+**Removed Systems:**
+- ~~AsyncStorage caching layer~~ (React Native Image + Supabase handle caching)
+- ~~Cloudinary backend endpoints~~ (now direct to Supabase Storage)
+- ~~Manual REST API calls~~ (now using Supabase SDK)
 
 ## Pattern of Failures
 
@@ -944,13 +885,12 @@ Settings → Actions → Disable "Error Monitoring" workflow
 ## Next Steps (Priority Order)
 
 1. **Fix gray screen crash** - CRITICAL - App unusable after fresh signup/login
-2. **Fix profile photo RLS error** - CRITICAL - Deploy explicit auth header fix and test
-3. **Re-implement tutorial system** - Core onboarding feature, currently disabled
-4. **Create Supabase RPC function** - Required for account deletion
-5. **Complete Railway deprecation** - Remove all Railway backend dependencies
-6. **Add photo format support** - HEIC, WebP, HEIF
-7. **Investigate radar blips** - Core app functionality
-8. **Grid performance optimization** - Memoize 6,440 View components
+2. **Re-implement tutorial system** - Core onboarding feature, currently disabled
+3. **Create Supabase RPC function** - Required for account deletion
+4. **Complete Railway deprecation** - Remove all Railway backend dependencies
+5. **Add photo format support** - HEIC, WebP, HEIF
+6. **Investigate radar blips** - Core app functionality
+7. **Grid performance optimization** - Memoize 6,440 View components
 9. **Expand test coverage** - Update tests for Supabase endpoints
 
 ---
@@ -1194,7 +1134,7 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 
 ### Feature Requests / TODOs
 - [ ] Fix gray screen crash after signup/login (CRITICAL)
-- [ ] Fix profile photo RLS error (CRITICAL)
+- [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Re-implement tutorial system
 - [ ] Create Supabase RPC delete_user function
