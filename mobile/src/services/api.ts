@@ -156,13 +156,6 @@ export async function secureFetch(
       timing
     );
 
-    // Send to backend logging endpoint (fire-and-forget, don't block on this)
-    fetch(`${BASE_URL}/api/log-api-call`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData)
-    }).catch(() => {}); // Silent fail - don't break app if logging fails
-
     // Handle HTTP -> HTTPS redirects (301, 302, 307, 308)
     if ([301, 302, 307, 308].includes(response.status)) {
       const location = response.headers.get('Location');
@@ -196,13 +189,6 @@ export async function secureFetch(
       timing,
       error
     );
-
-    // Send to backend logging endpoint (fire-and-forget)
-    fetch(`${BASE_URL}/api/log-api-call`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData)
-    }).catch(() => {}); // Silent fail
 
     // Handle abort (timeout)
     if (error.name === 'AbortError') {
