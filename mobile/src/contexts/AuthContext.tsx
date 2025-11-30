@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState({
           isAuthenticated: true,
           userId: session.user.id,
-          username: session.user.email || null,
+          username: session.user.user_metadata?.username || null,
           token: session.access_token,
           loading: false,
         });
@@ -87,7 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setState({
         isAuthenticated: true,
         userId: userId,
-        username: data.user.email || null,
+        username: data.user.user_metadata?.username || null,
         token: data.session?.access_token || null,
         loading: false,
       });
@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState({
           isAuthenticated: true,
           userId: data.user.id,
-          username: data.user.email || null,
+          username: data.user.user_metadata?.username || null,
           token: data.session?.access_token || null,
           loading: false,
         });
