@@ -66,8 +66,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  // Privacy Zones feature removed
-  // const [privacyZonesEnabled, setPrivacyZonesEnabled] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -344,15 +342,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   //     type: 'success',
   //     duration: 2000,
   //   });
-  // };
-
-  // Privacy Zones feature removed
-  // const handlePrivacyZonesToggle = () => {
-  //   if (!privacyZonesEnabled) {
-  //     navigation.navigate('PrivacyZones');
-  //   } else {
-  //     setPrivacyZonesEnabled(false);
-  //   }
   // };
 
   return (

@@ -9,7 +9,6 @@ import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HomeScreen from './src/screens/HomeScreen';
-// import PrivacyZonesScreen from './src/screens/PrivacyZonesScreen'; // Removed feature
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import SecuritySettingsScreen from './src/screens/SecuritySettingsScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
@@ -169,11 +168,10 @@ function MainApp() {
   const [authScreen, setAuthScreen] = useState<'welcome' | 'signup' | 'login'>('welcome');
 
   const [tab, setTab] = useState<'Home' | 'Drop' | 'History' | 'Account'>('Home');
-  const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like Privacy Zones
+  const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like ProfilePhoto, SecuritySettings
   const [isDarkMode, setIsDarkMode] = useState(true);
   const insets = useSafeAreaInsets();
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
-  // const [privacyZones, setPrivacyZones] = useState<any[]>([]); // Removed Privacy Zones feature
 
   // ✅ FIXED: Initialize with socialMedia array to prevent crashes
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -716,11 +714,6 @@ function MainApp() {
 
   const Screen = () => {
     // Show sub-screen if one is active
-    // Privacy Zones feature removed
-    // if (subScreen === 'PrivacyZones') {
-    //   return <PrivacyZonesScreen navigation={navigation} zones={privacyZones} setZones={setPrivacyZones} />;
-    // }
-
     if (subScreen === 'ProfilePhoto') {
       return <ProfilePhotoScreen
         navigation={navigation}

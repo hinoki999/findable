@@ -501,52 +501,6 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
   }
 }
 
-// ==================== PRIVACY ZONES ====================
-export interface PrivacyZone {
-  id: number;
-  address: string;
-  radius: number;
-}
-
-export async function getPrivacyZones(): Promise<PrivacyZone[]> {
-  if (USE_STUB) {
-    await sleep(100);
-    return [];
-  }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/privacy-zones`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function savePrivacyZone(zone: { address: string; radius: number }): Promise<PrivacyZone> {
-  if (USE_STUB) {
-    await sleep(100);
-    return { id: Date.now(), ...zone };
-  }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/privacy-zones`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(zone),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-export async function deletePrivacyZone(zoneId: number): Promise<void> {
-  if (USE_STUB) {
-    await sleep(100);
-    return;
-  }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/privacy-zones/${zoneId}`, {
-    method: "DELETE",
-    headers,
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-}
-
 // ==================== PINNED CONTACTS ====================
 export async function getPinnedContacts(): Promise<number[]> {
   if (USE_STUB) {
