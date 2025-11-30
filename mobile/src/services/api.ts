@@ -417,10 +417,52 @@ export async function getUserSettings(): Promise<UserSettings> {
     await sleep(100);
     return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
   }
-  const headers = await getAuthHeaders();
-  const res = await secureFetch(`${BASE_URL}/user/settings`, { headers });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+
+  try {
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    // Query settings from Supabase
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (error) {
+      // If no settings found (PGRST116), return defaults
+      if (error.code === 'PGRST116') {
+        console.log('⚠️ No settings found, returning defaults');
+        return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+      }
+      console.error('Supabase settings query error:', error);
+      throw new Error('Failed to load settings. Please try again.');
+    }
+
+    console.log('✅ Settings loaded from Supabase');
+    
+    // Map database format to frontend format (snake_case to camelCase)
+    return {
+      darkMode: data.dark_mode ?? false,
+      maxDistance: data.max_distance ?? 33,
+      privacyZonesEnabled: data.privacy_zones_enabled ?? false,
+    };
+  } catch (error: any) {
+    console.error('❌ Get settings error:', error);
+    
+    // Return defaults on error instead of throwing
+    if (error.message?.includes('User not authenticated')) {
+      throw error;
+    }
+    
+    // For other errors, return defaults to not block app
+    console.log('⚠️ Returning default settings due to error');
+    return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+  }
 }
 
 export async function saveUserSettings(settings: UserSettings, userId: string): Promise<void> {
