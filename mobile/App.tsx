@@ -280,8 +280,6 @@ function MainApp() {
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
   const loadUserData = useCallback(async (auth: boolean, uid: string | null, options?: { onlyPhoto?: boolean }) => {
-    console.log('🔍 loadUserData called - auth:', auth, 'uid:', uid);
-    
     if (!auth || !uid) return;
     
     try {
@@ -291,8 +289,6 @@ function MainApp() {
         .select('*')
         .eq('user_id', uid)
         .single();
-      
-      console.log('📸 Profile data loaded:', profile?.profile_photo);
       
       // Handle onlyPhoto option
       if (options?.onlyPhoto && profile) {
