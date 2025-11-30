@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** November 29, 2025
+**Last Updated:** November 30, 2024
 
 ---
 
@@ -717,8 +717,8 @@ Add support for additional formats:
 
 **Storage:**
 - Bucket: `profile_photos` (public)
-- File naming: `{userId}.{extension}` (overwrites previous photo)
-- RLS Policy: Authenticated users can manage their own files
+- File naming: `{userId}/profile.{extension}` (folder-based structure)
+- RLS Policy: Authenticated users can manage their own files using folder ownership checks
 
 **Dependencies:**
 - `react-native-blob-util` - File system access
@@ -728,6 +728,239 @@ Add support for additional formats:
 - ~~AsyncStorage caching layer~~ (React Native Image + Supabase handle caching)
 - ~~Cloudinary backend endpoints~~ (now direct to Supabase Storage)
 - ~~Manual REST API calls~~ (now using Supabase SDK)
+
+---
+
+### Profile Photo System - Recent Overhaul (Nov 30, 2024)
+
+**Comprehensive refactor of profile photo upload system to fix RLS errors, persistence bugs, and code complexity.**
+
+#### Problems Identified
+
+1. **Overcomplicated Upload Function**
+   - 90+ lines of manual REST API implementation
+   - Manual JWT token extraction and header construction
+   - Custom base64 → ArrayBuffer conversion helper
+   - Difficult to debug and maintain
+
+2. **AsyncStorage Redundant Caching Layer**
+   - Profile photos cached in AsyncStorage separate from Supabase
+   - Caused stale data when DB updated but cache didn't sync
+   - Added unnecessary complexity with two sources of truth
+   - Masked underlying persistence bug in loadUserData()
+
+3. **Excessive Debug Logging**
+   - 100+ lines of debug UI across ProfilePhotoScreen.tsx and ProfilePhotoPromptScreen.tsx
+   - On-screen error messages meant for debugging (errorText displays)
+   - Console.log spam cluttering production code
+   - Debug banners in SignupScreen.tsx showing internal state
+
+4. **Flat File Structure Incompatible with RLS**
+   - File naming: `{userId}.{extension}` (e.g., `abc123.jpg`)
+   - Supabase Storage RLS policies struggle with flat structure
+   - No clear folder ownership for RLS checks
+   - All files in root of bucket
+
+5. **Double State Bug**
+   - Profile photo URL stored in TWO places:
+     - `profilePhotoUri` (App.tsx local state) → passed to AccountScreen
+     - `userProfile.profilePhoto` (UserProfileContext) → not used
+   - Only `userProfile.profilePhoto` updated on app restart
+   - `profilePhotoUri` never set during loadUserData() full mode
+   - AsyncStorage cache was masking this bug
+
+6. **Photos Not Persisting After App Restart**
+   - Photos uploaded successfully and displayed immediately
+   - After app restart, photos disappeared (showed placeholder)
+   - Root cause: `setProfilePhotoUri()` only called in onlyPhoto mode
+   - Full data load (line 313-321) updated context but not local state
+
+#### Solutions Implemented
+
+1. **Simplified uploadProfilePhoto Function**
+   - **Before:** 90 lines with manual REST API (`fetch`, manual headers, manual token)
+   - **After:** 36 lines using Supabase SDK
+   - Removed manual JWT extraction
+   - SDK automatically handles authentication headers
+   - Cleaner error handling with native Supabase errors
+
+2. **Fixed Base64 → ArrayBuffer Conversion**
+   - **Issue:** `base-64` package's `decode()` returns string, not binary
+   - **Solution:** Native JavaScript conversion:
+     ```typescript
+     const binaryString = atob(base64);
+     const bytes = new Uint8Array(binaryString.length);
+     for (let i = 0; i < binaryString.length; i++) {
+       bytes[i] = binaryString.charCodeAt(i);
+     }
+     // Upload bytes.buffer (ArrayBuffer)
+     ```
+   - Removed `base-64` dependency (and `@types/base-64`)
+
+3. **Removed AsyncStorage Caching Layer**
+   - **Deleted:** `useEffect` hook saving `profilePhotoUri` to AsyncStorage
+   - **Deleted:** Startup code loading cached photo from AsyncStorage
+   - **Result:** Supabase is single source of truth
+   - Exposed underlying persistence bug (which we then fixed)
+
+4. **Removed Debug Logging from Production Code**
+   - **ProfilePhotoScreen.tsx:** Removed 40+ lines
+     - Deleted `debugLog` state variable
+     - Deleted `errorText` UI display
+     - Removed excessive `console.log` statements
+     - Kept `Alert.alert()` for user-facing errors only
+   - **ProfilePhotoPromptScreen.tsx:** Removed 30+ lines
+     - Same cleanup as ProfilePhotoScreen
+   - **SignupScreen.tsx:** Removed debug log banner
+     - Deleted visible debug UI displaying signup state
+
+5. **Switched to Folder-Based Storage Structure**
+   - **Before:** `{userId}.{extension}` (e.g., `abc123-def456.jpg`)
+   - **After:** `{userId}/profile.{extension}` (e.g., `abc123-def456/profile.jpg`)
+   - **Benefits:**
+     - Better RLS policy support (folder ownership checks)
+     - Scalable for future features (thumbnails, multiple photos)
+     - Cleaner storage browser in Supabase dashboard
+     - Can use `storage.foldername(name)` in RLS policies
+
+6. **Fixed Persistence Bug**
+   - **Root Cause:** `profilePhotoUri` state never set during full data load
+   - **Location:** `mobile/App.tsx` line 313-322 (loadUserData function)
+   - **Fix:** Added `setProfilePhotoUri(profile.profile_photo)` after `setUserProfile()`
+   - **Result:** Both state variables now sync correctly on app restart
+
+#### Supabase Configuration
+
+**Storage Bucket:**
+- **Name:** `profile_photos`
+- **Visibility:** PUBLIC (for direct URL access)
+- **File Structure:** `{userId}/profile.{extension}` (folder-based)
+
+**Storage RLS Policy:**
+```sql
+-- Allow authenticated users to upload/update their own profile photo
+CREATE POLICY "Users can manage their own profile photos"
+ON storage.objects FOR ALL
+USING (
+  bucket_id = 'profile_photos' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+)
+WITH CHECK (
+  bucket_id = 'profile_photos' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Allow public read access to all profile photos
+CREATE POLICY "Public read access to profile photos"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'profile_photos');
+```
+
+**Database Schema:**
+```sql
+-- user_profiles table
+CREATE TABLE user_profiles (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT,
+  phone TEXT,
+  email TEXT,
+  bio TEXT,
+  profile_photo TEXT,  -- Stores full public URL
+  social_media JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS Policy for user_profiles
+CREATE POLICY "Users can update their own profile"
+ON user_profiles FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+```
+
+#### Code Changes Summary
+
+**Files Modified:**
+- `mobile/src/services/api.ts` (uploadProfilePhoto function)
+  - Simplified from 90 → 36 lines
+  - Switched to Supabase SDK
+  - Fixed base64 conversion
+  - Added session validation check
+  - Changed file path to folder structure
+
+- `mobile/App.tsx` (loadUserData function)
+  - Added `setProfilePhotoUri(profile.profile_photo)` on line 322
+  - Removed AsyncStorage caching useEffect
+  - Removed AsyncStorage load on startup
+
+- `mobile/src/screens/ProfilePhotoScreen.tsx`
+  - Removed 40+ lines of debug logging
+  - Simplified handleSave function
+  - Kept Alert.alert() for errors
+
+- `mobile/src/screens/ProfilePhotoPromptScreen.tsx`
+  - Removed 30+ lines of debug logging
+  - Simplified handleUpload function
+  - Kept Alert.alert() with skip/retry options
+
+- `mobile/src/screens/SignupScreen.tsx`
+  - Removed debug log display UI
+
+- `backend/main.py`
+  - Deleted legacy Cloudinary endpoints:
+    - `@app.post("/user/profile/photo")`
+    - `@app.get("/user/profile/photo")`
+    - `@app.delete("/user/profile/photo")`
+
+**Dependencies Removed:**
+- `base-64` package (and `@types/base-64`)
+
+**Dependencies Kept:**
+- `react-native-blob-util` (for file system access)
+- `@supabase/supabase-js` (for Storage SDK)
+
+#### Commits
+
+```bash
+4d01f04 Fix profile photo persistence - set profilePhotoUri on app restart
+6048970 Add PROFILE_PHOTO_PERSISTENCE_BUG.md - identify missing state update
+a99505c Revert temporary logging - analyze code instead
+50771b8 Switch to folder-based file structure for Supabase Storage RLS
+6b23d72 Add FILE_PATH_STRUCTURE_ANALYSIS.md - document isolated file path construction
+92bc411 Add PHOTO_UPLOAD_DATABASE_ANALYSIS.md - document all table access during upload
+6b09d70 Add session validation to uploadProfilePhoto
+73745a5 Remove all UI error logging displays - keep only Alert dialogs
+2aa2662 Remove AsyncStorage caching for profile photos
+1c8f2a3 Simplify photo upload handlers - remove debug logging
+a28815d Fix uploadProfilePhoto - properly convert base64 to binary
+be05010 Simplify uploadProfilePhoto - use Supabase SDK instead of manual REST API
+```
+
+#### Testing Checklist
+
+**Before Fix:**
+- ❌ Upload photo → displays ✅
+- ❌ Close app → reopen → photo gone ❌
+
+**After Fix:**
+- ✅ Upload photo → displays ✅
+- ✅ Close app → reopen → photo persists ✅
+- ✅ No console spam from debug logging
+- ✅ Clean error handling with Alert.alert() only
+- ✅ Single source of truth (Supabase)
+- ✅ Folder-based storage structure
+- ✅ Both state variables sync correctly
+
+#### Lessons Learned
+
+1. **Caching layers can mask bugs** - AsyncStorage was hiding the persistence bug
+2. **Use SDK over manual REST API** - Supabase SDK handles auth headers automatically
+3. **Duplicate state is dangerous** - Always sync all related state variables
+4. **Debug logging belongs in dev tools** - Not in production UI
+5. **Folder structure scales better** - Easier RLS policies and future features
+6. **Always test full app restart** - Not just hot reload or OTA updates
+
+---
 
 ## Pattern of Failures
 
