@@ -335,15 +335,6 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setShowConfirmPassword(false);
   };
 
-  // Flag/Report button removed
-  // const handleReportIssue = () => {
-  //   showToast({
-  //     message: 'Report feature coming soon',
-  //     type: 'success',
-  //     duration: 2000,
-  //   });
-  // };
-
   return (
     <View style={{ flex: 1, backgroundColor: theme?.colors?.bg || '#000000' }}>
       <TopBar
