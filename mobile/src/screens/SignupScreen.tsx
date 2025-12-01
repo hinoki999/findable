@@ -4,7 +4,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyOtpCode } from '../services/api';
-import { useTutorial } from '../contexts/TutorialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 
@@ -17,7 +16,6 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
   const { signup } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -291,17 +289,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(`Failed to create settings: ${settingsError.message}`);
       }
       console.log('SUCCESS: user_settings record created');
-
-      // Tutorial initialization - Set flag for new user (HomeScreen will start tutorial on mount)
-      console.log('[TUTORIAL] Setting up tutorials...');
-      if (typeof enableTutorialsForSignup === 'function') {
-        try {
-          await enableTutorialsForSignup();
-          console.log('[TUTORIAL] SUCCESS: Tutorials enabled successfully');
-        } catch (tutorialError: any) {
-          console.log(`[TUTORIAL] WARNING: enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
-        }
-      }
 
       // Success! Close modal and navigate
       setShowVerificationModal(false);

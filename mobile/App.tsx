@@ -15,7 +15,7 @@ import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
-import { TutorialProvider } from './src/contexts/TutorialContext';
+import { TutorialProvider, useTutorial } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
@@ -155,6 +155,7 @@ const formatPhoneNumber = (text: string): string => {
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
+  const { markAsNewUser } = useTutorial();
 
   const [fontsReady] = useFonts({
     Inter_300Light,
@@ -379,12 +380,15 @@ function MainApp() {
   const handleSignupSuccess = async (
     profileData?: { name: string; phone: string; bio: string }
   ) => {
-    console.log('✅ [App] Signup successful');
+    console.log('SUCCESS: [App] Signup successful');
+    
+    // Mark user as new for tutorial system
+    markAsNewUser();
     
     // Refresh auth state to detect the new Supabase session created during signup
-    console.log('🔄 [App] Refreshing auth state after signup...');
+    console.log('[App] Refreshing auth state after signup...');
     await refreshAuth();
-    console.log('✅ [App] Auth state refreshed');
+    console.log('SUCCESS: [App] Auth state refreshed');
 
     // Set flag to prevent automatic data reload (prevents race condition)
     setIsSignupInProgress(true);

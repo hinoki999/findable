@@ -671,15 +671,8 @@ export default function HomeScreen() {
 
   // Start Home screen tutorial when component mounts
   useEffect(() => {
-    // Small delay to ensure AsyncStorage operations from signup have completed
-    const timer = setTimeout(() => {
-      startScreenTutorial('Home', 6);
-    }, 100);
-    
-    return () => {
-      clearTimeout(timer);
-    };
-  }, []);
+    startScreenTutorial('Home', 6);
+  }, [startScreenTutorial]);
 
   // Start BLE scanning when component mounts
   useEffect(() => {
@@ -3096,7 +3089,7 @@ export default function HomeScreen() {
       {/* Tutorial Overlay */}
       {(() => {
         const shouldShowTutorial = isActive && currentScreen === 'Home' && currentStep > 0;
-        console.log(`🎓 [HomeScreen] Tutorial Render Check:`, {
+        console.log(`[TUTORIAL] [HomeScreen] Tutorial Render Check:`, {
           isActive,
           currentScreen,
           currentStep,

@@ -1,246 +1,101 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../services/supabase';
+import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-type ScreenName = 'Home' | 'Drop' | 'History' | 'Account';
+export type ScreenName = 'Home' | 'Drop' | 'History';
 
 interface TutorialContextType {
+  isActive: boolean;
   currentStep: number;
   totalSteps: number;
-  isActive: boolean;
   currentScreen: ScreenName | null;
+  markAsNewUser: () => void;
+  startScreenTutorial: (screen: ScreenName, steps: number) => void;
   nextStep: () => void;
   prevStep: () => void;
   skipTutorial: () => void;
-  startTutorial: () => void;
-  startScreenTutorial: (screen: ScreenName, steps: number) => Promise<void>;
-  completeScreenTutorial: (screen: ScreenName) => void;
-  isScreenTutorialComplete: (screen: ScreenName) => Promise<boolean>;
-  enableTutorialsForSignup: () => Promise<void>;
 }
 
-const TutorialContext = createContext<TutorialContextType>({
-  currentStep: 0,
-  totalSteps: 0,
-  isActive: false,
-  currentScreen: null,
-  nextStep: () => {},
-  prevStep: () => {},
-  skipTutorial: () => {},
-  startTutorial: () => {},
-  startScreenTutorial: async () => {},
-  completeScreenTutorial: () => {},
-  isScreenTutorialComplete: async () => false,
-  enableTutorialsForSignup: async () => {},
-});
+const TutorialContext = createContext<TutorialContextType | undefined>(undefined);
 
-export const useTutorial = () => useContext(TutorialContext);
-
-const TUTORIAL_STORAGE_KEY = '@droplink_tutorial_screens';
-const SHOW_TUTORIALS_FLAG = '@droplink_show_tutorials_flag';
-
-export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentStep, setCurrentStep] = useState(0);
+export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isActive, setIsActive] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
   const [currentScreen, setCurrentScreen] = useState<ScreenName | null>(null);
+  
+  const isNewUser = useRef(false);
+  const shownScreens = useRef<Set<ScreenName>>(new Set());
 
-  useEffect(() => {
-    checkTutorialStatus();
-  }, []);
-
-  const checkTutorialStatus = async () => {
-    try {
-      // Tutorial completion status is now persisted across app restarts
-    } catch (error) {
-      console.error('Error checking tutorial status:', error);
-    }
+  const markAsNewUser = () => {
+    isNewUser.current = true;
+    console.log('[TUTORIAL] User marked as new - tutorials will show on first screen visits');
   };
 
-  const checkOnboardingStatus = async (): Promise<boolean> => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return false;
-      
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('has_completed_onboarding')
-        .eq('user_id', session.user.id)
-        .single();
-      
-      if (error) {
-        console.error('[TUTORIAL] Error checking onboarding status:', error);
-        return false;
-      }
-      
-      return data?.has_completed_onboarding || false;
-    } catch (error) {
-      console.error('[TUTORIAL] Error in checkOnboardingStatus:', error);
-      return false;
-    }
-  };
-
-  const isScreenTutorialComplete = async (screen: ScreenName): Promise<boolean> => {
-    try {
-      const data = await AsyncStorage.getItem(TUTORIAL_STORAGE_KEY);
-      if (!data) return false;
-      const completedScreens = JSON.parse(data);
-      return completedScreens[screen] === true;
-    } catch (error) {
-      console.error('Error checking screen tutorial status:', error);
-      return false;
-    }
-  };
-
-  const enableTutorialsForSignup = async () => {
-    try {
-      console.log('[TUTORIAL] [TutorialContext] Setting SHOW_TUTORIALS_FLAG to "true"');
-      await AsyncStorage.setItem(SHOW_TUTORIALS_FLAG, 'true');
-      console.log('[TUTORIAL] [TutorialContext] Clearing existing tutorial data');
-      // Clear any existing tutorial completion data to ensure fresh start
-      await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
-      console.log('SUCCESS: [TutorialContext] Tutorials enabled for signup');
-    } catch (error) {
-      console.error('ERROR: [TutorialContext] Error enabling tutorials:', error);
-    }
-  };
-
-  const startScreenTutorial = async (screen: ScreenName, steps: number) => {
-    console.log(`[TUTORIAL] [TutorialContext] startScreenTutorial called for screen: "${screen}", steps: ${steps}`);
+  const startScreenTutorial = (screen: ScreenName, steps: number) => {
+    console.log(`[TUTORIAL] startScreenTutorial called for "${screen}" (${steps} steps)`);
     
-    // Check if user has already completed onboarding
-    const hasCompletedOnboarding = await checkOnboardingStatus();
-    if (hasCompletedOnboarding) {
-      console.log('[TUTORIAL] User has already completed onboarding - skipping tutorials');
+    if (!isNewUser.current) {
+      console.log('[TUTORIAL] Not a new user - skipping tutorial');
       return;
     }
     
-    // Check if tutorials are enabled for this session (signup only)
-    try {
-      const showTutorialsFlag = await AsyncStorage.getItem(SHOW_TUTORIALS_FLAG);
-      console.log(`[TUTORIAL] [TutorialContext] SHOW_TUTORIALS_FLAG = "${showTutorialsFlag}"`);
-      
-      if (showTutorialsFlag !== 'true') {
-        console.log(`[SKIP] [TutorialContext] Tutorials NOT enabled (flag != "true"), skipping tutorial`);
-        return;
-      }
-    } catch (error) {
-      console.error('ERROR: [TutorialContext] Error reading SHOW_TUTORIALS_FLAG:', error);
+    if (shownScreens.current.has(screen)) {
+      console.log(`[TUTORIAL] Tutorial for "${screen}" already shown this session - skipping`);
       return;
     }
-
-    // Check if this specific screen tutorial has been completed
-    const completed = await isScreenTutorialComplete(screen);
-    console.log(`[TUTORIAL] [TutorialContext] Screen "${screen}" completed status: ${completed}`);
     
-    if (!completed) {
-      console.log(`SUCCESS: [TutorialContext] Starting tutorial for "${screen}"`);
-      console.log(`   Setting: currentScreen="${screen}", totalSteps=${steps}, currentStep=1, isActive=true`);
-      setCurrentScreen(screen);
-      setTotalSteps(steps);
-      setCurrentStep(1);
-      setIsActive(true);
-      console.log(`   State update calls completed`);
-      
-      // Verify state was set (next render will show updated values)
-      setTimeout(() => {
-        console.log(`   [TutorialContext] State after 100ms - This should show in next render`);
-      }, 100);
-    } else {
-      console.log(`[SKIP] [TutorialContext] Tutorial for "${screen}" already completed, skipping`);
-    }
-  };
-
-  const completeScreenTutorial = async (screen: ScreenName) => {
-    try {
-      const data = await AsyncStorage.getItem(TUTORIAL_STORAGE_KEY);
-      const completedScreens = data ? JSON.parse(data) : {};
-      completedScreens[screen] = true;
-      await AsyncStorage.setItem(TUTORIAL_STORAGE_KEY, JSON.stringify(completedScreens));
-      
-      // Check if all tutorial screens are complete, if so, clear the tutorial flag
-      // Note: Account screen doesn't have a tutorial, so only check Home, Drop, History
-      const allScreens: ScreenName[] = ['Home', 'Drop', 'History'];
-      const allComplete = allScreens.every(s => completedScreens[s] === true);
-      if (allComplete) {
-        await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
-        
-        // Update Supabase that onboarding is complete
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            const { error } = await supabase
-              .from('user_profiles')
-              .update({ has_completed_onboarding: true })
-              .eq('user_id', session.user.id);
-            
-            if (error) {
-              console.error('[TUTORIAL] Failed to update onboarding status:', error);
-            }
-          }
-        } catch (error) {
-          console.error('[TUTORIAL] Could not update Supabase onboarding status:', error);
-        }
-      }
-      
-      setIsActive(false);
-      setCurrentStep(0);
-      setCurrentScreen(null);
-    } catch (error) {
-      console.error('Error saving screen tutorial status:', error);
-    }
+    console.log(`[TUTORIAL] Starting tutorial for "${screen}"`);
+    shownScreens.current.add(screen);
+    setCurrentScreen(screen);
+    setTotalSteps(steps);
+    setCurrentStep(1);
+    setIsActive(true);
   };
 
   const nextStep = () => {
     if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    } else if (currentScreen) {
-      completeScreenTutorial(currentScreen);
+      setCurrentStep(prev => prev + 1);
+      console.log(`[TUTORIAL] Advanced to step ${currentStep + 1} of ${totalSteps}`);
+    } else {
+      console.log(`[TUTORIAL] Tutorial completed for "${currentScreen}"`);
+      setIsActive(false);
+      setCurrentStep(0);
+      setCurrentScreen(null);
     }
   };
 
   const prevStep = () => {
     if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+      setCurrentStep(prev => prev - 1);
+      console.log(`[TUTORIAL] Went back to step ${currentStep - 1} of ${totalSteps}`);
     }
   };
 
-  const skipTutorial = async () => {
-    if (currentScreen) {
-      await completeScreenTutorial(currentScreen);
-    }
-    // Clear the tutorial flag when user skips
-    try {
-      await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
-    } catch (error) {
-      console.error('Error clearing tutorial flag:', error);
-    }
-  };
-
-  const startTutorial = () => {
-    setIsActive(true);
-    setCurrentStep(1);
+  const skipTutorial = () => {
+    console.log(`[TUTORIAL] User skipped tutorial for "${currentScreen}"`);
+    setIsActive(false);
+    setCurrentStep(0);
+    setCurrentScreen(null);
   };
 
   return (
-    <TutorialContext.Provider
-      value={{
-        currentStep,
-        totalSteps,
-        isActive,
-        currentScreen,
-        nextStep,
-        prevStep,
-        skipTutorial,
-        startTutorial,
-        startScreenTutorial,
-        completeScreenTutorial,
-        isScreenTutorialComplete,
-        enableTutorialsForSignup,
-      }}
-    >
+    <TutorialContext.Provider value={{
+      isActive,
+      currentStep,
+      totalSteps,
+      currentScreen,
+      markAsNewUser,
+      startScreenTutorial,
+      nextStep,
+      prevStep,
+      skipTutorial
+    }}>
       {children}
     </TutorialContext.Provider>
   );
 };
 
+export const useTutorial = () => {
+  const context = useContext(TutorialContext);
+  if (!context) throw new Error('useTutorial must be used within TutorialProvider');
+  return context;
+};
