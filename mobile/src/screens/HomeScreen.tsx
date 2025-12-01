@@ -7,7 +7,6 @@ import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifi
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
-import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 
@@ -591,7 +590,6 @@ export default function HomeScreen() {
   const { showToast } = useToast();
   const { userId } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
-  const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
   const { maxDistance } = useSettings();
   const theme = getTheme(isDarkMode);
   
@@ -668,11 +666,6 @@ export default function HomeScreen() {
   
   // Update grid spacing to scale with radar size
   const PIXELS_PER_FOOT = radarSize / (MAX_RADIUS_FEET * 2);
-
-  // Start Home screen tutorial when component mounts
-  useEffect(() => {
-    startScreenTutorial('Home', 6);
-  }, [startScreenTutorial]);
 
   // Start BLE scanning when component mounts
   useEffect(() => {
@@ -3085,37 +3078,6 @@ export default function HomeScreen() {
       </Modal>
 
       </View>
-
-      {/* Tutorial Overlay */}
-      {(() => {
-        const shouldShowTutorial = isActive && currentScreen === 'Home' && currentStep > 0;
-        console.log(`[TUTORIAL] [HomeScreen] Tutorial Render Check:`, {
-          isActive,
-          currentScreen,
-          currentStep,
-          totalSteps,
-          shouldShowTutorial,
-          tutorialStepsLength: tutorialSteps.length,
-          hasStepData: currentStep > 0 && tutorialSteps[currentStep - 1] !== undefined
-        });
-        
-        if (!shouldShowTutorial) {
-          return null;
-        }
-        
-        return (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} pointerEvents="box-none">
-            <TutorialOverlay
-              step={tutorialSteps[currentStep - 1]}
-              currentStepNumber={currentStep}
-              totalSteps={totalSteps}
-              onNext={nextStep}
-              onBack={prevStep}
-              onSkip={skipTutorial}
-            />
-          </View>
-        );
-      })()}
     </Animated.View>
   );
 }

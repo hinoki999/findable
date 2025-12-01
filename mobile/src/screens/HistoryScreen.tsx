@@ -5,7 +5,6 @@ import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
-import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import SwipeableRow from '../components/SwipeableRow';
@@ -55,15 +54,9 @@ export default function HistoryScreen() {
   const { showToast } = useToast();
   const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
-  const { currentStep, totalSteps, isActive, nextStep, prevStep, skipTutorial, startScreenTutorial, currentScreen } = useTutorial();
   
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
-
-  // Start History screen tutorial when component mounts
-  useEffect(() => {
-    startScreenTutorial('History', 3);
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -687,18 +680,6 @@ export default function HistoryScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Tutorial Overlay - Show for History screen */}
-      {isActive && currentScreen === 'History' && currentStep > 0 && (
-        <TutorialOverlay
-          step={tutorialSteps[currentStep - 1]}
-          currentStepNumber={currentStep}
-          totalSteps={totalSteps}
-          onNext={nextStep}
-          onBack={prevStep}
-          onSkip={skipTutorial}
-        />
-      )}
     </View>
   );
 }
