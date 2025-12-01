@@ -268,7 +268,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         bio: null,
         profile_photo: null,
         social_media: [],
-        has_completed_onboarding: false
+        tutorial_home_completed: false,
+        tutorial_drop_completed: false,
+        tutorial_history_completed: false,
+        tutorial_account_completed: false
       });
 
       if (profileError) {

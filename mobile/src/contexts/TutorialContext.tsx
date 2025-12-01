@@ -8,7 +8,8 @@ interface TutorialContextType {
   currentStep: number;
   totalSteps: number;
   currentScreen: ScreenName | null;
-  shouldShowTutorials: boolean | null;
+  completedTutorials: Record<ScreenName, boolean>;
+  isLoaded: boolean;
   initializeTutorials: () => Promise<void>;
   startScreenTutorial: (screen: ScreenName, steps: number) => void;
   nextStep: () => void;
@@ -20,7 +21,13 @@ const TutorialContext = createContext<TutorialContextType | undefined>(undefined
 
 export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State variables
-  const [shouldShowTutorials, setShouldShowTutorials] = useState<boolean | null>(null);
+  const [completedTutorials, setCompletedTutorials] = useState<Record<ScreenName, boolean>>({
+    Home: false,
+    Drop: false,
+    History: false,
+    Account: false,
+  });
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
@@ -30,46 +37,66 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const shownScreens = useRef<Set<ScreenName>>(new Set());
 
   /**
-   * Initialize tutorials by checking Supabase onboarding status
+   * Initialize tutorials by checking Supabase per-screen completion status
    * Called once on app startup
    */
   const initializeTutorials = async () => {
     try {
-      console.log('[TUTORIAL] Initializing tutorials...');
+      console.log('[TUTORIAL] Initializing per-screen tutorials...');
       
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        console.log('[TUTORIAL] No session, setting shouldShowTutorials = false');
-        setShouldShowTutorials(false);
+        console.log('[TUTORIAL] No session, marking all tutorials as completed');
+        setCompletedTutorials({
+          Home: true,
+          Drop: true,
+          History: true,
+          Account: true,
+        });
+        setIsLoaded(true);
         return;
       }
       
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('has_completed_onboarding')
+        .select('tutorial_home_completed, tutorial_drop_completed, tutorial_history_completed, tutorial_account_completed')
         .eq('user_id', session.user.id)
         .single();
       
       if (error) {
-        console.error('[TUTORIAL] Error checking onboarding:', error);
-        setShouldShowTutorials(false); // Fail safe: don't show on error
+        console.error('[TUTORIAL] Error checking tutorial status:', error);
+        // Fail safe: mark all as completed (don't show on error)
+        setCompletedTutorials({
+          Home: true,
+          Drop: true,
+          History: true,
+          Account: true,
+        });
+        setIsLoaded(true);
         return;
       }
       
-      // Treat NULL as FALSE (for existing users without the column set)
-      const hasCompleted = data?.has_completed_onboarding ?? false;
-      const shouldShow = !hasCompleted;
+      // Treat NULL as FALSE (show tutorial if not explicitly completed)
+      const completed = {
+        Home: data?.tutorial_home_completed ?? false,
+        Drop: data?.tutorial_drop_completed ?? false,
+        History: data?.tutorial_history_completed ?? false,
+        Account: data?.tutorial_account_completed ?? false,
+      };
       
-      console.log('[TUTORIAL] Onboarding check:', {
-        hasCompleted,
-        shouldShow
-      });
-      
-      setShouldShowTutorials(shouldShow);
+      console.log('[TUTORIAL] Per-screen status loaded:', completed);
+      setCompletedTutorials(completed);
+      setIsLoaded(true);
       
     } catch (error) {
       console.error('[TUTORIAL] initializeTutorials error:', error);
-      setShouldShowTutorials(false); // Fail safe
+      setCompletedTutorials({
+        Home: true,
+        Drop: true,
+        History: true,
+        Account: true,
+      });
+      setIsLoaded(true);
     }
   };
 
@@ -80,13 +107,19 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const startScreenTutorial = (screen: ScreenName, steps: number) => {
     console.log(`[TUTORIAL] startScreenTutorial("${screen}", ${steps})`);
     
-    // Check 1: Should we show tutorials at all?
-    if (shouldShowTutorials !== true) {
-      console.log(`[TUTORIAL] shouldShowTutorials is ${shouldShowTutorials}, skipping`);
+    // Check 1: Is data loaded?
+    if (!isLoaded) {
+      console.log(`[TUTORIAL] Tutorial data not loaded yet, skipping`);
       return;
     }
     
-    // Check 2: Already shown this screen this session?
+    // Check 2: Already completed this specific screen?
+    if (completedTutorials[screen]) {
+      console.log(`[TUTORIAL] "${screen}" tutorial already completed, skipping`);
+      return;
+    }
+    
+    // Check 3: Already shown this screen this session?
     if (shownScreens.current.has(screen)) {
       console.log(`[TUTORIAL] Already shown "${screen}" this session, skipping`);
       return;
@@ -128,17 +161,25 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   /**
-   * Mark onboarding as complete in Supabase
+   * Mark specific screen tutorial as complete in Supabase
    * Called by nextStep (on last step) OR skipTutorial
    */
   const completeTutorial = async () => {
-    console.log('[TUTORIAL] Marking onboarding as complete');
+    if (!currentScreen) return;
+    
+    console.log(`[TUTORIAL] Marking "${currentScreen}" tutorial as complete`);
     
     // Close tutorial immediately (optimistic UI)
     setIsActive(false);
     setCurrentStep(0);
+    const screenToComplete = currentScreen;
     setCurrentScreen(null);
-    setShouldShowTutorials(false); // Don't show again this session
+    
+    // Update local state
+    setCompletedTutorials(prev => ({
+      ...prev,
+      [screenToComplete]: true,
+    }));
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -147,16 +188,26 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
       }
       
+      // Map screen name to database column
+      const columnMap: Record<ScreenName, string> = {
+        Home: 'tutorial_home_completed',
+        Drop: 'tutorial_drop_completed',
+        History: 'tutorial_history_completed',
+        Account: 'tutorial_account_completed',
+      };
+      
+      const columnName = columnMap[screenToComplete];
+      
       const { error } = await supabase
         .from('user_profiles')
-        .update({ has_completed_onboarding: true })
+        .update({ [columnName]: true })
         .eq('user_id', session.user.id);
       
       if (error) {
-        console.error('[TUTORIAL] Error marking complete:', error);
+        console.error(`[TUTORIAL] Error marking "${screenToComplete}" complete:`, error);
         // Don't revert UI state - fail gracefully
       } else {
-        console.log('[TUTORIAL] Successfully marked onboarding complete in Supabase');
+        console.log(`[TUTORIAL] Successfully marked "${screenToComplete}" tutorial complete in Supabase`);
       }
     } catch (error) {
       console.error('[TUTORIAL] completeTutorial error:', error);
@@ -178,7 +229,8 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       currentStep,
       totalSteps,
       currentScreen,
-      shouldShowTutorials,
+      completedTutorials,
+      isLoaded,
       initializeTutorials,
       startScreenTutorial,
       nextStep,
