@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
 import { supabase } from '../services/supabase';
 
-export type ScreenName = 'Home' | 'Drop' | 'History';
+export type ScreenName = 'Home' | 'Drop' | 'History' | 'Account';
 
 interface TutorialContextType {
   isActive: boolean;

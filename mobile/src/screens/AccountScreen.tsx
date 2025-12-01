@@ -43,7 +43,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   
   // Get contexts with error handling
   const { isDarkMode, toggleDarkMode } = useDarkMode();
-  const { profile, updateProfile, debugSetProfileCalls } = useUserProfile();
+  const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
   

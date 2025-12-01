@@ -30,7 +30,7 @@ export default function DropScreen() {
 
   // Start Drop screen tutorial when component mounts
   useEffect(() => {
-    startScreenTutorial('Drop', 2);
+    startScreenTutorial('Drop', 1);
   }, []);
 
   // Use BLE scanner hook
@@ -168,14 +168,12 @@ export default function DropScreen() {
   // Drop screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'When people are nearby, they will appear here!',
-      position: { top: screenHeight * 0.28, left: screenWidth * 0.3, right: screenWidth * 0.05 },
-      arrow: 'down' as const,
-    },
-    {
-      message: 'When you see someone, click their name to send a drop and share your contact card!',
-      position: { top: screenHeight * 0.38 - 40, left: screenWidth * 0.05, right: screenWidth * 0.3 },
-      arrow: 'down' as const,
+      message: 'This page shows all nearby users within your 33 ft radius—tap their card to send a drop!',
+      position: { 
+        top: screenHeight * 0.35, 
+        left: 30, 
+        right: 30 
+      },
     },
   ];
 

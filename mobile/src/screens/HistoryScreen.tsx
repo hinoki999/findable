@@ -219,19 +219,30 @@ export default function HistoryScreen() {
   // History screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'This is your link page! When you link with someone, their contact card will appear here.',
-      position: { top: 150, left: screenWidth * 0.1, right: screenWidth * 0.1 },
-      arrow: undefined,
+      message: 'When you link with someone (mutual drop), you can view their contact card here!',
+      position: { 
+        top: 150, 
+        left: 30, 
+        right: 30 
+      },
     },
     {
-      message: 'Once you have contacts, swipe right to pin your favorites to the top of the page!',
-      position: { top: 205, left: screenWidth * 0.05, right: screenWidth * 0.35 },
-      arrow: 'down' as const,
+      message: 'Swipe right to pin your favorites to the top of the page!',
+      position: { 
+        top: 205, 
+        left: 30, 
+        right: 30 
+      },
     },
     {
-      message: 'Use the search bar to quickly find your contacts when your list grows!',
-      position: { top: 100, left: screenWidth * 0.1, right: screenWidth * 0.1 },
+      message: 'Use the search bar to quickly find contacts as your list grows!',
+      position: { 
+        top: 100, 
+        left: 30, 
+        right: 30 
+      },
       arrow: 'up' as const,
+      arrowPosition: { top: 60, left: screenWidth * 0.5 - 16 },
     },
   ];
 
