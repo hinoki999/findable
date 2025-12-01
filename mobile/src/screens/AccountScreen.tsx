@@ -125,7 +125,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   const handleEdit = (field: 'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password', socialIndex?: number) => {
     try {
-      console.log('✏️ [AccountScreen] handleEdit called:', { field, socialIndex });
+      console.log('[AccountScreen] handleEdit called:', { field, socialIndex });
       
       setEditingField(field);
       logAction(`Edit ${field} clicked`, { field, currentValue: field === 'phone' ? phone : field === 'email' ? email : field === 'name' ? name : field === 'bio' ? bio : undefined });
@@ -158,14 +158,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       }
       setEditModalVisible(true);
     } catch (err: any) {
-      console.error('❌ [AccountScreen] handleEdit error:', err);
+      console.error('ERROR: [AccountScreen] handleEdit error:', err);
       Alert.alert('Error', err.message || 'Failed to open editor');
     }
   };
 
   const handleSave = async () => {
     try {
-      console.log('💾 [AccountScreen] handleSave called:', { editingField, tempValue });
+      console.log('[AccountScreen] handleSave called:', { editingField, tempValue });
       
       // Validate based on field type
       let error = '';
@@ -178,9 +178,9 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         logStateChange('profile.phone', phone, tempValue);
         logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
         
-        console.log('💾 [AccountScreen] Calling updateProfile for phone');
+        console.log('[AccountScreen] Calling updateProfile for phone');
         await updateProfile({ phone: tempValue });
-        console.log('✅ [AccountScreen] Phone updated successfully');
+        console.log('SUCCESS: [AccountScreen] Phone updated successfully');
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
       if (error) {
@@ -309,7 +309,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       duration: 2000,
     });
     } catch (err: any) {
-      console.error('❌ [AccountScreen] handleSave error:', err);
+      console.error('ERROR: [AccountScreen] handleSave error:', err);
       setValidationError(err.message || 'Failed to save changes');
       showToast({
         message: err.message || 'Failed to save changes',
@@ -408,7 +408,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     source={{ uri: profilePhotoUri }} 
                     style={{ width: 50, height: 50 }}
                     onError={(err) => {
-                      console.error('❌ [AccountScreen] Profile photo load error:', err.nativeEvent.error);
+                      console.error('ERROR: [AccountScreen] Profile photo load error:', err.nativeEvent.error);
                     }}
                   />
                 ) : (
@@ -458,7 +458,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     updateProfile({ socialMedia: newSocial });
                   }
                 } catch (err: any) {
-                  console.error('❌ [AccountScreen] Add social media error:', err);
+                  console.error('ERROR: [AccountScreen] Add social media error:', err);
                   Alert.alert('Error', 'Failed to add social media. Please try again.');
                 }
               }}
@@ -504,7 +504,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                       const updatedSocial = currentSocial.filter((_, i) => i !== index);
                       updateProfile({ socialMedia: updatedSocial });
                     } catch (err: any) {
-                      console.error('❌ [AccountScreen] Delete social media error:', err);
+                      console.error('ERROR: [AccountScreen] Delete social media error:', err);
                       Alert.alert('Error', 'Failed to delete social media. Please try again.');
                     }
                   }}

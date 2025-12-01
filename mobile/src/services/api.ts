@@ -862,9 +862,9 @@ export async function deleteAccount(userId: string): Promise<void> {
       console.log('SUCCESS: Auth account deleted');
     }
 
-    console.log('✅ Account deletion complete');
+    console.log('SUCCESS: Account deletion complete');
   } catch (error: any) {
-    console.error('❌ Delete account error:', error);
+    console.error('ERROR: Delete account error:', error);
     
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {

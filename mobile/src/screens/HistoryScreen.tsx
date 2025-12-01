@@ -69,21 +69,21 @@ export default function HistoryScreen() {
     (async () => {
       try {
         const items = await getDevices();
-        console.log('🔍 HISTORY: Fetched items from API:', items?.length, items);
+        console.log('DEBUG: HISTORY: Fetched items from API:', items?.length, items);
         // Show all connections (dropped, accepted, and returned)
         const filteredItems = (items ?? []).filter(item => 
           item.action === 'accepted' || item.action === 'returned' || item.action === 'dropped'
         );
-        console.log('🔍 HISTORY: Filtered items:', filteredItems?.length, filteredItems);
+        console.log('DEBUG: HISTORY: Filtered items:', filteredItems?.length, filteredItems);
         setData(filteredItems);
         setErr(null); // Clear any previous errors
       } catch (e:any) {
-        console.error('❌ HISTORY: Failed to load devices:', e);
+        console.error('ERROR: HISTORY: Failed to load devices:', e);
         const errorMsg = e?.message || 'Failed to load contacts';
         
         // Don't show error toast - just log it
         // User can still use the app, they just don't see links yet
-        console.log('⚠️ HISTORY: Error loading links (this is OK if user has no links yet)');
+        console.log('WARNING: HISTORY: Error loading links (this is OK if user has no links yet)');
         setData([]); // Set empty array instead of showing error
         setErr(null); // Don't set error state
       } finally {
@@ -116,7 +116,7 @@ export default function HistoryScreen() {
       await deleteDevice(itemToDelete.id, userId!);
       // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
-      console.log('🗑️ Device deleted from history and store');
+      console.log('Device deleted from history and store');
       
       // Show toast with undo
       showToast({
@@ -144,7 +144,7 @@ export default function HistoryScreen() {
     setData(prevData => [...prevData, lastDeletedItem]);
     lastDeletedItemRef.current = null; // Clear ref
     
-    console.log('✅ Contact fully restored to history and store');
+    console.log('SUCCESS: Contact fully restored to history and store');
   };
 
   const cancelDelete = () => {
@@ -176,10 +176,10 @@ export default function HistoryScreen() {
       setData(filteredItems);
       setErr(null);
     } catch (e: any) {
-      console.error('❌ HISTORY: Failed to refresh devices:', e);
+      console.error('ERROR: HISTORY: Failed to refresh devices:', e);
       // Don't show error toast on refresh - just silently fail
       // User can try again if they want
-      console.log('⚠️ HISTORY: Refresh failed, keeping existing data');
+      console.log('WARNING: HISTORY: Refresh failed, keeping existing data');
       setErr(null); // Don't set error state
     } finally {
       setRefreshing(false);

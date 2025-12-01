@@ -94,7 +94,7 @@ class PerformanceLogger {
 
       // Warn if operation is slow
       if (durationMs > 3000) {
-        console.warn(`⚠️ Slow operation detected: ${metricName} took ${durationMs}ms`);
+        console.warn(`WARNING: Slow operation detected: ${metricName} took ${durationMs}ms`);
       }
 
       // Send to backend (fire and forget)

@@ -36,12 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkStoredAuth = async () => {
     try {
-      console.log('🔍 [AuthContext] Checking for stored auth session...');
+      console.log('DEBUG: [AuthContext] Checking for stored auth session...');
       // Check for Supabase session
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        console.log('✅ [AuthContext] Session found, setting authenticated state');
+        console.log('SUCCESS: [AuthContext] Session found, setting authenticated state');
         setState({
           isAuthenticated: true,
           userId: session.user.id,
@@ -50,11 +50,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           loading: false,
         });
       } else {
-        console.log('⚠️ [AuthContext] No session found');
+        console.log('WARNING: [AuthContext] No session found');
         setState(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      console.error('❌ [AuthContext] Error checking stored auth:', error);
+      console.error('ERROR: [AuthContext] Error checking stored auth:', error);
       setState(prev => ({ ...prev, loading: false }));
     }
   };
@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Supabase user ID is UUID string
       const userId = data.user.id;
       
-      console.log('✅ Login successful:', { userId, email: data.user.email });
+      console.log('SUCCESS: Login successful:', { userId, email: data.user.email });
       
       setState({
         isAuthenticated: true,

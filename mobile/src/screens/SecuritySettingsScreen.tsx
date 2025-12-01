@@ -234,9 +234,9 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       await verifyOtpCode(userEmail, deleteVerificationCode);
 
       // Delete the account
-      console.log('🗑️ Attempting to delete account...');
+      console.log('Attempting to delete account...');
       await api.deleteAccount(userId!);
-      console.log('✅ Account deleted successfully from backend');
+      console.log('SUCCESS: Account deleted successfully from backend');
 
       // Show success toast first
       showToast({
@@ -252,7 +252,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         logout();
       }, 500);
     } catch (error: any) {
-      console.error('❌ Delete account error:', error);
+      console.error('ERROR: Delete account error:', error);
       console.error('Error message:', error.message);
       showToast({
         message: error.message || 'Failed to delete account',

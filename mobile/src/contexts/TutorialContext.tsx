@@ -76,9 +76,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log('📚 [TutorialContext] Clearing existing tutorial data');
       // Clear any existing tutorial completion data to ensure fresh start
       await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
-      console.log('✅ [TutorialContext] Tutorials enabled for signup');
+      console.log('SUCCESS: [TutorialContext] Tutorials enabled for signup');
     } catch (error) {
-      console.error('❌ [TutorialContext] Error enabling tutorials:', error);
+      console.error('ERROR: [TutorialContext] Error enabling tutorials:', error);
     }
   };
 
@@ -91,11 +91,11 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log(`📚 [TutorialContext] SHOW_TUTORIALS_FLAG = "${showTutorialsFlag}"`);
       
       if (showTutorialsFlag !== 'true') {
-        console.log(`⏭️ [TutorialContext] Tutorials NOT enabled (flag != "true"), skipping tutorial`);
+        console.log(`[SKIP] [TutorialContext] Tutorials NOT enabled (flag != "true"), skipping tutorial`);
         return;
       }
     } catch (error) {
-      console.error('❌ [TutorialContext] Error reading SHOW_TUTORIALS_FLAG:', error);
+      console.error('ERROR: [TutorialContext] Error reading SHOW_TUTORIALS_FLAG:', error);
       return;
     }
 
@@ -104,7 +104,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     console.log(`📚 [TutorialContext] Screen "${screen}" completed status: ${completed}`);
     
     if (!completed) {
-      console.log(`✅ [TutorialContext] Starting tutorial for "${screen}"`);
+      console.log(`SUCCESS: [TutorialContext] Starting tutorial for "${screen}"`);
       console.log(`   Setting: currentScreen="${screen}", totalSteps=${steps}, currentStep=1, isActive=true`);
       setCurrentScreen(screen);
       setTotalSteps(steps);
@@ -117,7 +117,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.log(`   [TutorialContext] State after 100ms - This should show in next render`);
       }, 100);
     } else {
-      console.log(`⏭️ [TutorialContext] Tutorial for "${screen}" already completed, skipping`);
+      console.log(`[SKIP] [TutorialContext] Tutorial for "${screen}" already completed, skipping`);
     }
   };
 

@@ -1577,7 +1577,7 @@ export default function HomeScreen() {
                 nucleusY={nucleusY}
                 viewTransform={viewTransformTensor}
                 onPress={() => {
-                  console.log('✅ Link marker clicked for:', device.name);
+                  console.log('SUCCESS: Link marker clicked for:', device.name);
                   setSelectedLink(device);
                   setShowLinkModal(true);
                 }}
@@ -2505,7 +2505,7 @@ export default function HomeScreen() {
                     // Just toggle the pin
                     togglePin(deviceId);
                     markAsViewed(selectedContactCard.id);
-                    console.log(`✅ Contact ${selectedContactCard.name} ${pinnedIds.has(deviceId) ? 'unpinned' : 'pinned'}`);
+                    console.log(`SUCCESS: Contact ${selectedContactCard.name} ${pinnedIds.has(deviceId) ? 'unpinned' : 'pinned'}`);
                   }
                 }}
                 style={({ pressed }) => ({

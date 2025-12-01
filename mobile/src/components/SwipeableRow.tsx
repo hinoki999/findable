@@ -50,7 +50,7 @@ export default function SwipeableRow({
   // Mouse event handlers for web
   const handleMouseDown = (e: any) => {
     const x = e.pageX || e.clientX || e.nativeEvent?.pageX || e.nativeEvent?.clientX;
-    console.log('🖱️ Mouse down at X:', x);
+    console.log('Mouse down at X:', x);
     swipeState.current.swiping = true;
     swipeState.current.startX = x;
     setIsDragging(true);
@@ -63,7 +63,7 @@ export default function SwipeableRow({
       const currentX = e.pageX || e.clientX || e.nativeEvent?.pageX || e.nativeEvent?.clientX;
       const deltaX = currentX - swipeState.current.startX;
       const constrainedX = Math.max(-MAX_SWIPE, Math.min(MAX_SWIPE, deltaX));
-      console.log('🖱️ Mouse move - deltaX:', deltaX);
+      console.log('Mouse move - deltaX:', deltaX);
       translateX.setValue(constrainedX);
       if (e.preventDefault) e.preventDefault();
       if (e.stopPropagation) e.stopPropagation();
@@ -74,7 +74,7 @@ export default function SwipeableRow({
     if (swipeState.current.swiping) {
       const currentX = e.pageX || e.clientX || e.nativeEvent?.pageX || e.nativeEvent?.clientX;
       const deltaX = currentX - swipeState.current.startX;
-      console.log('🖱️ Mouse up - deltaX:', deltaX, 'threshold:', SWIPE_THRESHOLD);
+      console.log('Mouse up - deltaX:', deltaX, 'threshold:', SWIPE_THRESHOLD);
       swipeState.current.swiping = false;
       setIsDragging(false);
 
@@ -83,7 +83,7 @@ export default function SwipeableRow({
       
       if (Math.abs(deltaX) < cancelThreshold) {
         // User dragged back to cancel
-        console.log('❌ Drag CANCELLED - returned to center');
+        console.log('[CANCEL] Drag CANCELLED - returned to center');
         Animated.spring(translateX, {
           toValue: 0,
           useNativeDriver: true,
@@ -95,7 +95,7 @@ export default function SwipeableRow({
 
       // Same logic as touch gestures
       if (deltaX > SWIPE_THRESHOLD) {
-        console.log('✅ Swipe RIGHT triggered - Pin action');
+        console.log('SUCCESS: Swipe RIGHT triggered - Pin action');
         // Animate fully to reveal the action
         Animated.timing(translateX, {
           toValue: MAX_SWIPE,
@@ -117,7 +117,7 @@ export default function SwipeableRow({
           }, 600);
         });
       } else if (deltaX < -SWIPE_THRESHOLD) {
-        console.log('✅ Swipe LEFT triggered - Delete action');
+        console.log('SUCCESS: Swipe LEFT triggered - Delete action');
         // Animate fully to reveal the delete action
         Animated.timing(translateX, {
           toValue: -MAX_SWIPE,
@@ -175,9 +175,9 @@ export default function SwipeableRow({
         
         // Check if user is swiping back to cancel
         if (gestureState.dx > SWIPE_THRESHOLD * 0.5 && gestureState.vx < -0.3) {
-          console.log('⬅️ Swiping back to cancel RIGHT swipe');
+          console.log('[CANCEL] Swiping back to cancel RIGHT swipe');
         } else if (gestureState.dx < -SWIPE_THRESHOLD * 0.5 && gestureState.vx > 0.3) {
-          console.log('➡️ Swiping back to cancel LEFT swipe');
+          console.log('[CANCEL] Swiping back to cancel LEFT swipe');
         }
         
         if (Math.abs(gestureState.dx) > 20) {
@@ -197,7 +197,7 @@ export default function SwipeableRow({
         
         if (Math.abs(swipeDistance) < cancelThreshold) {
           // User swiped back to cancel
-          console.log('❌ Swipe CANCELLED - returned to center');
+          console.log('[CANCEL] Swipe CANCELLED - returned to center');
           Animated.spring(translateX, {
             toValue: 0,
             useNativeDriver: true,
@@ -209,7 +209,7 @@ export default function SwipeableRow({
         
         // Swipe Right (Pin)
         if (swipeDistance > SWIPE_THRESHOLD || (swipeDistance > 60 && velocity > 0.5)) {
-          console.log('✅ Touch Swipe RIGHT - Pin action');
+          console.log('SUCCESS: Touch Swipe RIGHT - Pin action');
           // Animate fully to reveal the action
           Animated.timing(translateX, {
             toValue: MAX_SWIPE,
@@ -233,7 +233,7 @@ export default function SwipeableRow({
         }
         // Swipe Left (Delete)
         else if (swipeDistance < -SWIPE_THRESHOLD || (swipeDistance < -60 && velocity < -0.5)) {
-          console.log('✅ Touch Swipe LEFT - Delete action');
+          console.log('SUCCESS: Touch Swipe LEFT - Delete action');
           // Animate fully to reveal the delete action
           Animated.timing(translateX, {
             toValue: -MAX_SWIPE,

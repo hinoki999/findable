@@ -180,7 +180,7 @@ export const logApiCall = (
 
   // Response
   if (error) {
-    console.log(`${colors.brightRed}[${timestamp}] ❌ API ERROR: ${method} ${url}${colors.reset}`);
+    console.log(`${colors.brightRed}[${timestamp}] ERROR: API ERROR: ${method} ${url}${colors.reset}`);
     console.log(`${colors.red}           ├─ Error: ${error.message || String(error)}${colors.reset}`);
     if (timing) {
       console.log(`${colors.gray}           ├─ Timing: ${timing}ms${colors.reset}`);
@@ -211,7 +211,7 @@ export const logApiCall = (
       ? colors.brightRed
       : colors.brightYellow;
 
-    console.log(`${statusColor}[${timestamp}] ✅ RESPONSE: ${response.status} ${response.statusText || 'OK'}${colors.reset}`);
+    console.log(`${statusColor}[${timestamp}] SUCCESS: RESPONSE: ${response.status} ${response.statusText || 'OK'}${colors.reset}`);
 
     if (timing) {
       console.log(`${colors.gray}           ├─ Timing: ${timing}ms${colors.reset}`);
@@ -241,7 +241,7 @@ export const runDiagnostics = async (
   try {
     // SAFEGUARD 1: Prevent concurrent runs
     if (diagnosticState.isRunning) {
-      console.log(`${colors.yellow}⏸️  Diagnostics already running, skipping...${colors.reset}`);
+      console.log(`${colors.yellow}[SKIP] Diagnostics already running, skipping...${colors.reset}`);
       return;
     }
 
@@ -249,7 +249,7 @@ export const runDiagnostics = async (
     if (diagnosticState.lastRun) {
       const timeSinceLastRun = Date.now() - diagnosticState.lastRun.getTime();
       if (timeSinceLastRun < diagnosticState.cooldownMs) {
-        console.log(`${colors.yellow}⏸️  Diagnostics in cooldown (${Math.ceil((diagnosticState.cooldownMs - timeSinceLastRun) / 1000)}s remaining)${colors.reset}`);
+        console.log(`${colors.yellow}[COOLDOWN] Diagnostics in cooldown (${Math.ceil((diagnosticState.cooldownMs - timeSinceLastRun) / 1000)}s remaining)${colors.reset}`);
         return;
       }
     }
@@ -257,7 +257,7 @@ export const runDiagnostics = async (
     // SAFEGUARD 3: Deduplication check
     const errorKey = `${diagnosticType}:${JSON.stringify(context)}`;
     if (diagnosticState.recentErrors.has(errorKey)) {
-      console.log(`${colors.yellow}⏸️  Diagnostics already ran for this error${colors.reset}`);
+      console.log(`${colors.yellow}[SKIP] Diagnostics already ran for this error${colors.reset}`);
       return;
     }
 
@@ -270,7 +270,7 @@ export const runDiagnostics = async (
       diagnosticState.recentErrors.delete(errorKey);
     }, 60000);
 
-    console.log(`\n${colors.yellow}🔍 RUNNING DIAGNOSTICS: ${diagnosticType}${colors.reset}`);
+    console.log(`\n${colors.yellow}DEBUG: RUNNING DIAGNOSTICS: ${diagnosticType}${colors.reset}`);
 
     const token = await AsyncStorage.getItem('@droplink_token');
 
@@ -324,7 +324,7 @@ export const runDiagnostics = async (
 
     if (results.checks && Array.isArray(results.checks)) {
       results.checks.forEach((check: any) => {
-        const statusIcon = check.status === 'pass' ? '✅' : check.status === 'fail' ? '❌' : '⚠️';
+        const statusIcon = check.status === 'pass' ? '[PASS]' : check.status === 'fail' ? '[FAIL]' : '[WARN]';
         const statusColor = check.status === 'pass' ? colors.green : check.status === 'fail' ? colors.red : colors.yellow;
 
         console.log(`\n${statusColor}${statusIcon} ${check.name}: ${check.status?.toUpperCase() || 'UNKNOWN'}${colors.reset}`);
@@ -349,9 +349,9 @@ export const runDiagnostics = async (
   } catch (error: any) {
     // SAFEGUARD 6: Error isolation - diagnostics failure should not break app
     if (error.name === 'AbortError') {
-      console.log(`${colors.red}⏱️  Diagnostic timed out after 10 seconds${colors.reset}`);
+      console.log(`${colors.red}[TIMEOUT] Diagnostic timed out after 10 seconds${colors.reset}`);
     } else {
-      console.log(`${colors.red}❌ Diagnostic failed: ${error.message}${colors.reset}`);
+      console.log(`${colors.red}ERROR: Diagnostic failed: ${error.message}${colors.reset}`);
     }
   } finally {
     // Always clear running flag
@@ -379,7 +379,7 @@ export const logDatabase = (operation: string, table: string, data?: any) => {
   if (!isEnabled) return;
 
   const timestamp = getTimestamp();
-  console.log(`${colors.brightYellow}[${timestamp}] 🗄️  DATABASE: ${operation} ${table}${colors.reset}`);
+  console.log(`${colors.brightYellow}[${timestamp}] [DB] DATABASE: ${operation} ${table}${colors.reset}`);
 
   if (data) {
     console.log(`${colors.gray}           ├─ Data:${colors.reset}`);
@@ -395,7 +395,7 @@ export const logError = (error: Error | any, context?: string) => {
   if (!isEnabled) return;
 
   const timestamp = getTimestamp();
-  console.log(`${colors.brightRed}[${timestamp}] ❌ ERROR${context ? `: ${context}` : ''}${colors.reset}`);
+  console.log(`${colors.brightRed}[${timestamp}] ERROR${context ? `: ${context}` : ''}${colors.reset}`);
   console.log(`${colors.red}           ├─ Message: ${error.message || String(error)}${colors.reset}`);
 
   if (error.stack) {
@@ -461,7 +461,7 @@ export const logWarning = (message: string, details?: any) => {
   if (!isEnabled) return;
 
   const timestamp = getTimestamp();
-  console.log(`${colors.brightYellow}[${timestamp}] ⚠️  WARNING: ${message}${colors.reset}`);
+  console.log(`${colors.brightYellow}[${timestamp}] WARNING: ${message}${colors.reset}`);
 
   if (details) {
     console.log(`${colors.yellow}           ├─ Details:${colors.reset}`);
@@ -477,7 +477,7 @@ export const logInfo = (message: string, details?: any) => {
   if (!isEnabled) return;
 
   const timestamp = getTimestamp();
-  console.log(`${colors.blue}[${timestamp}] ℹ️  INFO: ${message}${colors.reset}`);
+  console.log(`${colors.blue}[${timestamp}] [INFO] ${message}${colors.reset}`);
 
   if (details) {
     console.log(`${colors.gray}           ├─ Details:${colors.reset}`);
@@ -493,7 +493,7 @@ export const logSuccess = (message: string, details?: any) => {
   if (!isEnabled) return;
 
   const timestamp = getTimestamp();
-  console.log(`${colors.brightGreen}[${timestamp}] ✅ SUCCESS: ${message}${colors.reset}`);
+  console.log(`${colors.brightGreen}[${timestamp}] SUCCESS: ${message}${colors.reset}`);
 
   if (details) {
     console.log(`${colors.gray}           ├─ Details:${colors.reset}`);
@@ -552,7 +552,7 @@ export const resetDiagnostics = () => {
   diagnosticState.isRunning = false;
   diagnosticState.lastRun = null;
   diagnosticState.recentErrors.clear();
-  console.log(`${colors.green}✅ Diagnostics reset${colors.reset}`);
+  console.log(`${colors.green}SUCCESS: Diagnostics reset${colors.reset}`);
 };
 
 // Export all functions
