@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BASE_URL } from '../services/api';
+import { supabase } from '../services/supabase';
 
 type ScreenName = 'Home' | 'Drop' | 'History' | 'Account';
 
@@ -71,9 +71,9 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const enableTutorialsForSignup = async () => {
     try {
-      console.log('📚 [TutorialContext] Setting SHOW_TUTORIALS_FLAG to "true"');
+      console.log('[TUTORIAL] [TutorialContext] Setting SHOW_TUTORIALS_FLAG to "true"');
       await AsyncStorage.setItem(SHOW_TUTORIALS_FLAG, 'true');
-      console.log('📚 [TutorialContext] Clearing existing tutorial data');
+      console.log('[TUTORIAL] [TutorialContext] Clearing existing tutorial data');
       // Clear any existing tutorial completion data to ensure fresh start
       await AsyncStorage.removeItem(TUTORIAL_STORAGE_KEY);
       console.log('SUCCESS: [TutorialContext] Tutorials enabled for signup');
@@ -83,12 +83,12 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const startScreenTutorial = async (screen: ScreenName, steps: number) => {
-    console.log(`📚 [TutorialContext] startScreenTutorial called for screen: "${screen}", steps: ${steps}`);
+    console.log(`[TUTORIAL] [TutorialContext] startScreenTutorial called for screen: "${screen}", steps: ${steps}`);
     
     // Check if tutorials are enabled for this session (signup only)
     try {
       const showTutorialsFlag = await AsyncStorage.getItem(SHOW_TUTORIALS_FLAG);
-      console.log(`📚 [TutorialContext] SHOW_TUTORIALS_FLAG = "${showTutorialsFlag}"`);
+      console.log(`[TUTORIAL] [TutorialContext] SHOW_TUTORIALS_FLAG = "${showTutorialsFlag}"`);
       
       if (showTutorialsFlag !== 'true') {
         console.log(`[SKIP] [TutorialContext] Tutorials NOT enabled (flag != "true"), skipping tutorial`);
@@ -101,7 +101,7 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     // Check if this specific screen tutorial has been completed
     const completed = await isScreenTutorialComplete(screen);
-    console.log(`📚 [TutorialContext] Screen "${screen}" completed status: ${completed}`);
+    console.log(`[TUTORIAL] [TutorialContext] Screen "${screen}" completed status: ${completed}`);
     
     if (!completed) {
       console.log(`SUCCESS: [TutorialContext] Starting tutorial for "${screen}"`);
@@ -135,21 +135,21 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (allComplete) {
         await AsyncStorage.removeItem(SHOW_TUTORIALS_FLAG);
         
-        // Update backend that onboarding is complete
+        // Update Supabase that onboarding is complete
         try {
-          const token = await AsyncStorage.getItem('token');
-          if (token) {
-            await fetch(`${BASE_URL}/user/profile`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ hasCompletedOnboarding: true })
-            });
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { error } = await supabase
+              .from('user_profiles')
+              .update({ has_completed_onboarding: true })
+              .eq('user_id', session.user.id);
+            
+            if (error) {
+              console.error('[TUTORIAL] Failed to update onboarding status:', error);
+            }
           }
         } catch (error) {
-          console.error('Could not update backend onboarding status:', error);
+          console.error('[TUTORIAL] Could not update Supabase onboarding status:', error);
         }
       }
       
