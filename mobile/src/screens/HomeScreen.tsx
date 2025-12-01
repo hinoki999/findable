@@ -7,6 +7,7 @@ import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifi
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
+import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 
@@ -591,6 +592,7 @@ export default function HomeScreen() {
   const { userId } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
   const { maxDistance } = useSettings();
+  const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   const theme = getTheme(isDarkMode);
   
   // Safe area insets for Android/iOS system UI
@@ -666,6 +668,11 @@ export default function HomeScreen() {
   
   // Update grid spacing to scale with radar size
   const PIXELS_PER_FOOT = radarSize / (MAX_RADIUS_FEET * 2);
+
+  // Start Home screen tutorial when component mounts
+  useEffect(() => {
+    startScreenTutorial('Home', 6);
+  }, []);
 
   // Start BLE scanning when component mounts
   useEffect(() => {
@@ -3078,6 +3085,18 @@ export default function HomeScreen() {
       </Modal>
 
       </View>
+
+      {/* Tutorial Overlay */}
+      {isActive && currentScreen === 'Home' && currentStep > 0 && (
+        <TutorialOverlay
+          step={tutorialSteps[currentStep - 1]}
+          currentStepNumber={currentStep}
+          totalSteps={totalSteps}
+          onNext={nextStep}
+          onBack={prevStep}
+          onSkip={skipTutorial}
+        />
+      )}
     </Animated.View>
   );
 }

@@ -8,6 +8,7 @@ import { useDarkMode, useLinkNotifications, useToast, useSettings } from '../../
 import { useAuth } from '../contexts/AuthContext';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
+import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 
@@ -22,9 +23,15 @@ export default function DropScreen() {
   const { maxDistance } = useSettings();
   const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
+  const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
+
+  // Start Drop screen tutorial when component mounts
+  useEffect(() => {
+    startScreenTutorial('Drop', 2);
+  }, []);
 
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
@@ -395,6 +402,18 @@ export default function DropScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Tutorial Overlay */}
+      {isActive && currentScreen === 'Drop' && currentStep > 0 && (
+        <TutorialOverlay
+          step={tutorialSteps[currentStep - 1]}
+          currentStepNumber={currentStep}
+          totalSteps={totalSteps}
+          onNext={nextStep}
+          onBack={prevStep}
+          onSkip={skipTutorial}
+        />
+      )}
     </View>
   );
 }

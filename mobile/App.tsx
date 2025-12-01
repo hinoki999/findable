@@ -15,6 +15,7 @@ import WelcomeScreen from './src/screens/WelcomeScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
+import { TutorialProvider, useTutorial } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
@@ -154,6 +155,7 @@ const formatPhoneNumber = (text: string): string => {
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
+  const { initializeTutorials } = useTutorial();
 
   const [fontsReady] = useFonts({
     Inter_300Light,
@@ -373,6 +375,14 @@ function MainApp() {
 
     checkForUpdates();
   }, []);
+
+  // Initialize tutorials when auth state changes
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      console.log('[TUTORIAL] Auth state changed - initializing tutorials');
+      initializeTutorials();
+    }
+  }, [isAuthenticated, userId, initializeTutorials]);
 
   // Auth handlers
   const handleSignupSuccess = async (
@@ -737,7 +747,8 @@ function MainApp() {
   };
 
   return (
-    <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+    <TutorialProvider>
+      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
           <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
             <ToastContext.Provider value={{ showToast }}>
@@ -856,6 +867,7 @@ function MainApp() {
           </UserProfileContext.Provider>
         </PinnedProfilesContext.Provider>
       </DarkModeContext.Provider>
+    </TutorialProvider>
   );
 }
 
