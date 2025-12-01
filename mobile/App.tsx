@@ -155,7 +155,6 @@ const formatPhoneNumber = (text: string): string => {
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
-  const { initializeTutorials } = useTutorial();
 
   const [fontsReady] = useFonts({
     Inter_300Light,
@@ -375,14 +374,6 @@ function MainApp() {
 
     checkForUpdates();
   }, []);
-
-  // Initialize tutorials when auth state changes
-  useEffect(() => {
-    if (isAuthenticated && userId) {
-      console.log('[TUTORIAL] Auth state changed - initializing tutorials');
-      initializeTutorials();
-    }
-  }, [isAuthenticated, userId, initializeTutorials]);
 
   // Auth handlers
   const handleSignupSuccess = async (
@@ -746,8 +737,23 @@ function MainApp() {
     return <DropScreen />;
   };
 
+  // Tutorial initializer component (must be inside TutorialProvider)
+  const TutorialInitializer = () => {
+    const { initializeTutorials } = useTutorial();
+    
+    useEffect(() => {
+      if (isAuthenticated && userId) {
+        console.log('[TUTORIAL] Auth state changed - initializing tutorials');
+        initializeTutorials();
+      }
+    }, [isAuthenticated, userId, initializeTutorials]);
+    
+    return null; // This component doesn't render anything
+  };
+
   return (
     <TutorialProvider>
+      <TutorialInitializer />
       <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
         <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
           <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
