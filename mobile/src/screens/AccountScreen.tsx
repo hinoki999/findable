@@ -5,6 +5,8 @@ import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
 import { useDarkMode, useUserProfile, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
+import { useTutorial } from '../contexts/TutorialContext';
+import TutorialOverlay from '../components/TutorialOverlay';
 import * as api from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
@@ -46,8 +48,26 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
   const { logout, username, userId, login } = useAuth();
+  const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
   const { name, phone, email, bio, socialMedia } = profile || {};
+  const screenHeight = Dimensions.get('window').height;
+
+  // Account screen tutorial - single message
+  useEffect(() => {
+    startScreenTutorial('Account', 1);
+  }, []);
+
+  const tutorialSteps = [
+    {
+      message: 'Update your profile information any time and view your contact card here! Note: You must confirm your phone number before sending drops.',
+      position: { 
+        top: screenHeight * 0.32, 
+        left: 30, 
+        right: 30 
+      },
+    },
+  ];
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
@@ -960,6 +980,17 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         </View>
       </Modal>
 
+      {/* Tutorial Overlay */}
+      {isActive && currentScreen === 'Account' && currentStep > 0 && (
+        <TutorialOverlay
+          step={tutorialSteps[currentStep - 1]}
+          currentStepNumber={currentStep}
+          totalSteps={totalSteps}
+          onNext={nextStep}
+          onBack={prevStep}
+          onSkip={skipTutorial}
+        />
+      )}
     </View>
   );
 }
