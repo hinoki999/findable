@@ -62,7 +62,7 @@ export default function HistoryScreen() {
 
   // Start History screen tutorial when component mounts
   useEffect(() => {
-    startScreenTutorial('History', 3);
+    startScreenTutorial('History', 1);
   }, []);
 
   useEffect(() => {
@@ -219,30 +219,12 @@ export default function HistoryScreen() {
   // History screen tutorial steps
   const tutorialSteps = [
     {
-      message: 'When you link with someone (mutual drop), you can view their contact card here!',
+      message: 'When you link with someone (have a mutual drop), you can view their contact here!',
       position: { 
-        top: 150, 
+        top: screenHeight * 0.35, 
         left: 30, 
         right: 30 
       },
-    },
-    {
-      message: 'Swipe right to pin your favorites to the top of the page!',
-      position: { 
-        top: 205, 
-        left: 30, 
-        right: 30 
-      },
-    },
-    {
-      message: 'Use the search bar to quickly find contacts as your list grows!',
-      position: { 
-        top: 100, 
-        left: 30, 
-        right: 30 
-      },
-      arrow: 'up' as const,
-      arrowPosition: { top: 60, left: screenWidth * 0.5 - 16 },
     },
   ];
 
