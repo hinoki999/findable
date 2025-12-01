@@ -37,9 +37,9 @@ export class TimeoutError extends Error {
 async function getAuthToken(): Promise<string | null> {
   const token = await storage.getItem('authToken');
   
-  // 🔍 POINT D: Token retrieval from storage
+  // DEBUG: POINT D: Token retrieval from storage
   console.log('═══════════════════════════════════════════════════════');
-  console.log('🔍 POINT D: api.ts - Token Retrieved from Storage');
+  console.log('DEBUG: POINT D: api.ts - Token Retrieved from Storage');
   console.log('  timestamp:', new Date().toISOString());
   console.log('  retrieved token:', token);
   console.log('  typeof token:', typeof token);
@@ -56,9 +56,9 @@ async function getAuthToken(): Promise<string | null> {
 // Helper to create authorized headers
 async function getAuthHeaders(): Promise<HeadersInit> {
   const token = await getAuthToken();
-  console.log('🔑 getAuthHeaders - Token exists:', !!token);
-  console.log('🔑 Token length:', token?.length || 0);
-  console.log('🔑 Token first 20 chars:', token?.substring(0, 20));
+  console.log('DEBUG: getAuthHeaders - Token exists:', !!token);
+  console.log('DEBUG: Token length:', token?.length || 0);
+  console.log('DEBUG: Token first 20 chars:', token?.substring(0, 20));
   
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -68,9 +68,9 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     
-    // 🔍 POINT E: Final Authorization header
+    // DEBUG: POINT E: Final Authorization header
     console.log('═══════════════════════════════════════════════════════');
-    console.log('🔍 POINT E: api.ts - Authorization Header Constructed');
+    console.log('DEBUG: POINT E: api.ts - Authorization Header Constructed');
     console.log('  timestamp:', new Date().toISOString());
     console.log('  token used:', token);
     console.log('  Authorization header:', headers['Authorization']);
@@ -79,7 +79,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     console.log('═══════════════════════════════════════════════════════');
   } else {
     console.log('═══════════════════════════════════════════════════════');
-    console.log('🔍 POINT E: api.ts - NO TOKEN AVAILABLE');
+    console.log('DEBUG: POINT E: api.ts - NO TOKEN AVAILABLE');
     console.log('  timestamp:', new Date().toISOString());
     console.log('  token was null/undefined');
     console.log('═══════════════════════════════════════════════════════');
@@ -96,7 +96,7 @@ export async function secureFetch(
   // Only enforce HTTPS in production (Railway)
   if (ENV.ENFORCE_HTTPS && !url.startsWith('https://')) {
     const httpsUrl = url.replace('http://', 'https://');
-    console.warn(`⚠️ Non-HTTPS URL detected in production, redirecting to: ${httpsUrl}`);
+    console.warn(`WARNING: Non-HTTPS URL detected in production, redirecting to: ${httpsUrl}`);
     url = httpsUrl;
   }
 
@@ -193,7 +193,7 @@ export async function secureFetch(
     // Handle abort (timeout)
     if (error.name === 'AbortError') {
       if (retries > 0) {
-        console.log(`⏱️ Request timeout, retrying... (${retries} attempts left)`);
+        console.log(`[RETRY] Request timeout, retrying... (${retries} attempts left)`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
         return secureFetch(url, options, retries - 1);
       }
@@ -203,7 +203,7 @@ export async function secureFetch(
     // Handle network errors
     if (error.message === 'Network request failed' || error.message === 'Failed to fetch') {
       if (retries > 0) {
-        console.log(`🌐 Network error, retrying... (${retries} attempts left)`);
+        console.log(`[NETWORK] Network error, retrying... (${retries} attempts left)`);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
         return secureFetch(url, options, retries - 1);
       }
@@ -282,10 +282,10 @@ export async function saveDevice(d: Device, userId: string): Promise<any> {
       throw new Error('Failed to save device. Please try again.');
     }
 
-    console.log('✅ Device saved successfully:', data?.id);
+    console.log('SUCCESS: Device saved successfully:', data?.id);
     return data;
   } catch (error: any) {
-    console.error('❌ Device save error:', error);
+    console.error('ERROR: Device save error:', error);
     
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
@@ -322,7 +322,7 @@ export async function getDevices(): Promise<Device[]> {
       throw new Error('Failed to load devices. Please try again.');
     }
 
-    console.log(`✅ Loaded ${data?.length || 0} devices from Supabase`);
+    console.log(`SUCCESS: Loaded ${data?.length || 0} devices from Supabase`);
     
     // Map database format to frontend format (snake_case to camelCase)
     return (data || []).map((d: any) => ({
@@ -339,7 +339,7 @@ export async function getDevices(): Promise<Device[]> {
       profilePhoto: d.profile_photo,
     }));
   } catch (error: any) {
-    console.error('❌ Get devices error:', error);
+    console.error('ERROR: Get devices error:', error);
     throw new Error(error.message || 'Failed to load devices. Please try again.');
   }
 }
@@ -363,9 +363,9 @@ export async function deleteDevice(deviceId: number, userId: string): Promise<vo
       throw new Error('Failed to delete device. Please try again.');
     }
 
-    console.log(`✅ Device ${deviceId} deleted successfully`);
+    console.log(`SUCCESS: Device ${deviceId} deleted successfully`);
   } catch (error: any) {
-    console.error('❌ Device delete error:', error);
+    console.error('ERROR: Device delete error:', error);
     
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
@@ -422,14 +422,14 @@ export async function getUserSettings(): Promise<UserSettings> {
     if (error) {
       // If no settings found (PGRST116), return defaults
       if (error.code === 'PGRST116') {
-        console.log('⚠️ No settings found, returning defaults');
+        console.log('WARNING: No settings found, returning defaults');
         return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
       }
       console.error('Supabase settings query error:', error);
       throw new Error('Failed to load settings. Please try again.');
     }
 
-    console.log('✅ Settings loaded from Supabase');
+    console.log('SUCCESS: Settings loaded from Supabase');
     
     // Map database format to frontend format (snake_case to camelCase)
     return {
@@ -438,7 +438,7 @@ export async function getUserSettings(): Promise<UserSettings> {
       privacyZonesEnabled: data.privacy_zones_enabled ?? false,
     };
   } catch (error: any) {
-    console.error('❌ Get settings error:', error);
+    console.error('ERROR: Get settings error:', error);
     
     // Return defaults on error instead of throwing
     if (error.message?.includes('User not authenticated')) {
@@ -446,7 +446,7 @@ export async function getUserSettings(): Promise<UserSettings> {
     }
     
     // For other errors, return defaults to not block app
-    console.log('⚠️ Returning default settings due to error');
+    console.log('WARNING: Returning default settings due to error');
     return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
   }
 }
@@ -474,9 +474,9 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
       throw new Error('Failed to save settings. Please try again.');
     }
 
-    console.log('✅ Settings saved successfully');
+    console.log('SUCCESS: Settings saved successfully');
   } catch (error: any) {
-    console.error('❌ Settings save error:', error);
+    console.error('ERROR: Settings save error:', error);
     
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
@@ -513,12 +513,12 @@ export async function getPinnedContacts(): Promise<number[]> {
       throw new Error('Failed to load pinned contacts. Please try again.');
     }
 
-    console.log(`✅ Loaded ${data?.length || 0} pinned contacts from Supabase`);
+    console.log(`SUCCESS: Loaded ${data?.length || 0} pinned contacts from Supabase`);
     
     // Return array of device IDs
     return (data || []).map((row: any) => row.device_id);
   } catch (error: any) {
-    console.error('❌ Get pinned contacts error:', error);
+    console.error('ERROR: Get pinned contacts error:', error);
     throw new Error(error.message || 'Failed to load pinned contacts. Please try again.');
   }
 }
@@ -552,9 +552,9 @@ export async function pinContact(deviceId: number): Promise<void> {
       throw new Error('Failed to pin contact. Please try again.');
     }
 
-    console.log(`✅ Contact ${deviceId} pinned successfully`);
+    console.log(`SUCCESS: Contact ${deviceId} pinned successfully`);
   } catch (error: any) {
-    console.error('❌ Pin contact error:', error);
+    console.error('ERROR: Pin contact error:', error);
     throw new Error(error.message || 'Failed to pin contact. Please try again.');
   }
 }
@@ -585,9 +585,9 @@ export async function unpinContact(deviceId: number): Promise<void> {
       throw new Error('Failed to unpin contact. Please try again.');
     }
 
-    console.log(`✅ Contact ${deviceId} unpinned successfully`);
+    console.log(`SUCCESS: Contact ${deviceId} unpinned successfully`);
   } catch (error: any) {
-    console.error('❌ Unpin contact error:', error);
+    console.error('ERROR: Unpin contact error:', error);
     throw new Error(error.message || 'Failed to unpin contact. Please try again.');
   }
 }
@@ -659,9 +659,9 @@ export async function changeUsername(newUsername: string, userId: string): Promi
       // Don't throw - profile update succeeded, metadata update is optional
     }
 
-    console.log('✅ Username changed successfully');
+    console.log('SUCCESS: Username changed successfully');
   } catch (error: any) {
-    console.error('❌ Change username error:', error);
+    console.error('ERROR: Change username error:', error);
     
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
@@ -684,9 +684,9 @@ export async function changePassword(currentPassword: string, newPassword: strin
       throw new Error('Failed to change password. Please try again.');
     }
 
-    console.log('✅ Password changed successfully');
+    console.log('SUCCESS: Password changed successfully');
   } catch (error: any) {
-    console.error('❌ Change password error:', error);
+    console.error('ERROR: Change password error:', error);
     throw new Error(error.message || 'Failed to change password. Please try again.');
   }
 }
@@ -707,9 +707,9 @@ export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): P
       throw new Error('Failed to send verification code. Please try again.');
     }
 
-    console.log(`✅ OTP code sent to ${email}`);
+    console.log(`SUCCESS: OTP code sent to ${email}`);
   } catch (error: any) {
-    console.error('❌ Send OTP error:', error);
+    console.error('ERROR: Send OTP error:', error);
     throw new Error(error.message || 'Failed to send verification code. Please try again.');
   }
 }
@@ -724,7 +724,7 @@ export async function verifyOtpCode(
     // Supabase only supports 'email', 'sms', 'phone_change'
     // For signup OTPs, we still use 'email' type
     const supabaseType = 'email';
-    console.log(`🔍 Verifying OTP with type: ${supabaseType} (requested: ${verificationType})`);
+    console.log(`DEBUG: Verifying OTP with type: ${supabaseType} (requested: ${verificationType})`);
     
     const { data, error } = await supabase.auth.verifyOtp({
       email: email.toLowerCase(),
@@ -742,10 +742,10 @@ export async function verifyOtpCode(
       throw new Error('Verification failed. Please try again.');
     }
 
-    console.log('✅ OTP verified successfully');
+    console.log('SUCCESS: OTP verified successfully');
     return { userId: data.user.id };
   } catch (error: any) {
-    console.error('❌ Verify OTP error:', error);
+    console.error('ERROR: Verify OTP error:', error);
     throw new Error(error.message || 'Invalid or expired code. Please try again.');
   }
 }
@@ -768,11 +768,11 @@ export async function resetPasswordWithOtp(email: string, code: string, newPassw
 
     // Sign out the user so they return to clean unauthenticated state
     await supabase.auth.signOut();
-    console.log('✅ User signed out after password reset');
+    console.log('SUCCESS: User signed out after password reset');
 
-    console.log('✅ Password reset successfully');
+    console.log('SUCCESS: Password reset successfully');
   } catch (error: any) {
-    console.error('❌ Reset password error:', error);
+    console.error('ERROR: Reset password error:', error);
     throw new Error(error.message || 'Failed to reset password. Please try again.');
   }
 }
@@ -793,14 +793,14 @@ export async function getUsernameByEmail(email: string): Promise<string> {
 
     return data.name;
   } catch (error: any) {
-    console.error('❌ Get username error:', error);
+    console.error('ERROR: Get username error:', error);
     throw new Error(error.message || 'Failed to retrieve username. Please try again.');
   }
 }
 
 export async function deleteAccount(userId: string): Promise<void> {
   try {
-    console.log('🗑️ Starting account deletion for user:', userId);
+    console.log('Starting account deletion for user:', userId);
 
     // Validate userId parameter
   if (!userId) {
@@ -817,7 +817,7 @@ export async function deleteAccount(userId: string): Promise<void> {
       console.error('Failed to delete devices:', devicesError);
       // Continue anyway - devices are not critical
     } else {
-      console.log('✅ Devices deleted');
+      console.log('SUCCESS: Devices deleted');
     }
 
     // Step 2: Delete from user_settings table
@@ -830,7 +830,7 @@ export async function deleteAccount(userId: string): Promise<void> {
       console.error('Failed to delete settings:', settingsError);
       // Continue anyway - settings are not critical
     } else {
-      console.log('✅ Settings deleted');
+      console.log('SUCCESS: Settings deleted');
     }
 
     // Step 3: Delete from user_profiles table (CRITICAL)
@@ -843,11 +843,11 @@ export async function deleteAccount(userId: string): Promise<void> {
       console.error('Failed to delete profile:', profileError);
       throw new Error('Failed to delete profile. Please try again.');
     }
-    console.log('✅ Profile deleted');
+    console.log('SUCCESS: Profile deleted');
 
     // Step 4: Sign out user
     await supabase.auth.signOut();
-    console.log('✅ User signed out');
+    console.log('SUCCESS: User signed out');
 
     // Step 5: Delete from Supabase Auth
     // Note: User is already signed out
@@ -857,9 +857,9 @@ export async function deleteAccount(userId: string): Promise<void> {
     if (authError) {
       console.error('Auth deletion error:', authError);
       // Profile is already deleted, so account is effectively deleted
-      console.log('⚠️ Auth account not deleted but profile removed');
+      console.log('WARNING: Auth account not deleted but profile removed');
     } else {
-      console.log('✅ Auth account deleted');
+      console.log('SUCCESS: Auth account deleted');
     }
 
     console.log('✅ Account deletion complete');

@@ -697,7 +697,7 @@ export default function HomeScreen() {
           device.action === 'accepted' || device.action === 'returned'
         );
         setLinkedDevices(links);
-        console.log(`✅ Loaded ${links.length} linked contacts on map`);
+        console.log(`SUCCESS: Loaded ${links.length} linked contacts on map`);
       } catch (error) {
         console.error('Failed to fetch linked devices:', error);
       }
@@ -983,7 +983,7 @@ export default function HomeScreen() {
       gestureState.initialAngle = viewRotation;
       gestureState.startAngle = angle;
       
-      console.log('🔍 TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
+      console.log('DEBUG: TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
     }
   };
 
@@ -1033,7 +1033,7 @@ export default function HomeScreen() {
 
   const handleTouchEnd = () => {
     touchPositions.current = {};
-    console.log('🔍 TOUCH END - Reset');
+    console.log('DEBUG: TOUCH END - Reset');
   };
 
   // Stack drag animation
@@ -1227,11 +1227,11 @@ export default function HomeScreen() {
 
     // Store the card for undo BEFORE performing the action
     const cardToStore = pinnedProfiles.find(p => p.id === confirmCardId) || null;
-    console.log('💾 Storing card for undo:', cardToStore?.name, 'ID:', cardToStore?.id);
+    console.log('Storing card for undo:', cardToStore?.name, 'ID:', cardToStore?.id);
     
     const actionData = { type: actionType, cardId: confirmCardId, card: cardToStore };
     lastActionRef.current = actionData; // Store in ref synchronously
-    console.log('💾 Ref updated with:', actionData);
+    console.log('Ref updated with:', actionData);
     
     // Perform the action
     if (actionType === 'unpin') {
@@ -1243,7 +1243,7 @@ export default function HomeScreen() {
       setPinnedProfiles(prev => prev.filter(p => p.id !== confirmCardId));
       // Unpin
       togglePin(confirmCardId);
-      console.log('🗑️ Device deleted from all locations');
+      console.log('Device deleted from all locations');
     }
 
     // Close confirmation modal
@@ -1262,7 +1262,7 @@ export default function HomeScreen() {
       actionLabel: 'UNDO',
       onAction: handleUndo,
     });
-    console.log('✅ TOAST WITH UNDO SHOWN');
+    console.log('SUCCESS: TOAST WITH UNDO SHOWN');
   };
 
   // Handle undo
@@ -1271,7 +1271,7 @@ export default function HomeScreen() {
     console.log('🔘 handleUndo CALLED! lastAction:', lastAction);
     
     if (!lastAction) {
-      console.log('⚠️ No lastAction stored, cannot undo');
+      console.log('WARNING: No lastAction stored, cannot undo');
       return;
     }
 
@@ -1280,28 +1280,28 @@ export default function HomeScreen() {
     if (lastAction.type === 'unpin') {
       // Re-pin the contact
       togglePin(lastAction.cardId);
-      console.log('✅ Contact re-pinned');
+      console.log('SUCCESS: Contact re-pinned');
     } else if (lastAction.type === 'delete' && lastAction.card) {
       console.log('Starting restore process for:', lastAction.card.name);
       
       // Step 1: Restore to API/store first and wait for it
       await restoreDevice(lastAction.card, userId!);
-      console.log('✅ Device restored to API/store');
+      console.log('SUCCESS: Device restored to API/store');
       
       // Step 2: Re-add to pinnedProfiles immediately for instant UI feedback
       setPinnedProfiles(prev => {
         // Make sure it's not already there
         if (prev.some(p => p.id === lastAction.cardId)) {
-          console.log('⚠️ Card already in pinnedProfiles');
+          console.log('WARNING: Card already in pinnedProfiles');
           return prev;
         }
-        console.log('✅ Adding card back to pinnedProfiles UI');
+        console.log('SUCCESS: Adding card back to pinnedProfiles UI');
         return [...prev, lastAction.card!];
       });
       
       // Step 3: Re-pin to persist it (this will be saved in the context)
       togglePin(lastAction.cardId);
-      console.log('✅ Pin toggled back on, ID added to pinnedIds');
+      console.log('SUCCESS: Pin toggled back on, ID added to pinnedIds');
     }
 
     lastActionRef.current = null; // Clear the ref
@@ -1554,7 +1554,7 @@ export default function HomeScreen() {
                 nucleusY={nucleusY}
                 viewTransform={viewTransformTensor}
                 onPress={() => {
-                  console.log('✅ Blip press handler called for:', device.name);
+                  console.log('SUCCESS: Blip press handler called for:', device.name);
                   setSelectedBlipDevice(device);
                   setShowBlipModal(true);
                 }}

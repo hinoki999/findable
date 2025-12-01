@@ -53,7 +53,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         setUsernameError('Username is already taken');
       }
     } catch (err) {
-      console.error('❌ Failed to check username:', err);
+      console.error('ERROR: Failed to check username:', err);
     }
   };
 
@@ -65,7 +65,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         setEmailError('Email is already in use');
       }
     } catch (err) {
-      console.error('❌ Failed to check email:', err);
+      console.error('ERROR: Failed to check email:', err);
     }
   };
 
@@ -241,7 +241,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Verify the OTP code (this logs user in)
       // Use 'signup' type for signup OTP verification
       await verifyOtpCode(email, verificationCode, 'signup');
-      console.log('✅ OTP verified successfully');
+      console.log('SUCCESS: OTP verified successfully');
 
       // User already created by OTP - now set password
       const { error: passwordError } = await supabase.auth.updateUser({
@@ -261,7 +261,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error('Failed to get user session');
       }
 
-      console.log(`✅ Password set successfully, userId: ${userId}`);
+      console.log(`SUCCESS: Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
       const { error: profileError } = await supabase.from('user_profiles').insert({
@@ -276,10 +276,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (profileError) {
-        console.error(`❌ Failed to create user_profiles: ${profileError.message}`);
+        console.error(`ERROR: Failed to create user_profiles: ${profileError.message}`);
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
-      console.log('✅ user_profiles record created');
+      console.log('SUCCESS: user_profiles record created');
 
       // Create user_settings record in Supabase
       const { error: settingsError } = await supabase.from('user_settings').insert({
@@ -289,10 +289,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (settingsError) {
-        console.error(`❌ Failed to create user_settings: ${settingsError.message}`);
+        console.error(`ERROR: Failed to create user_settings: ${settingsError.message}`);
         throw new Error(`Failed to create settings: ${settingsError.message}`);
       }
-      console.log('✅ user_settings record created');
+      console.log('SUCCESS: user_settings record created');
 
       // TODO: Re-implement tutorials after signup flow is stable
       // Tutorial setup temporarily disabled - was blocking signup navigation
@@ -302,41 +302,41 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       if (typeof enableTutorialsForSignup === 'function') {
         try {
           await enableTutorialsForSignup();
-          addLog('✅ Tutorials enabled successfully');
+          addLog('SUCCESS: Tutorials enabled successfully');
         } catch (tutorialError: any) {
-          addLog(`⚠️ enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
+          addLog(`WARNING: enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
           // Don't throw - tutorials are not critical for signup
         }
       } else {
-        addLog('⚠️ enableTutorialsForSignup not available (skipping)');
+        addLog('WARNING: enableTutorialsForSignup not available (skipping)');
       }
 
       if (typeof startScreenTutorial === 'function') {
         try {
           await startScreenTutorial('Home', 5);
-          addLog('✅ Home screen tutorial started');
+          addLog('SUCCESS: Home screen tutorial started');
         } catch (tutorialError: any) {
-          addLog(`⚠️ startScreenTutorial error (non-critical): ${tutorialError.message || 'Unknown error'}`);
+          addLog(`WARNING: startScreenTutorial error (non-critical): ${tutorialError.message || 'Unknown error'}`);
           // Don't throw - tutorials are not critical for signup
         }
       } else {
-        addLog('⚠️ startScreenTutorial not available (skipping)');
+        addLog('WARNING: startScreenTutorial not available (skipping)');
       }
 
       // Small delay to ensure AsyncStorage operations complete
       addLog('⏳ Waiting for AsyncStorage operations...');
       await new Promise(resolve => setTimeout(resolve, 200));
-      addLog('✅ AsyncStorage operations should be complete');
+      addLog('SUCCESS: AsyncStorage operations should be complete');
       */
 
-      console.log('⏭️ Tutorial setup skipped (temporarily disabled)');
+      console.log('[SKIP] Tutorial setup skipped (temporarily disabled)');
 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
       
       // Validate navigation handler before calling
       if (typeof onSignupSuccess !== 'function') {
-        console.error('❌ ERROR: onSignupSuccess is not a function!');
+        console.error('ERROR: onSignupSuccess is not a function!');
         throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
       }
       
@@ -346,13 +346,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       // Profile will be set up later via profile editing or onboarding
       try {
         onSignupSuccess(undefined);
-        console.log('✅ [SignupScreen] onSignupSuccess returned');
+        console.log('SUCCESS: [SignupScreen] onSignupSuccess returned');
       } catch (navError: any) {
-        console.error(`❌ onSignupSuccess threw error: ${navError.message}`);
+        console.error(`ERROR: onSignupSuccess threw error: ${navError.message}`);
         throw navError;
       }
     } catch (err: any) {
-      console.error(`❌ [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
+      console.error(`ERROR: [SignupScreen] handleVerifyAndSignup error: ${err.message}`);
       setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
