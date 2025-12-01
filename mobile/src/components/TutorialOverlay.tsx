@@ -37,7 +37,7 @@ export default function TutorialOverlay({
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
 
-  console.log(`🎨 [TutorialOverlay] RENDERING:`, {
+  console.log(`[TUTORIAL] [TutorialOverlay] RENDERING:`, {
     currentStepNumber,
     totalSteps,
     hasStep: !!step,
