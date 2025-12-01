@@ -57,6 +57,29 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const checkOnboardingStatus = async (): Promise<boolean> => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return false;
+      
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('has_completed_onboarding')
+        .eq('user_id', session.user.id)
+        .single();
+      
+      if (error) {
+        console.error('[TUTORIAL] Error checking onboarding status:', error);
+        return false;
+      }
+      
+      return data?.has_completed_onboarding || false;
+    } catch (error) {
+      console.error('[TUTORIAL] Error in checkOnboardingStatus:', error);
+      return false;
+    }
+  };
+
   const isScreenTutorialComplete = async (screen: ScreenName): Promise<boolean> => {
     try {
       const data = await AsyncStorage.getItem(TUTORIAL_STORAGE_KEY);
@@ -84,6 +107,13 @@ export const TutorialProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const startScreenTutorial = async (screen: ScreenName, steps: number) => {
     console.log(`[TUTORIAL] [TutorialContext] startScreenTutorial called for screen: "${screen}", steps: ${steps}`);
+    
+    // Check if user has already completed onboarding
+    const hasCompletedOnboarding = await checkOnboardingStatus();
+    if (hasCompletedOnboarding) {
+      console.log('[TUTORIAL] User has already completed onboarding - skipping tutorials');
+      return;
+    }
     
     // Check if tutorials are enabled for this session (signup only)
     try {
