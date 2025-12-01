@@ -13,7 +13,7 @@ interface TutorialContextType {
   prevStep: () => void;
   skipTutorial: () => void;
   startTutorial: () => void;
-  startScreenTutorial: (screen: ScreenName, steps: number) => void;
+  startScreenTutorial: (screen: ScreenName, steps: number) => Promise<void>;
   completeScreenTutorial: (screen: ScreenName) => void;
   isScreenTutorialComplete: (screen: ScreenName) => Promise<boolean>;
   enableTutorialsForSignup: () => Promise<void>;
@@ -28,7 +28,7 @@ const TutorialContext = createContext<TutorialContextType>({
   prevStep: () => {},
   skipTutorial: () => {},
   startTutorial: () => {},
-  startScreenTutorial: () => {},
+  startScreenTutorial: async () => {},
   completeScreenTutorial: () => {},
   isScreenTutorialComplete: async () => false,
   enableTutorialsForSignup: async () => {},

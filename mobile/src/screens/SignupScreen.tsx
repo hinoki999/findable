@@ -4,8 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyOtpCode } from '../services/api';
-// TODO: Re-enable after fixing tutorial blocking issue
-// import { useTutorial } from '../contexts/TutorialContext';
+import { useTutorial } from '../contexts/TutorialContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 
@@ -18,8 +17,7 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  // TODO: Re-enable after fixing tutorial blocking issue
-  // const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
+  const { enableTutorialsForSignup, startScreenTutorial } = useTutorial();
   const { signup } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -294,42 +292,23 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       console.log('SUCCESS: user_settings record created');
 
-      // TODO: Re-implement tutorials after signup flow is stable
-      // Tutorial setup temporarily disabled - was blocking signup navigation
-      // Original code preserved below for re-implementation:
-      /*
-      addLog('📚 Setting up tutorials...');
+      // Tutorial initialization (non-blocking to prevent navigation issues)
+      console.log('[TUTORIAL] Setting up tutorials...');
       if (typeof enableTutorialsForSignup === 'function') {
         try {
           await enableTutorialsForSignup();
-          addLog('SUCCESS: Tutorials enabled successfully');
+          console.log('[TUTORIAL] SUCCESS: Tutorials enabled successfully');
         } catch (tutorialError: any) {
-          addLog(`WARNING: enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
-          // Don't throw - tutorials are not critical for signup
+          console.log(`[TUTORIAL] WARNING: enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
         }
-      } else {
-        addLog('WARNING: enableTutorialsForSignup not available (skipping)');
       }
 
       if (typeof startScreenTutorial === 'function') {
-        try {
-          await startScreenTutorial('Home', 5);
-          addLog('SUCCESS: Home screen tutorial started');
-        } catch (tutorialError: any) {
-          addLog(`WARNING: startScreenTutorial error (non-critical): ${tutorialError.message || 'Unknown error'}`);
-          // Don't throw - tutorials are not critical for signup
-        }
-      } else {
-        addLog('WARNING: startScreenTutorial not available (skipping)');
+        // Start tutorial asynchronously (don't await) to prevent blocking navigation
+        startScreenTutorial('Home', 5).catch((err: any) => {
+          console.log('[TUTORIAL] WARNING: startScreenTutorial error (non-critical):', err.message);
+        });
       }
-
-      // Small delay to ensure AsyncStorage operations complete
-      addLog('⏳ Waiting for AsyncStorage operations...');
-      await new Promise(resolve => setTimeout(resolve, 200));
-      addLog('SUCCESS: AsyncStorage operations should be complete');
-      */
-
-      console.log('[SKIP] Tutorial setup skipped (temporarily disabled)');
 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
