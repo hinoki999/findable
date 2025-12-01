@@ -292,7 +292,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
       console.log('SUCCESS: user_settings record created');
 
-      // Tutorial initialization (non-blocking to prevent navigation issues)
+      // Tutorial initialization - Set flag for new user (HomeScreen will start tutorial on mount)
       console.log('[TUTORIAL] Setting up tutorials...');
       if (typeof enableTutorialsForSignup === 'function') {
         try {
@@ -301,13 +301,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         } catch (tutorialError: any) {
           console.log(`[TUTORIAL] WARNING: enableTutorialsForSignup error (non-critical): ${tutorialError.message || 'Unknown error'}`);
         }
-      }
-
-      if (typeof startScreenTutorial === 'function') {
-        // Start tutorial asynchronously (don't await) to prevent blocking navigation
-        startScreenTutorial('Home', 5).catch((err: any) => {
-          console.log('[TUTORIAL] WARNING: startScreenTutorial error (non-critical):', err.message);
-        });
       }
 
       // Success! Close modal and navigate
