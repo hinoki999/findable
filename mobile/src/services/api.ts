@@ -750,6 +750,84 @@ export async function verifyOtpCode(
   }
 }
 
+// ==================== PHONE VERIFICATION ====================
+// Send OTP code to phone number for verification
+export async function sendPhoneVerificationCode(phoneNumber: string, userId: string): Promise<void> {
+  try {
+    // Supabase phone OTP requires phone in E.164 format (+1234567890)
+    // Format phone number to E.164 if not already
+    let formattedPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+    if (!formattedPhone.startsWith('1')) {
+      formattedPhone = '1' + formattedPhone; // Add US country code
+    }
+    formattedPhone = '+' + formattedPhone;
+
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: formattedPhone,
+      options: {
+        shouldCreateUser: false, // Don't create new auth user, just send verification
+      },
+    });
+
+    if (error) {
+      console.error('Failed to send phone OTP:', error);
+      throw new Error('Failed to send verification code. Please check your phone number.');
+    }
+
+    console.log(`SUCCESS: Phone OTP sent to ${formattedPhone}`);
+  } catch (error: any) {
+    console.error('ERROR: Send phone OTP error:', error);
+    throw new Error(error.message || 'Failed to send verification code. Please try again.');
+  }
+}
+
+// Verify phone OTP code and mark phone as verified
+export async function verifyPhoneCode(phoneNumber: string, code: string, userId: string): Promise<void> {
+  try {
+    // Format phone number to E.164
+    let formattedPhone = phoneNumber.replace(/\D/g, '');
+    if (!formattedPhone.startsWith('1')) {
+      formattedPhone = '1' + formattedPhone;
+    }
+    formattedPhone = '+' + formattedPhone;
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone: formattedPhone,
+      token: code,
+      type: 'sms'
+    });
+
+    if (error) {
+      console.error('Failed to verify phone OTP:', error);
+      throw new Error('Invalid or expired code. Please try again.');
+    }
+
+    if (!data.user) {
+      throw new Error('Verification failed. Please try again.');
+    }
+
+    // Update user_profiles to mark phone as verified
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({ 
+        phone_verified: true,
+        phone_verification_code: null, // Clear verification code
+        verification_code_expires: null
+      })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Failed to update phone verification status:', updateError);
+      throw new Error('Verification succeeded but failed to save status. Please contact support.');
+    }
+
+    console.log('SUCCESS: Phone verified and status updated');
+  } catch (error: any) {
+    console.error('ERROR: Verify phone code error:', error);
+    throw new Error(error.message || 'Invalid or expired code. Please try again.');
+  }
+}
+
 // Reset password after OTP verification
 export async function resetPasswordWithOtp(email: string, code: string, newPassword: string): Promise<void> {
   try {

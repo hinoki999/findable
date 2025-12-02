@@ -57,6 +57,7 @@ interface UserProfile {
   bio: string;
   socialMedia: SocialMediaAccount[];
   profilePhoto?: string;
+  phoneVerified?: boolean;
 }
 
 const UserProfileContext = createContext<{
@@ -69,6 +70,7 @@ const UserProfileContext = createContext<{
     email: 'user@example.com',
     bio: 'Add bio',
     socialMedia: [],
+    phoneVerified: false,
   },
   updateProfile: () => { },
 });
@@ -316,6 +318,7 @@ function MainApp() {
           bio: profile.bio || 'Add bio',
           profilePhoto: profile.profile_photo,
           socialMedia: profile.social_media || [],
+          phoneVerified: profile.phone_verified || false,
         });
         setProfilePhotoUri(profile.profile_photo);
       }

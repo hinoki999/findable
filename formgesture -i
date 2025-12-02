@@ -1,0 +1,111 @@
+[33ma740367[m[33m ([m[1;31morigin/backup-branch[m[33m)[m Auto-backup: 2025-12-01_23-51-35
+[33m7be899c[m Document complete blip functionality investigation - all attempted fixes and theories
+[33m67bdd22[m Remove cleanup interval - causing blips to disappear after 5 seconds
+[33m2854714[m Fix cleanup interval removing devices without lastSeen property
+[33m95a0453[m Remove diagnostic log
+[33meb5f2df[m Add diagnostic log to verify BLE scanner version is loaded
+[33m8ec206d[m Fix BLE scanner: continuous scanning + real-time updates
+[33mec0c3b4[m Auto-backup: 2025-12-01_20-08-47
+[33mcf99d62[m Auto-backup: 2025-12-01_19-42-18
+[33m792187f[m Auto-backup: 2025-12-01_02-08-46
+[33mc50ed11[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Implement per-screen tutorial tracking - each screen independent
+[33m2893cf3[m Add Account screen tutorial (1 message)
+[33mc1ead4a[m Simplify tutorials to 1 message per screen (except Home with 6)
+[33mba51767[m Refine tutorial messages - add Account tutorials, improve clarity across all screens
+[33m63c0d3a[m Clean up missed emoji in TutorialOverlay console.log
+[33m3fa94aa[m Fix tutorial crash - move TutorialInitializer inside TutorialProvider
+[33m57bb96a[m Implement Supabase-persisted tutorial system - simple, clean, rock-solid
+[33m1a84ff4[m Remove all tutorial functionality - keep UI components only
+[33mcf0a723[m Simplify tutorial system - remove backend logic, keep UI only
+[33m799f0de[m Remove duplicate tutorial call from SignupScreen - let HomeScreen handle it
+[33m5847eb4[m Check authenticated user onboarding status before showing tutorials
+[33md4c3779[m Remove expo-web-browser from app.json - package uninstalled
+[33mfde2f7f[m Re-enable tutorials in signup flow - make non-blocking to prevent navigation issues
+[33m3d42bbc[m Migrate tutorial system from Railway to Supabase
+[33m781115a[m Remove all emojis from codebase - improve professionalism and log parsing
+[33m3f8d538[m Auto-backup: 2025-11-30_18-26-29
+[33m586b9c2[m Auto-backup: 2025-11-30_15-35-50
+[33mb1471fe[m Remove obsolete report issue handler comment
+[33m6ae5e67[m Remove Google OAuth feature - not planned for implementation
+[33m27ececf[m Remove Railway API logging - complete Railway deprecation
+[33ma769ee6[m Migrate pinned contacts from Railway to Supabase
+[33m87ca819[m Remove Privacy Zones feature - obsolete
+[33mea78e40[m Migrate user settings from Railway to Supabase
+[33ma72d283[m Migrate device management from Railway to Supabase
+[33md2c58eb[m Auto-backup: 2025-11-30_12-49-54
+[33m68d1bbe[m Fix username display - use user_metadata.username instead of email
+[33m5613da8[m Document profile photo system overhaul - comprehensive Nov 30 refactor details
+[33m4d01f04[m Fix profile photo persistence - set profilePhotoUri on app restart
+[33m6048970[m Add PROFILE_PHOTO_PERSISTENCE_BUG.md - identify missing state update on app restart
+[33ma99505c[m Revert temporary logging - analyze code instead
+[33m7214cb4[m Add temporary logging to debug profile photo persistence
+[33m50771b8[m Switch to folder-based file structure for Supabase Storage RLS
+[33m6b23d72[m Add FILE_PATH_STRUCTURE_ANALYSIS.md - document isolated file path construction
+[33m92bc411[m Add PHOTO_UPLOAD_DATABASE_ANALYSIS.md - document all table access during upload
+[33m6b09d70[m Add session validation to uploadProfilePhoto
+[33m73745a5[m Remove all UI error logging displays - keep only Alert dialogs for critical errors
+[33mb7c79e5[m Add TYPE_MISMATCH_ANALYSIS.md - verify no UUID vs string issues
+[33m5f35ee2[m Auto-backup: 2025-11-29_21-00-07
+[33m6093f6c[m Add SIGNUP_FLOW_ANALYSIS.md - document profile creation vs photo upload timing
+[33m55e73e1[m Update README.md - document resolved profile photo upload system
+[33m2531d08[m Delete legacy Cloudinary profile photo endpoints - now using Supabase Storage
+[33m1520a6d[m Simplify photo upload handlers - remove debug logging
+[33m2aa2662[m Remove AsyncStorage caching for profile photos - load from Supabase only
+[33mf73422b[m Fix uploadProfilePhoto - properly convert base64 to binary for Supabase upload
+[33ma28815d[m Simplify uploadProfilePhoto - use Supabase SDK instead of manual REST API
+[33m8e4e512[m Auto-backup: 2025-11-29_04-10-28
+[33m55c1c5a[m Restore critical Supabase auth refresh code
+[33mcb149ee[m Auto-backup: 2025-11-29_00-14-39
+[33mb6516d4[m Test: Disable react-native-blob-util to test native module theory
+[33m9cf87fa[m Fix module load failure preventing updates from reflecting
+[33m75a4d55[m Auto-backup: 2025-11-28_23-01-58
+[33mcea97a3[m Remove debug UI and console logging from profile upload
+[33m0827bcc[m Bypass Supabase SDK - use direct fetch for storage upload with manual auth headers
+[33md3ba4f6[m Auto-backup: 2025-11-28_21-08-46
+[33mb9752e4[m Fix Supabase Storage auth: remove manual header, add global headers, start auto-refresh on init
+[33m92ca6eb[m Auto-backup: 2025-11-28_20-01-31
+[33mff4fc0e[m Fix Supabase Storage RLS error - add AppState listener and react-native-url-polyfill
+[33mbb4fefd[m Fix AccountScreen crash: add null fallbacks for all Text renderings
+[33mabb858b[m Fix AccountScreen crash: allow null/undefined name in helper functions - Update getInitials() to accept name: string | null | undefined - Update getAvatarColor() to accept name: string | null | undefined - Add default 'User' fallback in getAvatarColor when name is null - Prevents crash in Preview Modal when new users have null name field - Fixes gray screen issue after fresh signup/login
+[33m45a225e[m Fix OTP verification to use 'email' type instead of 'signup' - Supabase only supports 'email', 'sms', 'phone_change' OTP types - Using 'signup' type was causing verification failures - Both sendOtpCode and verifyOtpCode now use 'email' type correctly - This fixes the issue where account is created but OTP verification fails
+[33mbe05010[m Add comprehensive session verification and RLS error detection to uploadProfilePhoto - Verify active session exists before upload - Log user ID, email, and access token details - Detect and explain RLS policy errors - Warn if session user ID doesn't match provided userId - Add detailed error logging for debugging auth issues
+[33m528cdfe[m Fix bucket name to match Supabase: profile_photos
+[33m9aad2c8[m Use react-native-blob-util for profile photo upload in RN 0.81.5 - Add ReactNativeBlobUtil import - Add base64ToArrayBuffer helper function - Replace fetch/blob with ReactNativeBlobUtil.fs.readFile - Convert base64 to ArrayBuffer for Supabase Storage upload - Handle file:// URI prefix common in React Native - Designed for React Native file operations without fetch.blob dependency
+[33m3aa774b[m Auto-backup: 2025-11-27_23-08-47
+[33mf1676a1[m Rewrite uploadProfilePhoto to use fetch/blob instead of expo-file-system for reliability - Remove expo-file-system/legacy import - Remove base64-arraybuffer import - Replace FileSystem.readAsStringAsync() + decode() with fetch() + blob() - Use built-in Web APIs for maximum compatibility - Simplify upload flow: imageUri to fetch to blob to upload - Add step-by-step logging for better debugging - Throw original Supabase errors instead of wrapping them
+[33mcbfd442[m Fix uploadProfilePhoto to preserve original error instead of throwing generic message
+[33m6568cbb[m Add extremely visible error tracking to profile photo upload with triple display (Alert + Console + On-screen)
+[33m60b5cdf[m Use expo-file-system/legacy import for SDK 54 compatibility with readAsStringAsync
+[33m51172fc[m Fix profile photo upload by using string constant 'base64' instead of FileSystem.EncodingType.Base64 for SDK 54
+[33mf59cd80[m Add visible error logging to profile photo upload and remove debug logs from HomeScreen
+[33mb9bac3f[m Update eas.json to output APK instead of AAB for Android builds
+[33md2a00d2[m Add console.log verification around onSignupSuccess call for debugging
+[33m07ff63d[m Fix signup navigation by adding auth state refresh after Supabase session creation
+[33m1152031[m Temporarily disable tutorial integration to unblock signup navigation flow
+[33m9d3ca59[m Fix OTP verification type for signup flow - use 'signup' type instead of 'email'
+[33mcf6f071[m Add defensive checks to signup flow for tutorial and navigation handlers
+[33m3f767ef[m Add visible error logging to signup modal and remove redundant console logs
+[33m9e2aede[m Auto-backup: 2025-11-27_01-08-47
+[33m0caf2bc[m Fix signup navigation: add error checking to database inserts and make tutorials non-blocking
+[33m36fe792[m Fix AccountScreen crash: protect socialMedia operations from undefined
+[33mc2ec140[m Auto-backup: 2025-11-26_20-08-46
+[33mfb82725[m Auto-backup: 2025-11-26_19-54-18
+[33m3d7ef1b[m Auto-backup: 2025-11-26_18-16-15
+[33ma8f9373[m Fix password reset: sign out user after password update to prevent session conflicts
+[33mfc07440[m Complete Phase 4: Migrate remaining features to Supabase
+[33me61e63b[m Auto-backup: 2025-11-26_11-11-52
+[33m8b5440c[m Auto-backup: 2025-11-25_23-08-46
+[33m12cdd2b[m Replace updateProfile function with Supabase update in App.tsx
+[33m68950b6[m Replace loadUserData with direct Supabase queries in App.tsx
+[33m6c61383[m Migrate SignupScreen to Supabase authentication
+[33m0f3a0b8[m Fix userId type changes from number to string (Supabase UUID) in App.tsx
+[33m3f88d45[m Simplify handleLoginSuccess in App.tsx for Supabase auth
+[33m2fa1da0[m Update LoginScreen to use Supabase authentication
+[33mfdf9747[m Migrate AuthContext from JWT to Supabase authentication
+[33m9cd9579[m Remove Supabase connection test from HomeScreen - connection verified working
+[33m9e1ee1f[m Update Supabase connection test to display full error message for debugging
+[33m108d19c[m Update Supabase anon key with correct credentials
+[33mf7ba393[m Move Supabase connection test from App.tsx to HomeScreen with visible status indicator
+[33mdaa7243[m Auto-backup: 2025-11-24_22-08-46
+[33m2b1205a[m Add Supabase connection test in App.tsx to verify database connectivity on app launch
+[33mf50bee4[m Add Supabase client configuration for database integration
