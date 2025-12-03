@@ -524,6 +524,7 @@ function MainApp() {
           phone: newProfile.phone,
           bio: newProfile.bio,
           social_media: newProfile.socialMedia,
+          phone_verified: newProfile.phoneVerified || false,
         })
         .eq('user_id', userId);
       

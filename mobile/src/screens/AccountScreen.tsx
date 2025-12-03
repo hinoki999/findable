@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions } from 'react-native';
+import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import * as api from '../services/api';
+import { sendPhoneVerificationCode, verifyPhoneCode } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
 
@@ -50,7 +51,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { logout, username, userId, login } = useAuth();
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
-  const { name, phone, email, bio, socialMedia } = profile || {};
+  const { name, phone, email, bio, socialMedia, phoneVerified } = profile || {};
   const screenHeight = Dimensions.get('window').height;
 
   // Account screen tutorial - single message
@@ -72,6 +73,13 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'phone' | 'email' | 'name' | 'bio' | 'social-media' | 'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
+  
+  // Phone verification modal state
+  const [showPhoneVerificationModal, setShowPhoneVerificationModal] = useState(false);
+  const [phoneVerificationStep, setPhoneVerificationStep] = useState<'confirm' | 'enter-code'>('confirm');
+  const [phoneVerificationCode, setPhoneVerificationCode] = useState('');
+  const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+  const [phoneVerificationError, setPhoneVerificationError] = useState('');
   const [tempSocialPlatform, setTempSocialPlatform] = useState('');
   const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
@@ -199,7 +207,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         logAction('Profile phone updated', { oldPhone: phone, newPhone: tempValue });
         
         console.log('[AccountScreen] Calling updateProfile for phone');
-        await updateProfile({ phone: tempValue });
+        await updateProfile({ phone: tempValue, phoneVerified: false }); // Reset verification when phone changes
         console.log('SUCCESS: [AccountScreen] Phone updated successfully');
     } else if (editingField === 'email') {
       error = validateEmail(tempValue);
@@ -339,6 +347,63 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     }
   };
 
+  // Phone verification handlers
+  const handleSendPhoneCode = async () => {
+    if (!phone || !userId) {
+      setPhoneVerificationError('Phone number is required');
+      return;
+    }
+
+    setSendingPhoneCode(true);
+    setPhoneVerificationError('');
+
+    try {
+      await sendPhoneVerificationCode(phone, userId);
+      setPhoneVerificationStep('enter-code');
+    } catch (err: any) {
+      setPhoneVerificationError(err.message || 'Failed to send verification code. Please try again.');
+    } finally {
+      setSendingPhoneCode(false);
+    }
+  };
+
+  const handleVerifyPhoneCode = async () => {
+    if (!phone || !userId) {
+      setPhoneVerificationError('Phone number is required');
+      return;
+    }
+
+    if (phoneVerificationCode.length !== 6) {
+      setPhoneVerificationError('Please enter a 6-digit code');
+      return;
+    }
+
+    setSendingPhoneCode(true);
+    setPhoneVerificationError('');
+
+    try {
+      await verifyPhoneCode(phone, phoneVerificationCode, userId);
+      
+      // Update local profile state
+      updateProfile({ phoneVerified: true });
+      
+      // Close modal and reset state
+      setShowPhoneVerificationModal(false);
+      setPhoneVerificationStep('confirm');
+      setPhoneVerificationCode('');
+      
+      showToast({
+        message: 'Phone number verified successfully!',
+        type: 'success',
+        duration: 3000,
+      });
+    } catch (err: any) {
+      setPhoneVerificationError(err.message || 'Invalid or expired code. Please try again.');
+    } finally {
+      setSendingPhoneCode(false);
+    }
+  };
+
   const handleCancel = () => {
     setEditModalVisible(false);
     setEditingField(null);
@@ -449,6 +514,23 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
               <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
+              {!phoneVerified && (
+                <Pressable
+                  onPress={() => setShowPhoneVerificationModal(true)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.blue,
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    marginRight: 8,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
+                    Verify
+                  </Text>
+                </Pressable>
+              )}
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -978,6 +1060,262 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Phone Verification Modal */}
+      <Modal
+        visible={showPhoneVerificationModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!sendingPhoneCode) {
+            setShowPhoneVerificationModal(false);
+            setPhoneVerificationStep('confirm');
+            setPhoneVerificationCode('');
+            setPhoneVerificationError('');
+          }
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}>
+            <View style={{
+              width: '100%',
+              maxWidth: 400,
+              borderRadius: 16,
+              padding: 24,
+              alignItems: 'center',
+              backgroundColor: theme.colors.white,
+            }}>
+              {/* Close Button */}
+              <Pressable
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 16,
+                  padding: 4,
+                  zIndex: 1,
+                }}
+                onPress={() => {
+                  if (!sendingPhoneCode) {
+                    setShowPhoneVerificationModal(false);
+                    setPhoneVerificationStep('confirm');
+                    setPhoneVerificationCode('');
+                    setPhoneVerificationError('');
+                  }
+                }}
+                disabled={sendingPhoneCode}
+              >
+                {({ pressed }) => (
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={theme.colors.muted}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
+                  />
+                )}
+              </Pressable>
+
+              {phoneVerificationStep === 'confirm' ? (
+                <>
+                  <MaterialCommunityIcons name="phone-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '600',
+                    fontFamily: 'Inter_500Medium',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                    color: theme.colors.text,
+                  }}>
+                    Phone verification needed
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontFamily: 'Inter_400Regular',
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    lineHeight: 22,
+                    color: theme.colors.muted,
+                  }}>
+                    We'll send a confirmation code to {phone}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderColor: theme.colors.blue,
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                      onPress={() => {
+                        setShowPhoneVerificationModal(false);
+                        setPhoneVerificationStep('confirm');
+                        setPhoneVerificationCode('');
+                        setPhoneVerificationError('');
+                      }}
+                      disabled={sendingPhoneCode}
+                    >
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '600',
+                        fontFamily: 'Inter_500Medium',
+                        color: theme.colors.blue,
+                      }}>
+                        Cancel
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: theme.colors.blue,
+                        opacity: pressed || sendingPhoneCode ? 0.6 : 1,
+                        minHeight: 48,
+                      })}
+                      onPress={handleSendPhoneCode}
+                      disabled={sendingPhoneCode}
+                    >
+                      {sendingPhoneCode ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={{
+                          color: '#FFFFFF',
+                          fontSize: 16,
+                          fontWeight: '600',
+                          fontFamily: 'Inter_500Medium',
+                        }}>
+                          Send Code
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="phone-check-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '600',
+                    fontFamily: 'Inter_500Medium',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                    color: theme.colors.text,
+                  }}>
+                    Enter Verification Code
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontFamily: 'Inter_400Regular',
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    lineHeight: 22,
+                    color: theme.colors.muted,
+                  }}>
+                    We sent a 6-digit code to {phone}
+                  </Text>
+                  <TextInput
+                    style={{
+                      width: '100%',
+                      fontSize: 24,
+                      fontWeight: '600',
+                      fontFamily: 'Inter_500Medium',
+                      textAlign: 'center',
+                      paddingVertical: 16,
+                      paddingHorizontal: 24,
+                      borderWidth: 2,
+                      borderRadius: 12,
+                      marginBottom: 8,
+                      letterSpacing: 8,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    }}
+                    value={phoneVerificationCode}
+                    onChangeText={(text) => setPhoneVerificationCode(text.replace(/[^0-9]/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    placeholderTextColor={theme.colors.muted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    editable={!sendingPhoneCode}
+                  />
+                  {phoneVerificationError && (
+                    <Text style={{
+                      fontSize: 13,
+                      color: '#FF3B30',
+                      fontFamily: 'Inter_400Regular',
+                      marginBottom: 8,
+                      textAlign: 'center',
+                    }}>
+                      {phoneVerificationError}
+                    </Text>
+                  )}
+                  <Pressable
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 16,
+                      marginBottom: 8,
+                      opacity: pressed || sendingPhoneCode ? 0.6 : 1,
+                    })}
+                    onPress={handleSendPhoneCode}
+                    disabled={sendingPhoneCode}
+                  >
+                    <Text style={{
+                      fontSize: 15,
+                      fontFamily: 'Inter_400Regular',
+                      textAlign: 'center',
+                      color: theme.colors.blue,
+                    }}>
+                      {sendingPhoneCode ? 'Sending...' : 'Resend code'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => ({
+                      width: '100%',
+                      paddingVertical: 14,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: phoneVerificationCode.length === 6 && !sendingPhoneCode ? theme.colors.blue : theme.colors.muted,
+                      opacity: pressed && phoneVerificationCode.length === 6 ? 0.6 : 1,
+                      marginTop: 16,
+                    })}
+                    onPress={handleVerifyPhoneCode}
+                    disabled={phoneVerificationCode.length !== 6 || sendingPhoneCode}
+                  >
+                    {sendingPhoneCode ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={{
+                        color: '#FFFFFF',
+                        fontSize: 16,
+                        fontWeight: '600',
+                        fontFamily: 'Inter_500Medium',
+                      }}>
+                        Verify
+                      </Text>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Tutorial Overlay */}
