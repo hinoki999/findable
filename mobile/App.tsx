@@ -182,6 +182,7 @@ function MainApp() {
     email: 'user@example.com',
     bio: 'Add bio',
     socialMedia: [], // ← CRITICAL: Always an array, never undefined
+    phoneVerified: false,
   });
 
   const [isSignupInProgress, setIsSignupInProgress] = useState(false);
