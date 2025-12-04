@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** November 30, 2024
+**Last Updated:** December 2024
 
 ---
 
@@ -337,11 +337,12 @@ await supabase.storage.from('profile_photos').upload(filePath, arrayBuffer, {
 
 Status: ✅ **RESOLVED** - Profile photos now upload successfully to Supabase Storage
 
-**Bug 8: Tutorial System Disabled (Commit 1152031)**
+**Bug 8: Tutorial System Disabled (Commit 1152031) - RESOLVED**
 - UI Presentation: New users complete signup, no tutorial overlays appear, proceed directly to home screen
 - Root Cause: Tutorial functions (`enableTutorialsForSignup`, `startScreenTutorial`) were throwing errors or undefined, blocking signup navigation
-- Solution: Temporarily commented out all tutorial integration in SignupScreen.tsx (lines 308-342)
-- Status: Original code preserved in comments, awaiting re-implementation after signup flow is stable
+- Initial Solution: Temporarily commented out all tutorial integration in SignupScreen.tsx (lines 308-342)
+- **Final Solution (Post-Code-Cleanup):** Complete tutorial system overhaul with per-screen tracking (see Tutorial System Overhaul section below)
+- Status: ✅ **RESOLVED** - Tutorial system now functional with per-screen completion tracking
 
 ### Supabase Database Schema
 
@@ -354,7 +355,14 @@ phone TEXT
 bio TEXT
 profile_photo TEXT
 social_media JSONB
-has_completed_onboarding BOOLEAN DEFAULT false
+has_completed_onboarding BOOLEAN DEFAULT false  -- DEPRECATED: Replaced by per-screen tutorial flags
+tutorial_home_completed BOOLEAN DEFAULT false
+tutorial_drop_completed BOOLEAN DEFAULT false
+tutorial_history_completed BOOLEAN DEFAULT false
+tutorial_account_completed BOOLEAN DEFAULT false
+phone_verified BOOLEAN DEFAULT false
+phone_verification_code TEXT
+verification_code_expires TIMESTAMPTZ
 created_at TIMESTAMP DEFAULT NOW()
 ```
 
@@ -480,7 +488,8 @@ curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
 
 ### 🔴 Critical Issues
 
-#### Issue #1: Tutorials Not Showing At All
+#### Issue #1: Tutorials Not Showing At All ✅ **RESOLVED**
+
 **Expected:** Tutorials show on first signup
 **Actual:** Tutorials don't appear at all
 
@@ -505,18 +514,24 @@ curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
 - Files modified: `TutorialContext.tsx` (lines 144-161)
 - Why it failed: Function called but backend not receiving/saving data correctly
 
-**Attempt 4 - Signup Flow Integration (Current)**
+**Attempt 4 - Signup Flow Integration (Failed)**
 - Date: November 9, 2025
 - Approach: Call `startScreenTutorial('Home', 5)` immediately after signup
 - Files modified: `SignupScreen.tsx` (line 18, 392)
 - Status: Pushed but not yet tested
 - Result: Tutorials still not showing at all
 
-**Current State (Post-Supabase Migration):**
+**Attempt 5 - Temporary Disable (Post-Supabase Migration)**
+- Date: November 2024
 - Status: Temporarily disabled (Commit 1152031)
 - Reason: Was blocking signup navigation flow
 - Solution: Commented out tutorial integration, preserved original code
-- Next Steps: Re-implement with proper async handling after signup is stable
+
+**Final Solution - Per-Screen Tutorial System (Post-Code-Cleanup)**
+- Date: December 2024
+- Status: ✅ **RESOLVED** - Complete tutorial system overhaul
+- Solution: Implemented per-screen tracking with independent completion flags
+- See "Tutorial System Overhaul" section below for complete details
 
 ---
 
@@ -674,6 +689,333 @@ Add support for additional formats:
 - Not yet investigated
 - Lower priority than tutorial/profile/deletion issues
 - May be related to BLE scanning or data formatting
+
+---
+
+## Tutorial System Overhaul: Per-Screen Tracking (December 2024)
+
+### Problem Statement
+The original tutorial system used a single `has_completed_onboarding` flag, which meant completing or skipping any tutorial would disable all others. This created an "all-or-nothing" experience that didn't allow users to see tutorials for specific screens independently.
+
+### Solution: Per-Screen Tutorial Tracking
+
+#### Database Schema Changes
+**New Columns in `user_profiles` table:**
+- `tutorial_home_completed` (BOOLEAN, default: false)
+- `tutorial_drop_completed` (BOOLEAN, default: false)
+- `tutorial_history_completed` (BOOLEAN, default: false)
+- `tutorial_account_completed` (BOOLEAN, default: false)
+
+**Removed:**
+- `has_completed_onboarding` (replaced by per-screen flags)
+
+#### Core Implementation: `TutorialContext.tsx`
+
+**Key Changes:**
+
+1. **State Structure:**
+```typescript
+// Before: Single boolean flag
+const [shouldShowTutorials, setShouldShowTutorials] = useState(true);
+
+// After: Per-screen completion tracking
+const [completedTutorials, setCompletedTutorials] = useState<Record<ScreenName, boolean>>({
+  Home: false,
+  Drop: false,
+  History: false,
+  Account: false,
+});
+const [isLoaded, setIsLoaded] = useState(false); // Track when data is fetched
+```
+
+2. **Initialization Logic:**
+```typescript
+const initializeTutorials = async () => {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('tutorial_home_completed, tutorial_drop_completed, tutorial_history_completed, tutorial_account_completed')
+    .eq('user_id', session.user.id)
+    .single();
+  
+  const completed = {
+    Home: data?.tutorial_home_completed ?? false,
+    Drop: data?.tutorial_drop_completed ?? false,
+    History: data?.tutorial_history_completed ?? false,
+    Account: data?.tutorial_account_completed ?? false,
+  };
+  
+  setCompletedTutorials(completed);
+  setIsLoaded(true);
+};
+```
+
+3. **Completion Logic:**
+```typescript
+const completeTutorial = async (screen: ScreenName) => {
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ [`tutorial_${screen.toLowerCase()}_completed`]: true })
+    .eq('user_id', session.user.id);
+  
+  setCompletedTutorials(prev => ({ ...prev, [screen]: true }));
+};
+```
+
+#### Screen Integration
+
+**HomeScreen.tsx:**
+- Tutorial message: "Welcome to DropLink! This radar shows nearby users within your 33 ft radius. Tap a blip to send them your contact info!"
+- Uses `useTutorial('Home')` hook
+- Shows `TutorialOverlay` when `!completedTutorials.Home`
+
+**DropScreen.tsx:**
+- Tutorial message: "This page shows all nearby users within your 33 ft radius—tap their card to send a drop!"
+- Uses `useTutorial('Drop')` hook
+
+**HistoryScreen.tsx:**
+- Tutorial message: "When you link with someone (have a mutual drop), you can view their contact here!"
+- Uses `useTutorial('History')` hook
+
+**AccountScreen.tsx:**
+- Tutorial message: "Update your profile information any time and view your contact card here! Note: You must confirm your phone number before sending drops."
+- Uses `useTutorial('Account')` hook
+
+#### Signup Flow Integration
+
+**SignupScreen.tsx:**
+- New user profiles initialized with all tutorial flags set to `false`:
+```typescript
+await supabase.from('user_profiles').insert({
+  user_id: user.id,
+  email: email.toLowerCase(),
+  tutorial_home_completed: false,
+  tutorial_drop_completed: false,
+  tutorial_history_completed: false,
+  tutorial_account_completed: false,
+});
+```
+
+#### TutorialInitializer Component
+
+**Problem:** `useTutorial()` hook called before `TutorialProvider` rendered, causing crash.
+
+**Solution:** Created `TutorialInitializer` component that calls `useTutorial()` *inside* the `TutorialProvider`'s render tree:
+
+```typescript
+// App.tsx
+<TutorialProvider>
+  <TutorialInitializer />
+  {/* Rest of app */}
+</TutorialProvider>
+
+// TutorialInitializer.tsx
+const TutorialInitializer = () => {
+  useTutorial('Home'); // This call initializes the tutorial system
+  return null;
+};
+```
+
+#### Benefits
+
+- ✅ Independent tutorial tracking per screen
+- ✅ Users can complete tutorials at their own pace
+- ✅ Tutorials persist across app restarts (stored in Supabase)
+- ✅ No "all-or-nothing" behavior
+- ✅ Clean separation of concerns
+
+#### Files Modified
+
+- `mobile/src/contexts/TutorialContext.tsx` - Complete rewrite with per-screen tracking
+- `mobile/src/screens/HomeScreen.tsx` - Added tutorial integration
+- `mobile/src/screens/DropScreen.tsx` - Added tutorial message
+- `mobile/src/screens/HistoryScreen.tsx` - Added tutorial message
+- `mobile/src/screens/AccountScreen.tsx` - Added tutorial message
+- `mobile/src/screens/SignupScreen.tsx` - Initialize tutorial flags on signup
+- `mobile/App.tsx` - Added `TutorialInitializer` component
+
+#### Migration Required
+
+**SQL Migration:**
+```sql
+ALTER TABLE user_profiles
+ADD COLUMN IF NOT EXISTS tutorial_home_completed BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS tutorial_drop_completed BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS tutorial_history_completed BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS tutorial_account_completed BOOLEAN DEFAULT false;
+```
+
+**Status:** ✅ Implemented and functional
+
+---
+
+## Phone Verification Feature (Partial Implementation - December 2024)
+
+### Overview
+Phone verification feature requires users to verify their phone number before sending or receiving drops. This is a security measure to ensure users have valid contact information.
+
+### Current Implementation Status
+
+**Phase 1: Database Setup** ✅ **COMPLETE**
+- Added `phone_verified` column to `user_profiles` table
+- Added `phone_verification_code` column for storing OTP codes
+- Added `verification_code_expires` column for code expiration
+
+**Phase 2: API Functions** ✅ **COMPLETE**
+- `sendPhoneVerificationCode()` - Sends OTP via Supabase Auth (Twilio integration)
+- `verifyPhoneCode()` - Verifies OTP and updates `phone_verified` flag
+
+**Phase 3: AccountScreen UI** ✅ **COMPLETE**
+- "Verify" button appears when `!profile.phoneVerified`
+- Phone verification modal (mirrors email verification modal design)
+- Two-step flow: send code → verify code
+- Error handling with user-friendly messages
+
+**Phase 4: App.tsx Integration** ✅ **COMPLETE**
+- `UserProfile` interface includes `phoneVerified?: boolean`
+- `loadUserData()` fetches `phone_verified` from Supabase
+- `updateProfile()` includes `phone_verified` in updates
+- Default state includes `phoneVerified: false`
+
+**Phase 5: HomeScreen UI** ⚠️ **PENDING**
+- Persistent "Verify your phone number" banner at bottom
+- Banner tappable to navigate to AccountScreen
+
+**Phase 6: Drop Blocking Logic** ⚠️ **PENDING**
+- Modify "Send Drop" button to check `phoneVerified`
+- Show toast: "Please verify your phone number to drop" if not verified
+- Allow viewing blips and modals, but block actual drop sending
+
+**Phase 7: Testing** ⚠️ **PENDING**
+- Test phone verification flow end-to-end
+- Test phone number change re-verification
+- Test drop blocking on HomeScreen
+
+### Database Schema
+
+```sql
+ALTER TABLE user_profiles
+ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS phone_verification_code TEXT,
+ADD COLUMN IF NOT EXISTS verification_code_expires TIMESTAMPTZ;
+```
+
+### API Functions (mobile/src/services/api.ts)
+
+**sendPhoneVerificationCode (Lines 755-782):**
+```typescript
+export const sendPhoneVerificationCode = async (
+  phoneNumber: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // Use Supabase Auth for phone OTP
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      phone: phoneNumber,
+    });
+    
+    if (otpError) throw otpError;
+    
+    // Store code and expiration in user_profiles
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 10); // 10 minute expiration
+    
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        phone_verification_code: code, // Code from Supabase response
+        verification_code_expires: expiresAt.toISOString(),
+      })
+      .eq('user_id', userId);
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+```
+
+**verifyPhoneCode (Lines 785-820):**
+```typescript
+export const verifyPhoneCode = async (
+  phoneNumber: string,
+  code: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    // Verify OTP with Supabase Auth
+    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+      phone: phoneNumber,
+      token: code,
+      type: 'sms',
+    });
+    
+    if (verifyError) throw verifyError;
+    
+    // Update phone_verified flag
+    const { error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        phone_verified: true,
+        phone_verification_code: null,
+        verification_code_expires: null,
+      })
+      .eq('user_id', userId);
+    
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+```
+
+### AccountScreen Implementation
+
+**State Variables:**
+```typescript
+const [showPhoneVerificationModal, setShowPhoneVerificationModal] = useState(false);
+const [phoneVerificationStep, setPhoneVerificationStep] = useState<'send' | 'verify'>('send');
+const [phoneVerificationCode, setPhoneVerificationCode] = useState('');
+const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+const [phoneVerificationError, setPhoneVerificationError] = useState<string | null>(null);
+```
+
+**Verify Button (Conditional Rendering):**
+```typescript
+{!profile.phoneVerified && (
+  <Pressable
+    onPress={() => setShowPhoneVerificationModal(true)}
+    style={/* Verify button styles */}
+  >
+    <Text style={/* Verify text styles */}>Verify</Text>
+  </Pressable>
+)}
+```
+
+**Phone Number Change Handler:**
+```typescript
+const handleSave = async () => {
+  // ... existing save logic ...
+  
+  // If phone number changed, reset verification
+  if (phone !== profile.phone) {
+    await updateProfile({ phoneVerified: false });
+  }
+};
+```
+
+### Supabase Configuration Required
+
+**Twilio Integration:**
+- Configure Twilio in Supabase Dashboard → Authentication → Phone Auth
+- Add Twilio Account SID and Auth Token
+- Set up phone number for SMS sending
+
+**Status:** ⚠️ **PARTIAL** - UI and API complete, blocking logic and HomeScreen banner pending
+
+**Documentation:**
+- `PHONE_VERIFICATION_MIGRATION.sql` - Database migration script
+- `PHONE_VERIFIED_DIAGNOSTIC.md` - Diagnostic guide for troubleshooting
+- `HANDOFF_TO_CLAUDE.md` - Complete implementation details
 
 ---
 
@@ -1715,6 +2057,9 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - React Native Blob Util: https://github.com/RonRadtke/react-native-blob-util
 - Project Summary: `PROJECT_SUMMARY.md` - High-level overview
 - Data Pipeline: `testing/DATA_PIPELINE.md` - Complete data flow
+- Handoff Document: `HANDOFF_TO_CLAUDE.md` - Post-code-cleanup implementation details
+- Phone Verification Diagnostic: `PHONE_VERIFIED_DIAGNOSTIC.md` - Phone verification troubleshooting guide
+- Blips Diagnostic: `BLIPS_DIAGNOSTIC.md` - Blips not appearing troubleshooting guide
 
 ---
 
@@ -1743,11 +2088,12 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 ### Feature Requests / TODOs
 - [ ] Fix gray screen crash after signup/login (CRITICAL)
 - [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
+- [x] ~~Re-implement tutorial system~~ (RESOLVED - Per-screen tracking implemented December 2024)
+- [ ] Complete phone verification feature (HomeScreen banner + drop blocking logic)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
-- [ ] Re-implement tutorial system
 - [ ] Create Supabase RPC delete_user function
 - [ ] Update all tests for Supabase endpoints
-- [ ] Investigate radar blip visibility
+- [ ] Investigate radar blip visibility (see BLIPS_DIAGNOSTIC.md)
 - [ ] Grid performance optimization (memoization)
 - [ ] Complete Railway backend deprecation
 - [ ] Add Supabase RLS policy documentation
