@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
 
@@ -16,6 +16,7 @@ interface UseBLEScannerReturn {
   startScan: () => void;
   stopScan: () => void;
   error: string | null;
+  startScanCount: number;
 }
 
 // Only create BleManager on native platforms (iOS/Android)
@@ -25,6 +26,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [devices, setDevices] = useState<BleDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const startScanCountRef = useRef(0);
 
   // Calculate distance from RSSI using the formula from the original code
   const calculateDistanceFeet = useCallback((rssi: number): number => {
@@ -62,6 +64,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {
+    startScanCountRef.current += 1;
+    console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
     setError(null);
     setDevices([]);
     
@@ -131,5 +135,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     startScan,
     stopScan,
     error,
+    startScanCount: startScanCountRef.current,
   };
 };

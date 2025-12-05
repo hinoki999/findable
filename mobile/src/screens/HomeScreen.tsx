@@ -599,7 +599,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
 
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
@@ -1367,6 +1367,9 @@ export default function HomeScreen() {
         </Text>
         <Text style={{ color: 'white', fontSize: 11, marginTop: 4 }}>
           Devices: {devices.map(d => `${d.name}(${Math.round(d.distanceFeet)}ft)`).join(', ') || 'none'}
+        </Text>
+        <Text style={{ color: 'yellow', fontSize: 11 }}>
+          startScan calls: {startScanCount}
         </Text>
       </View>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
