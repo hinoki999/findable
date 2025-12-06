@@ -364,50 +364,15 @@ const Sphere3D = {
 const DeviceBlip: React.FC<{
   device: BleDevice;
   position: { x: number; y: number };
-  nucleusX: number;
-  nucleusY: number;
-  viewTransform: Tensor2x2;
-  depth?: number; // z-coordinate for depth effects
   onPress: () => void;
-}> = ({ device, position, nucleusX, nucleusY, viewTransform, depth = 0, onPress }) => {
-  // Create random delay based on device ID for staggered animation
-  const randomDelay = useState(() => Math.random() * 1000)[0];
+}> = ({ device, position, onPress }) => {
+  const randomDelay = useState(() => Math.random() * 2000)[0];
   const [pulseAnim] = useState(new Animated.Value(0));
-  const BLIP_SIZE = 6; // pixels
   
-  // DRAMATIZED pulse speed based on distance - closer = MUCH faster
-  // Distance-based pulsation:
-  // 0-5 feet: No pulsing (stay bright)
-  // 5-10 feet: 300ms (very fast)
-  // 10-20 feet: 800ms (medium)
-  // 20-30 feet: 1500ms (slow)
-  // 30+ feet: 2500ms (very slow)
-  const distance = device.distanceFeet;
-  let pulseDuration;
-  let shouldPulse = true;
-  
-  if (distance <= 5) {
-    shouldPulse = false; // No pulsing, stay solid bright
-    pulseDuration = 0;
-  } else if (distance <= 10) {
-    pulseDuration = 300; // Very fast
-  } else if (distance <= 20) {
-    pulseDuration = 800; // Medium
-  } else if (distance <= 30) {
-    pulseDuration = 1500; // Slow
-  } else {
-    pulseDuration = 2500; // Very slow
-  }
-  
+  const pulseDuration = 800 + (device.distanceFeet / 33) * 1200;
+
   useEffect(() => {
-    if (!shouldPulse) {
-      // Keep at full brightness for very close devices
-      pulseAnim.setValue(1);
-      return;
-    }
-    
-    // Start with random delay for staggered effect
-    const timer = setTimeout(() => {
+    setTimeout(() => {
       const pulse = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -424,68 +389,46 @@ const DeviceBlip: React.FC<{
       );
       pulse.start();
     }, randomDelay);
-    
-    return () => {
-      clearTimeout(timer);
-      pulseAnim.stopAnimation();
-    };
-  }, [pulseDuration, shouldPulse]);
-  
-  // Calculate depth-based effects (farther away = smaller & dimmer)
-  const depthFactor = depth !== undefined ? Math.max(0.4, 1 - Math.abs(depth) / 200) : 1;
-  
-  // More dramatic scale changes with depth factor
-  const baseScale = shouldPulse ? pulseAnim.interpolate({
+    return () => pulseAnim.stopAnimation();
+  }, [pulseDuration]);
+
+  const scale = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.3], // More dramatic scaling
-  }) : 1.2; // Slightly larger when not pulsing
-  
-  const scale = typeof baseScale === 'number' ? baseScale * depthFactor : baseScale;
-  
-  // More dramatic opacity changes with depth factor
-  const baseOpacity = shouldPulse ? pulseAnim.interpolate({
+    outputRange: [1, 1.15],
+  });
+
+  const opacity = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.5, 1.0], // Wider range
-  }) : 1.0; // Full brightness when not pulsing
-  
-  const opacity = typeof baseOpacity === 'number' ? baseOpacity * depthFactor : baseOpacity;
-  
-  // Apply view transformation (rotation + zoom) to position
-  const transformedPosition = TensorMath.transformVector(viewTransform, position);
-  
-  const hitAreaSize = 30; // Large hit area for easy tapping
-  
+    outputRange: [0.7, 0.95],
+  });
+
   return (
     <Pressable
-      onPress={(e) => {
-        e.stopPropagation();
-        onPress();
-      }}
+      onPress={onPress}
       style={{
         position: 'absolute',
-        left: nucleusX + transformedPosition.x - (hitAreaSize / 2),
-        top: nucleusY + transformedPosition.y - (hitAreaSize / 2),
-        width: hitAreaSize,
-        height: hitAreaSize,
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1001,
+        left: '50%',
+        top: '50%',
+        transform: [
+          { translateX: position.x - 4 },
+          { translateY: position.y - 34 },
+        ],
+        zIndex: 100,
       }}
     >
       <Animated.View
         style={{
-          width: BLIP_SIZE,
-          height: BLIP_SIZE,
-          borderRadius: BLIP_SIZE / 2,
+          width: 8,
+          height: 8,
+          borderRadius: 4,
           backgroundColor: '#00FF00',
           transform: [{ scale }],
           opacity,
           shadowColor: '#00FF00',
           shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: shouldPulse ? 0.6 : 0.9,
-          shadowRadius: shouldPulse ? 3 : 5,
+          shadowOpacity: 0.8,
+          shadowRadius: 4,
         }}
-        pointerEvents="none"
       />
     </Pressable>
   );
@@ -789,96 +732,18 @@ export default function HomeScreen() {
   // Map device to 2D position with ACCURATE grid snapping (3 ft intervals to match visible grid)
   const GRID_SPACING_FEET = 3; // Must match grid configuration (3 ft intervals)
   
-  const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
-    const deviceId = device.id || device.name;
-    const currentTime = Date.now();
+  const getGridPosition = (device: BleDevice) => {
+    const gridSize = Math.min(screenWidth, screenHeight) * 0.9;
+    const maxFeet = 33;
+    const distanceRatio = Math.min(device.distanceFeet / maxFeet, 1);
+    const pixelDistance = (distanceRatio * gridSize) / 2;
     
-    // Generate consistent angle based on device hash (deterministic positioning)
     const hash = device.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const angleInRadians = (hash % 360) * (Math.PI / 180);
+    const angle = (hash % 360) * (Math.PI / 180);
     
-    // ACCURATE distance mapping to pixel radius (linear scale for symmetry)
-    const distanceInFeet = Math.min(device.distanceFeet, MAX_RADIUS_FEET);
-    const radiusInPixels = (distanceInFeet / MAX_RADIUS_FEET) * spatialTensors.maxRadiusPixels;
-    
-    // Calculate raw 2D position (polar to cartesian)
-    const rawPosition: Vector2D = {
-      x: radiusInPixels * Math.cos(angleInRadians),
-      y: radiusInPixels * Math.sin(angleInRadians),
-    };
-    
-    // SNAP TO NEAREST GRID INTERSECTION (1 ft intervals) - BEFORE sphere projection
-    // This ensures nodes align perfectly with visible grid lines for accuracy
-    const gridPixelSpacing = spatialTensors.pixelsPerFoot * GRID_SPACING_FEET;
-    const snappedPosition: Vector2D = {
-      x: Math.round(rawPosition.x / gridPixelSpacing) * gridPixelSpacing,
-      y: Math.round(rawPosition.y / gridPixelSpacing) * gridPixelSpacing,
-    };
-    
-    // Apply CUBED SPHERE PROJECTION to match curved grid (EXACT same formula as grid lines)
-    // CRITICAL: Must use same sphere radius calculation as grid for alignment
-    const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Matches grid exactly
-    const normalizedX = snappedPosition.x / sphereRadius;
-    const normalizedY = snappedPosition.y / sphereRadius;
-    const denominator = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY + 1);
-    const depth = 1 / denominator;
-    const projectedX = normalizedX / denominator;
-    const projectedY = normalizedY / denominator;
-    const bulgeFactor = 1.15; // Matches grid exactly
-    const curvedPosition: Vector2D = {
-      x: projectedX * sphereRadius * bulgeFactor,
-      y: projectedY * sphereRadius * bulgeFactor,
-    };
-    
-    const z = depth; // Depth factor from sphere projection (0-1)
-    
-    // Update spatial tensor tracking (for future velocity/acceleration features)
-    // Track snapped position (pre-curve) for accurate velocity/acceleration
-    const previousTensor = deviceSpatialTensors.current.get(deviceId);
-    
-    if (previousTensor) {
-      const deltaTime = (currentTime - previousTensor.timestamp) / 1000; // seconds
-      
-      // Compute velocity using finite difference
-      const velocity = TensorMath.computeVelocity(
-        snappedPosition,
-        previousTensor.position,
-        deltaTime
-      );
-      
-      // Compute acceleration (change in velocity)
-      const acceleration = TensorMath.computeVelocity(
-        velocity,
-        previousTensor.velocity,
-        deltaTime
-      );
-      
-      // Store updated tensor
-      deviceSpatialTensors.current.set(deviceId, {
-        position: snappedPosition,
-        velocity,
-        acceleration,
-        distance: device.distanceFeet,
-        angle: angleInRadians, // Store angle for tracking
-        timestamp: currentTime,
-      });
-    } else {
-      // Initialize tensor for new device
-      deviceSpatialTensors.current.set(deviceId, {
-        position: snappedPosition,
-        velocity: { x: 0, y: 0 },
-        acceleration: { x: 0, y: 0 },
-        distance: device.distanceFeet,
-        angle: angleInRadians, // Store angle for tracking
-        timestamp: currentTime,
-      });
-    }
-    
-    // Return CURVED position that matches the 3D grid projection
     return {
-      x: curvedPosition.x,
-      y: curvedPosition.y,
-      z: z, // Depth for perspective effects (0-1)
+      x: pixelDistance * Math.cos(angle),
+      y: pixelDistance * Math.sin(angle),
     };
   };
 
@@ -1567,18 +1432,12 @@ export default function HomeScreen() {
         >
           {filteredDevices.map((device) => {
             const position = getGridPosition(device);
-
             return (
               <DeviceBlip
                 key={device.id || device.name}
                 device={device}
-                position={{ x: position.x, y: position.y }}
-                depth={position.z}
-                nucleusX={nucleusX}
-                nucleusY={nucleusY}
-                viewTransform={viewTransformTensor}
+                position={position}
                 onPress={() => {
-                  console.log('SUCCESS: Blip press handler called for:', device.name);
                   setSelectedBlipDevice(device);
                   setShowBlipModal(true);
                 }}
@@ -1596,7 +1455,7 @@ export default function HomeScreen() {
                 key={device.id || `link-${device.name}`}
                 device={device}
                 position={{ x: position.x, y: position.y }}
-                depth={position.z}
+                depth={0}
                 nucleusX={nucleusX}
                 nucleusY={nucleusY}
                 viewTransform={viewTransformTensor}
