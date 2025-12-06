@@ -645,22 +645,20 @@ export default function HomeScreen() {
   const nucleusXRef = useRef(nucleusX);
   const nucleusYRef = useRef(nucleusY);
 
-  // Update refs only when screen dimensions actually change (not during gestures)
-  useEffect(() => {
-    const newNucleusX = nucleusX;
-    const newNucleusY = nucleusY;  // Must match raindrop icon Y position
-
-    nucleusXRef.current = newNucleusX;
-    nucleusYRef.current = newNucleusY;
-
-    console.log('🎯 NUCLEUS REFS UPDATED:', {
-      nucleusX: nucleusXRef.current,
-      nucleusY: nucleusYRef.current,
-      raindropY: nucleusY,
-      screenWidth,
-      viewableHeight
-    });
-  }, [nucleusX, nucleusY, screenWidth, viewableHeight]);
+  // TEMPORARILY DISABLED - Testing if this causes BLE state reset
+  // useEffect(() => {
+  //   const newNucleusX = nucleusX;
+  //   const newNucleusY = nucleusY;  // Must match raindrop icon Y position
+  //   nucleusXRef.current = newNucleusX;
+  //   nucleusYRef.current = newNucleusY;
+  //   console.log('🎯 NUCLEUS REFS UPDATED:', {
+  //     nucleusX: nucleusXRef.current,
+  //     nucleusY: nucleusYRef.current,
+  //     raindropY: nucleusY,
+  //     screenWidth,
+  //     viewableHeight
+  //   });
+  // }, [nucleusX, nucleusY, screenWidth, viewableHeight]);
   
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
