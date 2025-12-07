@@ -67,7 +67,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     startScanCountRef.current += 1;
     console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
     setError(null);
-    setDevices([]);
+    // FIX #2: Don't clear devices array - preserve existing devices and update them
+    // setDevices([]); // REMOVED - this was causing devices to disappear
     
     // Web platform: BLE is not available, devices will remain empty
     if (Platform.OS === 'web') {
@@ -89,27 +90,38 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         return;
       }
 
-      if (device && device.name) {
+      // FIX #1: Accept devices even without names - use device ID or "Unknown Device" as fallback
+      if (device) {
         setDevices(prevDevices => {
           const exists = prevDevices.find(d => d.id === device.id);
+          const distanceFeet = calculateDistanceFeet(device.rssi || -100);
+          const deviceName = device.name || `Unknown Device (${device.id.substring(0, 8)})`;
+          
           if (!exists) {
-            const distanceFeet = calculateDistanceFeet(device.rssi || -100);
+            // Add new device
             return [...prevDevices, {
               id: device.id,
-              name: device.name || 'Unknown Device',
+              name: deviceName,
               rssi: device.rssi || -100,
               distanceFeet,
             }];
+          } else {
+            // Update existing device with new RSSI/distance
+            return prevDevices.map(d => 
+              d.id === device.id 
+                ? { ...d, rssi: device.rssi || -100, distanceFeet }
+                : d
+            );
           }
-          return prevDevices;
         });
       }
     });
 
-    // Stop scanning after 10 seconds
-    setTimeout(() => {
-      stopScan();
-    }, 10000);
+    // FIX #3 & #4: Remove 10-second timeout - scanning continues until stopScan() is called
+    // Continuous scanning allows devices to be detected and updated in real-time
+    // setTimeout(() => {
+    //   stopScan();
+    // }, 10000); // REMOVED - this was stopping scanning after 10 seconds
   }, [requestPermissions, calculateDistanceFeet]);
 
   // Stop scanning
