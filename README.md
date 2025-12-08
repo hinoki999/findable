@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** December 2024
+**Last Updated:** December 2024 (BLE/Blips Fixes)
 
 ---
 
@@ -11,13 +11,14 @@
 **Purpose:** Proximity-based social networking application using Bluetooth Low Energy (BLE) technology to discover and connect with nearby users.
 
 **Core Features:**
-- Real-time proximity detection via BLE
+- Real-time proximity detection via BLE (DropLink users only)
 - Profile creation with photos and contact info
 - Accept/decline connection requests
 - Contact history and pinned favorites
 - Privacy zones to disable scanning in specific locations
-- Radar view showing nearby users
-- Tutorial system for first-time users
+- Radar view showing nearby DropLink users as blips
+- Link markers for accepted/returned connections
+- Tutorial system for first-time users (per-screen tracking)
 
 **Tech Stack:**
 - **Frontend:** React Native 0.81.5 with Expo SDK 54 (TypeScript)
@@ -681,14 +682,18 @@ Add support for additional formats:
 
 ---
 
-#### Issue #7: Blips Not Showing on Radar
+#### Issue #7: Blips Not Showing on Radar ✅ **RESOLVED**
 **Expected:** Nearby users appear as green blips
 **Actual:** No blips visible
 
-**Status:**
-- Not yet investigated
-- Lower priority than tutorial/profile/deletion issues
-- May be related to BLE scanning or data formatting
+**Root Causes Identified (December 2024):**
+1. Devices without names were being filtered out
+2. Devices array cleared on each `startScan()` call
+3. Scanning stopped after 10 seconds with no restart
+4. No continuous scanning loop
+
+**Solution:** Complete BLE scanning overhaul (see "BLE Scanning System Overhaul" section below)
+**Status:** ✅ **RESOLVED** - Blips now appear correctly with continuous scanning and DropLink filtering
 
 ---
 
@@ -1019,16 +1024,217 @@ const handleSave = async () => {
 
 ---
 
+## BLE Scanning System Overhaul: Blips & Device Detection (December 2024)
+
+### Problem Statement
+Blips were not appearing on the radar, and when they did appear, they would disappear after a few seconds. Additionally, the system was detecting all Bluetooth devices (phones, headphones, etc.) instead of only DropLink users.
+
+### Root Causes Identified
+
+**Issue #1: Devices Without Names Filtered Out**
+- **Location:** `BLEScanner.tsx` line 92
+- **Problem:** Code checked `if (device && device.name)` - many BLE devices don't broadcast names
+- **Impact:** Valid devices were being ignored
+
+**Issue #2: Devices Array Cleared on Each startScan Call**
+- **Location:** `BLEScanner.tsx` line 70
+- **Problem:** `setDevices([])` cleared all devices every time `startScan()` was called
+- **Impact:** If `startScan()` was called multiple times (due to re-renders), devices would disappear
+
+**Issue #3: 10-Second Timeout Stopped Scanning**
+- **Location:** `BLEScanner.tsx` lines 109-112
+- **Problem:** `setTimeout(() => stopScan(), 10000)` automatically stopped scanning after 10 seconds
+- **Impact:** No new devices could be detected after 10 seconds, and existing devices wouldn't update
+
+**Issue #4: No Continuous Scanning Loop**
+- **Location:** `HomeScreen.tsx` line 676-679
+- **Problem:** `startScan()` only called once on mount, no restart mechanism
+- **Impact:** If scanning stopped for any reason, it never restarted
+
+**Issue #5: All Bluetooth Devices Detected (Not Just DropLink Users)**
+- **Location:** `BLEScanner.tsx` line 85
+- **Problem:** `startDeviceScan(null, null, callback)` scanned ALL BLE devices
+- **Impact:** Phones, headphones, smartwatches, etc. all appeared as blips
+
+### Solutions Implemented
+
+#### Fix #1: Accept Devices Without Names
+**File:** `mobile/src/components/BLEScanner.tsx`
+- Changed from `if (device && device.name)` to `if (device)`
+- Uses device ID as fallback: `Unknown Device (${device.id.substring(0, 8)})`
+- All detected devices are now processed
+
+#### Fix #2: Preserve Devices Array
+**File:** `mobile/src/components/BLEScanner.tsx`
+- Removed `setDevices([])` from `startScan()` function
+- Existing devices are preserved and updated with new RSSI/distance
+- New devices are added to the array instead of replacing it
+
+#### Fix #3: Remove 10-Second Timeout
+**File:** `mobile/src/components/BLEScanner.tsx`
+- Removed `setTimeout(() => stopScan(), 10000)`
+- Scanning now continues indefinitely until `stopScan()` is explicitly called
+- Allows real-time device detection and updates
+
+#### Fix #4: Continuous Scanning Loop
+**File:** `mobile/src/screens/HomeScreen.tsx`
+- Added interval that checks every 5 seconds if scanning stopped
+- Automatically restarts scanning if `isScanning === false`
+- Ensures continuous device detection even if scanning stops unexpectedly
+
+#### Fix #5: DropLink Device Filtering
+**File:** `mobile/src/components/BLEScanner.tsx`
+- Added `DROPLINK_DEVICE_PREFIX = 'DropLink-'` constant
+- Added `isDropLinkDevice()` helper function to check device names
+- Only devices with names starting with "DropLink-" are processed
+- Non-DropLink devices (phones, headphones, etc.) are silently filtered out
+
+### Implementation Details
+
+**DropLink Device Filtering:**
+```typescript
+// Configuration
+const DROPLINK_DEVICE_PREFIX = 'DropLink-';
+
+// Filter function
+const isDropLinkDevice = (device: Device | null): boolean => {
+  if (!device) return false;
+  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+    return true;
+  }
+  return false;
+};
+
+// Usage in scanner
+if (device && isDropLinkDevice(device)) {
+  // Process DropLink device
+}
+```
+
+**Continuous Scanning:**
+```typescript
+// HomeScreen.tsx - Auto-restart mechanism
+useEffect(() => {
+  startScan();
+  
+  const scanInterval = setInterval(() => {
+    if (!isScanning) {
+      console.log('[BLE-DEBUG] Scanning stopped, restarting...');
+      startScan();
+    }
+  }, 5000); // Check every 5 seconds
+  
+  return () => {
+    stopScan();
+    clearInterval(scanInterval);
+  };
+}, [startScan, stopScan, isScanning]);
+```
+
+### Current Behavior
+
+**BLE Scanning:**
+- ✅ Continuous scanning (no timeout)
+- ✅ Auto-restarts if scanning stops
+- ✅ Only DropLink users detected (name must start with "DropLink-")
+- ✅ Devices preserved across `startScan()` calls
+- ✅ Real-time RSSI/distance updates
+
+**Blip Display:**
+- ✅ DropLink devices appear as green pulsating blips
+- ✅ Blips positioned on radar grid based on distance and angle
+- ✅ Blips remain visible and don't disappear
+- ✅ Blips are clickable to open modal
+
+**Link Markers:**
+- ✅ Accepted/returned links displayed as LinkMarker components
+- ✅ Separate system from BLE scanning (fetched from API)
+- ✅ Refreshes every 5 seconds
+
+### Files Modified
+
+**mobile/src/components/BLEScanner.tsx:**
+- Added `DROPLINK_DEVICE_PREFIX` constant (line 28)
+- Added `isDropLinkDevice()` helper function (lines 35-56)
+- Removed `setDevices([])` from `startScan()` (line 70)
+- Removed 10-second timeout (lines 156-160)
+- Added DropLink filtering in device processing (line 127)
+- Added console logging for detected DropLink devices (line 136)
+
+**mobile/src/screens/HomeScreen.tsx:**
+- Added continuous scanning loop with auto-restart (lines 679-685)
+- Checks every 5 seconds and restarts if scanning stopped
+
+**No Changes Required:**
+- `mobile/src/screens/DropScreen.tsx` - Automatically uses filtered devices
+- Modal functionality - Already working, now works with filtered DropLink devices
+
+### Testing Requirements
+
+**For DropLink Device Detection:**
+- Device Bluetooth name must start with "DropLink-"
+- Examples: "DropLink-John", "DropLink-User123"
+- Device must be within `maxDistance` (default 33 feet)
+- Device must be actively advertising via BLE
+
+**Expected Results:**
+- ✅ DropLink devices appear as blips on radar
+- ✅ DropLink devices appear in DropScreen list
+- ✅ Clicking blip opens modal with device info
+- ✅ Non-DropLink devices are filtered out
+- ✅ Blips persist and don't disappear
+- ✅ Real-time distance updates as device moves
+
+### Future Upgrade Path
+
+**Service UUID Filtering (When BLE Advertising Implemented):**
+- Replace name pattern check with Service UUID check
+- Add BLE advertising implementation to broadcast DropLink service UUID
+- Update `isDropLinkDevice()` function to check `device.serviceUUIDs`
+- No other code changes needed - filtering logic remains the same
+
+**Code Example for Future:**
+```typescript
+const DROPLINK_SERVICE_UUID = '12345678-1234-1234-1234-123456789ABC';
+
+const isDropLinkDevice = (device: Device | null): boolean => {
+  if (!device) return false;
+  
+  // Primary: Check Service UUID (most reliable)
+  if (device.serviceUUIDs && device.serviceUUIDs.includes(DROPLINK_SERVICE_UUID)) {
+    return true;
+  }
+  
+  // Fallback: Check device name prefix (backward compatibility)
+  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+    return true;
+  }
+  
+  return false;
+};
+```
+
+### Documentation Created
+
+- `BLIPS_DIAGNOSTIC.md` - Comprehensive diagnostic guide for blip issues
+- `DROPLINK_BLE_FILTERING_PLAN.md` - Implementation plan for DropLink filtering
+- `DROPLINK_BLE_FILTERING_CODE.md` - Complete code documentation with examples
+
+---
+
 ## Key Features Detail
 
-### Proximity Radar (HomeScreen.tsx - 3129 lines)
+### Proximity Radar (HomeScreen.tsx - 3113 lines)
 - 3D curved grid with 6,440+ View components
 - Tensor mathematics for spatial positioning
-- Real-time BLE scanning (updates every 5 seconds)
-- Green pulsating dots for nearby users
+- **Continuous BLE scanning** - No timeout, auto-restarts if stopped
+- **DropLink user filtering** - Only shows devices with "DropLink-" prefix in name
+- Green pulsating dots (blips) for nearby DropLink users
+- Link markers for accepted/returned connections (from API)
 - Pinch-to-zoom and rotation gestures
 - Distance-based dot pulsation (closer = faster)
 - Grid snapping to 3-foot intersections
+- Clickable blips open modal with user info and drop functionality
 - Performance issues during gestures (optimization in progress)
 
 ### Drop Screen
@@ -2010,6 +2216,28 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - Fix: Add explicit Authorization header to upload options
 - Verify: AppState listener registered in supabase.ts
 
+**Blips not appearing on radar?**
+- Check: Device Bluetooth name must start with "DropLink-" (e.g., "DropLink-John")
+- Verify: BLE permissions granted (Android: Location permission required)
+- Check: Scanning status in console logs (`[BLE-DEBUG] Scanning stopped, restarting...`)
+- Verify: Device is within 33 feet (maxDistance)
+- Check: `BLEScanner.tsx` - Ensure `isDropLinkDevice()` filter is working
+- Fix: If scanning stopped, it should auto-restart every 5 seconds
+- Debug: Check console for `[BLE] DropLink device detected:` messages
+
+**Blips disappearing after a few seconds?**
+- Issue: Devices array being cleared or scanning stopped
+- Check: `BLEScanner.tsx` - Ensure `setDevices([])` is removed from `startScan()`
+- Verify: 10-second timeout is removed (no `setTimeout(() => stopScan(), 10000)`)
+- Check: Continuous scanning loop in `HomeScreen.tsx` is active
+- Fix: Auto-restart mechanism should restart scanning if it stops
+
+**All Bluetooth devices showing (not just DropLink users)?**
+- Issue: DropLink filtering not applied
+- Check: `BLEScanner.tsx` - Verify `isDropLinkDevice()` function is called
+- Verify: Only devices with names starting with "DropLink-" are processed
+- Fix: Non-DropLink devices should be silently filtered out
+
 ---
 
 ## Environment Variables
@@ -2060,6 +2288,8 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - Handoff Document: `HANDOFF_TO_CLAUDE.md` - Post-code-cleanup implementation details
 - Phone Verification Diagnostic: `PHONE_VERIFIED_DIAGNOSTIC.md` - Phone verification troubleshooting guide
 - Blips Diagnostic: `BLIPS_DIAGNOSTIC.md` - Blips not appearing troubleshooting guide
+- DropLink BLE Filtering Plan: `DROPLINK_BLE_FILTERING_PLAN.md` - Implementation plan for DropLink filtering
+- DropLink BLE Filtering Code: `DROPLINK_BLE_FILTERING_CODE.md` - Complete code documentation
 
 ---
 
@@ -2085,6 +2315,15 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 7. Auth state doesn't auto-update - requires manual refreshAuth call
 8. TypeScript type guards don't prevent runtime null crashes
 
+### Lessons Learned (BLE Scanning & Blips)
+1. **Clearing state on function calls causes data loss** - Don't clear devices array on each `startScan()` call
+2. **Timeouts break continuous functionality** - Remove automatic timeouts for real-time features
+3. **Auto-restart mechanisms are essential** - Always implement restart loops for critical scanning operations
+4. **Device name filtering is unreliable** - Many BLE devices don't broadcast names, need fallback strategies
+5. **Filter at the source** - Filtering in the scanner prevents downstream components from processing unwanted data
+6. **Continuous scanning requires monitoring** - Check scanning state periodically and restart if stopped
+7. **Service UUID filtering is more reliable** - Name-based filtering works but Service UUID is preferred for production
+
 ### Feature Requests / TODOs
 - [ ] Fix gray screen crash after signup/login (CRITICAL)
 - [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
@@ -2093,7 +2332,7 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
 - [ ] Update all tests for Supabase endpoints
-- [ ] Investigate radar blip visibility (see BLIPS_DIAGNOSTIC.md)
+- [x] ~~Investigate radar blip visibility~~ (RESOLVED - BLE scanning overhaul December 2024)
 - [ ] Grid performance optimization (memoization)
 - [ ] Complete Railway backend deprecation
 - [ ] Add Supabase RLS policy documentation

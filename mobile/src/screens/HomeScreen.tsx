@@ -672,13 +672,20 @@ export default function HomeScreen() {
     startScreenTutorial('Home', 6);
   }, []);
 
+  // Ref to track scanning state for interval (avoids stale closures)
+  const isScanningRef = useRef(isScanning);
+  useEffect(() => {
+    isScanningRef.current = isScanning;
+  }, [isScanning]);
+
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
     startScan();
     
     // FIX #4: Restart scanning if it stops (continuous scanning loop)
+    // Use ref to check current scanning state without causing effect re-runs
     const scanInterval = setInterval(() => {
-      if (!isScanning) {
+      if (!isScanningRef.current) {
         console.log('[BLE-DEBUG] Scanning stopped, restarting...');
         startScan();
       }
@@ -688,7 +695,7 @@ export default function HomeScreen() {
       stopScan(); // Cleanup on unmount
       clearInterval(scanInterval);
     };
-  }, [startScan, stopScan, isScanning]);
+  }, [startScan, stopScan]);
   
   // Fetch linked devices (accepted and returned links) when component mounts and periodically
   useEffect(() => {

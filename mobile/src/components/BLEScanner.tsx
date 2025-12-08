@@ -97,6 +97,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {
+    // Prevent multiple simultaneous scan starts
+    if (isScanning) {
+      console.log('[BLE-DEBUG] Already scanning, skipping startScan call');
+      return;
+    }
+
     startScanCountRef.current += 1;
     console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
     setError(null);
@@ -105,67 +111,102 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     
     // Web platform: BLE is not available, devices will remain empty
     if (Platform.OS === 'web') {
+      console.log('[BLE-DEBUG] Web platform detected, BLE not available');
+      return;
+    }
+
+    // Ensure bleManager exists
+    if (!bleManager) {
+      console.error('[BLE-DEBUG] BleManager not initialized');
+      setError('Bluetooth manager not available');
       return;
     }
 
     const hasPermissions = await requestPermissions();
     if (!hasPermissions) {
+      console.warn('[BLE-DEBUG] Permissions not granted, cannot start scan');
       return;
     }
 
     setIsScanning(true);
 
-    bleManager!.startDeviceScan(null, null, (error, device) => {
-      if (error) {
-        console.error('BLE scan error:', error);
-        setError(error.message);
-        setIsScanning(false);
-        return;
-      }
+    try {
+      bleManager.startDeviceScan(null, null, (error, device) => {
+        if (error) {
+          console.error('[BLE-DEBUG] BLE scan error:', error);
+          setError(error.message);
+          setIsScanning(false);
+          return;
+        }
 
-      // Filter: Only process DropLink users (devices with "DropLink-" prefix in name)
-      if (device && isDropLinkDevice(device)) {
-        setDevices(prevDevices => {
-          const exists = prevDevices.find(d => d.id === device.id);
-          const distanceFeet = calculateDistanceFeet(device.rssi || -100);
-          // DropLink devices should always have a name (required prefix)
-          const deviceName = device.name || `DropLink-Unknown (${device.id.substring(0, 8)})`;
-          
-          if (!exists) {
-            // Add new DropLink device
-            console.log('[BLE] DropLink device detected:', deviceName, `(${distanceFeet.toFixed(1)}ft)`);
-            return [...prevDevices, {
-              id: device.id,
-              name: deviceName,
-              rssi: device.rssi || -100,
-              distanceFeet,
-            }];
-          } else {
-            // Update existing DropLink device with new RSSI/distance
-            return prevDevices.map(d => 
-              d.id === device.id 
-                ? { ...d, rssi: device.rssi || -100, distanceFeet }
-                : d
-            );
+        // Filter: Only process DropLink users (devices with "DropLink-" prefix in name)
+        if (device && isDropLinkDevice(device)) {
+          // Validate device has required properties
+          if (!device.id) {
+            console.warn('[BLE-DEBUG] Device missing ID, skipping:', device);
+            return;
           }
-        });
-      }
-      // Non-DropLink devices are silently ignored (filtered out)
-    });
+
+          setDevices(prevDevices => {
+            const exists = prevDevices.find(d => d.id === device.id);
+            const distanceFeet = calculateDistanceFeet(device.rssi || -100);
+            // DropLink devices should always have a name (required prefix)
+            const deviceName = device.name || `DropLink-Unknown (${device.id.substring(0, 8)})`;
+            
+            if (!exists) {
+              // Add new DropLink device
+              console.log('[BLE] DropLink device detected:', deviceName, `(${distanceFeet.toFixed(1)}ft)`);
+              return [...prevDevices, {
+                id: device.id,
+                name: deviceName,
+                rssi: device.rssi || -100,
+                distanceFeet,
+              }];
+            } else {
+              // Update existing DropLink device with new RSSI/distance
+              return prevDevices.map(d => 
+                d.id === device.id 
+                  ? { ...d, rssi: device.rssi || -100, distanceFeet }
+                  : d
+              );
+            }
+          });
+        }
+        // Non-DropLink devices are silently ignored (filtered out)
+      });
+    } catch (err) {
+      console.error('[BLE-DEBUG] Exception starting scan:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start scanning');
+      setIsScanning(false);
+    }
 
     // FIX #3 & #4: Remove 10-second timeout - scanning continues until stopScan() is called
     // Continuous scanning allows devices to be detected and updated in real-time
     // setTimeout(() => {
     //   stopScan();
     // }, 10000); // REMOVED - this was stopping scanning after 10 seconds
-  }, [requestPermissions, calculateDistanceFeet]);
+  }, [requestPermissions, calculateDistanceFeet, isScanning]);
 
   // Stop scanning
   const stopScan = useCallback(() => {
-    if (Platform.OS !== 'web' && bleManager) {
-      bleManager.stopDeviceScan();
+    if (Platform.OS === 'web') {
+      return;
     }
-    setIsScanning(false);
+
+    if (!bleManager) {
+      console.warn('[BLE-DEBUG] BleManager not initialized, cannot stop scan');
+      setIsScanning(false);
+      return;
+    }
+
+    try {
+      bleManager.stopDeviceScan();
+      setIsScanning(false);
+      console.log('[BLE-DEBUG] Scanning stopped');
+    } catch (err) {
+      console.error('[BLE-DEBUG] Error stopping scan:', err);
+      setIsScanning(false);
+    }
   }, []);
 
   // Cleanup on unmount
