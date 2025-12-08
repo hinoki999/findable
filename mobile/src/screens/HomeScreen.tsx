@@ -10,6 +10,7 @@ import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
+import { useBLEAdvertiser } from '../components/BLEAdvertiser';
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
@@ -601,6 +602,9 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
 
+  // Use BLE advertiser to make device discoverable (isolated from scanning)
+  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable } = useBLEAdvertiser();
+
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
     const { width, height } = Dimensions.get('window');
@@ -696,6 +700,31 @@ export default function HomeScreen() {
       clearInterval(scanInterval);
     };
   }, [startScan, stopScan]);
+
+  // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
+  useEffect(() => {
+    if (!isAvailable) {
+      console.log('[HomeScreen] BLE advertising not available, skipping');
+      return;
+    }
+
+    // Start advertising when isDiscoverable is true
+    if (isDiscoverable) {
+      console.log('[HomeScreen] Discoverable toggle ON, starting advertising');
+      startAdvertising();
+    } else {
+      // Stop advertising when isDiscoverable is false
+      console.log('[HomeScreen] Discoverable toggle OFF, stopping advertising');
+      stopAdvertising();
+    }
+    
+    return () => {
+      // Stop advertising when HomeScreen unmounts
+      if (isDiscoverable) {
+        stopAdvertising();
+      }
+    };
+  }, [isDiscoverable, isAvailable, startAdvertising, stopAdvertising]);
   
   // Fetch linked devices (accepted and returned links) when component mounts and periodically
   useEffect(() => {

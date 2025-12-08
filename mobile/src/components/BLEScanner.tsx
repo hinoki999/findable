@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
+import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 
 export interface BleDevice {
   id: string;
@@ -22,35 +23,27 @@ interface UseBLEScannerReturn {
 // Only create BleManager on native platforms (iOS/Android)
 const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
 
-// DropLink Device Identifier Configuration
-// Devices must have this prefix in their name to be detected as DropLink users
-// FUTURE: Can be upgraded to Service UUID filtering when BLE advertising is implemented
-const DROPLINK_DEVICE_PREFIX = 'DropLink-';
-
 /**
  * Check if a BLE device is a DropLink user
  * @param device - The BLE device to check
  * @returns true if device is a DropLink user, false otherwise
+ * 
+ * Detection methods (in priority order):
+ * 1. Service UUID check (primary - when advertising is implemented)
+ * 2. Device name prefix (fallback - backward compatibility)
  */
 const isDropLinkDevice = (device: Device | null): boolean => {
   if (!device) return false;
   
-  // Check device name for DropLink prefix
-  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+  // Primary: Check Service UUID (most reliable - when advertising is implemented)
+  if (device.serviceUUIDs && device.serviceUUIDs.includes(DROPLINK_SERVICE_UUID)) {
     return true;
   }
   
-  // FUTURE: Add Service UUID check here when advertising is implemented
-  // Example:
-  // if (device.serviceUUIDs && device.serviceUUIDs.includes(DROPLINK_SERVICE_UUID)) {
-  //   return true;
-  // }
-  
-  // FUTURE: Add Manufacturer Data check here if needed
-  // Example:
-  // if (device.manufacturerData && containsDropLinkIdentifier(device.manufacturerData)) {
-  //   return true;
-  // }
+  // Fallback: Check device name prefix (backward compatibility - existing functionality)
+  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+    return true;
+  }
   
   return false;
 };
