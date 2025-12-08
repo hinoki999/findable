@@ -1349,39 +1349,6 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* TEMPORARY DIAGNOSTIC - REMOVE AFTER DEBUGGING */}
-      <View style={{
-        position: 'absolute',
-        top: 50,
-        left: 10,
-        right: 10,
-        backgroundColor: 'rgba(255, 0, 0, 0.9)',
-        padding: 10,
-        borderRadius: 8,
-        zIndex: 9999,
-      }}>
-        <Text style={{ color: 'white', fontSize: 12, fontWeight: 'bold' }}>
-          BLE DIAGNOSTIC
-        </Text>
-        <Text style={{ color: 'white', fontSize: 11 }}>
-          Scanning: {isScanning ? 'YES' : 'NO'}
-        </Text>
-        <Text style={{ color: 'white', fontSize: 11 }}>
-          Raw devices: {devices.length}
-        </Text>
-        <Text style={{ color: 'white', fontSize: 11 }}>
-          Filtered devices: {filteredDevices.length}
-        </Text>
-        <Text style={{ color: 'white', fontSize: 11 }}>
-          Max distance: {maxDistance} ft
-        </Text>
-        <Text style={{ color: 'white', fontSize: 11, marginTop: 4 }}>
-          Devices: {devices.map(d => `${d.name}(${Math.round(d.distanceFeet)}ft)`).join(', ') || 'none'}
-        </Text>
-        <Text style={{ color: 'yellow', fontSize: 11 }}>
-          startScan calls: {startScanCount}
-        </Text>
-      </View>
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
         style={{ flex: 1 }}
