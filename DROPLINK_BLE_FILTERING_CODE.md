@@ -1,3 +1,15 @@
+# Complete DropLink BLE Filtering Code Changes
+
+## Overview
+This document shows the complete, synergetic code changes to filter BLE scanning to only detect DropLink users.
+
+---
+
+## File 1: `mobile/src/components/BLEScanner.tsx`
+
+### Complete File (After Changes)
+
+```typescript
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
@@ -186,3 +198,164 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     startScanCount: startScanCountRef.current,
   };
 };
+```
+
+### Key Changes Summary:
+
+1. **Added DropLink Configuration (Lines 24-26):**
+   - `DROPLINK_DEVICE_PREFIX = 'DropLink-'` constant
+   - Configurable for easy updates
+
+2. **Added Filter Helper Function (Lines 28-50):**
+   - `isDropLinkDevice()` checks if device name starts with "DropLink-"
+   - Includes comments for future Service UUID upgrade
+   - Returns `false` for non-DropLink devices
+
+3. **Modified Device Processing (Lines 93-120):**
+   - Changed from `if (device)` to `if (device && isDropLinkDevice(device))`
+   - Only DropLink devices are added/updated in the devices array
+   - Non-DropLink devices are silently ignored
+   - Added console log for detected DropLink devices
+
+---
+
+## File 2: `mobile/src/screens/HomeScreen.tsx`
+
+### No Changes Required ✅
+
+**Why:** HomeScreen already uses `filteredDevices` which comes from the scanner's `devices` array. Since the scanner now only contains DropLink devices, HomeScreen automatically only shows DropLink blips.
+
+**Current Code (Unchanged):**
+```typescript
+// Line 602: Get devices from scanner (now filtered to DropLink only)
+const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
+
+// Line 777: Filter by distance (DropLink devices only)
+const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+
+// Line 1547: Render blips (only DropLink devices)
+{filteredDevices.map((device) => {
+  // ... DeviceBlip rendering
+})}
+```
+
+---
+
+## File 3: `mobile/src/screens/DropScreen.tsx`
+
+### No Changes Required ✅
+
+**Why:** DropScreen also uses the scanner's `devices` array, which now only contains DropLink devices.
+
+**Current Code (Unchanged):**
+```typescript
+// Line 37: Get devices from scanner (now filtered to DropLink only)
+const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
+
+// Line 40-42: Filter by distance and sort (DropLink devices only)
+const filteredDevices = devices
+  .filter(device => device.distanceFeet <= maxDistance)
+  .sort((a, b) => a.distanceFeet - b.distanceFeet);
+```
+
+---
+
+## Synergy Verification
+
+### Data Flow (All Synergetic):
+
+```
+1. BLE Scanner (BLEScanner.tsx)
+   └─> Scans ALL BLE devices
+   └─> Filters to only DropLink devices (isDropLinkDevice check)
+   └─> Returns: devices[] (DropLink users only)
+
+2. HomeScreen.tsx
+   └─> Receives: devices[] (DropLink users only)
+   └─> Filters by: maxDistance
+   └─> Renders: DeviceBlip components (DropLink users only)
+   └─> Shows: LinkMarker components (from API, separate system)
+
+3. DropScreen.tsx
+   └─> Receives: devices[] (DropLink users only)
+   └─> Filters by: maxDistance
+   └─> Renders: DeviceCard components (DropLink users only)
+```
+
+### Integration Points:
+
+✅ **Scanner → HomeScreen:** Filtered devices flow correctly
+✅ **Scanner → DropScreen:** Filtered devices flow correctly
+✅ **Link Markers:** Separate system (from API), unaffected
+✅ **Modal Functionality:** Works with filtered DropLink devices
+✅ **Distance Filtering:** Still works (applied after DropLink filtering)
+
+---
+
+## Testing Requirements
+
+### For Testing DropLink Detection:
+
+**Device Name Requirements:**
+- Device name must start with "DropLink-" prefix
+- Examples:
+  - ✅ "DropLink-John" - Will be detected
+  - ✅ "DropLink-User123" - Will be detected
+  - ✅ "DropLink-Device" - Will be detected
+  - ❌ "John's iPhone" - Will be filtered out
+  - ❌ "AirPods Pro" - Will be filtered out
+  - ❌ "Unknown Device" - Will be filtered out
+
+**To Test:**
+1. Change a test device's Bluetooth name to "DropLink-TestUser"
+2. Ensure device is within maxDistance (default 33 ft)
+3. Verify blip appears on HomeScreen
+4. Verify device appears in DropScreen list
+5. Verify modal opens when blip is clicked
+
+---
+
+## Future Upgrade Path (Service UUID)
+
+When BLE advertising is implemented, upgrade `isDropLinkDevice()`:
+
+```typescript
+const DROPLINK_SERVICE_UUID = '12345678-1234-1234-1234-123456789ABC';
+
+const isDropLinkDevice = (device: Device | null): boolean => {
+  if (!device) return false;
+  
+  // Primary: Check Service UUID (most reliable)
+  if (device.serviceUUIDs && device.serviceUUIDs.includes(DROPLINK_SERVICE_UUID)) {
+    return true;
+  }
+  
+  // Fallback: Check device name prefix (for backward compatibility)
+  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+    return true;
+  }
+  
+  return false;
+};
+```
+
+**No other code changes needed** - the filtering logic remains the same.
+
+---
+
+## Rollback Instructions
+
+If issues occur, revert by changing line 93 in `BLEScanner.tsx`:
+
+**Current (Filtered):**
+```typescript
+if (device && isDropLinkDevice(device)) {
+```
+
+**Revert to (All Devices):**
+```typescript
+if (device) {
+```
+
+This restores the original behavior of showing all Bluetooth devices.
+
