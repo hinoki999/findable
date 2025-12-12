@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
-import { BleManager, Device, State } from 'react-native-ble-plx';
+import { Device, State } from 'react-native-ble-plx';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { bleManager } from '../services/bleManager';
 
 export interface BleDevice {
   id: string;
@@ -20,10 +21,8 @@ interface UseBLEScannerReturn {
   startScanCount: number;
 }
 
-// Only create BleManager on native platforms (iOS/Android)
-// Module-level singleton - created once, shared across all hook instances
-// This prevents double initialization and ensures proper resource management
-const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
+// Use shared BleManager instance from bleManager.ts
+// This prevents multiple instances and conflicting state listeners
 
 /**
  * Normalize UUID for comparison (lowercase, no hyphens)
@@ -226,13 +225,42 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   }, []);
 
   // Monitor Bluetooth state changes (handle Bluetooth being disabled)
+  // Use ref for startScan to avoid recreating listener when startScan changes
+  const startScanRef = useRef(startScan);
+  useEffect(() => {
+    startScanRef.current = startScan;
+  }, [startScan]);
+
   useEffect(() => {
     if (Platform.OS === 'web' || !bleManager) return;
 
+    // Track if we've already handled the initial state emission
+    let hasHandledInitialState = false;
+
     const subscription = bleManager.onStateChange((state) => {
+      // Skip the initial state emission if we're already scanning
+      // This prevents the loop where PoweredOn -> startScan -> state change -> loop
+      if (!hasHandledInitialState) {
+        hasHandledInitialState = true;
+        // Only handle initial state if Bluetooth is off or unauthorized
+        if (state === State.PoweredOff || state === State.Unauthorized) {
+          if (state === State.PoweredOff) {
+            console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
+            setDevices([]);
+            setIsScanning(false);
+            setError('Bluetooth is disabled');
+          } else if (state === State.Unauthorized) {
+            console.warn('[BLE-DEBUG] Bluetooth unauthorized');
+            setError('Bluetooth permission denied');
+            setIsScanning(false);
+          }
+        }
+        return;
+      }
+
+      // Handle subsequent state changes
       if (state === State.PoweredOff) {
         console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
-        // Clear devices since Bluetooth is off
         setDevices([]);
         setIsScanning(false);
         setError('Bluetooth is disabled');
@@ -242,7 +270,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         // Auto-restart scanning if we were scanning before
         if (isScanningRef.current) {
           console.log('[BLE-DEBUG] Restarting scan after Bluetooth re-enabled');
-          startScan();
+          startScanRef.current();
         }
       } else if (state === State.Unauthorized) {
         console.warn('[BLE-DEBUG] Bluetooth unauthorized');
@@ -254,7 +282,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     return () => {
       subscription.remove();
     };
-  }, [startScan]);
+  }, []); // Empty deps - listener never needs to be recreated
 
   // Cleanup on unmount
   useEffect(() => {

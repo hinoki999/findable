@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
-import { BleManager, State } from 'react-native-ble-plx';
+import { State } from 'react-native-ble-plx';
 import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
+import { bleManager } from '../services/bleManager';
 
 // Feature flag - can disable advertising if needed
 const ADVERTISING_ENABLED = true;
@@ -18,9 +19,8 @@ try {
   console.warn('[BLEAdvertiser] munim-bluetooth-peripheral not available:', error);
 }
 
-// BleManager for monitoring Bluetooth state (shared with BLEScanner)
-// Module-level singleton - only created once, never destroyed during app lifecycle
-const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
+// Use shared BleManager instance from bleManager.ts
+// This prevents multiple instances and conflicting state listeners
 
 interface UseBLEAdvertiserReturn {
   isAdvertising: boolean;
@@ -180,13 +180,33 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   }, [isAvailable, stopAdvertising]); // Removed isAdvertising and startAdvertising from deps
 
   // Monitor Bluetooth state changes (handle Bluetooth being disabled during advertising)
+  // Use empty deps to prevent listener recreation - only create once
   useEffect(() => {
     if (Platform.OS === 'web' || !bleManager || !isAvailable) return;
 
+    // Track if we've already handled the initial state emission
+    let hasHandledInitialState = false;
+
     const subscription = bleManager.onStateChange((state) => {
+      // Skip initial state emission to prevent loops
+      if (!hasHandledInitialState) {
+        hasHandledInitialState = true;
+        // Only handle initial state if Bluetooth is off or unauthorized
+        if (state === State.PoweredOff || state === State.Unauthorized) {
+          if (state === State.PoweredOff && isAdvertisingRef.current) {
+            setIsAdvertising(false);
+            setError('Bluetooth is disabled');
+          } else if (state === State.Unauthorized && isAdvertisingRef.current) {
+            setIsAdvertising(false);
+            setError('Bluetooth permission denied');
+          }
+        }
+        return;
+      }
+
+      // Handle subsequent state changes
       if (state === State.PoweredOff) {
         console.warn('[BLEAdvertiser] Bluetooth powered off, stopping advertising');
-        // Use ref to avoid stale closure
         if (isAdvertisingRef.current) {
           setIsAdvertising(false);
           setError('Bluetooth is disabled');
@@ -207,7 +227,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     return () => {
       subscription.remove();
     };
-  }, [isAvailable]);
+  }, [isAvailable]); // Only recreate if isAvailable changes
 
   // Cleanup on unmount
   useEffect(() => {
