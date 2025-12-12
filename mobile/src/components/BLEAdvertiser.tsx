@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
+import { BleManager, State } from 'react-native-ble-plx';
 import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 
 // Feature flag - can disable advertising if needed
@@ -16,6 +17,10 @@ try {
 } catch (error) {
   console.warn('[BLEAdvertiser] munim-bluetooth-peripheral not available:', error);
 }
+
+// BleManager for monitoring Bluetooth state (shared with BLEScanner)
+// Module-level singleton - only created once, never destroyed during app lifecycle
+const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
 
 interface UseBLEAdvertiserReturn {
   isAdvertising: boolean;
@@ -45,6 +50,12 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [isAdvertising, setIsAdvertising] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
+  
+  // Ref to track advertising state for AppState listener (prevents stale closures)
+  const isAdvertisingRef = useRef(isAdvertising);
+  useEffect(() => {
+    isAdvertisingRef.current = isAdvertising;
+  }, [isAdvertising]);
 
   // Request BLE advertising permissions
   const requestPermissions = useCallback(async (): Promise<boolean> => {
@@ -145,38 +156,68 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   }, [isAvailable, isAdvertising]);
 
   // Handle app state changes (pause advertising in background on iOS)
+  // NOTE: We only pause on background, NOT resume on foreground.
+  // HomeScreen controls resume based on isDiscoverable toggle state.
   useEffect(() => {
     if (!isAvailable) return;
 
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         // Pause advertising when app goes to background (iOS limitation)
-        if (Platform.OS === 'ios' && isAdvertising) {
+        // Use ref to avoid stale closure
+        if (Platform.OS === 'ios' && isAdvertisingRef.current) {
           console.log('[BLEAdvertiser] App going to background, pausing advertising');
           stopAdvertising();
         }
-      } else if (nextAppState === 'active') {
-        // Resume advertising when app returns to foreground
-        if (Platform.OS === 'ios' && !isAdvertising) {
-          console.log('[BLEAdvertiser] App returning to foreground, resuming advertising');
-          startAdvertising();
-        }
       }
+      // Removed auto-resume on foreground - let HomeScreen control via isDiscoverable toggle
+      // This prevents advertising from resuming if user toggled it off while backgrounded
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isAvailable, isAdvertising, startAdvertising, stopAdvertising]);
+  }, [isAvailable, stopAdvertising]); // Removed isAdvertising and startAdvertising from deps
+
+  // Monitor Bluetooth state changes (handle Bluetooth being disabled during advertising)
+  useEffect(() => {
+    if (Platform.OS === 'web' || !bleManager || !isAvailable) return;
+
+    const subscription = bleManager.onStateChange((state) => {
+      if (state === State.PoweredOff) {
+        console.warn('[BLEAdvertiser] Bluetooth powered off, stopping advertising');
+        // Use ref to avoid stale closure
+        if (isAdvertisingRef.current) {
+          setIsAdvertising(false);
+          setError('Bluetooth is disabled');
+        }
+      } else if (state === State.PoweredOn) {
+        console.log('[BLEAdvertiser] Bluetooth powered on');
+        setError(null);
+        // Note: We don't auto-restart advertising here - HomeScreen controls it via isDiscoverable
+      } else if (state === State.Unauthorized) {
+        console.warn('[BLEAdvertiser] Bluetooth unauthorized');
+        setError('Bluetooth permission denied');
+        if (isAdvertisingRef.current) {
+          setIsAdvertising(false);
+        }
+      }
+    }, true); // true = emit current state immediately
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAvailable]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (isAdvertising) {
+      // Use ref to avoid stale closure in cleanup
+      if (isAdvertisingRef.current) {
         stopAdvertising();
       }
     };
-  }, [isAdvertising, stopAdvertising]);
+  }, [stopAdvertising]);
 
   return {
     isAdvertising,
