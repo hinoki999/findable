@@ -6,9 +6,13 @@ import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 const ADVERTISING_ENABLED = true;
 
 // Import with error handling (library may not be available)
-let MunimBluetoothPeripheral: any = null;
+// Library exports: startAdvertising, stopAdvertising, setServices, etc.
+let startAdvertisingNative: ((options: { serviceUUIDs: string[]; localName?: string }) => void) | null = null;
+let stopAdvertisingNative: (() => void) | null = null;
 try {
-  MunimBluetoothPeripheral = require('munim-bluetooth-peripheral');
+  const MunimBluetoothPeripheral = require('munim-bluetooth-peripheral');
+  startAdvertisingNative = MunimBluetoothPeripheral.startAdvertising;
+  stopAdvertisingNative = MunimBluetoothPeripheral.stopAdvertising;
 } catch (error) {
   console.warn('[BLEAdvertiser] munim-bluetooth-peripheral not available:', error);
 }
@@ -40,7 +44,7 @@ interface UseBLEAdvertiserReturn {
 export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [isAdvertising, setIsAdvertising] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isAvailable = MunimBluetoothPeripheral !== null && ADVERTISING_ENABLED;
+  const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
 
   // Request BLE advertising permissions
   const requestPermissions = useCallback(async (): Promise<boolean> => {
@@ -97,7 +101,12 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       }
 
       // Start advertising with Service UUID using munim-bluetooth-peripheral API
-      await MunimBluetoothPeripheral.startAdvertising({
+      // Note: startAdvertising is synchronous (returns void), no await needed
+      if (!startAdvertisingNative) {
+        throw new Error('startAdvertising function not available');
+      }
+      
+      startAdvertisingNative({
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
         localName: 'DropLink',
       });
@@ -120,7 +129,12 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     }
 
     try {
-      await MunimBluetoothPeripheral.stopAdvertising();
+      // Note: stopAdvertising is synchronous (returns void), no await needed
+      if (!stopAdvertisingNative) {
+        throw new Error('stopAdvertising function not available');
+      }
+      
+      stopAdvertisingNative();
       setIsAdvertising(false);
       setError(null);
       console.log('[BLEAdvertiser] Advertising stopped');

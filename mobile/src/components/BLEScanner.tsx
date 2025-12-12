@@ -24,27 +24,42 @@ interface UseBLEScannerReturn {
 const bleManager = Platform.OS !== 'web' ? new BleManager() : null;
 
 /**
+ * Normalize UUID for comparison (lowercase, no hyphens)
+ * Handles UUIDs in different formats: with/without hyphens, different cases
+ */
+const normalizeUUID = (uuid: string): string => {
+  return uuid.toLowerCase().replace(/-/g, '');
+};
+
+/**
  * Check if a BLE device is a DropLink user
  * @param device - The BLE device to check
  * @returns true if device is a DropLink user, false otherwise
  * 
  * Detection methods (in priority order):
  * 1. Service UUID check (primary - when advertising is implemented)
+ *    - Uses normalized UUID comparison for robust matching
  * 2. Device name prefix (fallback - backward compatibility)
  */
 const isDropLinkDevice = (device: Device | null): boolean => {
   if (!device) return false;
-  
-  // Primary: Check Service UUID (most reliable - when advertising is implemented)
-  if (device.serviceUUIDs && device.serviceUUIDs.includes(DROPLINK_SERVICE_UUID)) {
-    return true;
+
+  // Primary: Check Service UUID (normalize both for comparison)
+  if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
+    const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
+    const hasDropLinkService = device.serviceUUIDs.some(
+      uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
+    );
+    if (hasDropLinkService) {
+      return true;
+    }
   }
-  
-  // Fallback: Check device name prefix (backward compatibility - existing functionality)
+
+  // Fallback: Check device name prefix (backward compatibility)
   if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
     return true;
   }
-  
+
   return false;
 };
 
