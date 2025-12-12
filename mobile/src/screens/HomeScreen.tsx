@@ -600,7 +600,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable } = useBLEAdvertiser();
@@ -1385,6 +1385,14 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
+      {/* BLE Debug Overlay - TEMPORARY DIAGNOSTIC */}
+      <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999 }}>
+        <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
+        {debugLog.map((log, i) => (
+          <Text key={i} style={{ color: 'lime', fontSize: 9 }}>{log}</Text>
+        ))}
+      </View>
+      
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
         style={{ flex: 1 }}

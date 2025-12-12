@@ -19,6 +19,7 @@ interface UseBLEScannerReturn {
   stopScan: () => void;
   error: string | null;
   startScanCount: number;
+  debugLog: string[];
 }
 
 // Use shared BleManager instance from bleManager.ts
@@ -69,12 +70,19 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const startScanCountRef = useRef(0);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
   
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
   const isScanningRef = useRef(isScanning);
   useEffect(() => {
     isScanningRef.current = isScanning;
   }, [isScanning]);
+
+  // Debug logging helper
+  const addDebugLog = useCallback((message: string) => {
+    const timestamp = Date.now() % 100000; // Last 5 digits for readability
+    setDebugLog(prev => [...prev.slice(-9), `${timestamp}: ${message}`]);
+  }, []);
 
   // Calculate distance from RSSI using the formula from the original code
   const calculateDistanceFeet = useCallback((rssi: number): number => {
@@ -112,13 +120,17 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {
+    addDebugLog('startScan called');
+    
     // Prevent multiple simultaneous scan starts
     if (isScanning) {
+      addDebugLog('startScan: already scanning, skipping');
       console.log('[BLE-DEBUG] Already scanning, skipping startScan call');
       return;
     }
 
     startScanCountRef.current += 1;
+    addDebugLog(`startScan: proceeding (count: ${startScanCountRef.current})`);
     console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
     setError(null);
     // FIX #2: Don't clear devices array - preserve existing devices and update them
@@ -144,13 +156,16 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     }
 
     setIsScanning(true);
+    addDebugLog('setIsScanning(true)');
 
     try {
       bleManager.startDeviceScan(null, null, (error, device) => {
         if (error) {
+          addDebugLog(`scan error: ${error.message}`);
           console.error('[BLE-DEBUG] BLE scan error:', error);
           setError(error.message);
           setIsScanning(false);
+          addDebugLog('setIsScanning(false) - from error');
           return;
         }
 
@@ -190,9 +205,11 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         // Non-DropLink devices are silently ignored (filtered out)
       });
     } catch (err) {
+      addDebugLog(`startScan exception: ${err instanceof Error ? err.message : 'unknown'}`);
       console.error('[BLE-DEBUG] Exception starting scan:', err);
       setError(err instanceof Error ? err.message : 'Failed to start scanning');
       setIsScanning(false);
+      addDebugLog('setIsScanning(false) - from exception');
     }
 
     // FIX #3 & #4: Remove 10-second timeout - scanning continues until stopScan() is called
@@ -200,15 +217,19 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     // setTimeout(() => {
     //   stopScan();
     // }, 10000); // REMOVED - this was stopping scanning after 10 seconds
-  }, [requestPermissions, calculateDistanceFeet, isScanning]);
+  }, [requestPermissions, calculateDistanceFeet, isScanning, addDebugLog]);
 
   // Stop scanning
   const stopScan = useCallback(() => {
+    addDebugLog('stopScan called');
+    
     if (Platform.OS === 'web') {
+      addDebugLog('stopScan: web platform, skipping');
       return;
     }
 
     if (!bleManager) {
+      addDebugLog('stopScan: bleManager not initialized');
       console.warn('[BLE-DEBUG] BleManager not initialized, cannot stop scan');
       setIsScanning(false);
       return;
@@ -217,12 +238,16 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     try {
       bleManager.stopDeviceScan();
       setIsScanning(false);
+      addDebugLog('setIsScanning(false) - from stopScan');
+      addDebugLog('stopScan: completed');
       console.log('[BLE-DEBUG] Scanning stopped');
     } catch (err) {
+      addDebugLog(`stopScan error: ${err instanceof Error ? err.message : 'unknown'}`);
       console.error('[BLE-DEBUG] Error stopping scan:', err);
       setIsScanning(false);
+      addDebugLog('setIsScanning(false) - from stopScan error');
     }
-  }, []);
+  }, [addDebugLog]);
 
   // Monitor Bluetooth state changes (handle Bluetooth being disabled)
   // Use ref for startScan to avoid recreating listener when startScan changes
@@ -238,44 +263,61 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     let hasHandledInitialState = false;
 
     const subscription = bleManager.onStateChange((state) => {
+      addDebugLog(`stateChange: ${State[state]} (${state})`);
+      
       // Skip the initial state emission if we're already scanning
       // This prevents the loop where PoweredOn -> startScan -> state change -> loop
       if (!hasHandledInitialState) {
         hasHandledInitialState = true;
+        addDebugLog('stateChange: initial emission (skipping if already scanning)');
         // Only handle initial state if Bluetooth is off or unauthorized
         if (state === State.PoweredOff || state === State.Unauthorized) {
           if (state === State.PoweredOff) {
+            addDebugLog('stateChange: PoweredOff (initial)');
             console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
             setDevices([]);
             setIsScanning(false);
+            addDebugLog('setIsScanning(false) - from PoweredOff (initial)');
             setError('Bluetooth is disabled');
           } else if (state === State.Unauthorized) {
+            addDebugLog('stateChange: Unauthorized (initial)');
             console.warn('[BLE-DEBUG] Bluetooth unauthorized');
             setError('Bluetooth permission denied');
             setIsScanning(false);
+            addDebugLog('setIsScanning(false) - from Unauthorized (initial)');
           }
+        } else {
+          addDebugLog(`stateChange: ${State[state]} (initial, skipping)`);
         }
         return;
       }
 
       // Handle subsequent state changes
       if (state === State.PoweredOff) {
-        console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
-        setDevices([]);
-        setIsScanning(false);
-        setError('Bluetooth is disabled');
+            addDebugLog('stateChange: PoweredOff -> stopping scan');
+            console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
+            setDevices([]);
+            setIsScanning(false);
+            addDebugLog('setIsScanning(false) - from PoweredOff');
+            setError('Bluetooth is disabled');
       } else if (state === State.PoweredOn) {
+        addDebugLog(`stateChange: PoweredOn (isScanningRef: ${isScanningRef.current})`);
         console.log('[BLE-DEBUG] Bluetooth powered on');
         setError(null);
         // Auto-restart scanning if we were scanning before
         if (isScanningRef.current) {
+          addDebugLog('stateChange: PoweredOn -> restarting scan');
           console.log('[BLE-DEBUG] Restarting scan after Bluetooth re-enabled');
           startScanRef.current();
+        } else {
+          addDebugLog('stateChange: PoweredOn -> not restarting (was not scanning)');
         }
       } else if (state === State.Unauthorized) {
+        addDebugLog('stateChange: Unauthorized -> stopping scan');
         console.warn('[BLE-DEBUG] Bluetooth unauthorized');
         setError('Bluetooth permission denied');
         setIsScanning(false);
+        addDebugLog('setIsScanning(false) - from Unauthorized');
       }
     }, true); // true = emit current state immediately
 
@@ -303,5 +345,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     stopScan,
     error,
     startScanCount: startScanCountRef.current,
+    debugLog,
   };
 };
