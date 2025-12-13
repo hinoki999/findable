@@ -771,7 +771,7 @@ export async function sendPhoneVerificationCode(phoneNumber: string, userId: str
 
     if (error) {
       console.error('Failed to send phone OTP:', error);
-      throw new Error('Failed to send verification code. Please check your phone number.');
+      throw new Error(`Failed to send code: ${error.message}`);
     }
 
     console.log(`SUCCESS: Phone OTP sent to ${formattedPhone}`);
