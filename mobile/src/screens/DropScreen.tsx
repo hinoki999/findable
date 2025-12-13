@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl, Dimensions } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
@@ -40,47 +40,6 @@ export default function DropScreen() {
   const filteredDevices = devices
     .filter(device => device.distanceFeet <= maxDistance)
     .sort((a, b) => a.distanceFeet - b.distanceFeet);
-
-  // Show error toast when BLE scanning fails (debounced to prevent spam)
-  const errorToastShownRef = useRef(false);
-  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  useEffect(() => {
-    if (error) {
-      // Clear any pending timeout
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
-      
-      // Only show toast if we haven't shown one recently (debounce)
-      if (!errorToastShownRef.current) {
-        errorToastShownRef.current = true;
-        showToast({
-          message: 'Oops! Something went wrong. Ensure your Bluetooth is on.',
-          type: 'error',
-          duration: 4000,
-        });
-        
-        // Reset flag after 5 seconds to allow showing again if error persists
-        errorTimeoutRef.current = setTimeout(() => {
-          errorToastShownRef.current = false;
-        }, 5000);
-      }
-    } else {
-      // Clear error flag when error is cleared
-      errorToastShownRef.current = false;
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-        errorTimeoutRef.current = null;
-      }
-    }
-    
-    return () => {
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
-    };
-  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-start scanning when Drop page loads
   useEffect(() => {
