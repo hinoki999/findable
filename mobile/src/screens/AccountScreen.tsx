@@ -521,22 +521,22 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               </View>
             </View>
             {!phoneVerified && (
-              <Pressable
-                onPress={() => setShowPhoneVerificationModal(true)}
-                style={{
-                  borderWidth: 1,
-                  borderColor: theme.colors.blue,
-                  borderRadius: 6,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  marginTop: 8,
-                  alignSelf: 'flex-start',
-                }}
-              >
-                <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
-                  Verify
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
+                <Pressable
+                  onPress={() => setShowPhoneVerificationModal(true)}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.blue,
+                    borderRadius: 6,
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
+                    Verify
+                  </Text>
+                </Pressable>
+              </View>
             )}
           </View>
 
