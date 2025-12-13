@@ -510,31 +510,34 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           </View>
 
           {/* Phone Number Row */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
-              {!phoneVerified && (
-                <Pressable
-                  onPress={() => setShowPhoneVerificationModal(true)}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.colors.blue,
-                    borderRadius: 6,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                    marginRight: 8,
-                  }}
-                >
-                  <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
-                    Verify
-                  </Text>
+          <View style={{ paddingVertical: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
+                <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
+                <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
+                  <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
                 </Pressable>
-              )}
-              <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
-                <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
-              </Pressable>
+              </View>
             </View>
+            {!phoneVerified && (
+              <Pressable
+                onPress={() => setShowPhoneVerificationModal(true)}
+                style={{
+                  borderWidth: 1,
+                  borderColor: theme.colors.blue,
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  marginTop: 8,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
+                  Verify
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           {/* Email Row */}
