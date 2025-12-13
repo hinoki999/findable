@@ -452,8 +452,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
         {/* Contact Information Card */}
         <View style={theme.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={[theme.type.h2, { color: theme.colors.blue }]}>Edit contact information</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={[theme.type.h2, { color: theme.colors.blue, flex: 1 }]}>Contact Information</Text>
             <Pressable
               onPress={() => {
                 logAction('Preview My Card button clicked', { username });
@@ -466,6 +466,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                 backgroundColor: 'transparent',
                 paddingHorizontal: 8,
                 paddingVertical: 4,
+                marginRight: 12,
               }}
             >
               <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
@@ -514,30 +515,32 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Text style={[theme.type.muted, { flex: 1 }]}>Phone number</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-                <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{phone || '(555) 123-4567'}</Text>
+                  {!phoneVerified && (
+                    <Pressable
+                      onPress={() => setShowPhoneVerificationModal(true)}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: theme.colors.blue,
+                        borderRadius: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        marginTop: 8,
+                        marginRight: 8,
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
+                        Verify
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
                 <Pressable style={{ padding: 4 }} onPress={() => handleEdit('phone')}>
                   <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
                 </Pressable>
               </View>
             </View>
-            {!phoneVerified && (
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 }}>
-                <Pressable
-                  onPress={() => setShowPhoneVerificationModal(true)}
-                  style={{
-                    borderWidth: 1,
-                    borderColor: theme.colors.blue,
-                    borderRadius: 6,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Text style={{ color: theme.colors.blue, fontSize: 11, fontWeight: '600' }}>
-                    Verify
-                  </Text>
-                </Pressable>
-              </View>
-            )}
           </View>
 
           {/* Email Row */}
