@@ -80,7 +80,7 @@ export default function DropScreen() {
         clearTimeout(errorTimeoutRef.current);
       }
     };
-  }, [error, showToast]);
+  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-start scanning when Drop page loads
   useEffect(() => {
