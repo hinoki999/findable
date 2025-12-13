@@ -1152,6 +1152,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   }}>
                     We'll send a confirmation code to {phone}
                   </Text>
+                  {phoneVerificationError ? (
+                    <Text style={{ color: '#FF3B30', textAlign: 'center', marginTop: 12 }}>
+                      {phoneVerificationError}
+                    </Text>
+                  ) : null}
                   <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
                     <Pressable
                       style={({ pressed }) => ({
