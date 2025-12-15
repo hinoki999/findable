@@ -31,3 +31,8 @@ AppData/
 *.swp
 *.swo
 *~
+
+# Environment variables
+.env
+.env.local
+.env.*.local
