@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import * as api from '../services/api';
-import { sendPhoneVerificationCode, verifyPhoneCode } from '../services/api';
+import { sendPhoneVerificationCode, verifyPhoneCode, sendPhoneVerificationCodeTwilio, verifyPhoneCodeTwilio } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
 
@@ -358,7 +358,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setPhoneVerificationError('');
 
     try {
-      await sendPhoneVerificationCode(phone, userId);
+      await sendPhoneVerificationCodeTwilio(phone);
       setPhoneVerificationStep('enter-code');
     } catch (err: any) {
       setPhoneVerificationError(err.message || 'Failed to send verification code. Please try again.');
@@ -382,7 +382,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setPhoneVerificationError('');
 
     try {
-      await verifyPhoneCode(phone, phoneVerificationCode, userId);
+      await verifyPhoneCodeTwilio(phone, phoneVerificationCode, userId);
       
       // Update local profile state
       updateProfile({ phoneVerified: true });
