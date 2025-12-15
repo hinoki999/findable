@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
+import { TabNavigationProvider } from './src/contexts/TabNavigationContext';
 import HomeScreen from './src/screens/HomeScreen';
 import ProfilePhotoScreen from './src/screens/ProfilePhotoScreen';
 import SecuritySettingsScreen from './src/screens/SecuritySettingsScreen';
@@ -757,24 +758,25 @@ function MainApp() {
   };
 
   return (
-    <TutorialProvider>
-      <TutorialInitializer />
-      <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
-        <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
-          <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
-            <ToastContext.Provider value={{ showToast }}>
-              <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
-                <LinkNotificationsContext.Provider value={{
-                  linkNotifications,
-                  addLinkNotification,
-                  markAsViewed,
-                  dismissNotification,
-                  hasUnviewedLinks
-                }}>
-                  <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-                    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-                      <Screen />
-                    </View>
+    <TabNavigationProvider navigateToTab={setTab}>
+      <TutorialProvider>
+        <TutorialInitializer />
+        <DarkModeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+          <PinnedProfilesContext.Provider value={{ pinnedIds, togglePin }}>
+            <UserProfileContext.Provider value={{ profile: userProfile, updateProfile }}>
+              <ToastContext.Provider value={{ showToast }}>
+                <SettingsContext.Provider value={{ maxDistance, setMaxDistance: updateMaxDistance }}>
+                  <LinkNotificationsContext.Provider value={{
+                    linkNotifications,
+                    addLinkNotification,
+                    markAsViewed,
+                    dismissNotification,
+                    hasUnviewedLinks
+                  }}>
+                    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                      <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+                        <Screen />
+                      </View>
 
                     {/* Bottom nav - Hide when sub-screen is active */}
                     {!subScreen && (
@@ -876,11 +878,12 @@ function MainApp() {
               </SettingsContext.Provider>
             </ToastContext.Provider>
           </UserProfileContext.Provider>
-        </PinnedProfilesContext.Provider>
-      </DarkModeContext.Provider>
-    </TutorialProvider>
-  );
-}
+            </PinnedProfilesContext.Provider>
+          </DarkModeContext.Provider>
+        </TutorialProvider>
+      </TabNavigationProvider>
+    );
+  }
 
 // Export App wrapped with AuthProvider
 export default function App() {

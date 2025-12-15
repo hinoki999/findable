@@ -4,7 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
 import { saveDevice } from '../services/api';
-import { useDarkMode, useLinkNotifications, useToast, useSettings } from '../../App';
+import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile } from '../../App';
+import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
@@ -22,7 +23,10 @@ export default function DropScreen() {
   const { showToast } = useToast();
   const { maxDistance } = useSettings();
   const { userId } = useAuth();
+  const { profile } = useUserProfile();
+  const { navigateToTab } = useTabNavigation();
   const theme = getTheme(isDarkMode);
+  const phoneVerified = profile?.phoneVerified || false;
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
   const screenWidth = Dimensions.get('window').width;
@@ -48,6 +52,14 @@ export default function DropScreen() {
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
+    if (!phoneVerified) {
+      showToast({
+        message: 'Please verify your phone number to start dropping',
+        type: 'error',
+        duration: 3000,
+      });
+      return;
+    }
     try {
       await saveDevice({ 
         name: device.name, 
@@ -170,6 +182,48 @@ export default function DropScreen() {
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
       <TopBar logoMode={true} logoIcon="water-outline" />
       
+      {/* Phone Verification Banner - Show only when not verified */}
+      {!phoneVerified ? (
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 40,
+          paddingVertical: 60,
+        }}>
+          <MaterialCommunityIcons name="phone-outline" size={64} color={theme.colors.blue} style={{ marginBottom: 20 }} />
+          <Text style={{
+            fontSize: 18,
+            fontFamily: 'Inter_600SemiBold',
+            color: theme.colors.blue,
+            textAlign: 'center',
+            marginBottom: 12,
+          }}>
+            Verify your phone number to start sending and receiving drops!
+          </Text>
+          <Pressable
+            onPress={() => {
+              navigateToTab('Account');
+            }}
+            style={{
+              marginTop: 20,
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              backgroundColor: theme.colors.blue,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{
+              fontSize: 15,
+              fontFamily: 'Inter_600SemiBold',
+              color: '#FFFFFF',
+            }}>
+              Verify Now
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
       {/* Floating Contact Card Notification */}
       {incomingDrop && (
         <Animated.View
@@ -323,6 +377,8 @@ export default function DropScreen() {
       />
 
       {/* Confirmation modal */}
+        </>
+      )}
       <Modal visible={!!active} transparent animationType="fade" onRequestClose={()=>setActive(null)}>
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', padding:20 }}>
           <View style={{ ...theme.card, padding:24 }}>
