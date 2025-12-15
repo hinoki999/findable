@@ -76,10 +76,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   
   // Phone verification modal state
   const [showPhoneVerificationModal, setShowPhoneVerificationModal] = useState(false);
-  const [phoneVerificationStep, setPhoneVerificationStep] = useState<'confirm' | 'enter-code'>('confirm');
+  const [phoneVerificationStep, setPhoneVerificationStep] = useState<'confirm' | 'enter-code' | 'success'>('confirm');
   const [phoneVerificationCode, setPhoneVerificationCode] = useState('');
   const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
   const [phoneVerificationError, setPhoneVerificationError] = useState('');
+  const [codeSentSuccessfully, setCodeSentSuccessfully] = useState(false);
   const [tempSocialPlatform, setTempSocialPlatform] = useState('');
   const [tempSocialHandle, setTempSocialHandle] = useState('');
   const [tempSocialIndex, setTempSocialIndex] = useState<number | null>(null);
@@ -356,12 +357,17 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
     setSendingPhoneCode(true);
     setPhoneVerificationError('');
+    setCodeSentSuccessfully(false);
 
     try {
       await sendPhoneVerificationCodeTwilio(phone);
+      setCodeSentSuccessfully(true);
       setPhoneVerificationStep('enter-code');
+      // Clear error on successful send
+      setPhoneVerificationError('');
     } catch (err: any) {
       setPhoneVerificationError(err.message || 'Failed to send verification code. Please try again.');
+      setCodeSentSuccessfully(false);
     } finally {
       setSendingPhoneCode(false);
     }
@@ -387,16 +393,23 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       // Update local profile state
       updateProfile({ phoneVerified: true });
       
-      // Close modal and reset state
-      setShowPhoneVerificationModal(false);
-      setPhoneVerificationStep('confirm');
-      setPhoneVerificationCode('');
+      // Show success step before closing
+      setPhoneVerificationStep('success');
+      setPhoneVerificationError('');
       
-      showToast({
-        message: 'Phone number verified successfully!',
-        type: 'success',
-        duration: 3000,
-      });
+      // Close modal after showing success for 2 seconds
+      setTimeout(() => {
+        setShowPhoneVerificationModal(false);
+        setPhoneVerificationStep('confirm');
+        setPhoneVerificationCode('');
+        setCodeSentSuccessfully(false);
+        
+        showToast({
+          message: 'Phone number verified successfully!',
+          type: 'success',
+          duration: 3000,
+        });
+      }, 2000);
     } catch (err: any) {
       setPhoneVerificationError(err.message || 'Invalid or expired code. Please try again.');
     } finally {
@@ -1073,11 +1086,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         transparent={true}
         animationType="fade"
         onRequestClose={() => {
-          if (!sendingPhoneCode) {
+          if (!sendingPhoneCode && phoneVerificationStep !== 'success') {
             setShowPhoneVerificationModal(false);
             setPhoneVerificationStep('confirm');
             setPhoneVerificationCode('');
             setPhoneVerificationError('');
+            setCodeSentSuccessfully(false);
           }
         }}
       >
@@ -1110,14 +1124,15 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   zIndex: 1,
                 }}
                 onPress={() => {
-                  if (!sendingPhoneCode) {
+                  if (!sendingPhoneCode && phoneVerificationStep !== 'success') {
                     setShowPhoneVerificationModal(false);
                     setPhoneVerificationStep('confirm');
                     setPhoneVerificationCode('');
                     setPhoneVerificationError('');
+                    setCodeSentSuccessfully(false);
                   }
                 }}
-                disabled={sendingPhoneCode}
+                disabled={sendingPhoneCode || phoneVerificationStep === 'success'}
               >
                 {({ pressed }) => (
                   <MaterialCommunityIcons
@@ -1153,9 +1168,16 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     We'll send a confirmation code to {phone}
                   </Text>
                   {phoneVerificationError ? (
-                    <Text style={{ color: '#FF3B30', textAlign: 'center', marginTop: 12 }}>
-                      {phoneVerificationError}
-                    </Text>
+                    <View style={{ width: '100%', marginTop: 12, marginBottom: 8 }}>
+                      <Text style={{ 
+                        color: '#FF3B30', 
+                        textAlign: 'center',
+                        fontSize: 14,
+                        fontFamily: 'Inter_400Regular',
+                      }}>
+                        {phoneVerificationError}
+                      </Text>
+                    </View>
                   ) : null}
                   <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
                     <Pressable
@@ -1175,6 +1197,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                         setPhoneVerificationStep('confirm');
                         setPhoneVerificationCode('');
                         setPhoneVerificationError('');
+                        setCodeSentSuccessfully(false);
                       }}
                       disabled={sendingPhoneCode}
                     >
@@ -1216,6 +1239,30 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     </Pressable>
                   </View>
                 </>
+              ) : phoneVerificationStep === 'success' ? (
+                <>
+                  <MaterialCommunityIcons name="check-circle" size={64} color="#4CAF50" style={{ marginBottom: 16 }} />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '600',
+                    fontFamily: 'Inter_500Medium',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                    color: theme.colors.text,
+                  }}>
+                    Phone Verified!
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontFamily: 'Inter_400Regular',
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    lineHeight: 22,
+                    color: theme.colors.muted,
+                  }}>
+                    Your phone number has been successfully verified.
+                  </Text>
+                </>
               ) : (
                 <>
                   <MaterialCommunityIcons name="phone-check-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
@@ -1233,12 +1280,36 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     fontSize: 15,
                     fontFamily: 'Inter_400Regular',
                     textAlign: 'center',
-                    marginBottom: 24,
+                    marginBottom: 8,
                     lineHeight: 22,
                     color: theme.colors.muted,
                   }}>
                     We sent a 6-digit code to {phone}
                   </Text>
+                  {codeSentSuccessfully && !phoneVerificationError && (
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 24,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      backgroundColor: '#E8F5E9',
+                      borderRadius: 8,
+                    }}>
+                      <MaterialCommunityIcons name="check-circle" size={16} color="#4CAF50" style={{ marginRight: 6 }} />
+                      <Text style={{
+                        fontSize: 13,
+                        fontFamily: 'Inter_500Medium',
+                        color: '#4CAF50',
+                      }}>
+                        Code sent successfully!
+                      </Text>
+                    </View>
+                  )}
+                  {!codeSentSuccessfully && !phoneVerificationError && (
+                    <View style={{ height: 40, marginBottom: 24 }} />
+                  )}
                   <TextInput
                     style={{
                       width: '100%',
@@ -1265,35 +1336,69 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     editable={!sendingPhoneCode}
                   />
                   {phoneVerificationError && (
-                    <Text style={{
-                      fontSize: 13,
-                      color: '#FF3B30',
-                      fontFamily: 'Inter_400Regular',
-                      marginBottom: 8,
-                      textAlign: 'center',
-                    }}>
-                      {phoneVerificationError}
-                    </Text>
-                  )}
-                  <Pressable
-                    style={({ pressed }) => ({
-                      paddingVertical: 8,
+                    <View style={{
+                      width: '100%',
+                      paddingVertical: 12,
                       paddingHorizontal: 16,
-                      marginBottom: 8,
-                      opacity: pressed || sendingPhoneCode ? 0.6 : 1,
-                    })}
-                    onPress={handleSendPhoneCode}
-                    disabled={sendingPhoneCode}
-                  >
-                    <Text style={{
-                      fontSize: 15,
-                      fontFamily: 'Inter_400Regular',
-                      textAlign: 'center',
-                      color: theme.colors.blue,
+                      backgroundColor: '#FFEBEE',
+                      borderRadius: 8,
+                      marginBottom: 16,
+                      borderWidth: 1,
+                      borderColor: '#FFCDD2',
                     }}>
-                      {sendingPhoneCode ? 'Sending...' : 'Resend code'}
-                    </Text>
-                  </Pressable>
+                      <Text style={{
+                        fontSize: 14,
+                        color: '#FF3B30',
+                        fontFamily: 'Inter_500Medium',
+                        textAlign: 'center',
+                        marginBottom: 8,
+                      }}>
+                        {phoneVerificationError}
+                      </Text>
+                      <Pressable
+                        style={({ pressed }) => ({
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          backgroundColor: '#FF3B30',
+                          borderRadius: 6,
+                          opacity: pressed || sendingPhoneCode ? 0.7 : 1,
+                          alignSelf: 'center',
+                        })}
+                        onPress={handleSendPhoneCode}
+                        disabled={sendingPhoneCode}
+                      >
+                        <Text style={{
+                          fontSize: 14,
+                          fontFamily: 'Inter_600SemiBold',
+                          textAlign: 'center',
+                          color: '#FFFFFF',
+                        }}>
+                          {sendingPhoneCode ? 'Sending...' : 'Try Again'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {!phoneVerificationError && (
+                    <Pressable
+                      style={({ pressed }) => ({
+                        paddingVertical: 8,
+                        paddingHorizontal: 16,
+                        marginBottom: 8,
+                        opacity: pressed || sendingPhoneCode ? 0.6 : 1,
+                      })}
+                      onPress={handleSendPhoneCode}
+                      disabled={sendingPhoneCode}
+                    >
+                      <Text style={{
+                        fontSize: 15,
+                        fontFamily: 'Inter_400Regular',
+                        textAlign: 'center',
+                        color: theme.colors.blue,
+                      }}>
+                        {sendingPhoneCode ? 'Sending...' : 'Resend code'}
+                      </Text>
+                    </Pressable>
+                  )}
                   <Pressable
                     style={({ pressed }) => ({
                       width: '100%',
