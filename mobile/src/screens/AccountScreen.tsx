@@ -1086,7 +1086,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         transparent={true}
         animationType="fade"
         onRequestClose={() => {
-          if (!sendingPhoneCode && phoneVerificationStep !== 'success') {
+          if (!sendingPhoneCode && phoneVerificationStep === 'confirm') {
             setShowPhoneVerificationModal(false);
             setPhoneVerificationStep('confirm');
             setPhoneVerificationCode('');
@@ -1124,7 +1124,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   zIndex: 1,
                 }}
                 onPress={() => {
-                  if (!sendingPhoneCode && phoneVerificationStep !== 'success') {
+                  if (!sendingPhoneCode && phoneVerificationStep === 'confirm') {
                     setShowPhoneVerificationModal(false);
                     setPhoneVerificationStep('confirm');
                     setPhoneVerificationCode('');
