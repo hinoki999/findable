@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** December 2024 (Twilio Verify Implementation & Drop Visibility Blocking)
+**Last Updated:** December 2024 (Phone Verification Bug Fixes & Security Improvements)
 
 ---
 
@@ -1297,6 +1297,125 @@ phone_verified_at TIMESTAMPTZ  -- Note: Column exists but not currently used in 
 - [ ] Monitor Twilio usage and costs
 - [ ] Consider adding rate limiting for verification attempts
 - [ ] Add analytics for verification completion rates
+
+---
+
+## Phone Verification Bug Fixes & Security Improvements (December 2024)
+
+### Overview
+Critical bug fixes and security improvements to the phone verification system implemented after the initial Twilio Verify integration.
+
+### Bug Fixes
+
+#### Bug #1: Phone Verification Modal Closing on First "Send Code" Tap
+**Issue:** When user tapped "Send Code" for the first time, the code was sent successfully but the modal closed instead of transitioning to the code entry step. User had to tap "Verify" again and "Send Code" again - the second time it worked correctly.
+
+**Root Cause:** The `onRequestClose` condition in the modal was allowing it to close when `phoneVerificationStep` was `'enter-code'`. The condition `if (!sendingPhoneCode && phoneVerificationStep !== 'success')` allowed closing during the `'enter-code'` step.
+
+**Fix:** Changed the modal's `onRequestClose` condition to only allow closing when in the initial `'confirm'` step:
+```typescript
+// Before:
+if (!sendingPhoneCode && phoneVerificationStep !== 'success') {
+  setShowPhoneVerificationModal(false);
+}
+
+// After:
+if (!sendingPhoneCode && phoneVerificationStep === 'confirm') {
+  setShowPhoneVerificationModal(false);
+}
+```
+
+**Location:** `mobile/src/screens/AccountScreen.tsx` lines 1089 and 1127
+
+**Impact:** Modal now correctly stays open after sending code and transitions to code entry step on first attempt.
+
+#### Bug #2: Insufficient Error Logging in Phone Verification
+**Issue:** Error messages from Supabase OTP were not showing the actual error details, making debugging difficult.
+
+**Fix:** Updated error handling in `sendPhoneVerificationCode` to include `error.message`:
+```typescript
+// Before:
+if (error) {
+  console.error('Failed to send phone OTP:', error);
+  throw new Error('Failed to send verification code. Please check your phone number.');
+}
+
+// After:
+if (error) {
+  console.error('Failed to send phone OTP:', error);
+  throw new Error(`Failed to send code: ${error.message}`);
+}
+```
+
+**Location:** `mobile/src/services/api.ts` line 774
+
+**Impact:** Users now see specific error messages, and developers can debug issues more effectively.
+
+### UI/UX Improvements
+
+#### AccountScreen Phone Verification Button Layout
+**Issue:** Verify button was overlapping with phone number text, creating a poor user experience.
+
+**Changes:**
+- Restructured layout so phone number label and value stay on the same row
+- Moved "Verify" button to a new row directly underneath the phone number
+- Aligned right edge of verify button with the end of the phone number
+- Maintained pencil icon on the right side
+
+**Location:** `mobile/src/screens/AccountScreen.tsx` - Phone number section
+
+#### Contact Information Section Title
+**Change:** Updated section title from "Edit Contact Information" to "Contact Information" (removed "Edit" prefix).
+
+**Location:** `mobile/src/screens/AccountScreen.tsx`
+
+### Security Improvements
+
+#### Removed Hardcoded Credentials from README
+**Issue:** Twilio credentials were hardcoded in README.md documentation, exposing sensitive information.
+
+**Fix:** Replaced actual credentials with placeholder text:
+```diff
+- TWILIO_ACCOUNT_SID=ACe3750126b56ae9b96298de09396c0907
+- TWILIO_AUTH_TOKEN=e027b8221cebed813b9f4c45c8b17aab
+- TWILIO_VERIFY_SERVICE_SID=VAc0defbdde25269763a69c543bd0eaf91
++ TWILIO_ACCOUNT_SID=[TWILIO_CREDENTIALS_IN_ENV]
++ TWILIO_AUTH_TOKEN=[TWILIO_CREDENTIALS_IN_ENV]
++ TWILIO_VERIFY_SERVICE_SID=[TWILIO_CREDENTIALS_IN_ENV]
+```
+
+**Location:** `README.md` lines 1133-1135
+
+**Impact:** No sensitive credentials exposed in version control or documentation.
+
+### Testing & Verification
+
+**Tests Performed:**
+- ✅ Modal stays open after first "Send Code" tap
+- ✅ Smooth transition from 'confirm' to 'enter-code' step
+- ✅ Modal can only be closed from 'confirm' step (not during code entry)
+- ✅ Error messages display actual error details
+- ✅ Button layout improvements verified
+- ✅ No credentials visible in README
+
+### Files Modified
+
+**Modified Files:**
+- `mobile/src/screens/AccountScreen.tsx` - Fixed modal closing bug, improved button layout
+- `mobile/src/services/api.ts` - Enhanced error logging
+- `README.md` - Removed hardcoded credentials, added bug fix documentation
+
+### Git Operations
+
+**Commit:** "Fix phone verification modal closing on first send"
+- Fixed modal closing bug
+- Improved error handling
+- UI layout improvements
+- Security improvements (README cleanup)
+
+**Deployment:**
+- Pushed to `origin develop`
+- EAS update deployed to Android preview branch
 
 ---
 
