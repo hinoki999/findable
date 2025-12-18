@@ -58,12 +58,50 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
       
       const { data, error } = await supabase
-        .from('user_profiles')
-        .select('tutorial_home_completed, tutorial_drop_completed, tutorial_history_completed, tutorial_account_completed')
+        .from('tutorial_completions')
+        .select('home_completed, drop_completed, history_completed, account_completed')
         .eq('user_id', session.user.id)
         .single();
       
       if (error) {
+        // If row doesn't exist, create it
+        if (error.code === 'PGRST116') {
+          console.log('[TUTORIAL] No tutorial_completions row found, creating new row...');
+          const { error: insertError } = await supabase
+            .from('tutorial_completions')
+            .insert({
+              user_id: session.user.id,
+              home_completed: false,
+              drop_completed: false,
+              history_completed: false,
+              account_completed: false,
+            });
+          
+          if (insertError) {
+            console.error('[TUTORIAL] Error creating tutorial_completions row:', insertError);
+            // Fail safe: mark all as completed (don't show on error)
+            setCompletedTutorials({
+              Home: true,
+              Drop: true,
+              History: true,
+              Account: true,
+            });
+            setIsLoaded(true);
+            return;
+          }
+          
+          // Row created, set all to false (show all tutorials)
+          console.log('[TUTORIAL] Created new tutorial_completions row, all tutorials will show');
+          setCompletedTutorials({
+            Home: false,
+            Drop: false,
+            History: false,
+            Account: false,
+          });
+          setIsLoaded(true);
+          return;
+        }
+        
         console.error('[TUTORIAL] Error checking tutorial status:', error);
         // Fail safe: mark all as completed (don't show on error)
         setCompletedTutorials({
@@ -78,10 +116,10 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       
       // Treat NULL as FALSE (show tutorial if not explicitly completed)
       const completed = {
-        Home: data?.tutorial_home_completed ?? false,
-        Drop: data?.tutorial_drop_completed ?? false,
-        History: data?.tutorial_history_completed ?? false,
-        Account: data?.tutorial_account_completed ?? false,
+        Home: data?.home_completed ?? false,
+        Drop: data?.drop_completed ?? false,
+        History: data?.history_completed ?? false,
+        Account: data?.account_completed ?? false,
       };
       
       console.log('[TUTORIAL] Per-screen status loaded:', completed);
@@ -190,16 +228,16 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       
       // Map screen name to database column
       const columnMap: Record<ScreenName, string> = {
-        Home: 'tutorial_home_completed',
-        Drop: 'tutorial_drop_completed',
-        History: 'tutorial_history_completed',
-        Account: 'tutorial_account_completed',
+        Home: 'home_completed',
+        Drop: 'drop_completed',
+        History: 'history_completed',
+        Account: 'account_completed',
       };
       
       const columnName = columnMap[screenToComplete];
       
       const { error } = await supabase
-        .from('user_profiles')
+        .from('tutorial_completions')
         .update({ [columnName]: true })
         .eq('user_id', session.user.id);
       
