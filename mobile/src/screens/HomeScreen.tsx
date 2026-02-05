@@ -2675,21 +2675,54 @@ export default function HomeScreen() {
                 />
               </View>
               <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedBlipDevice?.name}
+                {selectedBlipDevice?.name || 'Unknown Device'}
               </Text>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#E5FFE5',
-                paddingHorizontal: 12,
-                paddingVertical: 4,
-                borderRadius: 12,
-                marginBottom: 8,
-              }}>
-                <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
-                  {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
-                </Text>
+              
+              {/* Device Details */}
+              <View style={{ width: '100%', marginBottom: 12 }}>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#E5FFE5',
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginBottom: 6,
+                }}>
+                  <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
+                    {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
+                  </Text>
+                </View>
+                
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F0F0F0',
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  marginBottom: 6,
+                }}>
+                  <MaterialCommunityIcons name="signal" size={14} color="#666" />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginLeft: 4 }}>
+                    RSSI: {selectedBlipDevice?.rssi || 'N/A'} dBm
+                  </Text>
+                </View>
+                
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F0F0F0',
+                  paddingHorizontal: 12,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                }}>
+                  <MaterialCommunityIcons name="identifier" size={14} color="#666" />
+                  <Text style={{ fontSize: 11, fontWeight: '500', color: '#666', marginLeft: 4, flex: 1 }}>
+                    ID: {selectedBlipDevice?.id ? selectedBlipDevice.id.substring(0, 20) + '...' : 'N/A'}
+                  </Text>
+                </View>
               </View>
             </View>
 
