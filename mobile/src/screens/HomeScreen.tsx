@@ -1422,13 +1422,6 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* UPDATE TEST BANNER */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#FF0000', padding: 20, zIndex: 10000, alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: 'bold', textAlign: 'center' }}>
-          UPDATE TEST 12345
-        </Text>
-      </View>
-      
       {/* BLE Debug Overlay - TEMPORARY DIAGNOSTIC */}
       <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999 }}>
         <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
@@ -1621,65 +1614,65 @@ export default function HomeScreen() {
           );
         }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
 
-        {/* Pulsating Blips for Nearby Devices - Inside grid so they rotate with it */}
-        <View
-          style={{
-            position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-            zIndex: 1000,
-            pointerEvents: 'box-none', // Allow touches to pass through to blips
-          }}
-        >
-          {filteredDevices.map((device) => {
-            const position = getGridPosition(device);
-
-            return (
-              <DeviceBlip
-                key={device.id || device.name}
-                device={device}
-                position={{ x: position.x, y: position.y }}
-                depth={position.z}
-                nucleusX={nucleusX}
-                nucleusY={nucleusY}
-                viewTransform={viewTransformTensor}
-                onPress={() => {
-                  console.log('SUCCESS: Blip press handler called for:', device.name);
-                  setSelectedBlipDevice(device);
-                  setShowBlipModal(true);
-                }}
-              />
-            );
-          })}
-
-          {/* Link Markers - for accepted and returned links (no pulsation) */}
-          {linkedDevices.map((device) => {
-            // Use same positioning logic as blips to ensure grid snapping
-            const position = getGridPosition(device as any); // Device has distanceFeet property
-
-            return (
-              <LinkMarker
-                key={device.id || `link-${device.name}`}
-                device={device}
-                position={{ x: position.x, y: position.y }}
-                depth={position.z}
-                nucleusX={nucleusX}
-                nucleusY={nucleusY}
-                viewTransform={viewTransformTensor}
-                onPress={() => {
-                  console.log('SUCCESS: Link marker clicked for:', device.name);
-                  setSelectedLink(device);
-                  setShowLinkModal(true);
-                }}
-              />
-            );
-          })}
-
-        </View>
 
           </Animated.View>  {/* ← Close transformed grid container */}
+
+      {/* Blips Layer - Completely separate from gesture handlers for reliable touch detection */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 2000,
+          pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
+        }}
+      >
+        {filteredDevices.map((device) => {
+          const position = getGridPosition(device);
+
+          return (
+            <DeviceBlip
+              key={device.id || device.name}
+              device={device}
+              position={{ x: position.x, y: position.y }}
+              depth={position.z}
+              nucleusX={nucleusX}
+              nucleusY={nucleusY}
+              viewTransform={viewTransformTensor}
+              onPress={() => {
+                console.log('SUCCESS: Blip press handler called for:', device.name);
+                setSelectedBlipDevice(device);
+                setShowBlipModal(true);
+              }}
+            />
+          );
+        })}
+
+        {/* Link Markers - for accepted and returned links (no pulsation) */}
+        {linkedDevices.map((device) => {
+          // Use same positioning logic as blips to ensure grid snapping
+          const position = getGridPosition(device as any); // Device has distanceFeet property
+
+          return (
+            <LinkMarker
+              key={device.id || `link-${device.name}`}
+              device={device}
+              position={{ x: position.x, y: position.y }}
+              depth={position.z}
+              nucleusX={nucleusX}
+              nucleusY={nucleusY}
+              viewTransform={viewTransformTensor}
+              onPress={() => {
+                console.log('SUCCESS: Link marker clicked for:', device.name);
+                setSelectedLink(device);
+                setShowLinkModal(true);
+              }}
+            />
+          );
+        })}
+      </View>
 
       {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
       {filteredDevices.length === 0 && linkedDevices.length === 0 && (
