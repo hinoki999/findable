@@ -459,13 +459,14 @@ const DeviceBlip: React.FC<{
   
   return (
     <Pressable
-      onPress={(e) => {
+      onTouchEnd={(e) => {
         e.stopPropagation();
-        console.log('[DeviceBlip] Press detected for device:', device.name);
+        console.log('[DeviceBlip] Touch detected for device:', device.name);
         onPress();
       }}
-      onPressIn={() => {
-        console.log('[DeviceBlip] Press in detected');
+      onPress={(e) => {
+        e.stopPropagation();
+        onPress();
       }}
       style={{
         position: 'absolute',
@@ -1431,16 +1432,11 @@ export default function HomeScreen() {
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
-        style={{ flex: 1, pointerEvents: 'box-none' }} // Don't capture touches - let blips receive them
+        style={{ flex: 1 }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        {/* Touch handlers only for multi-touch gestures - positioned behind blips */}
-        <View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          pointerEvents="box-none" // Let single touches pass through to blips
-        />
           <Animated.View
             style={{
         position: 'absolute',
@@ -1626,8 +1622,8 @@ export default function HomeScreen() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-            zIndex: 3000, // Much higher than touch handler (100) and grid (0) - ensures blips are on top
-            pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
+            zIndex: 1000,
+            pointerEvents: 'box-none', // Allow touches to pass through to blips
           }}
         >
           {filteredDevices.map((device) => {
