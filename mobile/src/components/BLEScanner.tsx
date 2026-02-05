@@ -159,8 +159,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     addDebugLog('setIsScanning(true)');
 
     try {
-      // Scan for specific Service UUID - this filters at the OS level for better performance
-      bleManager.startDeviceScan([DROPLINK_SERVICE_UUID], null, (error, device) => {
+      // Scan for ALL BLE devices (no Service UUID filter) - for testing
+      // TODO: Re-enable Service UUID filtering once advertising is working
+      bleManager.startDeviceScan(null, null, (error, device) => {
         if (error) {
           addDebugLog(`scan error: ${error.message}`);
           console.error('[BLE-DEBUG] BLE scan error:', error);
@@ -170,23 +171,23 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return;
         }
 
-        // Filter: Only process DropLink users (devices with "DropLink-" prefix in name)
-        if (device && isDropLinkDevice(device)) {
+        // Process ALL detected BLE devices - no filtering for testing
+        // TODO: Re-enable DropLink filtering once scanning is confirmed working
+        if (device) {
           // Validate device has required properties
           if (!device.id) {
-            console.warn('[BLE-DEBUG] Device missing ID, skipping:', device);
             return;
           }
 
           setDevices(prevDevices => {
             const exists = prevDevices.find(d => d.id === device.id);
             const distanceFeet = calculateDistanceFeet(device.rssi || -100);
-            // DropLink devices should always have a name (required prefix)
-            const deviceName = device.name || `DropLink-Unknown (${device.id.substring(0, 8)})`;
+            // Use device name or generate a fallback name
+            const deviceName = device.name || `BLE-Device-${device.id.substring(0, 8)}`;
             
             if (!exists) {
-              // Add new DropLink device
-              console.log('[BLE] DropLink device detected:', deviceName, `(${distanceFeet.toFixed(1)}ft)`);
+              // Add new device
+              console.log('[BLE] Device detected:', deviceName, `(${distanceFeet.toFixed(1)}ft)`);
               return [...prevDevices, {
                 id: device.id,
                 name: deviceName,
@@ -194,7 +195,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 distanceFeet,
               }];
             } else {
-              // Update existing DropLink device with new RSSI/distance
+              // Update existing device with new RSSI/distance
               return prevDevices.map(d => 
                 d.id === device.id 
                   ? { ...d, rssi: device.rssi || -100, distanceFeet }
@@ -203,7 +204,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             }
           });
         }
-        // Non-DropLink devices are silently ignored (filtered out)
       });
     } catch (err) {
       addDebugLog(`startScan exception: ${err instanceof Error ? err.message : 'unknown'}`);
