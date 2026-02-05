@@ -1213,15 +1213,7 @@ export default function HomeScreen() {
   };
 
   const handleRaindropPress = () => {
-    if (!phoneVerified) {
-      showToast({
-        message: 'Verify your phone number to see your drops',
-        type: 'error',
-        duration: 3000,
-      });
-      navigateToTab('Account');
-      return;
-    }
+    // Phone verification check removed for testing
 
     // Trigger ripple animation
     Animated.sequence([
@@ -1728,8 +1720,8 @@ export default function HomeScreen() {
           <View style={{ position: 'relative' }}>
             <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
             
-            {/* Link notification badge - only show if verified */}
-            {phoneVerified && hasUnviewedLinks && (
+            {/* Link notification badge */}
+            {hasUnviewedLinks && (
               <Animated.View
                 style={{
                   position: 'absolute',
@@ -2258,34 +2250,7 @@ export default function HomeScreen() {
             </Text>
             
             <ScrollView style={{ maxHeight: 500 }}>
-              {!phoneVerified ? (
-                <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
-                  <MaterialCommunityIcons name="phone-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
-                  <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
-                    Verify your phone number
-                  </Text>
-                  <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 13, lineHeight: 18, marginBottom: 20 }]}>
-                    Verify your phone number to see your drops
-                  </Text>
-                  <Pressable
-                    onPress={() => {
-                      setShowDrops(false);
-                      navigateToTab('Account');
-                    }}
-                    style={{
-                      backgroundColor: theme.colors.blue,
-                      paddingVertical: 12,
-                      paddingHorizontal: 24,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text style={[theme.type.button, { color: '#FFFFFF', fontSize: 14 }]}>
-                      Verify Now
-                    </Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <>
+              <>
               {/* Link Notifications Section */}
               {unviewedLinks.length > 0 && (
                 <View style={{ marginBottom: 16 }}>
@@ -2762,14 +2727,7 @@ export default function HomeScreen() {
             <View style={{ gap: 10 }}>
               <Pressable
                 onPress={async () => {
-                  if (!phoneVerified) {
-                    showToast({
-                      message: 'Please verify your phone number to start dropping',
-                      type: 'error',
-                      duration: 3000,
-                    });
-                    return;
-                  }
+                  // Phone verification check removed for testing
                   if (selectedBlipDevice) {
                     await saveDevice({ 
                       name: selectedBlipDevice.name, 
@@ -2830,31 +2788,12 @@ export default function HomeScreen() {
                   justifyContent: 'center',
                   gap: 8,
                 })}
-                disabled={!phoneVerified}
               >
                 <MaterialCommunityIcons name="water" size={18} color="#000" />
                 <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
                   Drop
                 </Text>
               </Pressable>
-              {!phoneVerified && (
-                <Pressable
-                  onPress={() => {
-                    setShowBlipModal(false);
-                    navigateToTab('Account');
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 13,
-                    color: '#FF3B30',
-                    textAlign: 'center',
-                    marginTop: 4,
-                    textDecorationLine: 'underline',
-                  }}>
-                    Verify your phone number to start dropping
-                  </Text>
-                </Pressable>
-              )}
 
               <Pressable
                 onPress={() => setShowBlipModal(false)}
