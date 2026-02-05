@@ -11,13 +11,31 @@ const ADVERTISING_ENABLED = true;
 // Library exports: startAdvertising, stopAdvertising, setServices, etc.
 let startAdvertisingNative: ((options: { serviceUUIDs: string[]; localName?: string }) => void) | null = null;
 let stopAdvertisingNative: (() => void) | null = null;
+let importError: any = null;
+
+console.log('[BLE-ADV-DIAG] ========== MODULE IMPORT DIAGNOSTIC ==========');
 try {
+  console.log('[BLE-ADV-DIAG] Attempting to require munim-bluetooth-peripheral...');
   const MunimBluetoothPeripheral = require('munim-bluetooth-peripheral');
+  console.log('[BLE-ADV-DIAG] ✅ Module loaded successfully');
+  console.log('[BLE-ADV-DIAG] Module keys:', Object.keys(MunimBluetoothPeripheral));
+  console.log('[BLE-ADV-DIAG] startAdvertising type:', typeof MunimBluetoothPeripheral.startAdvertising);
+  console.log('[BLE-ADV-DIAG] stopAdvertising type:', typeof MunimBluetoothPeripheral.stopAdvertising);
+  
   startAdvertisingNative = MunimBluetoothPeripheral.startAdvertising;
   stopAdvertisingNative = MunimBluetoothPeripheral.stopAdvertising;
+  
+  console.log('[BLE-ADV-DIAG] startAdvertisingNative assigned:', startAdvertisingNative !== null, typeof startAdvertisingNative);
+  console.log('[BLE-ADV-DIAG] stopAdvertisingNative assigned:', stopAdvertisingNative !== null, typeof stopAdvertisingNative);
 } catch (error) {
+  importError = error;
+  console.error('[BLE-ADV-DIAG] ❌ FAILED to import munim-bluetooth-peripheral');
+  console.error('[BLE-ADV-DIAG] Error type:', error?.constructor?.name);
+  console.error('[BLE-ADV-DIAG] Error message:', error instanceof Error ? error.message : String(error));
+  console.error('[BLE-ADV-DIAG] Full error:', error);
   console.warn('[BLEAdvertiser] munim-bluetooth-peripheral not available:', error);
 }
+console.log('[BLE-ADV-DIAG] ============================================');
 
 // Use shared BleManager instance from bleManager.ts
 // This prevents multiple instances and conflicting state listeners

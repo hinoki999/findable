@@ -55,7 +55,8 @@
     "plugins": [
       "react-native-ble-plx",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "munim-bluetooth-peripheral"
     ]
   }
 }
