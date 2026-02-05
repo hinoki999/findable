@@ -20,6 +20,9 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// AUTH BYPASS: Set to true to skip all authentication for BLE testing
+const AUTH_BYPASS_ENABLED = true;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
     isAuthenticated: false,
@@ -31,10 +34,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check for saved token on app start
   useEffect(() => {
+    if (AUTH_BYPASS_ENABLED) {
+      // Immediate mock authentication for testing
+      setState({
+        isAuthenticated: true,
+        userId: 'bypass-user-id',
+        username: 'TestUser',
+        token: 'bypass-token',
+        loading: false,
+      });
+      return;
+    }
     checkStoredAuth();
   }, []);
 
   const checkStoredAuth = async () => {
+    if (AUTH_BYPASS_ENABLED) {
+      return; // Skip auth check
+    }
     try {
       console.log('DEBUG: [AuthContext] Checking for stored auth session...');
       // Check for Supabase session
@@ -60,6 +77,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
+    if (AUTH_BYPASS_ENABLED) {
+      // Immediate success for testing
+      setState({
+        isAuthenticated: true,
+        userId: 'bypass-user-id',
+        username: 'TestUser',
+        token: 'bypass-token',
+        loading: false,
+      });
+      return { success: true };
+    }
+    
     try {
       console.log('🔐 Login attempt:', { email, passwordLength: password.length });
       
@@ -102,6 +131,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signup = async (email: string, password: string, username: string) => {
+    if (AUTH_BYPASS_ENABLED) {
+      // Immediate success for testing
+      setState({
+        isAuthenticated: true,
+        userId: 'bypass-user-id',
+        username: username || 'TestUser',
+        token: 'bypass-token',
+        loading: false,
+      });
+      return { success: true, userId: 'bypass-user-id' };
+    }
+    
     try {
       const { data, error } = await supabase.auth.signUp({
         email: email.toLowerCase().trim(),
@@ -134,6 +175,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (AUTH_BYPASS_ENABLED) {
+      // Skip logout for testing
+      return;
+    }
+    
     try {
       await supabase.auth.signOut();
       logAuth('Logout');
@@ -156,6 +202,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Allow manual refresh of auth state (e.g., after signup creates a session)
   const refreshAuth = async () => {
+    if (AUTH_BYPASS_ENABLED) {
+      // Immediate mock authentication for testing
+      setState({
+        isAuthenticated: true,
+        userId: 'bypass-user-id',
+        username: 'TestUser',
+        token: 'bypass-token',
+        loading: false,
+      });
+      return;
+    }
     console.log('🔄 [AuthContext] Manually refreshing auth state...');
     await checkStoredAuth();
   };
