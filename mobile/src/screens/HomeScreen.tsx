@@ -865,8 +865,9 @@ export default function HomeScreen() {
     const deviceId = device.id || device.name;
     const currentTime = Date.now();
     
-    // Generate consistent angle based on device hash (deterministic positioning)
-    const hash = device.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    // Generate consistent angle based on device ID hash (deterministic positioning)
+    // Using device.id ensures unique distribution across 360 degrees since IDs are always unique
+    const hash = deviceId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const angleInRadians = (hash % 360) * (Math.PI / 180);
     
     // ACCURATE distance mapping to pixel radius (linear scale for symmetry)
@@ -2693,9 +2694,17 @@ export default function HomeScreen() {
                   color="#00FF00" 
                 />
               </View>
-              <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedBlipDevice?.name || 'Unknown Device'}
+              {/* Device Name - Primary Identifier */}
+              <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
+                {selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'}
               </Text>
+              
+              {/* Device ID - Secondary, Smaller */}
+              {selectedBlipDevice?.id && (
+                <Text style={{ fontSize: 11, color: theme.colors.muted, marginBottom: 16, fontFamily: 'monospace' }}>
+                  {selectedBlipDevice.id.length > 30 ? selectedBlipDevice.id.substring(0, 30) + '...' : selectedBlipDevice.id}
+                </Text>
+              )}
               
               {/* Device Details */}
               <View style={{ width: '100%', marginBottom: 12 }}>
@@ -2721,25 +2730,10 @@ export default function HomeScreen() {
                   paddingHorizontal: 12,
                   paddingVertical: 4,
                   borderRadius: 12,
-                  marginBottom: 6,
                 }}>
                   <MaterialCommunityIcons name="signal" size={14} color="#666" />
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginLeft: 4 }}>
                     RSSI: {selectedBlipDevice?.rssi || 'N/A'} dBm
-                  </Text>
-                </View>
-                
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F0F0F0',
-                  paddingHorizontal: 12,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                }}>
-                  <MaterialCommunityIcons name="identifier" size={14} color="#666" />
-                  <Text style={{ fontSize: 11, fontWeight: '500', color: '#666', marginLeft: 4, flex: 1 }}>
-                    ID: {selectedBlipDevice?.id ? selectedBlipDevice.id.substring(0, 20) + '...' : 'N/A'}
                   </Text>
                 </View>
               </View>
