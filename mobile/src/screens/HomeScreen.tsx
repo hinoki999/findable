@@ -455,13 +455,17 @@ const DeviceBlip: React.FC<{
   // Apply view transformation (rotation + zoom) to position
   const transformedPosition = TensorMath.transformVector(viewTransform, position);
   
-  const hitAreaSize = 30; // Large hit area for easy tapping
+  const hitAreaSize = 50; // Increased hit area for easier tapping
   
   return (
     <Pressable
       onPress={(e) => {
         e.stopPropagation();
+        console.log('[DeviceBlip] Press detected for device:', device.name);
         onPress();
+      }}
+      onPressIn={() => {
+        console.log('[DeviceBlip] Press in detected');
       }}
       style={{
         position: 'absolute',
@@ -472,7 +476,10 @@ const DeviceBlip: React.FC<{
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1001,
+        // Temporary: Add background for debugging (remove after testing)
+        // backgroundColor: 'rgba(255, 0, 0, 0.1)',
       }}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
     >
       <Animated.View
         style={{
@@ -1021,6 +1028,12 @@ export default function HomeScreen() {
   
   const handleTouchStart = (event: any) => {
     const touches = event.nativeEvent.touches;
+    
+    // Only handle multi-touch gestures (pinch/rotate) - let single taps pass through to blips
+    if (touches.length === 1) {
+      return; // Don't capture single touches - allow blips to receive them
+    }
+    
     touches.forEach((touch: any) => {
       touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
     });
@@ -1044,6 +1057,11 @@ export default function HomeScreen() {
 
   const handleTouchMove = (event: any) => {
     const touches = event.nativeEvent.touches;
+    
+    // Only handle multi-touch gestures - let single taps pass through
+    if (touches.length !== 2) {
+      return;
+    }
     
     if (touches.length === 2) {
       const [touch1, touch2] = touches;
@@ -1417,6 +1435,8 @@ export default function HomeScreen() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onStartShouldSetResponder={() => false} // Don't capture single touches - let blips receive them
+        onMoveShouldSetResponder={() => false} // Don't capture single touches
       >
           <Animated.View
             style={{
@@ -1435,8 +1455,8 @@ export default function HomeScreen() {
                 outputRange: ['-100rad', '100rad']
               }) },
             ],
-            }}
-            pointerEvents="box-none"
+          }}
+            pointerEvents="box-none" // Allow touches to pass through to blips
           >
         {React.useMemo(() => {
           // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
@@ -1604,6 +1624,7 @@ export default function HomeScreen() {
                 right: 0,
                 bottom: 0,
             zIndex: 1000,
+            pointerEvents: 'box-none', // Allow touches to pass through to blips
           }}
         >
           {filteredDevices.map((device) => {
