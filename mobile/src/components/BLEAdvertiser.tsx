@@ -51,6 +51,18 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [error, setError] = useState<string | null>(null);
   const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
   
+  // Log availability on mount
+  useEffect(() => {
+    console.log('[BLE-ADV-DIAG] ========== ADVERTISER MOUNT ==========');
+    console.log('[BLE-ADV-DIAG] startAdvertisingNative exists:', startAdvertisingNative !== null);
+    console.log('[BLE-ADV-DIAG] stopAdvertisingNative exists:', stopAdvertisingNative !== null);
+    console.log('[BLE-ADV-DIAG] ADVERTISING_ENABLED:', ADVERTISING_ENABLED);
+    console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
+    console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
+    console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
+    console.log('[BLE-ADV-DIAG] =======================================');
+  }, []);
+  
   // Ref to track advertising state for AppState listener (prevents stale closures)
   const isAdvertisingRef = useRef(isAdvertising);
   useEffect(() => {
@@ -59,77 +71,112 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
 
   // Request BLE advertising permissions
   const requestPermissions = useCallback(async (): Promise<boolean> => {
+    console.log('[BLE-ADV-DIAG] requestPermissions called, Platform:', Platform.OS);
+    
     if (Platform.OS === 'web') {
+      console.log('[BLE-ADV-DIAG] Web platform - no permissions needed');
       return false;
     }
 
     if (Platform.OS === 'android') {
       try {
+        console.log('[BLE-ADV-DIAG] Requesting Android permissions: BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT');
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         ]);
+        
+        console.log('[BLE-ADV-DIAG] Permission results:', JSON.stringify(granted, null, 2));
         
         const allGranted = Object.values(granted).every(
           permission => permission === PermissionsAndroid.RESULTS.GRANTED
         );
         
         if (!allGranted) {
+          console.error('[BLE-ADV-DIAG] ❌ Not all permissions granted:', granted);
           setError('Bluetooth advertising permissions not granted');
           return false;
         }
+        
+        console.log('[BLE-ADV-DIAG] ✅ All permissions granted');
+        return true;
       } catch (err) {
-        console.warn('[BLEAdvertiser] Permission request error:', err);
+        console.error('[BLE-ADV-DIAG] ❌ Permission request error:', err);
         setError('Failed to request permissions');
         return false;
       }
     }
     
+    console.log('[BLE-ADV-DIAG] ✅ Permissions OK (non-Android platform)');
     return true;
   }, []);
 
   // Start advertising
   const startAdvertising = useCallback(async () => {
+    console.log('[BLE-ADV-DIAG] ========== startAdvertising CALLED ==========');
+    console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
+    console.log('[BLE-ADV-DIAG] isAdvertising (current):', isAdvertising);
+    console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
+    
     if (!isAvailable) {
-      console.log('[BLEAdvertiser] Advertising not available (library not loaded or disabled)');
+      console.error('[BLE-ADV-DIAG] ❌ Advertising not available (library not loaded or disabled)');
+      console.log('[BLE-ADV-DIAG] startAdvertisingNative:', startAdvertisingNative !== null);
+      console.log('[BLE-ADV-DIAG] stopAdvertisingNative:', stopAdvertisingNative !== null);
+      console.log('[BLE-ADV-DIAG] ADVERTISING_ENABLED:', ADVERTISING_ENABLED);
       return;
     }
 
     if (Platform.OS === 'web') {
-      console.log('[BLEAdvertiser] Web platform - advertising not supported');
+      console.log('[BLE-ADV-DIAG] Web platform - advertising not supported');
       return;
     }
 
     if (isAdvertising) {
-      console.log('[BLEAdvertiser] Already advertising, skipping start');
+      console.log('[BLE-ADV-DIAG] Already advertising, skipping start');
       return;
     }
 
     try {
+      console.log('[BLE-ADV-DIAG] Step 1: Requesting permissions...');
       const hasPermissions = await requestPermissions();
+      console.log('[BLE-ADV-DIAG] Permissions result:', hasPermissions);
       if (!hasPermissions) {
+        console.error('[BLE-ADV-DIAG] ❌ Permissions denied, cannot start advertising');
         return;
       }
 
       // Start advertising with Service UUID using munim-bluetooth-peripheral API
       // Note: startAdvertising is synchronous (returns void), no await needed
       if (!startAdvertisingNative) {
+        console.error('[BLE-ADV-DIAG] ❌ startAdvertisingNative is null!');
         throw new Error('startAdvertising function not available');
       }
+      
+      console.log('[BLE-ADV-DIAG] Step 2: Calling startAdvertisingNative...');
+      console.log('[BLE-ADV-DIAG] Options:', {
+        serviceUUIDs: [DROPLINK_SERVICE_UUID],
+        localName: 'DropLink',
+      });
+      console.log('[BLE-ADV-DIAG] startAdvertisingNative type:', typeof startAdvertisingNative);
       
       startAdvertisingNative({
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
         localName: 'DropLink',
       });
       
+      console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
       setIsAdvertising(true);
       setError(null);
-      console.log('[BLEAdvertiser] Advertising started with Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
+      console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully with Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[BLE-ADV-DIAG] ============================================');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start advertising';
-      console.error('[BLEAdvertiser] Error starting advertising:', errorMessage);
+      console.error('[BLE-ADV-DIAG] ❌ ERROR in startAdvertising:', errorMessage);
+      console.error('[BLE-ADV-DIAG] Error details:', err);
       setError(errorMessage);
       setIsAdvertising(false);
+      console.log('[BLE-ADV-DIAG] ============================================');
     }
   }, [isAvailable, isAdvertising, requestPermissions]);
 

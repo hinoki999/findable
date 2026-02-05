@@ -714,18 +714,23 @@ export default function HomeScreen() {
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {
+    console.log('[HOME-DIAG] ========== ADVERTISING useEffect ==========');
+    console.log('[HOME-DIAG] isAvailable:', isAvailable);
+    console.log('[HOME-DIAG] isDiscoverable:', isDiscoverable);
+    console.log('[HOME-DIAG] isAdvertising:', isAdvertising);
+    
     if (!isAvailable) {
-      console.log('[HomeScreen] BLE advertising not available, skipping');
+      console.error('[HOME-DIAG] ❌ BLE advertising not available, skipping');
       return;
     }
 
     // Start advertising when isDiscoverable is true
     if (isDiscoverable) {
-      console.log('[HomeScreen] Discoverable toggle ON, starting advertising');
+      console.log('[HOME-DIAG] ✅ Discoverable toggle ON, calling startAdvertising()');
       startAdvertising();
     } else {
       // Stop advertising when isDiscoverable is false
-      console.log('[HomeScreen] Discoverable toggle OFF, stopping advertising');
+      console.log('[HOME-DIAG] Discoverable toggle OFF, stopping advertising');
       stopAdvertising();
     }
     
