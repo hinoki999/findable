@@ -1422,6 +1422,13 @@ export default function HomeScreen() {
 
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
+      {/* UPDATE TEST BANNER */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#FF0000', padding: 20, zIndex: 10000, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#FFFFFF', fontSize: 32, fontWeight: 'bold', textAlign: 'center' }}>
+          UPDATE TEST 12345
+        </Text>
+      </View>
+      
       {/* BLE Debug Overlay - TEMPORARY DIAGNOSTIC */}
       <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999 }}>
         <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
