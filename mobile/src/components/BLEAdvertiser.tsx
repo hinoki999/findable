@@ -165,6 +165,8 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       });
       
       console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
+      
+      console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
       setIsAdvertising(true);
       setError(null);
       console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
