@@ -685,24 +685,32 @@ export default function HomeScreen() {
     isScanningRef.current = isScanning;
   }, [isScanning]);
 
+  // Refs to stabilize startScan/stopScan callbacks (prevents useEffect re-runs)
+  const startScanRef = useRef(startScan);
+  const stopScanRef = useRef(stopScan);
+  useEffect(() => {
+    startScanRef.current = startScan;
+    stopScanRef.current = stopScan;
+  }, [startScan, stopScan]);
+
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
-    startScan();
+    startScanRef.current();
     
     // FIX #4: Restart scanning if it stops (continuous scanning loop)
     // Use ref to check current scanning state without causing effect re-runs
     const scanInterval = setInterval(() => {
       if (!isScanningRef.current) {
         console.log('[BLE-DEBUG] Scanning stopped, restarting...');
-        startScan();
+        startScanRef.current();
       }
     }, 5000); // Check every 5 seconds and restart if stopped
     
     return () => {
-      stopScan(); // Cleanup on unmount
+      stopScanRef.current(); // Cleanup on unmount
       clearInterval(scanInterval);
     };
-  }, [startScan, stopScan]);
+  }, []); // Empty deps - only run once on mount
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {

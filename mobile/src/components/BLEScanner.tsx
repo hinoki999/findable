@@ -159,7 +159,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     addDebugLog('setIsScanning(true)');
 
     try {
-      bleManager.startDeviceScan(null, null, (error, device) => {
+      // Scan for specific Service UUID - this filters at the OS level for better performance
+      bleManager.startDeviceScan([DROPLINK_SERVICE_UUID], null, (error, device) => {
         if (error) {
           addDebugLog(`scan error: ${error.message}`);
           console.error('[BLE-DEBUG] BLE scan error:', error);
@@ -217,7 +218,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     // setTimeout(() => {
     //   stopScan();
     // }, 10000); // REMOVED - this was stopping scanning after 10 seconds
-  }, [requestPermissions, calculateDistanceFeet, isScanning, addDebugLog]);
+  }, [requestPermissions, calculateDistanceFeet, addDebugLog]);
 
   // Stop scanning
   const stopScan = useCallback(() => {
