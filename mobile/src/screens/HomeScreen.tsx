@@ -475,7 +475,7 @@ const DeviceBlip: React.FC<{
         height: hitAreaSize,
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 1001,
+        zIndex: 9999, // Maximum z-index to ensure blips are always on top
         // Temporary: Add background for debugging (remove after testing)
         // backgroundColor: 'rgba(255, 0, 0, 0.1)',
       }}
@@ -1431,13 +1431,16 @@ export default function HomeScreen() {
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
-        style={{ flex: 1 }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onStartShouldSetResponder={() => false} // Don't capture single touches - let blips receive them
-        onMoveShouldSetResponder={() => false} // Don't capture single touches
+        style={{ flex: 1, pointerEvents: 'box-none' }} // Don't capture touches - let blips receive them
       >
+        {/* Touch handlers only for multi-touch gestures - positioned behind blips */}
+        <View
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          pointerEvents="box-none" // Let single touches pass through to blips
+        />
           <Animated.View
             style={{
         position: 'absolute',
@@ -1623,8 +1626,8 @@ export default function HomeScreen() {
                 left: 0,
                 right: 0,
                 bottom: 0,
-            zIndex: 1000,
-            pointerEvents: 'box-none', // Allow touches to pass through to blips
+            zIndex: 3000, // Much higher than touch handler (100) and grid (0) - ensures blips are on top
+            pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
           }}
         >
           {filteredDevices.map((device) => {
@@ -2450,8 +2453,7 @@ export default function HomeScreen() {
           </View>
               ))
             )}
-                </>
-              )}
+              </>
             </ScrollView>
             
             <Pressable
