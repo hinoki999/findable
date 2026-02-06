@@ -12,6 +12,7 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { useBLEAdvertiser } from '../components/BLEAdvertiser';
+import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
@@ -611,7 +612,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, devicesAfterFilter } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, devicesAfterFilter, recentScans } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName } = useBLEAdvertiser();
@@ -1434,6 +1435,9 @@ export default function HomeScreen() {
         <Text style={{ color: 'cyan', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
           Advertising: {isAdvertising ? 'true' : 'false'} | isDiscoverable: {isDiscoverable ? 'true' : 'false'} | isAvailable: {isAvailable ? 'true' : 'false'}
         </Text>
+        <Text style={{ color: 'lime', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
+          Looking for UUID: {DROPLINK_SERVICE_UUID.substring(0, 8)}...
+        </Text>
         {isAdvertising && broadcastName && (
           <Text style={{ color: '#FFFF00', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
             Broadcasting as: {broadcastName}
@@ -1455,6 +1459,36 @@ export default function HomeScreen() {
         {debugLog.map((log, i) => (
           <Text key={i} style={{ color: 'lime', fontSize: 9 }}>{log}</Text>
         ))}
+      </View>
+      
+      {/* Recent Scans List - Scrollable */}
+      <View style={{ position: 'absolute', top: 250, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999, maxHeight: 300 }}>
+        <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace', marginBottom: 8, fontWeight: 'bold' }}>
+          Recent Scans (last 10):
+        </Text>
+        <ScrollView style={{ maxHeight: 250 }} nestedScrollEnabled>
+          {recentScans.length === 0 ? (
+            <Text style={{ color: 'gray', fontSize: 9, fontFamily: 'monospace', fontStyle: 'italic' }}>
+              No devices scanned yet...
+            </Text>
+          ) : (
+            recentScans.slice().reverse().map((scan, index) => {
+              const hasDropLinkName = scan.name && scan.name.includes('DropLink');
+              return (
+                <View key={`${scan.id}-${index}`} style={{ marginBottom: 6, padding: 4, backgroundColor: hasDropLinkName ? 'rgba(0,255,0,0.2)' : 'transparent', borderRadius: 4 }}>
+                  <Text style={{ 
+                    color: hasDropLinkName ? '#00FF00' : 'white', 
+                    fontSize: 9, 
+                    fontFamily: 'monospace',
+                    fontWeight: hasDropLinkName ? 'bold' : 'normal'
+                  }}>
+                    {scan.name || 'no name'} | ID: {scan.id.substring(0, 8)} | Has DropLink UUID: {scan.hasDropLinkUUID ? 'YES' : 'NO'}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
       </View>
       
       {/* Advertising Status Indicator */}
