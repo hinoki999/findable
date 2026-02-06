@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { logAuth, logStateChange } from '../services/activityMonitor';
 import { supabase } from '../services/supabase';
+import { storage } from '../services/storage';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -23,6 +24,41 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // AUTH BYPASS: Set to true to skip all authentication for BLE testing
 const AUTH_BYPASS_ENABLED = true;
 
+// Storage key for device-unique identifier
+const DEVICE_UNIQUE_ID_KEY = 'droplink_device_unique_id';
+
+/**
+ * Get or generate a unique device identifier for auth bypass
+ * Generates a random 4-digit number and stores it persistently
+ * Format: "Test" + 4-digit number (e.g., "Test1234")
+ */
+const getOrCreateDeviceUniqueId = async (): Promise<string> => {
+  try {
+    // Try to get existing ID from storage
+    const existingId = await storage.getItem(DEVICE_UNIQUE_ID_KEY);
+    if (existingId) {
+      console.log('[AuthBypass] Using existing device ID:', existingId);
+      return existingId;
+    }
+    
+    // Generate new random 4-digit number (1000-9999)
+    const randomId = Math.floor(1000 + Math.random() * 9000).toString();
+    const deviceId = `Test${randomId}`;
+    
+    // Store it for future use
+    await storage.setItem(DEVICE_UNIQUE_ID_KEY, deviceId);
+    console.log('[AuthBypass] Generated new device ID:', deviceId);
+    
+    return deviceId;
+  } catch (error) {
+    console.error('[AuthBypass] Error getting/creating device ID:', error);
+    // Fallback to timestamp-based ID if storage fails
+    const fallbackId = `Test${Date.now().toString().slice(-4)}`;
+    console.log('[AuthBypass] Using fallback device ID:', fallbackId);
+    return fallbackId;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>({
     isAuthenticated: false,
@@ -35,13 +71,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for saved token on app start
   useEffect(() => {
     if (AUTH_BYPASS_ENABLED) {
-      // Immediate mock authentication for testing
-      setState({
-        isAuthenticated: true,
-        userId: 'bypass-user-id',
-        username: 'TestUser',
-        token: 'bypass-token',
-        loading: false,
+      // Get unique device ID and set mock authentication
+      getOrCreateDeviceUniqueId().then((deviceId) => {
+        setState({
+          isAuthenticated: true,
+          userId: `bypass-${deviceId}`,
+          username: deviceId,
+          token: 'bypass-token',
+          loading: false,
+        });
+        console.log('[AuthBypass] Mock auth set with unique device ID:', deviceId);
       });
       return;
     }
@@ -78,11 +117,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     if (AUTH_BYPASS_ENABLED) {
-      // Immediate success for testing
+      // Get unique device ID and set mock authentication
+      const deviceId = await getOrCreateDeviceUniqueId();
       setState({
         isAuthenticated: true,
-        userId: 'bypass-user-id',
-        username: 'TestUser',
+        userId: `bypass-${deviceId}`,
+        username: deviceId,
         token: 'bypass-token',
         loading: false,
       });
@@ -132,15 +172,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = async (email: string, password: string, username: string) => {
     if (AUTH_BYPASS_ENABLED) {
-      // Immediate success for testing
+      // Get unique device ID and set mock authentication (ignore provided username)
+      const deviceId = await getOrCreateDeviceUniqueId();
       setState({
         isAuthenticated: true,
-        userId: 'bypass-user-id',
-        username: username || 'TestUser',
+        userId: `bypass-${deviceId}`,
+        username: deviceId,
         token: 'bypass-token',
         loading: false,
       });
-      return { success: true, userId: 'bypass-user-id' };
+      return { success: true, userId: `bypass-${deviceId}` };
     }
     
     try {
@@ -203,11 +244,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Allow manual refresh of auth state (e.g., after signup creates a session)
   const refreshAuth = async () => {
     if (AUTH_BYPASS_ENABLED) {
-      // Immediate mock authentication for testing
+      // Get unique device ID and set mock authentication
+      const deviceId = await getOrCreateDeviceUniqueId();
       setState({
         isAuthenticated: true,
-        userId: 'bypass-user-id',
-        username: 'TestUser',
+        userId: `bypass-${deviceId}`,
+        username: deviceId,
         token: 'bypass-token',
         loading: false,
       });

@@ -177,6 +177,10 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         return;
       }
 
+      // Calculate localName with current username/userId (ensures latest values)
+      // Format: "DropLink-" + username (or userId if username is null, or 'Unknown' if both null)
+      const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${username || userId || 'Unknown'}`;
+      
       // Start advertising with Service UUID using munim-bluetooth-peripheral API
       // Note: startAdvertising is synchronous (returns void), no await needed
       if (!startAdvertisingNative) {
@@ -185,16 +189,18 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       }
       
       console.log('[BLE-ADV-DIAG] Step 2: Calling startAdvertisingNative...');
+      console.log('[BLE-ADV-DIAG] Username:', username || 'null');
+      console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
       console.log('[BLE-ADV-DIAG] Options:', {
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
-        localName: localName,
+        localName: currentLocalName,
       });
-      console.log('[BLE-ADV-DIAG] Broadcasting as:', localName);
+      console.log('[BLE-ADV-DIAG] Broadcasting as:', currentLocalName);
       console.log('[BLE-ADV-DIAG] startAdvertisingNative type:', typeof startAdvertisingNative);
       
       startAdvertisingNative({
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
-        localName: localName,
+        localName: currentLocalName,
       });
       
       console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
@@ -203,7 +209,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
       console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully');
       console.log('[BLE-ADV-DIAG] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
-      console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', localName);
+      console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', currentLocalName);
       console.log('[BLE-ADV-DIAG] ✅ RESULT: SUCCESS - Advertising is now ACTIVE');
       console.log('[BLE-ADV-DIAG] ============================================');
     } catch (err) {
@@ -215,7 +221,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setIsAdvertising(false);
       console.log('[BLE-ADV-DIAG] ============================================');
     }
-  }, [isAvailable, isAdvertising, requestPermissions, localName]);
+  }, [isAvailable, isAdvertising, requestPermissions, username, userId]);
 
   // Stop advertising
   const stopAdvertising = useCallback(async () => {
