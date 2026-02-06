@@ -10,6 +10,7 @@ export interface BleDevice {
   rssi: number;
   distanceFeet: number;
   bio?: string;
+  serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
 }
 
 export interface RecentScanEntry {
@@ -27,8 +28,7 @@ interface UseBLEScannerReturn {
   startScanCount: number;
   debugLog: string[];
   devicesScanned: number; // Total devices detected
-  devicesAfterFilter: number; // Devices that passed the filter
-  recentScans: RecentScanEntry[]; // Last 10 scanned devices
+  recentScans: RecentScanEntry[]; // All scanned devices (for debugging)
 }
 
 // Use shared BleManager instance from bleManager.ts
@@ -42,37 +42,6 @@ const normalizeUUID = (uuid: string): string => {
   return uuid.toLowerCase().replace(/-/g, '');
 };
 
-/**
- * Check if a BLE device is a DropLink user
- * @param device - The BLE device to check
- * @returns true if device is a DropLink user, false otherwise
- * 
- * Accepts devices if:
- * - Name starts with "DropLink-" OR
- * - Service UUID matches DROPLINK_SERVICE_UUID
- */
-const isDropLinkDevice = (device: Device | null): boolean => {
-  if (!device) return false;
-
-  // Accept if name starts with "DropLink-"
-  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
-    return true;
-  }
-
-  // Accept if Service UUID matches
-  if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-    const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
-    const hasDropLinkService = device.serviceUUIDs.some(
-      uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
-    );
-    if (hasDropLinkService) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
 export const useBLEScanner = (): UseBLEScannerReturn => {
   const [devices, setDevices] = useState<BleDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
@@ -80,7 +49,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const startScanCountRef = useRef(0);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
-  const [devicesAfterFilter, setDevicesAfterFilter] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
   
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
@@ -182,11 +150,11 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return;
         }
 
-        // Count ALL devices scanned (before filtering)
+        // Add ALL detected devices (no filtering)
         if (device) {
           setDevicesScanned(prev => prev + 1);
           
-          // Check if device has DropLink Service UUID
+          // Check if device has DropLink Service UUID (for recent scans tracking)
           let hasDropLinkUUID = false;
           if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
             const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
@@ -206,18 +174,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             const filtered = prev.filter(entry => entry.id !== device.id);
             return [...filtered, newEntry];
           });
-        }
-
-        // Filter for DropLink devices (accepts: DropLink- prefix OR Service UUID match)
-        if (device && isDropLinkDevice(device)) {
-          // Count devices that pass the filter
-          setDevicesAfterFilter(prev => prev + 1);
           
           // Validate device has required properties
           if (!device.id) {
             return;
           }
 
+          // Add ALL devices to devices array (no filtering)
           setDevices(prevDevices => {
             const exists = prevDevices.find(d => d.id === device.id);
             const distanceFeet = calculateDistanceFeet(device.rssi || -100);
@@ -231,12 +194,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 name: deviceName,
                 rssi: device.rssi || -100,
                 distanceFeet,
+                serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
               }];
             } else {
               // Update existing device with new RSSI/distance
               return prevDevices.map(d => 
                 d.id === device.id 
-                  ? { ...d, rssi: device.rssi || -100, distanceFeet }
+                  ? { ...d, rssi: device.rssi || -100, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
                   : d
               );
             }
@@ -386,7 +350,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     startScanCount: startScanCountRef.current,
     debugLog,
     devicesScanned,
-    devicesAfterFilter,
     recentScans,
   };
 };

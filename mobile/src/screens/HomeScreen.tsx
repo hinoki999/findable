@@ -612,7 +612,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, devicesAfterFilter, recentScans } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, recentScans } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName } = useBLEAdvertiser();
@@ -839,8 +839,29 @@ export default function HomeScreen() {
     },
   ];
 
-  // Filter devices within max distance
-  const filteredDevices = devices.filter(device => device.distanceFeet <= maxDistance);
+  // Filter devices: DropLink devices only (name starts with "DropLink-" OR has DropLink Service UUID)
+  // Then filter by max distance
+  const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
+  const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
+  
+  const dropLinkDevices = devices.filter(device => {
+    // Check if name starts with "DropLink-"
+    if (device.name && device.name.startsWith('DropLink-')) {
+      return true;
+    }
+    // Check if has DropLink Service UUID
+    if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
+      const hasDropLinkService = device.serviceUUIDs.some(
+        uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
+      );
+      if (hasDropLinkService) {
+        return true;
+      }
+    }
+    return false;
+  });
+  
+  const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
   // ========== TENSOR-BASED SPATIAL SYSTEM ==========
   
@@ -1449,7 +1470,7 @@ export default function HomeScreen() {
           </Text>
         )}
         <Text style={{ color: 'magenta', fontSize: 11, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold' }}>
-          Devices scanned: {devicesScanned} | Devices after filter: {devicesAfterFilter} | Blips shown: {devices.length}
+          Total devices: {devices.length} | DropLink devices: {dropLinkDevices.length} | Blips shown: {filteredDevices.length}
         </Text>
         {advertisingError && (
           <Text style={{ color: 'red', fontSize: 9, fontFamily: 'monospace', marginTop: 2 }}>
