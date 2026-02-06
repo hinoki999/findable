@@ -20,6 +20,8 @@ interface UseBLEScannerReturn {
   error: string | null;
   startScanCount: number;
   debugLog: string[];
+  devicesScanned: number; // Total devices detected
+  devicesAfterFilter: number; // Devices that passed the filter
 }
 
 // Use shared BleManager instance from bleManager.ts
@@ -38,15 +40,28 @@ const normalizeUUID = (uuid: string): string => {
  * @param device - The BLE device to check
  * @returns true if device is a DropLink user, false otherwise
  * 
- * Detection methods (in priority order):
- * 1. Service UUID check (primary - when advertising is implemented)
- *    - Uses normalized UUID comparison for robust matching
- * 2. Device name prefix (fallback - backward compatibility)
+ * TEMPORARILY EXTREMELY PERMISSIVE FOR TESTING:
+ * Accepts device if ANY of these conditions are true:
+ * - Name starts with "DropLink-"
+ * - Name contains "Test"
+ * - Service UUID matches
+ * - Device has ANY name at all (not null/undefined)
  */
 const isDropLinkDevice = (device: Device | null): boolean => {
   if (!device) return false;
 
-  // Primary: Check Service UUID (normalize both for comparison)
+  // EXTREMELY PERMISSIVE FILTER FOR TESTING
+  // Accept if name starts with "DropLink-"
+  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+    return true;
+  }
+
+  // Accept if name contains "Test"
+  if (device.name && device.name.includes('Test')) {
+    return true;
+  }
+
+  // Accept if Service UUID matches
   if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
     const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
     const hasDropLinkService = device.serviceUUIDs.some(
@@ -57,8 +72,8 @@ const isDropLinkDevice = (device: Device | null): boolean => {
     }
   }
 
-  // Fallback: Check device name prefix (backward compatibility)
-  if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+  // Accept if device has ANY name at all (not null/undefined)
+  if (device.name) {
     return true;
   }
 
@@ -71,6 +86,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [error, setError] = useState<string | null>(null);
   const startScanCountRef = useRef(0);
   const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [devicesScanned, setDevicesScanned] = useState(0);
+  const [devicesAfterFilter, setDevicesAfterFilter] = useState(0);
   
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
   const isScanningRef = useRef(isScanning);
@@ -171,9 +188,17 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return;
         }
 
-        // Filter for DropLink devices by name prefix
-        // Service UUID filter is disabled for now (scanning with null, null)
+        // Count ALL devices scanned (before filtering)
+        if (device) {
+          setDevicesScanned(prev => prev + 1);
+        }
+
+        // EXTREMELY PERMISSIVE FILTER FOR TESTING
+        // Filter for DropLink devices (now accepts: DropLink- prefix, "Test" in name, Service UUID, or any name)
         if (device && isDropLinkDevice(device)) {
+          // Count devices that pass the filter
+          setDevicesAfterFilter(prev => prev + 1);
+          
           // Validate device has required properties
           if (!device.id) {
             return;
@@ -187,7 +212,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             
             if (!exists) {
               // Add new device
-              console.log('[BLE] Device detected:', deviceName, `(${distanceFeet.toFixed(1)}ft)`);
               return [...prevDevices, {
                 id: device.id,
                 name: deviceName,
@@ -347,5 +371,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     error,
     startScanCount: startScanCountRef.current,
     debugLog,
+    devicesScanned,
+    devicesAfterFilter,
   };
 };

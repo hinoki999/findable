@@ -53,6 +53,7 @@ interface UseBLEAdvertiserReturn {
   stopAdvertising: () => Promise<void>;
   error: string | null;
   isAvailable: boolean;
+  broadcastName: string | null; // Actual name being broadcast (set when advertising starts)
 }
 
 /**
@@ -75,6 +76,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const { username, userId } = useAuth();
   const [isAdvertising, setIsAdvertising] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [broadcastName, setBroadcastName] = useState<string | null>(null);
   const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
   
   // Generate localName: "DropLink-" + username (or userId if username is null)
@@ -203,6 +205,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         localName: currentLocalName,
       });
       
+      // Store the actual name being broadcast for verification
+      setBroadcastName(currentLocalName);
+      
       console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
       setIsAdvertising(true);
       setError(null);
@@ -219,6 +224,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       console.error('[BLE-ADV-DIAG] ❌ RESULT: FAILED - Advertising did not start');
       setError(errorMessage);
       setIsAdvertising(false);
+      setBroadcastName(null);
       console.log('[BLE-ADV-DIAG] ============================================');
     }
   }, [isAvailable, isAdvertising, requestPermissions, username, userId]);
@@ -237,6 +243,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       
       stopAdvertisingNative();
       setIsAdvertising(false);
+      setBroadcastName(null);
       setError(null);
       console.log('[BLEAdvertiser] Advertising stopped');
     } catch (err) {
@@ -335,6 +342,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     stopAdvertising,
     error,
     isAvailable,
+    broadcastName, // Actual name being broadcast (null when not advertising)
   };
 };
 

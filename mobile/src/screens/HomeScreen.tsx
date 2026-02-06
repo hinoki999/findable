@@ -611,10 +611,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, devicesAfterFilter } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
-  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable } = useBLEAdvertiser();
+  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName } = useBLEAdvertiser();
 
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
@@ -1433,6 +1433,19 @@ export default function HomeScreen() {
         <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
         <Text style={{ color: 'cyan', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
           Advertising: {isAdvertising ? 'true' : 'false'} | isDiscoverable: {isDiscoverable ? 'true' : 'false'} | isAvailable: {isAvailable ? 'true' : 'false'}
+        </Text>
+        {isAdvertising && broadcastName && (
+          <Text style={{ color: '#FFFF00', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
+            Broadcasting as: {broadcastName}
+          </Text>
+        )}
+        {isAdvertising && !broadcastName && (
+          <Text style={{ color: '#FF0000', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
+            Broadcasting as: null (NOT SET!)
+          </Text>
+        )}
+        <Text style={{ color: 'magenta', fontSize: 11, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold' }}>
+          Devices scanned: {devicesScanned} | Devices after filter: {devicesAfterFilter} | Blips shown: {devices.length}
         </Text>
         {advertisingError && (
           <Text style={{ color: 'red', fontSize: 9, fontFamily: 'monospace', marginTop: 2 }}>
