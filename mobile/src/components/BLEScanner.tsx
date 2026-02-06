@@ -195,16 +195,16 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             );
           }
           
-          // Add to recent scans list (keep last 10)
+          // Add to recent scans list (keep all devices, remove duplicates)
           setRecentScans(prev => {
             const newEntry: RecentScanEntry = {
               name: device.name || null,
               id: device.id,
               hasDropLinkUUID,
             };
-            // Remove duplicates (same ID) and add new entry at the end, keep last 10
+            // Remove duplicates (same ID) and add new entry at the end
             const filtered = prev.filter(entry => entry.id !== device.id);
-            return [...filtered, newEntry].slice(-10);
+            return [...filtered, newEntry];
           });
         }
 

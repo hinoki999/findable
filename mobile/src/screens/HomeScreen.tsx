@@ -1462,33 +1462,71 @@ export default function HomeScreen() {
       </View>
       
       {/* Recent Scans List - Scrollable */}
-      <View style={{ position: 'absolute', top: 250, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999, maxHeight: 300 }}>
+      <View style={{ position: 'absolute', top: 250, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999, maxHeight: 500 }}>
         <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace', marginBottom: 8, fontWeight: 'bold' }}>
-          Recent Scans (last 10):
+          Recent Scans (filtered):
         </Text>
-        <ScrollView style={{ maxHeight: 250 }} nestedScrollEnabled>
-          {recentScans.length === 0 ? (
-            <Text style={{ color: 'gray', fontSize: 9, fontFamily: 'monospace', fontStyle: 'italic' }}>
-              No devices scanned yet...
-            </Text>
-          ) : (
-            recentScans.slice().reverse().map((scan, index) => {
-              const hasDropLinkName = scan.name && scan.name.includes('DropLink');
-              return (
-                <View key={`${scan.id}-${index}`} style={{ marginBottom: 6, padding: 4, backgroundColor: hasDropLinkName ? 'rgba(0,255,0,0.2)' : 'transparent', borderRadius: 4 }}>
-                  <Text style={{ 
-                    color: hasDropLinkName ? '#00FF00' : 'white', 
-                    fontSize: 9, 
-                    fontFamily: 'monospace',
-                    fontWeight: hasDropLinkName ? 'bold' : 'normal'
-                  }}>
-                    {scan.name || 'no name'} | ID: {scan.id.substring(0, 8)} | Has DropLink UUID: {scan.hasDropLinkUUID ? 'YES' : 'NO'}
+        {(() => {
+          // Calculate statistics
+          const totalScanned = recentScans.length;
+          const withNames = recentScans.filter(s => s.name).length;
+          const withDropLinkUUID = recentScans.filter(s => s.hasDropLinkUUID).length;
+          
+          // Filter: show devices with names OR devices with DropLink UUID
+          const filtered = recentScans.filter(scan => scan.name || scan.hasDropLinkUUID);
+          
+          // Sort: DropLink name first, then DropLink UUID, then other named devices
+          const sorted = filtered.sort((a, b) => {
+            const aHasDropLinkName = a.name && a.name.includes('DropLink');
+            const bHasDropLinkName = b.name && b.name.includes('DropLink');
+            
+            // DropLink name first
+            if (aHasDropLinkName && !bHasDropLinkName) return -1;
+            if (!aHasDropLinkName && bHasDropLinkName) return 1;
+            
+            // Then DropLink UUID
+            if (a.hasDropLinkUUID && !b.hasDropLinkUUID) return -1;
+            if (!a.hasDropLinkUUID && b.hasDropLinkUUID) return 1;
+            
+            // Then other named devices (alphabetical by name)
+            if (a.name && b.name) {
+              return a.name.localeCompare(b.name);
+            }
+            
+            return 0;
+          });
+          
+          return (
+            <>
+              <Text style={{ color: 'cyan', fontSize: 9, fontFamily: 'monospace', marginBottom: 8, fontWeight: 'bold' }}>
+                Total scanned: {totalScanned} | With names: {withNames} | With DropLink UUID: {withDropLinkUUID}
+              </Text>
+              <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
+                {sorted.length === 0 ? (
+                  <Text style={{ color: 'gray', fontSize: 9, fontFamily: 'monospace', fontStyle: 'italic' }}>
+                    No devices with names or DropLink UUID found...
                   </Text>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
+                ) : (
+                  sorted.map((scan, index) => {
+                    const hasDropLinkName = scan.name && scan.name.includes('DropLink');
+                    return (
+                      <View key={`${scan.id}-${index}`} style={{ marginBottom: 6, padding: 4, backgroundColor: hasDropLinkName ? 'rgba(0,255,0,0.2)' : 'transparent', borderRadius: 4 }}>
+                        <Text style={{ 
+                          color: hasDropLinkName ? '#00FF00' : 'white', 
+                          fontSize: 9, 
+                          fontFamily: 'monospace',
+                          fontWeight: hasDropLinkName ? 'bold' : 'normal'
+                        }}>
+                          {scan.name || 'no name'} | ID: {scan.id.substring(0, 8)} | Has DropLink UUID: {scan.hasDropLinkUUID ? 'YES' : 'NO'}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </>
+          );
+        })()}
       </View>
       
       {/* Advertising Status Indicator */}
