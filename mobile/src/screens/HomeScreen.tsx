@@ -724,23 +724,28 @@ export default function HomeScreen() {
   useEffect(() => {
     console.log('[HOME-DIAG] ========== ADVERTISING useEffect ==========');
     console.log('[HOME-DIAG] isAvailable:', isAvailable);
-    console.log('[HOME-DIAG] isDiscoverable:', isDiscoverable);
-    console.log('[HOME-DIAG] isAdvertising:', isAdvertising);
+    console.log('[HOME-DIAG] isDiscoverable:', isDiscoverable, '(default: true)');
+    console.log('[HOME-DIAG] isAdvertising (current state):', isAdvertising);
+    console.log('[HOME-DIAG] startAdvertising function type:', typeof startAdvertising);
     
     if (!isAvailable) {
       console.error('[HOME-DIAG] ❌ BLE advertising not available, skipping');
+      console.log('[HOME-DIAG] ============================================');
       return;
     }
 
     // Start advertising when isDiscoverable is true
     if (isDiscoverable) {
-      console.log('[HOME-DIAG] ✅ Discoverable toggle ON, calling startAdvertising()');
+      console.log('[HOME-DIAG] ✅ Discoverable toggle ON, calling startAdvertising() NOW');
+      console.log('[HOME-DIAG] startAdvertising function exists:', typeof startAdvertising === 'function');
       startAdvertising();
+      console.log('[HOME-DIAG] startAdvertising() call completed');
     } else {
       // Stop advertising when isDiscoverable is false
       console.log('[HOME-DIAG] Discoverable toggle OFF, stopping advertising');
       stopAdvertising();
     }
+    console.log('[HOME-DIAG] ============================================');
     
     return () => {
       // Stop advertising when HomeScreen unmounts
@@ -1426,9 +1431,60 @@ export default function HomeScreen() {
       {/* BLE Debug Overlay - TEMPORARY DIAGNOSTIC */}
       <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999 }}>
         <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
+        <Text style={{ color: 'cyan', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
+          Advertising: {isAdvertising ? 'true' : 'false'} | isDiscoverable: {isDiscoverable ? 'true' : 'false'} | isAvailable: {isAvailable ? 'true' : 'false'}
+        </Text>
+        {advertisingError && (
+          <Text style={{ color: 'red', fontSize: 9, fontFamily: 'monospace', marginTop: 2 }}>
+            Error: {advertisingError}
+          </Text>
+        )}
         {debugLog.map((log, i) => (
           <Text key={i} style={{ color: 'lime', fontSize: 9 }}>{log}</Text>
         ))}
+      </View>
+      
+      {/* Advertising Status Indicator */}
+      <View style={{ 
+        position: 'absolute', 
+        top: 50, 
+        right: 10, 
+        backgroundColor: isAdvertising ? 'rgba(0, 200, 0, 0.9)' : 'rgba(200, 0, 0, 0.9)', 
+        paddingHorizontal: 12, 
+        paddingVertical: 6, 
+        borderRadius: 6, 
+        zIndex: 10000,
+        borderWidth: 2,
+        borderColor: isAdvertising ? '#00FF00' : '#FF0000',
+      }}>
+        <Text style={{ 
+          color: '#FFFFFF', 
+          fontSize: 12, 
+          fontWeight: 'bold',
+          fontFamily: 'monospace',
+        }}>
+          Advertising: {isAdvertising ? 'ON' : 'OFF'}
+        </Text>
+        {!isAvailable && (
+          <Text style={{ 
+            color: '#FFFF00', 
+            fontSize: 9, 
+            marginTop: 2,
+            fontFamily: 'monospace',
+          }}>
+            (Not Available)
+          </Text>
+        )}
+        {advertisingError && (
+          <Text style={{ 
+            color: '#FFFF00', 
+            fontSize: 9, 
+            marginTop: 2,
+            fontFamily: 'monospace',
+          }}>
+            Error: {advertisingError}
+          </Text>
+        )}
       </View>
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}

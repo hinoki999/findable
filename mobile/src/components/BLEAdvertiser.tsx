@@ -26,8 +26,12 @@ try {
   startAdvertisingNative = MunimBluetoothPeripheral.startAdvertising;
   stopAdvertisingNative = MunimBluetoothPeripheral.stopAdvertising;
   
-  console.log('[BLE-ADV-DIAG] startAdvertisingNative assigned:', startAdvertisingNative !== null, typeof startAdvertisingNative);
-  console.log('[BLE-ADV-DIAG] stopAdvertisingNative assigned:', stopAdvertisingNative !== null, typeof stopAdvertisingNative);
+  const isStartFunction = startAdvertisingNative !== null && typeof startAdvertisingNative === 'function';
+  const isStopFunction = stopAdvertisingNative !== null && typeof stopAdvertisingNative === 'function';
+  
+  console.log('[BLE-ADV-DIAG] startAdvertisingNative:', isStartFunction ? '✅ FUNCTION' : '❌ NULL/UNDEFINED');
+  console.log('[BLE-ADV-DIAG] stopAdvertisingNative:', isStopFunction ? '✅ FUNCTION' : '❌ NULL/UNDEFINED');
+  console.log('[BLE-ADV-DIAG] Native module status:', isStartFunction && isStopFunction ? '✅ READY' : '❌ NOT READY');
 } catch (error) {
   importError = error;
   console.error('[BLE-ADV-DIAG] ❌ FAILED to import munim-bluetooth-peripheral');
@@ -35,6 +39,8 @@ try {
   console.error('[BLE-ADV-DIAG] Error message:', error instanceof Error ? error.message : String(error));
   console.error('[BLE-ADV-DIAG] Full error:', error);
   console.warn('[BLEAdvertiser] munim-bluetooth-peripheral not available:', error);
+  startAdvertisingNative = null;
+  stopAdvertisingNative = null;
 }
 console.log('[BLE-ADV-DIAG] ============================================');
 
@@ -192,19 +198,19 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       });
       
       console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
-      
-      console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
       setIsAdvertising(true);
       setError(null);
       console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
       console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully');
       console.log('[BLE-ADV-DIAG] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
       console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', localName);
+      console.log('[BLE-ADV-DIAG] ✅ RESULT: SUCCESS - Advertising is now ACTIVE');
       console.log('[BLE-ADV-DIAG] ============================================');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start advertising';
       console.error('[BLE-ADV-DIAG] ❌ ERROR in startAdvertising:', errorMessage);
       console.error('[BLE-ADV-DIAG] Error details:', err);
+      console.error('[BLE-ADV-DIAG] ❌ RESULT: FAILED - Advertising did not start');
       setError(errorMessage);
       setIsAdvertising(false);
       console.log('[BLE-ADV-DIAG] ============================================');
