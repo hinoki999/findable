@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
 import { State } from 'react-native-ble-plx';
-import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
+import { useAuth } from '../contexts/AuthContext';
 
 // Feature flag - can disable advertising if needed
 const ADVERTISING_ENABLED = true;
@@ -65,9 +66,13 @@ interface UseBLEAdvertiserReturn {
  * API: startAdvertising({ serviceUUIDs, localName }), stopAdvertising()
  */
 export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
+  const { username, userId } = useAuth();
   const [isAdvertising, setIsAdvertising] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
+  
+  // Generate localName: "DropLink-" + username (or userId if username is null)
+  const localName = `${DROPLINK_DEVICE_PREFIX}${username || userId || 'Unknown'}`;
   
   // Log availability on mount
   useEffect(() => {
@@ -78,8 +83,11 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
     console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
     console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
+    console.log('[BLE-ADV-DIAG] Will broadcast as:', localName);
+    console.log('[BLE-ADV-DIAG] Username:', username || 'null');
+    console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
     console.log('[BLE-ADV-DIAG] =======================================');
-  }, []);
+  }, [localName, username, userId, isAvailable]);
   
   // Ref to track advertising state for AppState listener (prevents stale closures)
   const isAdvertisingRef = useRef(isAdvertising);
@@ -173,13 +181,14 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       console.log('[BLE-ADV-DIAG] Step 2: Calling startAdvertisingNative...');
       console.log('[BLE-ADV-DIAG] Options:', {
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
-        localName: 'DropLink',
+        localName: localName,
       });
+      console.log('[BLE-ADV-DIAG] Broadcasting as:', localName);
       console.log('[BLE-ADV-DIAG] startAdvertisingNative type:', typeof startAdvertisingNative);
       
       startAdvertisingNative({
         serviceUUIDs: [DROPLINK_SERVICE_UUID],
-        localName: 'DropLink',
+        localName: localName,
       });
       
       console.log('[BLE-ADV-DIAG] Step 3: startAdvertisingNative called (no return value)');
@@ -188,7 +197,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setIsAdvertising(true);
       setError(null);
       console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
-      console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully with Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully');
+      console.log('[BLE-ADV-DIAG] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', localName);
       console.log('[BLE-ADV-DIAG] ============================================');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start advertising';
@@ -198,7 +209,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setIsAdvertising(false);
       console.log('[BLE-ADV-DIAG] ============================================');
     }
-  }, [isAvailable, isAdvertising, requestPermissions]);
+  }, [isAvailable, isAdvertising, requestPermissions, localName]);
 
   // Stop advertising
   const stopAdvertising = useCallback(async () => {

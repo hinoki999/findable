@@ -171,9 +171,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return;
         }
 
-        // Process ALL detected BLE devices - no filtering for testing
-        // TODO: Re-enable DropLink filtering once scanning is confirmed working
-        if (device) {
+        // Filter for DropLink devices by name prefix
+        // Service UUID filter is disabled for now (scanning with null, null)
+        if (device && isDropLinkDevice(device)) {
           // Validate device has required properties
           if (!device.id) {
             return;
