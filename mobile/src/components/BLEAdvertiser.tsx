@@ -10,29 +10,14 @@ import { getBluetoothName, getBluetoothNameInstructions, isBluetoothNameCorrect 
 const ADVERTISING_ENABLED = true;
 
 // Import react-native-ble-peripheral with error handling
-// Library exports: startAdvertising, stopAdvertising
-let startAdvertisingNative: ((options: { name: string; serviceUUIDs: string[] }) => Promise<void>) | null = null;
-let stopAdvertisingNative: (() => Promise<void>) | null = null;
-let importError: any = null;
+// Library API: setName(), addService(), start(), stop()
+let BLEPeripheral: any = null;
 
 try {
-  const BlePeripheral = require('react-native-ble-peripheral');
-  startAdvertisingNative = BlePeripheral.startAdvertising;
-  stopAdvertisingNative = BlePeripheral.stopAdvertising;
-  
-  const isStartFunction = startAdvertisingNative !== null && typeof startAdvertisingNative === 'function';
-  const isStopFunction = stopAdvertisingNative !== null && typeof stopAdvertisingNative === 'function';
-  
-  if (!isStartFunction || !isStopFunction) {
-    console.warn('[BLEAdvertiser] react-native-ble-peripheral functions not available');
-    startAdvertisingNative = null;
-    stopAdvertisingNative = null;
-  }
+  BLEPeripheral = require('react-native-ble-peripheral');
 } catch (error) {
-  importError = error;
   console.warn('[BLEAdvertiser] react-native-ble-peripheral not available:', error);
-  startAdvertisingNative = null;
-  stopAdvertisingNative = null;
+  BLEPeripheral = null;
 }
 
 // Use shared BleManager instance from bleManager.ts
@@ -65,7 +50,7 @@ interface UseBLEAdvertiserReturn {
  * - Fails silently if library unavailable
  * 
  * Library: react-native-ble-peripheral
- * API: startAdvertising({ name, serviceUUIDs }), stopAdvertising()
+ * API: setName(name), addService(uuid, primary), start(), stop()
  */
 export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const { username, userId } = useAuth();
@@ -73,7 +58,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [error, setError] = useState<string | null>(null);
   const [broadcastName, setBroadcastName] = useState<string | null>(null);
   const [systemBluetoothName, setSystemBluetoothName] = useState<string | null>(null);
-  const isAvailable = startAdvertisingNative !== null && stopAdvertisingNative !== null && ADVERTISING_ENABLED;
+  const isAvailable = BLEPeripheral !== null && ADVERTISING_ENABLED;
   
   // Generate localName: "DropLink-" + username (or userId if username is null)
   const localName = `${DROPLINK_DEVICE_PREFIX}${username || userId || 'Unknown'}`;
@@ -102,8 +87,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   useEffect(() => {
     console.log('[BLE-ADV-DIAG] ========== ADVERTISER MOUNT ==========');
     console.log('[BLE-ADV-DIAG] Library: react-native-ble-peripheral');
-    console.log('[BLE-ADV-DIAG] startAdvertisingNative exists:', startAdvertisingNative !== null);
-    console.log('[BLE-ADV-DIAG] stopAdvertisingNative exists:', stopAdvertisingNative !== null);
+    console.log('[BLE-ADV-DIAG] BLEPeripheral exists:', BLEPeripheral !== null);
     console.log('[BLE-ADV-DIAG] ADVERTISING_ENABLED:', ADVERTISING_ENABLED);
     console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
     console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
@@ -171,8 +155,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     
     if (!isAvailable) {
       console.error('[BLE-ADV-DIAG] ❌ Advertising not available (library not loaded or disabled)');
-      console.log('[BLE-ADV-DIAG] startAdvertisingNative:', startAdvertisingNative !== null);
-      console.log('[BLE-ADV-DIAG] stopAdvertisingNative:', stopAdvertisingNative !== null);
+      console.log('[BLE-ADV-DIAG] BLEPeripheral:', BLEPeripheral !== null);
       console.log('[BLE-ADV-DIAG] ADVERTISING_ENABLED:', ADVERTISING_ENABLED);
       return;
     }
@@ -201,34 +184,36 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${username || userId || 'Unknown'}`;
       
       // Start advertising with Service UUID using react-native-ble-peripheral API
-      // Note: startAdvertising returns a Promise
-      if (!startAdvertisingNative) {
-        console.error('[BLE-ADV-DIAG] ❌ startAdvertisingNative is null!');
-        throw new Error('startAdvertising function not available');
+      // API sequence: setName() -> addService() -> start()
+      if (!BLEPeripheral) {
+        console.error('[BLE-ADV-DIAG] ❌ BLEPeripheral is null!');
+        throw new Error('react-native-ble-peripheral library not available');
       }
       
-      console.log('[BLE-ADV-DIAG] Step 2: Calling startAdvertising...');
+      console.log('[BLE-ADV-DIAG] Step 2: Setting up advertising...');
       console.log('[BLE-ADV-DIAG] Username:', username || 'null');
       console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
-      console.log('[BLE-ADV-DIAG] Options:', {
-        name: currentLocalName,
-        serviceUUIDs: [DROPLINK_SERVICE_UUID],
-      });
       console.log('[BLE-ADV-DIAG] Broadcasting as:', currentLocalName);
+      console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
       
-      // react-native-ble-peripheral API: startAdvertising({ name, serviceUUIDs })
-      await startAdvertisingNative({
-        name: currentLocalName,
-        serviceUUIDs: [DROPLINK_SERVICE_UUID],
-      });
+      // react-native-ble-peripheral API sequence:
+      // 1. Set the advertised name
+      BLEPeripheral.setName(currentLocalName);
+      
+      // 2. Add the DropLink service UUID (true = primary service)
+      BLEPeripheral.addService(DROPLINK_SERVICE_UUID, true);
+      
+      // 3. Start advertising (returns Promise - resolves on success, rejects on failure)
+      console.log('[BLE-ADV-DIAG] Step 3: Starting advertising...');
+      await BLEPeripheral.start();
       
       // Store the actual name being broadcast for verification
       setBroadcastName(currentLocalName);
       
-      console.log('[BLE-ADV-DIAG] Step 3: startAdvertising completed successfully');
+      console.log('[BLE-ADV-DIAG] Step 4: Advertising started successfully');
       setIsAdvertising(true);
       setError(null);
-      console.log('[BLE-ADV-DIAG] ✅ Step 4: State set to isAdvertising=true');
+      console.log('[BLE-ADV-DIAG] ✅ State set to isAdvertising=true');
       console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully');
       console.log('[BLE-ADV-DIAG] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
       console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', currentLocalName);
@@ -253,12 +238,12 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     }
 
     try {
-      // react-native-ble-peripheral API: stopAdvertising() returns a Promise
-      if (!stopAdvertisingNative) {
-        throw new Error('stopAdvertising function not available');
+      // react-native-ble-peripheral API: stop()
+      if (!BLEPeripheral) {
+        throw new Error('react-native-ble-peripheral library not available');
       }
       
-      await stopAdvertisingNative();
+      BLEPeripheral.stop();
       setIsAdvertising(false);
       setBroadcastName(null);
       setError(null);
