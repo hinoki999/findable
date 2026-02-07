@@ -15,6 +15,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.hirule.mobile.ble.BLEAdvertiserPackage
 
 class MainApplication : Application(), ReactApplication {
 
