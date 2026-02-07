@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** December 2024 (Phone Verification Bug Fixes & Security Improvements)
+**Last Updated:** January 2025 (BLE Advertising & Drop Functionality Implementation)
 
 ---
 
@@ -3005,7 +3005,170 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - `react-native-gesture-handler`: For pinch/zoom/rotate
 - `expo-file-system`: `^19.0.19` (legacy API for SDK 54)
 - `react-native-ble-plx`: `^3.5.0` - BLE scanning (central mode)
-- `munim-bluetooth-peripheral`: `^0.4.3` - BLE advertising (peripheral mode)
+- **Native Android BLE Advertiser Module** - Custom Kotlin module for BLE advertising (replaces `munim-bluetooth-peripheral`)
+
+---
+
+## BLE Advertising & Drop Functionality (January 2025)
+
+### Overview
+
+Complete implementation of BLE advertising and drop sending/receiving system. Devices broadcast their presence via BLE and exchange contact information ("drops") with nearby users.
+
+### Native Android BLE Advertising Module
+
+**Location:** `mobile/android/app/src/main/java/com/droplink/ble/`
+
+**Files:**
+- `BLEAdvertiserModule.kt` - Main native module (288 lines)
+- `BLEAdvertiserPackage.kt` - React Native package registration
+
+**Key Features:**
+- Uses Android's native `BluetoothLeAdvertiser` API (no third-party dependencies)
+- Broadcasts Service UUID: `af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d`
+- Sets device name to `"DL-{first 8 chars of userId}"` (e.g., "DL-abc12345")
+- Comprehensive permission handling for Android 6-13+
+- Thread-safe with `@Volatile` and `synchronized` blocks
+- Bluetooth state monitoring via `BroadcastReceiver`
+- Null safety throughout
+
+**Security Fixes:**
+1. Complete permission checks for all Android versions
+2. No `ANDROID_ID` usage (privacy-safe)
+3. Accepts `deviceId` parameter from JavaScript
+4. Null safety with safe call operators
+5. Thread synchronization
+6. Race condition protection
+7. Bluetooth state monitoring
+
+**JavaScript Interface:**
+- `startAdvertising(serviceUUID, deviceId): Promise`
+- `stopAdvertising(): Promise<void>`
+- `isAdvertising(): Promise<boolean>`
+
+**TypeScript Wrapper:** `mobile/src/native/BLEAdvertiserNative.ts`
+
+### BLE Advertiser Hook
+
+**Location:** `mobile/src/components/BLEAdvertiser.tsx`
+
+**Features:**
+- Waits for auth loading before starting advertising
+- Generates `deviceId = userId.substring(0, 8)`
+- Handles Android permissions (BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN)
+- Auto-stops when app goes to background (iOS)
+- Comprehensive error handling
+
+**Auth Loading Fix:**
+- Added `loading` check from `useAuth()` hook
+- Returns early if `loading === true` to prevent race condition
+- Prevents using "0000" fallback instead of actual userId
+
+### BLE Scanner with Username Lookup
+
+**Location:** `mobile/src/components/BLEScanner.tsx`
+
+**Enhanced Features:**
+- Detects all BLE devices (no filtering at scanner level)
+- Extracts `deviceId` from "DL-XXXX" pattern in device names
+- Queries Supabase: `SELECT username, id FROM profiles WHERE id LIKE '{deviceId}%'`
+- Stores `userId` directly in `BleDevice` object for drop sending
+
+**Device Object:**
+```typescript
+interface BleDevice {
+  id: string;
+  name: string;
+  rssi: number;
+  distanceFeet: number;
+  username?: string;  // From Supabase
+  userId?: string;    // From Supabase (for drops)
+}
+```
+
+### Drop Sending Flow
+
+**Location:** `mobile/src/screens/HomeScreen.tsx`
+
+**Flow:**
+1. User taps device blip → Opens modal
+2. User taps "Drop" → Uses `selectedBlipDevice.userId` (already from scan)
+3. Calls `saveDevice()` with receiver's `userId`
+4. Shows loading state ("Sending..." with ActivityIndicator)
+5. Success: Toast "Drop sent to [username]!" + closes modal
+6. Error: Red banner at top with actual error message
+
+**Error Display:**
+- Red banner at top of HomeScreen (above radar)
+- Auto-dismisses after 5 seconds
+- Manual close button (X icon)
+- Shows actual error message (not generic)
+
+**Database:** `devices` table stores drops with `user_id` = receiver's ID, `action` = 'dropped'
+
+### Drop Receiving Flow
+
+**Location:** `mobile/src/screens/HomeScreen.tsx`
+
+**Implementation:**
+- Polls Supabase every 5 seconds: `SELECT * FROM devices WHERE user_id = current_user AND action = 'dropped'`
+- Updates `incomingDrops` state
+- Raindrop icon: filled (`water`) when drops exist, empty (`water-outline`) when none
+- Drops modal shows all incoming drops with Accept/Decline buttons
+
+### Auth Bypass Mode
+
+**Location:** `mobile/src/contexts/AuthContext.tsx`
+
+**Changes:**
+- **Before:** Mock users with `bypass-{deviceId}`
+- **After:** Real Supabase users with actual profiles
+
+**Implementation:**
+1. Generates `deviceId` (e.g., "Test4701")
+2. Creates Supabase auth user:
+   - Email: `test-{deviceId}@droplink.test`
+   - Password: `Test{deviceId}123!`
+3. Creates profile: `id` (real userId), `username` (deviceId), `device_id` (first 8 chars)
+4. Uses real `userId` from Supabase
+
+**Benefits:** Scanner can find test users, drops work between devices, realistic testing
+
+### Configuration
+
+**Location:** `mobile/src/config/bleConfig.ts`
+
+- `DROPLINK_SERVICE_UUID`: `'af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d'`
+- `DROPLINK_DEVICE_PREFIX`: `'DL-'` (fits 31-byte BLE packet limit)
+
+### Android Permissions
+
+**Location:** `mobile/android/app/src/main/AndroidManifest.xml`
+
+- Android 12+: `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`
+- Android 6-11: `ACCESS_FINE_LOCATION`, `BLUETOOTH`, `BLUETOOTH_ADMIN`
+- Feature: `<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />`
+
+### Testing & Debugging
+
+**Test Banner (HomeScreen):**
+- Red banner: "TEST UPDATE LOADED - [timestamp]"
+- Shows `dropError` in large red text
+- Last 5 console.error messages in scrollable box
+
+**Logging Prefixes:**
+- `[BLE-ADV-USERID-TRACE]` - userId checks
+- `[BLE-ADV-DEVICEID]` - DeviceId generation
+- `[BLE-ADV-DIAG]` - General diagnostics
+- `[AUTH-CONTEXT-TRACE]` - Auth state
+- `[BLEScanner]` - Scanner detection
+
+### Known Issues & Solutions
+
+- **Advertising before userId loaded:** Added `loading` check
+- **Device name too long:** Shortened to "DL-XXXX"
+- **Scanner couldn't find users:** Query by userId prefix
+- **Drop sending failed silently:** Added error banner with actual messages
 
 ---
 

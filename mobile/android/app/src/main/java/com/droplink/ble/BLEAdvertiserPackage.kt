@@ -1,4 +1,4 @@
-package com.hirule.mobile.ble
+package com.droplink.ble
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -14,4 +14,5 @@ class BLEAdvertiserPackage : ReactPackage {
         return emptyList()
     }
 }
+
 

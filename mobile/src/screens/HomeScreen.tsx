@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform } from 'react-native';
+import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
@@ -12,7 +12,8 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { useBLEAdvertiser } from '../components/BLEAdvertiser';
-import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { supabase } from '../services/supabase';
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
@@ -576,6 +577,39 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
   const [showBlipModal, setShowBlipModal] = useState(false);
+  const [isSendingDrop, setIsSendingDrop] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+  const [errorLogs, setErrorLogs] = useState<string[]>([]);
+  
+  // Auto-dismiss drop error after 5 seconds
+  useEffect(() => {
+    if (dropError) {
+      const timer = setTimeout(() => {
+        setDropError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [dropError]);
+  
+  // Capture console.error messages
+  useEffect(() => {
+    const originalError = console.error;
+    console.error = (...args: any[]) => {
+      const errorMessage = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      const timestamp = new Date().toLocaleTimeString();
+      setErrorLogs(prev => {
+        const newLogs = [`[${timestamp}] ${errorMessage}`, ...prev];
+        return newLogs.slice(0, 5); // Keep last 5 errors
+      });
+      originalError.apply(console, args);
+    };
+    
+    return () => {
+      console.error = originalError;
+    };
+  }, []);
   
   // Link markers state (accepted links only, not returned drops)
   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
@@ -612,10 +646,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, recentScans } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
-  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, systemBluetoothName, instructions, needsManualSetup, localName } = useBLEAdvertiser();
+  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, localName } = useBLEAdvertiser();
 
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
@@ -780,6 +814,39 @@ export default function HomeScreen() {
     
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch incoming drops (devices where action='dropped' sent TO current user)
+  useEffect(() => {
+    const fetchIncomingDrops = async () => {
+      try {
+        const allDevices = await getDevices();
+        // Filter for drops sent TO the current user (action='dropped')
+        // The devices table stores user_id as the receiver (who the drop was sent TO)
+        const drops = (allDevices ?? []).filter(device => 
+          device.action === 'dropped'
+        );
+        
+        // Convert to incomingDrops format
+        const formattedDrops = drops.map(device => ({
+          name: device.name,
+          text: 'Wants to share their contact card.',
+        }));
+        
+        setIncomingDrops(formattedDrops);
+        console.log(`SUCCESS: Loaded ${formattedDrops.length} incoming drops`);
+      } catch (error) {
+        console.error('Failed to fetch incoming drops:', error);
+      }
+    };
+    
+    // Load immediately
+    fetchIncomingDrops();
+    
+    // Refresh every 5 seconds to catch new drops
+    const interval = setInterval(fetchIncomingDrops, 5000);
+    
+    return () => clearInterval(interval);
+  }, [userId]);
   
   // Get unviewed and not dismissed link notifications for badge
   const unviewedLinks = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
@@ -839,14 +906,14 @@ export default function HomeScreen() {
     },
   ];
 
-  // Filter devices: DropLink devices only (name starts with "DropLink-" OR has DropLink Service UUID)
+  // Filter devices: DropLink devices only (name starts with "DL-" OR has DropLink Service UUID)
   // Then filter by max distance
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
   
   const dropLinkDevices = devices.filter(device => {
-    // Check if name starts with "DropLink-"
-    if (device.name && device.name.startsWith('DropLink-')) {
+    // Check if name starts with "DL-"
+    if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
       return true;
     }
     // Check if has DropLink Service UUID
@@ -1448,179 +1515,158 @@ export default function HomeScreen() {
   };
 
 
+  const testTimestamp = new Date().toLocaleString();
+  
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* BLE Debug Overlay - TEMPORARY DIAGNOSTIC */}
-      <View style={{ position: 'absolute', top: 50, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999 }}>
-        <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace' }}>BLE Debug:</Text>
-        <Text style={{ color: 'cyan', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
-          Advertising: {isAdvertising ? 'true' : 'false'} | isDiscoverable: {isDiscoverable ? 'true' : 'false'} | isAvailable: {isAvailable ? 'true' : 'false'}
-        </Text>
-        <Text style={{ color: 'lime', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
-          Looking for UUID: {DROPLINK_SERVICE_UUID.substring(0, 8)}...
-        </Text>
-        {isAdvertising && broadcastName && (
-          <Text style={{ color: '#FFFF00', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
-            Broadcasting as: {broadcastName}
+      {/* HUGE TEST BANNER - at very top of screen */}
+      <View style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 99999,
+        backgroundColor: '#FF0000',
+        paddingVertical: 20,
+        paddingHorizontal: 16,
+        borderBottomWidth: 4,
+        borderBottomColor: '#CC0000',
+      }}>
+        {/* Test Update Banner */}
+        <View style={{ marginBottom: 12 }}>
+          <Text style={{
+            fontSize: 24,
+            fontWeight: '900',
+            color: '#FFFFFF',
+            textAlign: 'center',
+            textTransform: 'uppercase',
+          }}>
+            TEST UPDATE LOADED
           </Text>
-        )}
-        {isAdvertising && !broadcastName && (
-          <Text style={{ color: '#FF0000', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
-            Broadcasting as: null (NOT SET!)
+          <Text style={{
+            fontSize: 16,
+            fontWeight: '700',
+            color: '#FFFFFF',
+            textAlign: 'center',
+            marginTop: 4,
+          }}>
+            {testTimestamp}
           </Text>
-        )}
-        {needsManualSetup && (
-          <View style={{ marginTop: 8, padding: 8, backgroundColor: 'rgba(255, 165, 0, 0.2)', borderRadius: 4 }}>
-            <Text style={{ color: '#FFA500', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold', marginBottom: 4 }}>
-              ⚠️ Manual Setup Required:
+        </View>
+        
+        {/* Drop Error Display */}
+        {dropError && (
+          <View style={{
+            backgroundColor: '#990000',
+            padding: 16,
+            borderRadius: 8,
+            marginBottom: 12,
+            borderWidth: 3,
+            borderColor: '#FFFFFF',
+          }}>
+            <Text style={{
+              fontSize: 20,
+              fontWeight: '900',
+              color: '#FFFFFF',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}>
+              DROP ERROR:
             </Text>
-            {systemBluetoothName ? (
-              <>
-                <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 2 }}>
-                  Current name: <Text style={{ color: '#FF6B6B', fontWeight: 'bold' }}>{systemBluetoothName}</Text>
-                </Text>
-                <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 4 }}>
-                  Required name: <Text style={{ color: '#00FF00', fontWeight: 'bold' }}>{localName}</Text>
-                </Text>
-              </>
-            ) : (
-              <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 4 }}>
-                Required name: <Text style={{ color: '#00FF00', fontWeight: 'bold' }}>{localName}</Text>
-              </Text>
-            )}
-            <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace' }}>
-              {instructions}
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '700',
+              color: '#FFFFFF',
+              lineHeight: 24,
+            }}>
+              {dropError}
             </Text>
           </View>
         )}
-        {!needsManualSetup && systemBluetoothName && (
-          <Text style={{ color: '#00FF00', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
-            ✓ Bluetooth name correct: {systemBluetoothName}
-          </Text>
+        
+        {/* Error Logs */}
+        {errorLogs.length > 0 && (
+          <View style={{
+            backgroundColor: '#330000',
+            padding: 12,
+            borderRadius: 8,
+            maxHeight: 200,
+          }}>
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '900',
+              color: '#FFFFFF',
+              marginBottom: 8,
+              textTransform: 'uppercase',
+            }}>
+              Last 5 Console Errors:
+            </Text>
+            <ScrollView
+              style={{ maxHeight: 150 }}
+              nestedScrollEnabled={true}
+            >
+              {errorLogs.map((log, index) => (
+                <Text
+                  key={index}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '600',
+                    color: '#FFAAAA',
+                    marginBottom: 4,
+                    fontFamily: 'monospace',
+                  }}
+                >
+                  {log}
+                </Text>
+              ))}
+            </ScrollView>
+          </View>
         )}
-        <Text style={{ color: 'magenta', fontSize: 11, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold' }}>
-          Total devices: {devices.length} | DropLink devices: {dropLinkDevices.length} | Blips shown: {filteredDevices.length}
-        </Text>
-        {advertisingError && (
-          <Text style={{ color: 'red', fontSize: 9, fontFamily: 'monospace', marginTop: 2 }}>
-            Error: {advertisingError}
-          </Text>
-        )}
-        {debugLog.map((log, i) => (
-          <Text key={i} style={{ color: 'lime', fontSize: 9 }}>{log}</Text>
-        ))}
       </View>
       
-      {/* Recent Scans List - Scrollable */}
-      <View style={{ position: 'absolute', top: 250, left: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.8)', padding: 10, zIndex: 9999, maxHeight: 500 }}>
-        <Text style={{ color: 'yellow', fontSize: 10, fontFamily: 'monospace', marginBottom: 8, fontWeight: 'bold' }}>
-          Recent Scans (filtered):
-        </Text>
-        {(() => {
-          // Calculate statistics
-          const totalScanned = recentScans.length;
-          const withNames = recentScans.filter(s => s.name).length;
-          const withDropLinkUUID = recentScans.filter(s => s.hasDropLinkUUID).length;
-          
-          // Filter: show devices with names OR devices with DropLink UUID
-          const filtered = recentScans.filter(scan => scan.name || scan.hasDropLinkUUID);
-          
-          // Sort: DropLink name first, then DropLink UUID, then other named devices
-          const sorted = filtered.sort((a, b) => {
-            const aHasDropLinkName = a.name && a.name.includes('DropLink');
-            const bHasDropLinkName = b.name && b.name.includes('DropLink');
-            
-            // DropLink name first
-            if (aHasDropLinkName && !bHasDropLinkName) return -1;
-            if (!aHasDropLinkName && bHasDropLinkName) return 1;
-            
-            // Then DropLink UUID
-            if (a.hasDropLinkUUID && !b.hasDropLinkUUID) return -1;
-            if (!a.hasDropLinkUUID && b.hasDropLinkUUID) return 1;
-            
-            // Then other named devices (alphabetical by name)
-            if (a.name && b.name) {
-              return a.name.localeCompare(b.name);
-            }
-            
-            return 0;
-          });
-          
-          return (
-            <>
-              <Text style={{ color: 'cyan', fontSize: 9, fontFamily: 'monospace', marginBottom: 8, fontWeight: 'bold' }}>
-                Total scanned: {totalScanned} | With names: {withNames} | With DropLink UUID: {withDropLinkUUID}
-              </Text>
-              <ScrollView style={{ maxHeight: 400 }} nestedScrollEnabled>
-                {sorted.length === 0 ? (
-                  <Text style={{ color: 'gray', fontSize: 9, fontFamily: 'monospace', fontStyle: 'italic' }}>
-                    No devices with names or DropLink UUID found...
-                  </Text>
-                ) : (
-                  sorted.map((scan, index) => {
-                    const hasDropLinkName = scan.name && scan.name.includes('DropLink');
-                    return (
-                      <View key={`${scan.id}-${index}`} style={{ marginBottom: 6, padding: 4, backgroundColor: hasDropLinkName ? 'rgba(0,255,0,0.2)' : 'transparent', borderRadius: 4 }}>
-                        <Text style={{ 
-                          color: hasDropLinkName ? '#00FF00' : 'white', 
-                          fontSize: 9, 
-                          fontFamily: 'monospace',
-                          fontWeight: hasDropLinkName ? 'bold' : 'normal'
-                        }}>
-                          {scan.name || 'no name'} | ID: {scan.id.substring(0, 8)} | Has DropLink UUID: {scan.hasDropLinkUUID ? 'YES' : 'NO'}
-                        </Text>
-                      </View>
-                    );
-                  })
-                )}
-              </ScrollView>
-            </>
-          );
-        })()}
-      </View>
-      
-      {/* Advertising Status Indicator */}
-      <View style={{ 
-        position: 'absolute', 
-        top: 50, 
-        right: 10, 
-        backgroundColor: isAdvertising ? 'rgba(0, 200, 0, 0.9)' : 'rgba(200, 0, 0, 0.9)', 
-        paddingHorizontal: 12, 
-        paddingVertical: 6, 
-        borderRadius: 6, 
-        zIndex: 10000,
-        borderWidth: 2,
-        borderColor: isAdvertising ? '#00FF00' : '#FF0000',
-      }}>
-        <Text style={{ 
-          color: '#FFFFFF', 
-          fontSize: 12, 
-          fontWeight: 'bold',
-          fontFamily: 'monospace',
+      {/* Drop Error Banner - at top of screen */}
+      {dropError && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10000,
+          backgroundColor: '#FF0000',
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: 8,
         }}>
-          Advertising: {isAdvertising ? 'ON' : 'OFF'}
-        </Text>
-        {!isAvailable && (
-          <Text style={{ 
-            color: '#FFFF00', 
-            fontSize: 9, 
-            marginTop: 2,
-            fontFamily: 'monospace',
-          }}>
-            (Not Available)
-          </Text>
-        )}
-        {advertisingError && (
-          <Text style={{ 
-            color: '#FFFF00', 
-            fontSize: 9, 
-            marginTop: 2,
-            fontFamily: 'monospace',
-          }}>
-            Error: {advertisingError}
-          </Text>
-        )}
-      </View>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={{
+              fontSize: 14,
+              fontWeight: '600',
+              color: '#FFFFFF',
+              marginBottom: 2,
+            }}>
+              Drop Failed
+            </Text>
+            <Text style={{ fontSize: 12, color: '#FFFFFF', lineHeight: 16 }}>
+              {dropError}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setDropError(null)}
+            style={{
+              padding: 4,
+            }}
+          >
+            <MaterialCommunityIcons name="close" size={20} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      )}
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
@@ -1930,7 +1976,11 @@ export default function HomeScreen() {
             />
             
           <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons name="water" size={30} color={theme.colors.green} />
+            <MaterialCommunityIcons 
+              name={incomingDrops.length > 0 ? "water" : "water-outline"} 
+              size={30} 
+              color={theme.colors.green} 
+            />
             
             {/* Link notification badge */}
             {hasUnviewedLinks && (
@@ -2843,7 +2893,10 @@ export default function HomeScreen() {
         visible={showBlipModal}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowBlipModal(false)}
+            onRequestClose={() => {
+              setShowBlipModal(false);
+              setDropError(null);
+            }}
       >
         <View style={{ 
           flex: 1, 
@@ -2887,7 +2940,7 @@ export default function HomeScreen() {
               </View>
               {/* Device Name - Primary Identifier */}
               <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'}
+                {selectedBlipDevice?.username || (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device')}
               </Text>
               
               {/* Device ID - Secondary, Smaller */}
@@ -2965,30 +3018,43 @@ export default function HomeScreen() {
               <Pressable
                 onPress={async () => {
                   // Phone verification check removed for testing
-                  if (selectedBlipDevice) {
-                    await saveDevice({ 
-                      name: selectedBlipDevice.name, 
-                      rssi: selectedBlipDevice.rssi, 
-                      distanceFeet: selectedBlipDevice.distanceFeet, 
-                      action: 'dropped' 
-                    }, userId!);
-                    setShowBlipModal(false);
-                    showToast({
-                      message: `Drop sent to ${selectedBlipDevice.name}!`,
-                      type: 'success',
-                      duration: 3000,
-                    });
+                  if (selectedBlipDevice && !isSendingDrop) {
+                    setIsSendingDrop(true);
+                    setDropError(null);
+                    try {
+                      // Use userId from device object (already fetched during scan)
+                      if (!selectedBlipDevice.userId) {
+                        setDropError('Could not find receiver. User ID not available.');
+                        throw new Error('Could not find receiver');
+                      }
+                      
+                      await saveDevice({ 
+                        name: selectedBlipDevice.username || selectedBlipDevice.name, 
+                        rssi: selectedBlipDevice.rssi, 
+                        distanceFeet: selectedBlipDevice.distanceFeet, 
+                        action: 'dropped' 
+                      }, selectedBlipDevice.userId);
+                      
+                      // Close modal after successful send
+                      setShowBlipModal(false);
+                      
+                      // Show success toast
+                      showToast({
+                        message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
+                        type: 'success',
+                        duration: 3000,
+                      });
                     
                     // Simulate link back after 3 seconds
                     setTimeout(async () => {
                       const uniqueId = Date.now();
                       const linkData = {
-                        name: selectedBlipDevice.name,
+                        name: selectedBlipDevice.username || selectedBlipDevice.name,
                         phoneNumber: '(555) 123-4567',
-                        email: `${selectedBlipDevice.name.toLowerCase().replace(' ', '.')}@example.com`,
+                        email: `${(selectedBlipDevice.username || selectedBlipDevice.name).toLowerCase().replace(' ', '.')}@example.com`,
                         bio: 'This is a test bio for the linked contact.',
                         socialMedia: [
-                          { platform: 'Instagram', handle: `@${selectedBlipDevice.name.toLowerCase().replace(' ', '')}` },
+                          { platform: 'Instagram', handle: `@${(selectedBlipDevice.username || selectedBlipDevice.name).toLowerCase().replace(' ', '')}` },
                         ],
                       };
                       
@@ -3013,27 +3079,57 @@ export default function HomeScreen() {
                         socialMedia: linkData.socialMedia,
                       });
                     }, 3000);
+                    } catch (error: any) {
+                      // Set detailed error message with actual error details
+                      const errorMsg = error instanceof Error ? error.message : String(error);
+                      setDropError(`Drop failed: ${errorMsg}`);
+                      console.error('Drop error details:', error);
+                      
+                      // Show error toast
+                      showToast({
+                        message: `Drop failed: ${errorMsg}`,
+                        type: 'error',
+                        duration: 3000,
+                      });
+                    } finally {
+                      setIsSendingDrop(false);
+                    }
                   }
                 }}
+                disabled={isSendingDrop}
                 style={({ pressed }) => ({
                   backgroundColor: '#00FF00',
                   paddingVertical: 14,
                   borderRadius: 10,
                   alignItems: 'center',
-                  opacity: pressed ? 0.8 : 1,
+                  opacity: (pressed || isSendingDrop) ? 0.6 : 1,
                   flexDirection: 'row',
                   justifyContent: 'center',
                   gap: 8,
                 })}
               >
-                <MaterialCommunityIcons name="water" size={18} color="#000" />
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
-                  Drop
-                </Text>
+                {isSendingDrop ? (
+                  <>
+                    <ActivityIndicator size="small" color="#000" />
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                      Sending...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="water" size={18} color="#000" />
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                      Drop
+                    </Text>
+                  </>
+                )}
               </Pressable>
 
               <Pressable
-                onPress={() => setShowBlipModal(false)}
+                onPress={() => {
+                  setShowBlipModal(false);
+                  setDropError(null);
+                }}
                 style={({ pressed }) => ({
                   paddingVertical: 14,
                   borderRadius: 10,

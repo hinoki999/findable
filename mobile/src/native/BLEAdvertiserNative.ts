@@ -1,29 +1,36 @@
 import { NativeModules } from 'react-native';
 
-const { BLEAdvertiserModule } = NativeModules;
+interface BLEAdvertiserNativeInterface {
+  /**
+   * Start BLE advertising with the specified service UUID and device identifier
+   * @param serviceUUID - The UUID to advertise (must be valid UUID format)
+   * @param deviceId - 1-4 character device identifier (will be broadcast as "DropLink-XXXX")
+   * @returns Promise that resolves with {success: boolean, serviceUUID: string}
+   */
+  startAdvertising(serviceUUID: string, deviceId: string): Promise<{
+    success: boolean;
+    serviceUUID: string;
+  }>;
 
-interface BLEAdvertiserNative {
-  startAdvertising(serviceUUID: string): Promise<void>;
-  stopAdvertising(): void;
+  /**
+   * Stop BLE advertising
+   * @returns Promise that resolves when advertising stops
+   */
+  stopAdvertising(): Promise<void>;
+
+  /**
+   * Check if currently advertising
+   * @returns Promise that resolves with boolean advertising state
+   */
+  isAdvertising(): Promise<boolean>;
 }
 
-// Type-safe wrapper for the native module
-export const BLEAdvertiserNative: BLEAdvertiserNative = {
-  startAdvertising: (serviceUUID: string): Promise<void> => {
-    if (!BLEAdvertiserModule) {
-      return Promise.reject(new Error('BLEAdvertiserModule is not available'));
-    }
-    return BLEAdvertiserModule.startAdvertising(serviceUUID);
-  },
+const { BLEAdvertiserNative } = NativeModules;
 
-  stopAdvertising: (): void => {
-    if (!BLEAdvertiserModule) {
-      console.warn('[BLEAdvertiserNative] BLEAdvertiserModule is not available');
-      return;
-    }
-    BLEAdvertiserModule.stopAdvertising();
-  },
-};
+if (!BLEAdvertiserNative) {
+  throw new Error(
+    'BLEAdvertiserNative module not found. Make sure the native module is properly linked.'
+  );
+}
 
-export default BLEAdvertiserNative;
-
+export default BLEAdvertiserNative as BLEAdvertiserNativeInterface;

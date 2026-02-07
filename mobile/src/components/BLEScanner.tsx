@@ -3,6 +3,7 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
+import { supabase } from '../services/supabase';
 
 export interface BleDevice {
   id: string;
@@ -11,6 +12,8 @@ export interface BleDevice {
   distanceFeet: number;
   bio?: string;
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
+  username?: string; // DropLink username from Supabase lookup
+  userId?: string; // User ID from Supabase lookup (for sending drops)
 }
 
 export interface RecentScanEntry {
@@ -180,6 +183,42 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             return;
           }
 
+          // Extract deviceId from device name if it matches "DL-XXXX" pattern
+          const extractDeviceId = (name: string | null): string | null => {
+            if (!name) return null;
+            const match = name.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
+            return match ? match[1] : null;
+          };
+
+          const deviceId = extractDeviceId(device.name);
+          
+          // Lookup username and userId from Supabase if deviceId is found
+          if (deviceId) {
+            (async () => {
+              try {
+                const { data, error } = await supabase
+                  .from('profiles')
+                  .select('username, id')
+                  .like('id', `${deviceId}%`)
+                  .single();
+
+                if (!error && data) {
+                  // Update device with username and userId
+                  setDevices(prevDevices => 
+                    prevDevices.map(d => 
+                      d.id === device.id 
+                        ? { ...d, username: data.username, userId: data.id }
+                        : d
+                    )
+                  );
+                }
+              } catch (err) {
+                // Silently fail - username/userId lookup is optional
+                console.warn('[BLEScanner] Username/userId lookup failed:', err);
+              }
+            })();
+          }
+
           // Add ALL devices to devices array (no filtering)
           setDevices(prevDevices => {
             const exists = prevDevices.find(d => d.id === device.id);
@@ -195,9 +234,10 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 rssi: device.rssi || -100,
                 distanceFeet,
                 serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
+                username: undefined, // Will be populated by async lookup if deviceId found
               }];
             } else {
-              // Update existing device with new RSSI/distance
+              // Update existing device with new RSSI/distance (preserve username if already set)
               return prevDevices.map(d => 
                 d.id === device.id 
                   ? { ...d, rssi: device.rssi || -100, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }

@@ -13,7 +13,8 @@ export const DROPLINK_SERVICE_UUID = 'af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d';
 
     // Device name prefix - Backward compatibility for devices without Service UUID
     // This allows detection of devices that haven't updated to use Service UUID advertising yet
-    export const DROPLINK_DEVICE_PREFIX = 'DropLink-';
+    // Shortened to "DL-" to fit in 31-byte BLE advertising packet limit
+    export const DROPLINK_DEVICE_PREFIX = 'DL-';
 
     // Advertising configuration
     // Note: Actual interval is platform-dependent and may be adjusted by the OS
