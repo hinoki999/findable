@@ -615,7 +615,7 @@ export default function HomeScreen() {
   const { devices, isScanning, startScan, stopScan, startScanCount, debugLog, devicesScanned, recentScans } = useBLEScanner();
 
   // Use BLE advertiser to make device discoverable (isolated from scanning)
-  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName } = useBLEAdvertiser();
+  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, systemBluetoothName, instructions, needsManualSetup, localName } = useBLEAdvertiser();
 
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
@@ -1467,6 +1467,35 @@ export default function HomeScreen() {
         {isAdvertising && !broadcastName && (
           <Text style={{ color: '#FF0000', fontSize: 12, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold', backgroundColor: '#000000', padding: 4 }}>
             Broadcasting as: null (NOT SET!)
+          </Text>
+        )}
+        {needsManualSetup && (
+          <View style={{ marginTop: 8, padding: 8, backgroundColor: 'rgba(255, 165, 0, 0.2)', borderRadius: 4 }}>
+            <Text style={{ color: '#FFA500', fontSize: 10, fontFamily: 'monospace', fontWeight: 'bold', marginBottom: 4 }}>
+              ⚠️ Manual Setup Required:
+            </Text>
+            {systemBluetoothName ? (
+              <>
+                <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 2 }}>
+                  Current name: <Text style={{ color: '#FF6B6B', fontWeight: 'bold' }}>{systemBluetoothName}</Text>
+                </Text>
+                <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 4 }}>
+                  Required name: <Text style={{ color: '#00FF00', fontWeight: 'bold' }}>{localName}</Text>
+                </Text>
+              </>
+            ) : (
+              <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace', marginBottom: 4 }}>
+                Required name: <Text style={{ color: '#00FF00', fontWeight: 'bold' }}>{localName}</Text>
+              </Text>
+            )}
+            <Text style={{ color: 'white', fontSize: 9, fontFamily: 'monospace' }}>
+              {instructions}
+            </Text>
+          </View>
+        )}
+        {!needsManualSetup && systemBluetoothName && (
+          <Text style={{ color: '#00FF00', fontSize: 10, fontFamily: 'monospace', marginTop: 4, fontWeight: 'bold' }}>
+            ✓ Bluetooth name correct: {systemBluetoothName}
           </Text>
         )}
         <Text style={{ color: 'magenta', fontSize: 11, fontFamily: 'monospace', marginTop: 6, fontWeight: 'bold' }}>
