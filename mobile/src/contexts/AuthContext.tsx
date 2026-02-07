@@ -70,21 +70,143 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Check for saved token on app start
   useEffect(() => {
+    console.log('[AUTH-CONTEXT-TRACE] ========== AUTH INITIALIZATION ==========');
+    console.log('[AUTH-CONTEXT-TRACE] AUTH_BYPASS_ENABLED:', AUTH_BYPASS_ENABLED);
+    
     if (AUTH_BYPASS_ENABLED) {
-      // Get unique device ID and set mock authentication
-      getOrCreateDeviceUniqueId().then((deviceId) => {
-        setState({
-          isAuthenticated: true,
-          userId: `bypass-${deviceId}`,
-          username: deviceId,
-          token: 'bypass-token',
-          loading: false,
-        });
-        console.log('[AuthBypass] Mock auth set with unique device ID:', deviceId);
+      // Create real Supabase user with profile for testing
+      console.log('[AUTH-CONTEXT-TRACE] Using auth bypass mode');
+      getOrCreateDeviceUniqueId().then(async (deviceId) => {
+        try {
+          console.log('[AUTH-CONTEXT-TRACE] Creating real Supabase user for deviceId:', deviceId);
+          
+          // Generate email from deviceId
+          const email = `test-${deviceId}@droplink.test`;
+          const password = `Test${deviceId}123!`; // Simple password for test users
+          
+          // Create auth user in Supabase
+          console.log('[AUTH-CONTEXT-TRACE] Signing up user with email:', email);
+          const { data: authData, error: signUpError } = await supabase.auth.signUp({
+            email: email,
+            password: password,
+            options: {
+              data: {
+                username: deviceId, // Store username in user_metadata
+              }
+            }
+          });
+          
+          if (signUpError) {
+            // User might already exist, try to sign in instead
+            console.log('[AUTH-CONTEXT-TRACE] Sign up failed, trying sign in:', signUpError.message);
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: email,
+              password: password,
+            });
+            
+            if (signInError) {
+              console.error('[AUTH-CONTEXT-TRACE] Sign in also failed:', signInError);
+              throw signInError;
+            }
+            
+            // Use sign in data
+            const userId = signInData.user.id;
+            const session = signInData.session;
+            
+            console.log('[AUTH-CONTEXT-TRACE] ✅ Signed in existing user, userId:', userId);
+            
+            // Ensure profile exists
+            const { error: profileCheckError } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', userId)
+              .single();
+            
+            if (profileCheckError && profileCheckError.code === 'PGRST116') {
+              // Profile doesn't exist, create it
+              console.log('[AUTH-CONTEXT-TRACE] Profile not found, creating...');
+              const { error: profileError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: userId,
+                  username: deviceId,
+                  device_id: userId.substring(0, 8), // First 8 chars of userId for BLE
+                });
+              
+              if (profileError) {
+                console.error('[AUTH-CONTEXT-TRACE] Failed to create profile:', profileError);
+              } else {
+                console.log('[AUTH-CONTEXT-TRACE] ✅ Profile created');
+              }
+            }
+            
+            setState({
+              isAuthenticated: true,
+              userId: userId,
+              username: deviceId,
+              token: session?.access_token || null,
+              loading: false,
+            });
+            console.log('[AuthBypass] Real auth user set with userId:', userId);
+            return;
+          }
+          
+          // New user created
+          const userId = authData.user?.id;
+          if (!userId) {
+            throw new Error('User created but no userId returned');
+          }
+          
+          console.log('[AUTH-CONTEXT-TRACE] ✅ New user created, userId:', userId);
+          
+          // Create profile in Supabase
+          console.log('[AUTH-CONTEXT-TRACE] Creating profile for userId:', userId);
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              username: deviceId,
+              device_id: userId.substring(0, 8), // First 8 chars of userId for BLE
+            });
+          
+          if (profileError) {
+            console.error('[AUTH-CONTEXT-TRACE] Failed to create profile:', profileError);
+            // Continue anyway - profile might already exist
+          } else {
+            console.log('[AUTH-CONTEXT-TRACE] ✅ Profile created');
+          }
+          
+          // Get session
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          setState({
+            isAuthenticated: true,
+            userId: userId,
+            username: deviceId,
+            token: session?.access_token || null,
+            loading: false,
+          });
+          console.log('[AuthBypass] Real auth user set with userId:', userId);
+          console.log('[AUTH-CONTEXT-TRACE] State updated with real userId:', userId);
+        } catch (error) {
+          console.error('[AUTH-CONTEXT-TRACE] ❌ Error creating real user:', error);
+          // Fallback to mock auth if Supabase fails
+          const fallbackUserId = `bypass-${deviceId}`;
+          setState({
+            isAuthenticated: true,
+            userId: fallbackUserId,
+            username: deviceId,
+            token: 'bypass-token',
+            loading: false,
+          });
+          console.log('[AuthBypass] Fallback to mock auth due to error');
+        }
       });
       return;
     }
+    console.log('[AUTH-CONTEXT-TRACE] Using real auth, checking stored session');
     checkStoredAuth();
+    console.log('[AUTH-CONTEXT-TRACE] =========================================');
   }, []);
 
   const checkStoredAuth = async () => {
@@ -92,41 +214,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return; // Skip auth check
     }
     try {
-      console.log('DEBUG: [AuthContext] Checking for stored auth session...');
+      console.log('[AUTH-CONTEXT-TRACE] Checking for stored auth session...');
       // Check for Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      console.log('[AUTH-CONTEXT-TRACE] Session exists?', !!session);
+      console.log('[AUTH-CONTEXT-TRACE] Session error?', sessionError);
       
       if (session?.user) {
-        console.log('SUCCESS: [AuthContext] Session found, setting authenticated state');
+        const sessionUserId = session.user.id;
+        console.log('[AUTH-CONTEXT-TRACE] ✅ Session found');
+        console.log('[AUTH-CONTEXT-TRACE] session.user.id:', sessionUserId);
+        console.log('[AUTH-CONTEXT-TRACE] session.user.id type:', typeof sessionUserId);
+        console.log('[AUTH-CONTEXT-TRACE] session.user.id length:', sessionUserId?.length);
+        
         setState({
           isAuthenticated: true,
-          userId: session.user.id,
+          userId: sessionUserId,
           username: session.user.user_metadata?.username || null,
           token: session.access_token,
           loading: false,
         });
+        console.log('[AUTH-CONTEXT-TRACE] State updated with userId:', sessionUserId);
       } else {
-        console.log('WARNING: [AuthContext] No session found');
+        console.log('[AUTH-CONTEXT-TRACE] ⚠️ No session found');
         setState(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      console.error('ERROR: [AuthContext] Error checking stored auth:', error);
+      console.error('[AUTH-CONTEXT-TRACE] ❌ Error checking stored auth:', error);
       setState(prev => ({ ...prev, loading: false }));
     }
   };
 
   const login = async (email: string, password: string) => {
     if (AUTH_BYPASS_ENABLED) {
-      // Get unique device ID and set mock authentication
+      // For bypass mode, use the same logic as initialization
+      // This ensures we get/create the same user
       const deviceId = await getOrCreateDeviceUniqueId();
-      setState({
-        isAuthenticated: true,
-        userId: `bypass-${deviceId}`,
-        username: deviceId,
-        token: 'bypass-token',
-        loading: false,
-      });
-      return { success: true };
+      const testEmail = `test-${deviceId}@droplink.test`;
+      const testPassword = `Test${deviceId}123!`;
+      
+      try {
+        // Try to sign in
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: testEmail,
+          password: testPassword,
+        });
+        
+        if (signInError) {
+          throw signInError;
+        }
+        
+        const userId = signInData.user.id;
+        const session = signInData.session;
+        
+        setState({
+          isAuthenticated: true,
+          userId: userId,
+          username: deviceId,
+          token: session?.access_token || null,
+          loading: false,
+        });
+        return { success: true };
+      } catch (error) {
+        // Fallback to mock if Supabase fails
+        setState({
+          isAuthenticated: true,
+          userId: `bypass-${deviceId}`,
+          username: deviceId,
+          token: 'bypass-token',
+          loading: false,
+        });
+        return { success: true };
+      }
     }
     
     try {
@@ -244,11 +404,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Allow manual refresh of auth state (e.g., after signup creates a session)
   const refreshAuth = async () => {
     if (AUTH_BYPASS_ENABLED) {
-      // Get unique device ID and set mock authentication
+      // For bypass mode, re-run the initialization logic
       const deviceId = await getOrCreateDeviceUniqueId();
+      const testEmail = `test-${deviceId}@droplink.test`;
+      const testPassword = `Test${deviceId}123!`;
+      
+      try {
+        // Try to sign in
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: testEmail,
+          password: testPassword,
+        });
+        
+        if (!signInError && signInData) {
+          const userId = signInData.user.id;
+          const session = signInData.session;
+          
+          setState({
+            isAuthenticated: true,
+            userId: userId,
+            username: deviceId,
+            token: session?.access_token || null,
+            loading: false,
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('[AUTH-CONTEXT-TRACE] Refresh auth error:', error);
+      }
+      
+      // Fallback to mock
+      const fallbackUserId = `bypass-${deviceId}`;
       setState({
         isAuthenticated: true,
-        userId: `bypass-${deviceId}`,
+        userId: fallbackUserId,
         username: deviceId,
         token: 'bypass-token',
         loading: false,
@@ -271,6 +460,13 @@ export const useAuth = () => {
   if (!context) {
     throw new Error('useAuth must be used within AuthProvider');
   }
+  
+  // Log userId whenever it's accessed
+  console.log('[AUTH-CONTEXT-TRACE] useAuth() called - userId:', context.userId);
+  console.log('[AUTH-CONTEXT-TRACE] userId type:', typeof context.userId);
+  console.log('[AUTH-CONTEXT-TRACE] isAuthenticated:', context.isAuthenticated);
+  console.log('[AUTH-CONTEXT-TRACE] loading:', context.loading);
+  
   return context;
 };
 
