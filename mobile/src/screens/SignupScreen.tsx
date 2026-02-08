@@ -16,7 +16,7 @@ interface SignupScreenProps {
 export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: SignupScreenProps) {
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
-  const { signup } = useAuth();
+  const { signup, refreshAuth } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -202,10 +202,106 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
 
-    // All validation passed, show verification modal
+    // All validation passed, create account directly (skip email verification)
     setError('');
-    setVerificationStep('confirm');
-    setShowVerificationModal(true);
+    handleDirectSignup();
+  };
+
+  const handleDirectSignup = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      // Create account directly with Supabase (no email verification)
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.toLowerCase().trim(),
+        password: password,
+        options: {
+          data: { username: username },
+          emailRedirectTo: undefined, // Disable email confirmation requirement
+        }
+      });
+
+      if (signUpError) {
+        throw new Error(signUpError.message || 'Failed to create account');
+      }
+
+      if (!data.user) {
+        throw new Error('Account creation failed. Please try again.');
+      }
+
+      const userId = data.user.id;
+      console.log(`SUCCESS: Account created, userId: ${userId}`);
+
+      // Create user_profiles record in Supabase
+      const { error: profileError } = await supabase.from('user_profiles').insert({
+        user_id: userId,
+        email: email,
+        name: null,
+        phone: null,
+        bio: null,
+        profile_photo: null,
+        social_media: [],
+        tutorial_home_completed: false,
+        tutorial_drop_completed: false,
+        tutorial_history_completed: false,
+        tutorial_account_completed: false
+      });
+
+      if (profileError) {
+        console.error(`ERROR: Failed to create user_profiles: ${profileError.message}`);
+        throw new Error(`Failed to create profile: ${profileError.message}`);
+      }
+      console.log('SUCCESS: user_profiles record created');
+
+      // Create user_settings record in Supabase
+      const { error: settingsError } = await supabase.from('user_settings').insert({
+        user_id: userId,
+        dark_mode: true,
+        max_distance: 33
+      });
+
+      if (settingsError) {
+        console.error(`ERROR: Failed to create user_settings: ${settingsError.message}`);
+        throw new Error(`Failed to create settings: ${settingsError.message}`);
+      }
+      console.log('SUCCESS: user_settings record created');
+
+      // Check if we got a session from signUp (Supabase may auto-confirm in development)
+      let session = data.session;
+      
+      // If no session, sign in immediately (email confirmation may be required in production)
+      if (!session) {
+        console.log('No session from signUp, attempting sign in...');
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.toLowerCase().trim(),
+          password: password,
+        });
+
+        if (signInError || !signInData.user) {
+          throw new Error('Account created but sign-in failed. Please try logging in.');
+        }
+        
+        session = signInData.session;
+      }
+
+      // Update auth context by refreshing auth state (we've already created account and signed in)
+      await refreshAuth();
+      
+      console.log('SUCCESS: User signed in and auth context updated');
+
+      // Navigate to home screen
+      if (typeof onSignupSuccess !== 'function') {
+        throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
+      }
+      
+      onSignupSuccess(undefined);
+    } catch (err: any) {
+      console.error(`ERROR: Direct signup error: ${err.message}`);
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendCode = async () => {

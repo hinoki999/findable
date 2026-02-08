@@ -52,14 +52,7 @@ export default function DropScreen() {
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
-    if (!phoneVerified) {
-      showToast({
-        message: 'Please verify your phone number to start dropping',
-        type: 'error',
-        duration: 3000,
-      });
-      return;
-    }
+    // Phone verification check disabled - users can drop without phone verification
     try {
       await saveDevice({ 
         name: device.name, 
@@ -182,8 +175,8 @@ export default function DropScreen() {
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
       <TopBar logoMode={true} logoIcon="water-outline" />
       
-      {/* Phone Verification Banner - Show only when not verified */}
-      {!phoneVerified ? (
+      {/* Phone Verification Banner - DISABLED (verification not required) */}
+      {false && !phoneVerified ? (
         <View style={{
           flex: 1,
           justifyContent: 'center',

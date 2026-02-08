@@ -22,7 +22,8 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // AUTH BYPASS: Set to true to skip all authentication for BLE testing
-const AUTH_BYPASS_ENABLED = true;
+// DISABLED: Re-enabled login/signup screens (verification still disabled)
+const AUTH_BYPASS_ENABLED = false;
 
 // Storage key for device-unique identifier
 const DEVICE_UNIQUE_ID_KEY = 'droplink_device_unique_id';
