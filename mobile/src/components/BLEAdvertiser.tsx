@@ -87,7 +87,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-USERID-TRACE] ====================================');
   }, [userId, username]);
   
-  // Generate device ID from userId on mount
+  // Generate device ID from userId on mount and when userId changes
   useEffect(() => {
     console.log('[BLE-ADV-DEVICEID] ========== DEVICE ID GENERATION ==========');
     console.log('[BLE-ADV-DEVICEID] userId received:', userId);
@@ -105,14 +105,35 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       const newDeviceId = userId.substring(0, 8);
       console.log('[BLE-ADV-DEVICEID] Generated deviceId:', newDeviceId);
       console.log('[BLE-ADV-DEVICEID] deviceId length:', newDeviceId.length);
-      setDeviceId(newDeviceId);
+      console.log('[BLE-ADV-DEVICEID] Current deviceId state:', deviceId);
+      
+      // Only update if different (prevents unnecessary re-renders)
+      setDeviceId(prevDeviceId => {
+        if (prevDeviceId !== newDeviceId) {
+          console.log('[BLE-ADV-DEVICEID] Updating deviceId state from', prevDeviceId, 'to', newDeviceId);
+          
+          // If we were advertising with the wrong deviceId, restart with the correct one
+          if (isAdvertising && prevDeviceId === '0000') {
+            console.log('[BLE-ADV-DEVICEID] ⚠️ Was advertising with fallback deviceId, will restart with correct one...');
+            // Restart advertising with correct deviceId (use setTimeout to avoid state update during render)
+            setTimeout(() => {
+              stopAdvertising().then(() => {
+                setTimeout(() => startAdvertising(), 100);
+              });
+            }, 0);
+          }
+          
+          return newDeviceId;
+        }
+        return prevDeviceId;
+      });
     } else {
       console.log('[BLE-ADV-DEVICEID] ❌ userId is null/undefined, using fallback');
       console.log('[BLE-ADV-DEVICEID] Setting deviceId to fallback: 0000');
-      setDeviceId('0000');
+      setDeviceId(prevDeviceId => prevDeviceId !== '0000' ? '0000' : prevDeviceId);
     }
     console.log('[BLE-ADV-DEVICEID] ===========================================');
-  }, [userId]);
+  }, [userId, isAdvertising, stopAdvertising, startAdvertising]); // Removed deviceId from deps to prevent loop
   
   // Log availability on mount
   useEffect(() => {
@@ -245,18 +266,26 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         return;
       }
 
-      // Calculate localName with current deviceId
-      // Format: "DropLink-" + deviceId (1-4 characters)
-      const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${deviceId}`;
+      // Calculate deviceId directly from userId (don't rely on state which might be stale)
+      // Use first 8 characters of userId as deviceId
+      const calculatedDeviceId = userId.substring(0, 8);
+      const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${calculatedDeviceId}`;
       
       console.log('[BLE-ADV-DIAG] Step 2: Starting native BLE advertising...');
-      console.log('[BLE-ADV-DIAG] Device ID:', deviceId);
+      console.log('[BLE-ADV-DIAG] UserId:', userId);
+      console.log('[BLE-ADV-DIAG] Calculated Device ID:', calculatedDeviceId);
+      console.log('[BLE-ADV-DIAG] Device ID from state:', deviceId);
       console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
       console.log('[BLE-ADV-DIAG] Device name will be set to:', currentLocalName);
       
+      // Validate deviceId is not the fallback value
+      if (calculatedDeviceId === '0000' || calculatedDeviceId.length === 0) {
+        throw new Error('Invalid deviceId: userId not properly loaded');
+      }
+      
       // Start advertising with Service UUID and deviceId using native module
       // The native module handles setting the device name and advertising the UUID
-      const result = await BLEAdvertiserNative.startAdvertising(DROPLINK_SERVICE_UUID, deviceId);
+      const result = await BLEAdvertiserNative.startAdvertising(DROPLINK_SERVICE_UUID, calculatedDeviceId);
       
       if (result.success) {
         // Store the actual name being broadcast for verification
@@ -284,7 +313,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setBroadcastName(null);
       console.log('[BLE-ADV-DIAG] ============================================');
     }
-  }, [isAvailable, isAdvertising, requestPermissions, deviceId, userId]);
+  }, [isAvailable, isAdvertising, requestPermissions, userId]); // Removed deviceId - we calculate it from userId
 
   // Stop advertising
   const stopAdvertising = useCallback(async () => {

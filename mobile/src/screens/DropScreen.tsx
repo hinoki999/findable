@@ -12,6 +12,7 @@ import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
+import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
@@ -40,8 +41,31 @@ export default function DropScreen() {
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
   
-  // Filter devices based on max distance setting and sort by distance (closest first)
-  const filteredDevices = devices
+  // Filter to only show DropLink users (same filtering as HomeScreen)
+  // Normalize UUID for comparison
+  const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
+  const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
+  
+  // First filter to only DropLink devices (by name prefix or Service UUID)
+  const dropLinkDevices = devices.filter(device => {
+    // Check if name starts with "DL-"
+    if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
+      return true;
+    }
+    // Check if has DropLink Service UUID
+    if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
+      const hasDropLinkService = device.serviceUUIDs.some(
+        uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
+      );
+      if (hasDropLinkService) {
+        return true;
+      }
+    }
+    return false;
+  });
+  
+  // Then filter by max distance setting and sort by distance (closest first)
+  const filteredDevices = dropLinkDevices
     .filter(device => device.distanceFeet <= maxDistance)
     .sort((a, b) => a.distanceFeet - b.distanceFeet);
 

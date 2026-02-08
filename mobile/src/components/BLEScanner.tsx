@@ -194,6 +194,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
+            console.log('[BLEScanner] Looking up deviceId:', deviceId, 'for device:', device.name);
             (async () => {
               try {
                 const { data, error } = await supabase
@@ -202,7 +203,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   .like('id', `${deviceId}%`)
                   .single();
 
-                if (!error && data) {
+                if (error) {
+                  console.warn('[BLEScanner] Supabase query error for deviceId', deviceId, ':', error.message);
+                  if (error.code === 'PGRST116') {
+                    console.warn('[BLEScanner] No user found with id starting with:', deviceId);
+                  }
+                } else if (data) {
+                  console.log('[BLEScanner] ✅ Found user for deviceId', deviceId, ':', data.username, '(userId:', data.id, ')');
                   // Update device with username and userId
                   setDevices(prevDevices => 
                     prevDevices.map(d => 
@@ -217,6 +224,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 console.warn('[BLEScanner] Username/userId lookup failed:', err);
               }
             })();
+          } else {
+            console.log('[BLEScanner] No deviceId extracted from device name:', device.name);
           }
 
           // Add ALL devices to devices array (no filtering)
