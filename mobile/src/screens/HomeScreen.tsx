@@ -637,7 +637,7 @@ export default function HomeScreen() {
   const { showToast } = useToast();
   const { navigateToTab } = useTabNavigation();
   const phoneVerified = profile?.phoneVerified || false;
-  const { userId } = useAuth();
+  const { userId, loading } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
   const { maxDistance } = useSettings();
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
@@ -760,19 +760,26 @@ export default function HomeScreen() {
   useEffect(() => {
     console.log('[HOME-DIAG] ========== ADVERTISING useEffect ==========');
     console.log('[HOME-DIAG] isAvailable:', isAvailable);
+    console.log('[HOME-DIAG] loading:', loading);
+    console.log('[HOME-DIAG] userId:', userId ? 'present' : 'null');
     console.log('[HOME-DIAG] isDiscoverable:', isDiscoverable, '(default: true)');
     console.log('[HOME-DIAG] isAdvertising (current state):', isAdvertising);
     console.log('[HOME-DIAG] startAdvertising function type:', typeof startAdvertising);
     
-    if (!isAvailable) {
-      console.error('[HOME-DIAG] ❌ BLE advertising not available, skipping');
+    // Wait for BLE availability, auth loading to complete, and userId to be available
+    if (!isAvailable || loading || !userId) {
+      console.log('[HOME-DIAG] ⏳ Waiting for prerequisites:', {
+        isAvailable,
+        loading,
+        hasUserId: !!userId
+      });
       console.log('[HOME-DIAG] ============================================');
       return;
     }
 
     // Start advertising when isDiscoverable is true
     if (isDiscoverable) {
-      console.log('[HOME-DIAG] ✅ Discoverable toggle ON, calling startAdvertising() NOW');
+      console.log('[HOME-DIAG] ✅ All prerequisites met, calling startAdvertising() NOW');
       console.log('[HOME-DIAG] startAdvertising function exists:', typeof startAdvertising === 'function');
       startAdvertising();
       console.log('[HOME-DIAG] startAdvertising() call completed');
@@ -789,7 +796,7 @@ export default function HomeScreen() {
         stopAdvertising();
       }
     };
-  }, [isDiscoverable, isAvailable, startAdvertising, stopAdvertising]);
+  }, [isDiscoverable, isAvailable, startAdvertising, stopAdvertising, loading, userId]);
   
   // Fetch linked devices (accepted and returned links) when component mounts and periodically
   useEffect(() => {
