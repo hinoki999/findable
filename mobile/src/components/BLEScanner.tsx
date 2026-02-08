@@ -197,14 +197,30 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             console.log('[BLEScanner] Looking up deviceId:', deviceId, 'for device:', device.name);
             (async () => {
               try {
-                const { data, error } = await supabase
+                // Try exact match first (deviceId is first 8 chars of userId)
+                let { data, error } = await supabase
                   .from('profiles')
                   .select('username, id')
                   .like('id', `${deviceId}%`)
-                  .single();
+                  .maybeSingle(); // Use maybeSingle() instead of single() to avoid error if no match
+
+                // If no exact match, try with different case or as prefix
+                if (error || !data) {
+                  console.log('[BLEScanner] First query failed, trying alternative lookup...');
+                  const { data: altData, error: altError } = await supabase
+                    .from('profiles')
+                    .select('username, id')
+                    .ilike('id', `${deviceId}%`) // Case-insensitive like
+                    .maybeSingle();
+                  
+                  if (!altError && altData) {
+                    data = altData;
+                    error = null;
+                  }
+                }
 
                 if (error) {
-                  console.warn('[BLEScanner] Supabase query error for deviceId', deviceId, ':', error.message);
+                  console.warn('[BLEScanner] Supabase query error for deviceId', deviceId, ':', error.message, 'Code:', error.code);
                   if (error.code === 'PGRST116') {
                     console.warn('[BLEScanner] No user found with id starting with:', deviceId);
                   }
@@ -218,10 +234,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                         : d
                     )
                   );
+                } else {
+                  console.warn('[BLEScanner] ⚠️ No user found in Supabase for deviceId:', deviceId, 'Device name:', device.name);
                 }
               } catch (err) {
-                // Silently fail - username/userId lookup is optional
-                console.warn('[BLEScanner] Username/userId lookup failed:', err);
+                // Log error but don't fail completely
+                console.error('[BLEScanner] ❌ Username/userId lookup exception:', err);
               }
             })();
           } else {

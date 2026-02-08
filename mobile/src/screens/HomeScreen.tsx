@@ -2940,7 +2940,10 @@ export default function HomeScreen() {
               </View>
               {/* Device Name - Primary Identifier */}
               <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedBlipDevice?.username || (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device')}
+                {selectedBlipDevice?.username || 
+                 (selectedBlipDevice?.name && selectedBlipDevice.name.startsWith(DROPLINK_DEVICE_PREFIX) 
+                   ? 'Loading user...' 
+                   : (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'))}
               </Text>
               
               {/* Device ID - Secondary, Smaller */}
@@ -3023,7 +3026,52 @@ export default function HomeScreen() {
                     setDropError(null);
                     try {
                       // Use userId from device object (already fetched during scan)
-                      if (!selectedBlipDevice.userId) {
+                      // If userId is not available, try to look it up now
+                      let receiverUserId = selectedBlipDevice.userId;
+                      
+                      if (!receiverUserId) {
+                        console.log('[HomeScreen] userId not available, attempting lookup...');
+                        // Extract deviceId from device name
+                        const deviceIdMatch = selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
+                        if (deviceIdMatch && deviceIdMatch[1]) {
+                          const deviceId = deviceIdMatch[1];
+                          console.log('[HomeScreen] Extracted deviceId:', deviceId, 'from device name:', selectedBlipDevice.name);
+                          
+                          // Try to look up userId from Supabase
+                          try {
+                            const { data, error } = await supabase
+                              .from('profiles')
+                              .select('id, username')
+                              .like('id', `${deviceId}%`)
+                              .maybeSingle();
+                            
+                            if (error) {
+                              console.error('[HomeScreen] Supabase lookup error:', error);
+                              throw new Error(`Could not find user: ${error.message}`);
+                            } else if (data) {
+                              receiverUserId = data.id;
+                              console.log('[HomeScreen] ✅ Found userId:', receiverUserId, 'for deviceId:', deviceId);
+                              
+                              // Update the device object with the found userId and username
+                              if (data.username) {
+                                (selectedBlipDevice as any).username = data.username;
+                                (selectedBlipDevice as any).userId = data.id;
+                              }
+                            } else {
+                              throw new Error(`No user found with device ID: ${deviceId}`);
+                            }
+                          } catch (lookupError: any) {
+                            console.error('[HomeScreen] Lookup failed:', lookupError);
+                            setDropError(`Could not find receiver: ${lookupError.message || 'User not found in database'}`);
+                            throw new Error(`Could not find receiver: ${lookupError.message || 'User not found'}`);
+                          }
+                        } else {
+                          setDropError('Could not extract device ID from device name.');
+                          throw new Error('Could not extract device ID');
+                        }
+                      }
+                      
+                      if (!receiverUserId) {
                         setDropError('Could not find receiver. User ID not available.');
                         throw new Error('Could not find receiver');
                       }
@@ -3033,7 +3081,7 @@ export default function HomeScreen() {
                         rssi: selectedBlipDevice.rssi, 
                         distanceFeet: selectedBlipDevice.distanceFeet, 
                         action: 'dropped' 
-                      }, selectedBlipDevice.userId);
+                      }, receiverUserId);
                       
                       // Close modal after successful send
                       setShowBlipModal(false);
