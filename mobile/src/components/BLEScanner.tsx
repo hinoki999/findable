@@ -187,7 +187,11 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           const extractDeviceId = (name: string | null): string | null => {
             if (!name) return null;
             const match = name.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
-            return match ? match[1] : null;
+            if (match && match[1]) {
+              // Trim whitespace and return the extracted deviceId
+              return match[1].trim();
+            }
+            return null;
           };
 
           const deviceId = extractDeviceId(device.name);
@@ -195,15 +199,45 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
             console.log('[BLEScanner] Looking up deviceId:', deviceId, 'for device:', device.name);
+            console.log('[BLEScanner] DROPLINK_DEVICE_PREFIX:', DROPLINK_DEVICE_PREFIX);
+            console.log('[BLEScanner] Extracted deviceId length:', deviceId.length);
+            console.log('[BLEScanner] Extracted deviceId (raw):', JSON.stringify(deviceId));
             (async () => {
               try {
                 // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
                 // This is the DropLink display name, not the technical Supabase username
-                let { data: userProfileData, error: userProfileError } = await supabase
+                // CRITICAL: user_id is UUID type - PostgREST doesn't support ::text casting in LIKE
+                // Solution: Query all user_profiles and filter in JS (UUIDs have hyphens, prefix matching is complex)
+                let { data: allUserProfiles, error: userProfileError } = await supabase
                   .from('user_profiles')
-                  .select('user_id, name')
-                  .like('user_id', `${deviceId}%`)
-                  .maybeSingle();
+                  .select('user_id, name');
+                
+                console.log('[BLEScanner] Queried user_profiles, found', allUserProfiles?.length || 0, 'profiles');
+                
+                // Normalize deviceId: lowercase, remove hyphens, trim
+                const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '').trim();
+                console.log('[BLEScanner] Normalized deviceId:', normalizedDeviceId, '(length:', normalizedDeviceId.length, ')');
+                
+                // Filter in JavaScript: find user where UUID (as string) starts with deviceId
+                const userProfileData = allUserProfiles?.find(profile => {
+                  if (!profile.user_id) return false;
+                  
+                  // Normalize profile UUID: convert to string, lowercase, remove hyphens
+                  const normalizedProfileId = profile.user_id.toString().toLowerCase().replace(/-/g, '');
+                  
+                  // Explicit comparison with logging
+                  const matches = normalizedProfileId.startsWith(normalizedDeviceId);
+                  
+                  if (matches) {
+                    console.log('[BLEScanner] ✅ Match found!');
+                    console.log('[BLEScanner]   Profile UUID (raw):', profile.user_id);
+                    console.log('[BLEScanner]   Profile UUID (normalized):', normalizedProfileId);
+                    console.log('[BLEScanner]   DeviceId (normalized):', normalizedDeviceId);
+                    console.log('[BLEScanner]   First 8 chars of profile:', normalizedProfileId.substring(0, 8));
+                  }
+                  
+                  return matches;
+                }) || null;
                 
                 let userId: string | null = null;
                 let displayName: string | null = null;
@@ -216,11 +250,34 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 } else {
                   // Fallback: try profiles table (for AUTH_BYPASS users)
                   console.log('[BLEScanner] Not found in user_profiles, trying profiles table...');
-                  const { data: profileData, error: profileError } = await supabase
+                  const { data: allProfiles, error: profileError } = await supabase
                     .from('profiles')
-                    .select('id, username')
-                    .like('id', `${deviceId}%`)
-                    .maybeSingle();
+                    .select('id, username');
+                  
+                  console.log('[BLEScanner] Queried profiles table, found', allProfiles?.length || 0, 'profiles');
+                  
+                  // Normalize deviceId: lowercase, remove hyphens, trim
+                  const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '').trim();
+                  
+                  // Filter in JavaScript: find profile where id (as string) starts with deviceId
+                  const profileData = allProfiles?.find(profile => {
+                    if (!profile.id) return false;
+                    
+                    // Normalize profile ID: convert to string, lowercase, remove hyphens
+                    const normalizedProfileId = profile.id.toString().toLowerCase().replace(/-/g, '');
+                    
+                    // Explicit comparison
+                    const matches = normalizedProfileId.startsWith(normalizedDeviceId);
+                    
+                    if (matches) {
+                      console.log('[BLEScanner] ✅ Match found in profiles table!');
+                      console.log('[BLEScanner]   Profile ID (raw):', profile.id);
+                      console.log('[BLEScanner]   Profile ID (normalized):', normalizedProfileId);
+                      console.log('[BLEScanner]   DeviceId (normalized):', normalizedDeviceId);
+                    }
+                    
+                    return matches;
+                  }) || null;
                   
                   if (!profileError && profileData) {
                     userId = profileData.id;

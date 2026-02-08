@@ -3057,11 +3057,16 @@ export default function HomeScreen() {
                           // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
                           try {
                             // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
-                            let { data: userProfileData, error: userProfileError } = await supabase
+                            // CRITICAL: user_id is UUID type - PostgREST doesn't support ::text casting in LIKE
+                            // Solution: Query all user_profiles and filter in JS (UUIDs have hyphens, prefix matching is complex)
+                            let { data: allUserProfiles, error: userProfileError } = await supabase
                               .from('user_profiles')
-                              .select('user_id, name')
-                              .like('user_id', `${deviceId}%`)
-                              .maybeSingle();
+                              .select('user_id, name');
+                            
+                            // Filter in JavaScript: find user where UUID (as string) starts with deviceId
+                            const userProfileData = allUserProfiles?.find(profile => 
+                              profile.user_id && profile.user_id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
+                            ) || null;
                             
                             let foundUserId: string | null = null;
                             let foundDisplayName: string | null = null;
@@ -3074,11 +3079,14 @@ export default function HomeScreen() {
                             } else {
                               // Fallback: try profiles table (for AUTH_BYPASS users)
                               console.log('[HomeScreen] Not found in user_profiles, trying profiles table...');
-                              const { data: profileData, error: profileError } = await supabase
+                              const { data: allProfiles, error: profileError } = await supabase
                                 .from('profiles')
-                                .select('id, username')
-                                .like('id', `${deviceId}%`)
-                                .maybeSingle();
+                                .select('id, username');
+                              
+                              // Filter in JavaScript: find profile where id (as string) starts with deviceId
+                              const profileData = allProfiles?.find(profile => 
+                                profile.id && profile.id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
+                              ) || null;
                               
                               if (!profileError && profileData) {
                                 foundUserId = profileData.id;
