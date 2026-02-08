@@ -576,6 +576,7 @@ export default function HomeScreen() {
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
+  const [selectedBlipDeviceId, setSelectedBlipDeviceId] = useState<string | null>(null); // Store device ID to sync with devices array
   const [showBlipModal, setShowBlipModal] = useState(false);
   const [isSendingDrop, setIsSendingDrop] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
@@ -929,6 +930,21 @@ export default function HomeScreen() {
   });
   
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
+
+  // Sync selectedBlipDevice with devices array when username/userId is loaded
+  useEffect(() => {
+    if (selectedBlipDeviceId && selectedBlipDevice) {
+      // Find the current device in the devices array (it may have been updated with username)
+      const currentDevice = devices.find(d => d.id === selectedBlipDeviceId);
+      if (currentDevice && (
+        currentDevice.username !== selectedBlipDevice.username ||
+        currentDevice.userId !== selectedBlipDevice.userId
+      )) {
+        console.log('[HomeScreen] Syncing selectedBlipDevice with updated device data');
+        setSelectedBlipDevice(currentDevice);
+      }
+    }
+  }, [devices, selectedBlipDeviceId, selectedBlipDevice]);
 
   // ========== TENSOR-BASED SPATIAL SYSTEM ==========
   
@@ -1882,6 +1898,7 @@ export default function HomeScreen() {
               onPress={() => {
                 console.log('SUCCESS: Blip press handler called for:', device.name);
                 setSelectedBlipDevice(device);
+                setSelectedBlipDeviceId(device.id); // Store device ID to sync later
                 setShowBlipModal(true);
               }}
             />
@@ -3066,18 +3083,53 @@ export default function HomeScreen() {
                             throw new Error(`Could not find receiver: ${lookupError.message || 'User not found'}`);
                           }
                         } else {
-                          setDropError('Could not extract device ID from device name.');
-                          throw new Error('Could not extract device ID');
+                          // Device name doesn't match expected pattern - try to find user by device name directly
+                          console.log('[HomeScreen] Device name does not match DL- pattern, trying direct lookup by name:', selectedBlipDevice.name);
+                          try {
+                            // Try to find user by username matching the device name (without DL- prefix)
+                            const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
+                            const { data, error } = await supabase
+                              .from('profiles')
+                              .select('id, username')
+                              .or(`username.ilike.%${cleanName}%,id.ilike.${cleanName}%`)
+                              .maybeSingle();
+                            
+                            if (!error && data) {
+                              receiverUserId = data.id;
+                              console.log('[HomeScreen] ✅ Found userId by name lookup:', receiverUserId);
+                              (selectedBlipDevice as any).username = data.username;
+                              (selectedBlipDevice as any).userId = data.id;
+                            } else {
+                              throw new Error(`Device name "${selectedBlipDevice.name}" does not match expected format and user lookup failed`);
+                            }
+                          } catch (fallbackError: any) {
+                            console.error('[HomeScreen] Fallback lookup failed:', fallbackError);
+                            setDropError(`Could not identify receiver from device name: ${selectedBlipDevice.name}`);
+                            throw new Error(`Could not extract device ID: ${fallbackError.message}`);
+                          }
                         }
                       }
                       
                       if (!receiverUserId) {
-                        setDropError('Could not find receiver. User ID not available.');
+                        // Final fallback: try to use the device's BLE ID as a last resort
+                        // This should never happen if deviceId extraction worked, but handle it gracefully
+                        const errorMsg = `Could not find receiver. Device name: ${selectedBlipDevice.name}, Device ID: ${selectedBlipDevice.id}`;
+                        console.error('[HomeScreen]', errorMsg);
+                        setDropError('Could not find receiver. Please try again.');
                         throw new Error('Could not find receiver');
                       }
                       
+                      // Validate receiverUserId is not empty
+                      if (!receiverUserId || receiverUserId.trim() === '') {
+                        const errorMsg = 'Receiver user ID is empty or invalid';
+                        console.error('[HomeScreen]', errorMsg);
+                        setDropError('Invalid receiver ID. Please try again.');
+                        throw new Error(errorMsg);
+                      }
+                      
+                      console.log('[HomeScreen] Sending drop to userId:', receiverUserId);
                       await saveDevice({ 
-                        name: selectedBlipDevice.username || selectedBlipDevice.name, 
+                        name: selectedBlipDevice.username || selectedBlipDevice.name || 'Unknown User', 
                         rssi: selectedBlipDevice.rssi, 
                         distanceFeet: selectedBlipDevice.distanceFeet, 
                         action: 'dropped' 
