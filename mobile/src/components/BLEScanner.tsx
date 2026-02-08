@@ -197,40 +197,46 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             console.log('[BLEScanner] Looking up deviceId:', deviceId, 'for device:', device.name);
             (async () => {
               try {
-                // Try exact match first (deviceId is first 8 chars of userId)
-                let { data, error } = await supabase
-                  .from('profiles')
-                  .select('username, id')
-                  .like('id', `${deviceId}%`)
-                  .maybeSingle(); // Use maybeSingle() instead of single() to avoid error if no match
-
-                // If no exact match, try with different case or as prefix
-                if (error || !data) {
-                  console.log('[BLEScanner] First query failed, trying alternative lookup...');
-                  const { data: altData, error: altError } = await supabase
+                // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
+                // This is the DropLink display name, not the technical Supabase username
+                let { data: userProfileData, error: userProfileError } = await supabase
+                  .from('user_profiles')
+                  .select('user_id, name')
+                  .like('user_id', `${deviceId}%`)
+                  .maybeSingle();
+                
+                let userId: string | null = null;
+                let displayName: string | null = null;
+                
+                if (!userProfileError && userProfileData) {
+                  // Found in user_profiles - use the display name (e.g., "cheese")
+                  userId = userProfileData.user_id;
+                  displayName = userProfileData.name || deviceId || 'User';
+                  console.log('[BLEScanner] ✅ Found in user_profiles - display name:', displayName, 'userId:', userId);
+                } else {
+                  // Fallback: try profiles table (for AUTH_BYPASS users)
+                  console.log('[BLEScanner] Not found in user_profiles, trying profiles table...');
+                  const { data: profileData, error: profileError } = await supabase
                     .from('profiles')
-                    .select('username, id')
-                    .ilike('id', `${deviceId}%`) // Case-insensitive like
+                    .select('id, username')
+                    .like('id', `${deviceId}%`)
                     .maybeSingle();
                   
-                  if (!altError && altData) {
-                    data = altData;
-                    error = null;
+                  if (!profileError && profileData) {
+                    userId = profileData.id;
+                    // For profiles table, username is technical - use it as fallback
+                    displayName = profileData.username || deviceId || 'User';
+                    console.log('[BLEScanner] ✅ Found in profiles table - username:', displayName, 'userId:', userId);
                   }
                 }
 
-                if (error) {
-                  console.warn('[BLEScanner] Supabase query error for deviceId', deviceId, ':', error.message, 'Code:', error.code);
-                  if (error.code === 'PGRST116') {
-                    console.warn('[BLEScanner] No user found with id starting with:', deviceId);
-                  }
-                } else if (data) {
-                  console.log('[BLEScanner] ✅ Found user for deviceId', deviceId, ':', data.username, '(userId:', data.id, ')');
-                  // Update device with username and userId
+                if (userId && displayName) {
+                  console.log('[BLEScanner] ✅ Final result - display name:', displayName, 'userId:', userId);
+                  // Update device with display name and userId
                   setDevices(prevDevices => 
                     prevDevices.map(d => 
                       d.id === device.id 
-                        ? { ...d, username: data.username, userId: data.id }
+                        ? { ...d, username: displayName, userId: userId }
                         : d
                     )
                   );
@@ -238,7 +244,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   console.warn('[BLEScanner] ⚠️ No user found in Supabase for deviceId:', deviceId, 'Device name:', device.name);
                 }
               } catch (err) {
-                // Log error but don't fail completely
                 console.error('[BLEScanner] ❌ Username/userId lookup exception:', err);
               }
             })();

@@ -3054,26 +3054,46 @@ export default function HomeScreen() {
                           const deviceId = deviceIdMatch[1];
                           console.log('[HomeScreen] Extracted deviceId:', deviceId, 'from device name:', selectedBlipDevice.name);
                           
-                          // Try to look up userId from Supabase
+                          // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
                           try {
-                            const { data, error } = await supabase
-                              .from('profiles')
-                              .select('id, username')
-                              .like('id', `${deviceId}%`)
+                            // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
+                            let { data: userProfileData, error: userProfileError } = await supabase
+                              .from('user_profiles')
+                              .select('user_id, name')
+                              .like('user_id', `${deviceId}%`)
                               .maybeSingle();
                             
-                            if (error) {
-                              console.error('[HomeScreen] Supabase lookup error:', error);
-                              throw new Error(`Could not find user: ${error.message}`);
-                            } else if (data) {
-                              receiverUserId = data.id;
-                              console.log('[HomeScreen] ✅ Found userId:', receiverUserId, 'for deviceId:', deviceId);
+                            let foundUserId: string | null = null;
+                            let foundDisplayName: string | null = null;
+                            
+                            if (!userProfileError && userProfileData) {
+                              // Found in user_profiles - use display name (e.g., "cheese")
+                              foundUserId = userProfileData.user_id;
+                              foundDisplayName = userProfileData.name || deviceId || 'User';
+                              console.log('[HomeScreen] ✅ Found in user_profiles - display name:', foundDisplayName, 'userId:', foundUserId);
+                            } else {
+                              // Fallback: try profiles table (for AUTH_BYPASS users)
+                              console.log('[HomeScreen] Not found in user_profiles, trying profiles table...');
+                              const { data: profileData, error: profileError } = await supabase
+                                .from('profiles')
+                                .select('id, username')
+                                .like('id', `${deviceId}%`)
+                                .maybeSingle();
                               
-                              // Update the device object with the found userId and username
-                              if (data.username) {
-                                (selectedBlipDevice as any).username = data.username;
-                                (selectedBlipDevice as any).userId = data.id;
+                              if (!profileError && profileData) {
+                                foundUserId = profileData.id;
+                                foundDisplayName = profileData.username || deviceId || 'User';
+                                console.log('[HomeScreen] ✅ Found in profiles - username:', foundDisplayName, 'userId:', foundUserId);
                               }
+                            }
+                            
+                            if (foundUserId) {
+                              receiverUserId = foundUserId;
+                              console.log('[HomeScreen] ✅ Final result - display name:', foundDisplayName, 'userId:', receiverUserId);
+                              
+                              // Update the device object with the found userId and display name
+                              (selectedBlipDevice as any).username = foundDisplayName;
+                              (selectedBlipDevice as any).userId = foundUserId;
                             } else {
                               throw new Error(`No user found with device ID: ${deviceId}`);
                             }
@@ -3086,19 +3106,46 @@ export default function HomeScreen() {
                           // Device name doesn't match expected pattern - try to find user by device name directly
                           console.log('[HomeScreen] Device name does not match DL- pattern, trying direct lookup by name:', selectedBlipDevice.name);
                           try {
-                            // Try to find user by username matching the device name (without DL- prefix)
+                            // Try to find user by display name matching the device name (without DL- prefix)
                             const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
-                            const { data, error } = await supabase
-                              .from('profiles')
-                              .select('id, username')
-                              .or(`username.ilike.%${cleanName}%,id.ilike.${cleanName}%`)
+                            
+                            // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
+                            let { data: userProfileData, error: userProfileError } = await supabase
+                              .from('user_profiles')
+                              .select('user_id, name')
+                              .ilike('name', `%${cleanName}%`)
                               .maybeSingle();
                             
-                            if (!error && data) {
-                              receiverUserId = data.id;
-                              console.log('[HomeScreen] ✅ Found userId by name lookup:', receiverUserId);
-                              (selectedBlipDevice as any).username = data.username;
-                              (selectedBlipDevice as any).userId = data.id;
+                            let foundUserId: string | null = null;
+                            let foundDisplayName: string | null = null;
+                            
+                            if (!userProfileError && userProfileData) {
+                              // Found in user_profiles - use display name (e.g., "cheese")
+                              foundUserId = userProfileData.user_id;
+                              foundDisplayName = userProfileData.name || cleanName || 'User';
+                              console.log('[HomeScreen] ✅ Found in user_profiles by name - display name:', foundDisplayName, 'userId:', foundUserId);
+                            } else {
+                              // Fallback: try profiles table (for AUTH_BYPASS users)
+                              console.log('[HomeScreen] Not found in user_profiles, trying profiles table...');
+                              const { data: profileData, error: profileError } = await supabase
+                                .from('profiles')
+                                .select('id, username')
+                                .or(`username.ilike.%${cleanName}%,id.ilike.${cleanName}%`)
+                                .maybeSingle();
+                              
+                              if (!profileError && profileData) {
+                                foundUserId = profileData.id;
+                                foundDisplayName = profileData.username || cleanName || 'User';
+                                console.log('[HomeScreen] ✅ Found in profiles by name - username:', foundDisplayName, 'userId:', foundUserId);
+                              }
+                            }
+                            
+                            if (foundUserId) {
+                              receiverUserId = foundUserId;
+                              console.log('[HomeScreen] ✅ Final result by name - display name:', foundDisplayName, 'userId:', receiverUserId);
+                              // Update with display name
+                              (selectedBlipDevice as any).username = foundDisplayName;
+                              (selectedBlipDevice as any).userId = foundUserId;
                             } else {
                               throw new Error(`Device name "${selectedBlipDevice.name}" does not match expected format and user lookup failed`);
                             }
@@ -3128,8 +3175,14 @@ export default function HomeScreen() {
                       }
                       
                       console.log('[HomeScreen] Sending drop to userId:', receiverUserId);
+                      // Use username if available, otherwise device name, otherwise extract deviceId, otherwise fallback
+                      const dropName = selectedBlipDevice.username || 
+                                      selectedBlipDevice.name || 
+                                      (selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`))?.[1]) ||
+                                      'User';
+                      
                       await saveDevice({ 
-                        name: selectedBlipDevice.username || selectedBlipDevice.name || 'Unknown User', 
+                        name: dropName, 
                         rssi: selectedBlipDevice.rssi, 
                         distanceFeet: selectedBlipDevice.distanceFeet, 
                         action: 'dropped' 
