@@ -111,18 +111,6 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setDeviceId(prevDeviceId => {
         if (prevDeviceId !== newDeviceId) {
           console.log('[BLE-ADV-DEVICEID] Updating deviceId state from', prevDeviceId, 'to', newDeviceId);
-          
-          // If we were advertising with the wrong deviceId, restart with the correct one
-          if (isAdvertising && prevDeviceId === '0000') {
-            console.log('[BLE-ADV-DEVICEID] ⚠️ Was advertising with fallback deviceId, will restart with correct one...');
-            // Restart advertising with correct deviceId (use setTimeout to avoid state update during render)
-            setTimeout(() => {
-              stopAdvertising().then(() => {
-                setTimeout(() => startAdvertising(), 100);
-              });
-            }, 0);
-          }
-          
           return newDeviceId;
         }
         return prevDeviceId;
@@ -133,7 +121,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setDeviceId(prevDeviceId => prevDeviceId !== '0000' ? '0000' : prevDeviceId);
     }
     console.log('[BLE-ADV-DEVICEID] ===========================================');
-  }, [userId, isAdvertising, stopAdvertising, startAdvertising]); // Removed deviceId from deps to prevent loop
+  }, [userId]); // Only depend on userId - HomeScreen handles advertising start
   
   // Log availability on mount
   useEffect(() => {
