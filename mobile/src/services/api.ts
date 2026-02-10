@@ -829,94 +829,18 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
   }
 }
 
-// Twilio Verify credentials from environment variables
-const TWILIO_ACCOUNT_SID = Constants.expoConfig?.extra?.twilioAccountSid || '';
-const TWILIO_AUTH_TOKEN = Constants.expoConfig?.extra?.twilioAuthToken || '';
-const TWILIO_VERIFY_SERVICE_SID = Constants.expoConfig?.extra?.twilioVerifyServiceSid || '';
+// DISABLED: Twilio account suspended
+// const TWILIO_ACCOUNT_SID = Constants.expoConfig?.extra?.twilioAccountSid || '';
+// const TWILIO_AUTH_TOKEN = Constants.expoConfig?.extra?.twilioAuthToken || '';
+// const TWILIO_VERIFY_SERVICE_SID = Constants.expoConfig?.extra?.twilioVerifyServiceSid || '';
 
-// Send verification code via Twilio Verify
+// DISABLED: Twilio account suspended - stub functions to prevent app crashes
 export async function sendPhoneVerificationCodeTwilio(phoneNumber: string): Promise<void> {
-  try {
-    // Format phone to E.164
-    let formattedPhone = phoneNumber.replace(/\D/g, '');
-    if (!formattedPhone.startsWith('1')) {
-      formattedPhone = '1' + formattedPhone;
-    }
-    formattedPhone = '+' + formattedPhone;
-
-    const response = await fetch(
-      `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/Verifications`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `To=${encodeURIComponent(formattedPhone)}&Channel=sms`,
-      }
-    );
-
-    const data = await response.json();
-    
-    if (!response.ok) {
-      console.error('Twilio Verify error:', data);
-      throw new Error(data.message || 'Failed to send verification code');
-    }
-
-    console.log('SUCCESS: Verification code sent to', formattedPhone);
-  } catch (error: any) {
-    console.error('ERROR: Send verification error:', error);
-    throw new Error(error.message || 'Failed to send verification code');
-  }
+  throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
 }
 
-// Verify the code via Twilio Verify
 export async function verifyPhoneCodeTwilio(phoneNumber: string, code: string, userId: string): Promise<void> {
-  try {
-    // Format phone to E.164
-    let formattedPhone = phoneNumber.replace(/\D/g, '');
-    if (!formattedPhone.startsWith('1')) {
-      formattedPhone = '1' + formattedPhone;
-    }
-    formattedPhone = '+' + formattedPhone;
-
-    const response = await fetch(
-      `https://verify.twilio.com/v2/Services/${TWILIO_VERIFY_SERVICE_SID}/VerificationCheck`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `To=${encodeURIComponent(formattedPhone)}&Code=${code}`,
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || data.status !== 'approved') {
-      console.error('Twilio Verify check error:', data);
-      throw new Error('Invalid or expired code. Please try again.');
-    }
-
-    // Update user_profiles to mark phone as verified
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({
-        phone_verified: true,
-      })
-      .eq('user_id', userId);
-
-    if (updateError) {
-      console.error('Failed to update phone verification status:', updateError);
-      throw new Error('Verification succeeded but failed to save. Please try again.');
-    }
-
-    console.log('SUCCESS: Phone verified for user', userId);
-  } catch (error: any) {
-    console.error('ERROR: Verify code error:', error);
-    throw new Error(error.message || 'Verification failed. Please try again.');
-  }
+  throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
 }
 
 // Reset password after OTP verification

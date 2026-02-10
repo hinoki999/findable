@@ -8,7 +8,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import * as api from '../services/api';
-import { sendPhoneVerificationCode, verifyPhoneCode, sendPhoneVerificationCodeTwilio, verifyPhoneCodeTwilio } from '../services/api';
+import { sendPhoneVerificationCode, verifyPhoneCode } from '../services/api';
+// DISABLED: Twilio account suspended
+// import { sendPhoneVerificationCodeTwilio, verifyPhoneCodeTwilio } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
 import { storage } from '../services/storage';
 
@@ -360,7 +362,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setCodeSentSuccessfully(false);
 
     try {
-      await sendPhoneVerificationCodeTwilio(phone);
+      // DISABLED: Twilio account suspended - using non-Twilio verification
+      await sendPhoneVerificationCode(phone);
       setCodeSentSuccessfully(true);
       setPhoneVerificationStep('enter-code');
       // Clear error on successful send
@@ -388,7 +391,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setPhoneVerificationError('');
 
     try {
-      await verifyPhoneCodeTwilio(phone, phoneVerificationCode, userId);
+      // DISABLED: Twilio account suspended - using non-Twilio verification
+      await verifyPhoneCode(phone, phoneVerificationCode, userId);
       
       // Update local profile state
       updateProfile({ phoneVerified: true });
