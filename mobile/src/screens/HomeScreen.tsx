@@ -1913,6 +1913,7 @@ export default function HomeScreen() {
           pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
         }}
       >
+        {console.log('[CRASH-DEBUG] About to render filteredDevices, count:', filteredDevices.length)}
         {filteredDevices.map((device) => {
           const position = getGridPosition(device);
 
@@ -1936,6 +1937,7 @@ export default function HomeScreen() {
         })}
 
         {/* Link Markers - for accepted and returned links (no pulsation) */}
+        {console.log('[CRASH-DEBUG] About to render linkedDevices, count:', linkedDevices.length)}
         {linkedDevices.map((device) => {
           // Use same positioning logic as blips to ensure grid snapping
           const position = getGridPosition(device as any); // Device has distanceFeet property
@@ -2118,6 +2120,7 @@ export default function HomeScreen() {
               contentContainerStyle={{ minHeight: totalStackHeight }}
               scrollEnabled={!isDragging}
             >
+              {console.log('[CRASH-DEBUG] About to render pinnedProfiles, count:', pinnedProfiles?.length)}
               {pinnedProfiles.map((profile, index) => {
                 const isExpanded = expandedCardId === profile.id;
                 const isBottomCard = index === 0;
@@ -2569,6 +2572,7 @@ export default function HomeScreen() {
                       Links
               </Text>
                   </View>
+                  {console.log('[CRASH-DEBUG] About to render unviewedLinks, count:', unviewedLinks?.length)}
                   {unviewedLinks.map((linkNotif) => (
                     <View
                       key={linkNotif.id}
