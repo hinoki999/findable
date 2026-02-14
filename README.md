@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** January 2025 (BLE Advertising & Drop Functionality Implementation)
+**Last Updated:** February 14, 2026 (Gray Screen Crash RESOLVED - BLEAdvertiserNative fix + DB cleanup)
 
 ---
 
@@ -2752,16 +2752,228 @@ Settings → Actions → Disable "Error Monitoring" workflow
 
 ---
 
+## RESOLVED: Gray Screen Crash Investigation (February 14, 2026)
+
+**Status:** ✅ RESOLVED
+**Duration:** 8+ days of debugging
+**Resolution Date:** February 14, 2026
+
+### Problem Summary
+
+The app experienced a critical gray screen crash on launch that persisted across multiple commit reverts, cache clears, and clean rebuilds. Through systematic debugging with `adb logcat`, we identified and resolved **two separate issues**.
+
+### Issue 1: BLEAdvertiserNative Module Crash
+
+**Symptoms:**
+- App crashed immediately on launch with gray screen
+- Error occurred ~1 second after login when auth completed
+- Crash happened when HomeScreen tried to start BLE advertising
+
+**Root Cause:**
+- File `mobile/src/native/BLEAdvertiserNative.ts` threw error when native Kotlin module was missing
+- Error: `"BLEAdvertiserNative module not found. Make sure the native module is properly linked."`
+- The TypeScript bridge expected a native Kotlin module (`BLEAdvertiserModule.kt`) that was **never implemented**
+- Code threw error at module load time (before any try-catch could handle it)
+- This caused app to crash before any UI could render
+
+**Solution Implemented:**
+
+1. **Modified `BLEAdvertiserNative.ts`** to return safe stub instead of throwing error:
+```typescript
+const isNativeModuleAvailable = !!BLEAdvertiserNative;
+
+const BLEAdvertiserStub: BLEAdvertiserNativeInterface = {
+  async startAdvertising(serviceUUID: string, deviceId: string) {
+    console.log('[BLEAdvertiserNative] Native module not available, advertising disabled');
+    return { success: false, serviceUUID };
+  },
+  async stopAdvertising() { /* No-op */ },
+  async isAdvertising() { return false; },
+};
+
+export const isBLEAdvertiserAvailable = isNativeModuleAvailable;
+export default isNativeModuleAvailable 
+  ? (BLEAdvertiserNative as BLEAdvertiserNativeInterface)
+  : BLEAdvertiserStub;
+```
+
+2. **Updated `BLEAdvertiser.tsx`** to check native module availability:
+```typescript
+const isAvailable = Platform.OS === 'android' && ADVERTISING_ENABLED && isBLEAdvertiserAvailable;
+```
+
+3. **Bumped `runtimeVersion`** from `"1.0.1"` to `"1.0.2"` in `app.json` to escape OTA update poisoning
+
+**Files Modified:**
+- `mobile/src/native/BLEAdvertiserNative.ts`
+- `mobile/src/components/BLEAdvertiser.tsx`
+- `mobile/app.json`
+
+### Issue 2: Corrupted Database Records
+
+**Symptoms:**
+- After fixing BLE crash, app still crashed with `"TypeError: undefined is not a function"`
+- Crash occurred when rendering linked devices on HomeScreen
+- Error happened during `linkedDevices.map()` execution
+
+**Root Cause:**
+- Two device records in Supabase `devices` table had malformed data:
+  - `device_id` field contained `"-"` (dash) instead of valid UUID
+  - When `getGridPosition()` tried to use this for positioning calculations, it caused downstream errors in TensorMath operations
+- These records were created during testing and remained in database
+
+**Solution:**
+- Deleted the 2 corrupted device records from Supabase `devices` table
+- App immediately started working after cleanup
+
+**Records Deleted:**
+| Device ID | device_id | action |
+|-----------|-----------|--------|
+| 1770596655457 | "-" | returned |
+| 1770596767733 | "-" | returned |
+
+### OTA Update Poisoning Explained
+
+**What Happened:**
+- App uses Expo OTA (Over-The-Air) updates with `runtimeVersion: "1.0.1"`
+- When installing old reverted code, app would:
+  1. Install APK with old code
+  2. Launch and check Expo servers: "Any updates for 1.0.1?"
+  3. Download latest JavaScript bundle for 1.0.1 (which had broken code)
+  4. Run the downloaded code instead of APK code
+  5. Crash
+
+**Why Reverts Didn't Work:**
+- Even after reverting to commits from weeks ago (like `18472a9`), the OTA system kept re-downloading the newest code
+- `fallbackToCacheTimeout: 0` in app.json forced app to wait for OTA update before rendering
+- This meant EVERY launch, even from old APKs, would run the latest broken code
+
+**The Fix:**
+- Bumping `runtimeVersion` to `"1.0.2"` broke the OTA link
+- New builds check for "1.0.2" updates, find none, and use code baked into APK
+- This allowed the fixed code to actually run
+
+### Debugging Setup: adb logcat
+
+**Why This Was Critical:**
+- Physical device crashes don't show in Expo logs
+- `adb logcat` revealed exact crash location and error messages
+- Showed that all arrays were valid, narrowing down crash to specific render call
+- Identified that crash happened when rendering 1 linked device
+
+**Setup Steps:**
+1. Enable Developer Mode on device (tap Build Number 7 times)
+2. Enable USB Debugging in Developer Options
+3. Connect device via USB and authorize computer
+
+**Key Commands:**
+```powershell
+# Clear old logs
+adb logcat -c
+
+# View all React Native logs
+adb logcat | Select-String "ReactNativeJS"
+
+# View errors and crashes
+adb logcat | Select-String "ReactNativeJS|Error|FATAL"
+
+# View specific debug tags
+adb logcat | Select-String "CRASH-DEBUG|BLE-ADV"
+```
+
+### Debug Logging Added
+
+Added comprehensive debug logging throughout `HomeScreen.tsx` to trace crash:
+
+| Location | Purpose |
+|----------|---------|
+| After `useBLEScanner()` | Logs scanner state |
+| Before `dropLinkDevices` filter | Logs devices array |
+| Before `filteredDevices` filter | Logs distance filtering |
+| Before JSX return | Logs all arrays before render |
+| Before `filteredDevices.map()` | Logs render count |
+| Before `linkedDevices.map()` | Logs render count (revealed crash) |
+| Before `pinnedProfiles.map()` | Logs render count |
+| Before `unviewedLinks.map()` | Logs render count |
+
+**Key Insight from Logs:**
+- All data structures were valid arrays
+- Crash occurred specifically when `linkedDevices.length = 1`
+- Led to discovery of corrupted database records
+
+### All Attempted Fixes (Before Resolution)
+
+| # | Attempt | Result |
+|---|---------|--------|
+| 1 | Git revert to commit `6bb6e18` | ❌ Still crashes |
+| 2 | Git revert to commit `b95b981` | ❌ Still crashes |
+| 3 | Git revert to commit `18472a9` | ❌ Still crashes |
+| 4 | Commented out Twilio code | ❌ No change |
+| 5 | Commented out AsyncStorage | ❌ No change |
+| 6 | Removed drops table | ❌ No change |
+| 7 | Disabled fetchIncomingDrops | ❌ No change |
+| 8 | `npx expo install --fix` | ❌ Made it worse |
+| 9 | Deleted node_modules | ❌ No improvement |
+| 10 | Deleted android/ folder | ❌ No improvement |
+| 11 | Deleted .expo/ cache | ❌ No improvement |
+| 12 | `npm cache clean --force` | ❌ No improvement |
+| 13 | `npx expo prebuild --clean` | ❌ No improvement |
+| 14 | `--clear-cache` on EAS builds | ❌ No improvement |
+| 15 | Fresh native builds | ❌ Still crashes |
+| 16 | Uninstall app completely | ❌ Same crash |
+| 17 | Test on second device | ❌ Same crash |
+| **18** | **Fix BLEAdvertiserNative stub** | **✅ Partial fix** |
+| **19** | **Bump runtimeVersion to 1.0.2** | **✅ OTA escaped** |
+| **20** | **Delete corrupted DB records** | **✅ RESOLVED** |
+
+**Estimated Build Count:** ~30-45 EAS builds over 8+ days
+
+### Current State
+
+**Working:**
+- ✅ App launches without crashing
+- ✅ Login and authentication
+- ✅ HomeScreen renders successfully
+- ✅ BLE scanning functional (react-native-ble-plx)
+- ✅ Database operations working
+- ✅ adb logcat debugging setup
+
+**Not Implemented (Future Work):**
+- ❌ BLE advertising - native Kotlin module needs implementation
+- ❌ Users cannot be discovered by other devices
+- ❌ The stub prevents crashes but doesn't advertise
+
+### Lessons Learned
+
+1. **OTA Updates Can Poison Reverts** - Always bump `runtimeVersion` when reverting to ensure clean slate
+2. **Database Data Can Cause Code Crashes** - Malformed data caused "undefined is not a function" error
+3. **Physical Device Debugging Essential** - `adb logcat` was critical; Expo logs didn't show the crash
+4. **Systematic Logging Reveals Root Cause** - Adding targeted debug logs at each step identified exact crash location
+5. **Don't Assume Old Code Is Clean** - The crash wasn't in recent code; it was corrupted database records breaking old rendering logic
+6. **Module-Level Throws Are Dangerous** - Errors thrown during import evaluation crash before React can handle them
+
+### Related Files
+
+| File | Purpose |
+|------|---------|
+| `mobile/src/native/BLEAdvertiserNative.ts` | Native module wrapper (fixed) |
+| `mobile/src/components/BLEAdvertiser.tsx` | Advertising hook (fixed) |
+| `mobile/src/screens/HomeScreen.tsx` | Where advertising is triggered |
+| `mobile/app.json` | runtimeVersion configuration |
+| `mobile/android/app/src/main/java/com/hirule/mobile/` | Native code location (no BLE module exists) |
+
+---
+
 ## Next Steps (Priority Order)
 
-1. **Fix gray screen crash** - CRITICAL - App unusable after fresh signup/login
+1. **Implement BLEAdvertiserModule.kt** - Native Kotlin module for actual BLE advertising
 2. **Re-implement tutorial system** - Core onboarding feature, currently disabled
 3. **Create Supabase RPC function** - Required for account deletion
 4. **Complete Railway deprecation** - Remove all Railway backend dependencies
-5. **Add photo format support** - HEIC, WebP, HEIF
-6. **Investigate radar blips** - Core app functionality
+5. **Add phone verification** - Re-enable with new Twilio account
+6. **Add photo format support** - HEIC, WebP, HEIF
 7. **Grid performance optimization** - Memoize 6,440 View components
-9. **Expand test coverage** - Update tests for Supabase endpoints
+8. **Expand test coverage** - Update tests for Supabase endpoints
 
 ---
 
@@ -2788,9 +3000,12 @@ Settings → Actions → Disable "Error Monitoring" workflow
 - Tutorial system temporarily disabled (blocking signup navigation)
 - FormData uses `as any` type cast (removes TypeScript type safety)
 - Error messages too generic for debugging (improved during migration)
-- Gray screen crashes not fully resolved
+- ~~Gray screen crashes not fully resolved~~ **RESOLVED Feb 14, 2026** (See crash investigation section)
 - Profile photo upload RLS policy error persists
 - Supabase Storage requires explicit auth headers (workaround in place)
+- **BLEAdvertiserNative has no native implementation** - Stub in place, advertising disabled until Kotlin module implemented
+- **Twilio account suspended** - Phone verification disabled, credentials exposed in git history
+- **Debug logging in HomeScreen.tsx** - Remove `[CRASH-DEBUG]` logs after stability confirmed
 
 ### Code Patterns (Supabase)
 
@@ -2919,10 +3134,11 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - Verify all tables deleted: devices, user_settings, user_profiles
 
 **Gray screen crash after signup/login?**
-- Issue: React Native Text components rendering null values
-- Check: New users have null name/bio/phone in database
-- Fix: Add fallback values `{field || 'default'}` to all Text renders
-- Files: AccountScreen.tsx helper functions and Text components
+- **RESOLVED Feb 14, 2026** - See "Gray Screen Crash Investigation" section above
+- Root Cause 1: `BLEAdvertiserNative.ts` throwing error when native module missing
+- Root Cause 2: Corrupted device records in Supabase with `device_id: "-"`
+- Fix: Stub implementation in BLEAdvertiserNative.ts + delete corrupted DB records
+- Prevention: Always bump `runtimeVersion` when deploying fixes to escape OTA poisoning
 
 **Profile photo upload failing with RLS error?**
 - Issue: Storage API not receiving JWT token in headers
