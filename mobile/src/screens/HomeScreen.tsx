@@ -649,6 +649,9 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
 
+  console.log('[CRASH-DEBUG] ========== HomeScreen Render Start ==========');
+  console.log('[CRASH-DEBUG] useBLEScanner result:', { devices, isScanning, startScan: typeof startScan, stopScan: typeof stopScan, startScanCount });
+
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, localName } = useBLEAdvertiser();
 
@@ -919,6 +922,12 @@ export default function HomeScreen() {
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
   
+  console.log('[CRASH-DEBUG] About to filter dropLinkDevices');
+  console.log('[CRASH-DEBUG] devices type:', typeof devices);
+  console.log('[CRASH-DEBUG] devices is array?', Array.isArray(devices));
+  console.log('[CRASH-DEBUG] devices length:', devices?.length);
+  console.log('[CRASH-DEBUG] devices value:', devices);
+
   const dropLinkDevices = devices.filter(device => {
     // Check if name starts with "DL-"
     if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
@@ -936,6 +945,12 @@ export default function HomeScreen() {
     return false;
   });
   
+  console.log('[CRASH-DEBUG] About to filter by distance');
+  console.log('[CRASH-DEBUG] dropLinkDevices type:', typeof dropLinkDevices);
+  console.log('[CRASH-DEBUG] dropLinkDevices is array?', Array.isArray(dropLinkDevices));
+  console.log('[CRASH-DEBUG] dropLinkDevices length:', dropLinkDevices?.length);
+  console.log('[CRASH-DEBUG] maxDistance:', maxDistance);
+
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
@@ -1540,6 +1555,14 @@ export default function HomeScreen() {
 
   const testTimestamp = new Date().toLocaleString();
   
+  console.log('[CRASH-DEBUG] About to render JSX');
+  console.log('[CRASH-DEBUG] filteredDevices type:', typeof filteredDevices);
+  console.log('[CRASH-DEBUG] filteredDevices is array?', Array.isArray(filteredDevices));
+  console.log('[CRASH-DEBUG] filteredDevices length:', filteredDevices?.length);
+  console.log('[CRASH-DEBUG] linkedDevices type:', typeof linkedDevices);
+  console.log('[CRASH-DEBUG] linkedDevices length:', linkedDevices?.length);
+  console.log('[CRASH-DEBUG] ========== HomeScreen Render End ==========');
+
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
       {/* HUGE TEST BANNER - at very top of screen */}
