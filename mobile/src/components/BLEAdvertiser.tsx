@@ -279,7 +279,12 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         // Store the actual name being broadcast for verification
         setBroadcastName(currentLocalName);
       } else {
-        throw new Error('Advertising started but returned unsuccessful result');
+        // Native module not available, advertising disabled
+        console.log('[BLE-ADV-DIAG] Native module unavailable, advertising disabled');
+        setError('Advertising not available on this device');
+        setIsAdvertising(false);
+        setBroadcastName(null);
+        return; // Exit gracefully without crashing
       }
       
       console.log('[BLE-ADV-DIAG] Step 4: Advertising started successfully');
