@@ -27,10 +27,27 @@ interface BLEAdvertiserNativeInterface {
 
 const { BLEAdvertiserNative } = NativeModules;
 
-if (!BLEAdvertiserNative) {
-  throw new Error(
-    'BLEAdvertiserNative module not found. Make sure the native module is properly linked.'
-  );
-}
+// Check if native module is available
+const isNativeModuleAvailable = !!BLEAdvertiserNative;
 
-export default BLEAdvertiserNative as BLEAdvertiserNativeInterface;
+// Create stub implementation that fails gracefully when native module is missing
+const BLEAdvertiserStub: BLEAdvertiserNativeInterface = {
+  async startAdvertising(serviceUUID: string, deviceId: string) {
+    console.log('[BLEAdvertiserNative] Native module not available, advertising disabled');
+    return { success: false, serviceUUID };
+  },
+  async stopAdvertising() {
+    // No-op
+  },
+  async isAdvertising() {
+    return false;
+  },
+};
+
+// Export availability flag so other code can check
+export const isBLEAdvertiserAvailable = isNativeModuleAvailable;
+
+// Export either real module or stub
+export default isNativeModuleAvailable 
+  ? (BLEAdvertiserNative as BLEAdvertiserNativeInterface)
+  : BLEAdvertiserStub;

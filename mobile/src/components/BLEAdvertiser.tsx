@@ -4,7 +4,7 @@ import { State } from 'react-native-ble-plx';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { useAuth } from '../contexts/AuthContext';
-import BLEAdvertiserNative from '../native/BLEAdvertiserNative';
+import BLEAdvertiserNative, { isBLEAdvertiserAvailable } from '../native/BLEAdvertiserNative';
 import { supabase } from '../services/supabase';
 
 // Feature flag - can disable advertising if needed
@@ -46,7 +46,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [error, setError] = useState<string | null>(null);
   const [broadcastName, setBroadcastName] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string>('0000');
-  const isAvailable = Platform.OS === 'android' && ADVERTISING_ENABLED;
+  const isAvailable = Platform.OS === 'android' && ADVERTISING_ENABLED && isBLEAdvertiserAvailable;
   
   // Wait for auth to finish loading before proceeding
   // This ensures userId is ready before we try to use it
