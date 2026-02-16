@@ -222,26 +222,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   }
                 }
                 
-                // Fallback to profiles table if not found
-                if (!userId) {
-                  const { data: allProfiles, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('id, username');
-                  
-                  if (!profileError && allProfiles) {
-                    const profileData = allProfiles.find(profile => {
-                      if (!profile.id) return false;
-                      const normalizedProfileId = profile.id.toString().toLowerCase().replace(/-/g, '');
-                      return normalizedProfileId.startsWith(normalizedDeviceId);
-                    });
-                    
-                    if (profileData) {
-                      userId = profileData.id;
-                      displayName = profileData.username || deviceId || 'User';
-                    }
-                  }
-                }
-                
                 // Update device if found, or use deviceId as fallback
                 if (userId) {
                   setDevices(prevDevices => 

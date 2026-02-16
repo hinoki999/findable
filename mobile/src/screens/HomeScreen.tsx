@@ -3110,23 +3110,6 @@ export default function HomeScreen() {
                               foundUserId = userProfileData.user_id;
                               foundDisplayName = userProfileData.name || deviceId || 'User';
                               console.log('[HomeScreen] ✅ Found in user_profiles - display name:', foundDisplayName, 'userId:', foundUserId);
-                            } else {
-                              // Fallback: try profiles table (for AUTH_BYPASS users)
-                              console.log('[HomeScreen] Not found in user_profiles, trying profiles table...');
-                              const { data: allProfiles, error: profileError } = await supabase
-                                .from('profiles')
-                                .select('id, username');
-                              
-                              // Filter in JavaScript: find profile where id (as string) starts with deviceId
-                              const profileData = allProfiles?.find(profile => 
-                                profile.id && profile.id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
-                              ) || null;
-                              
-                              if (!profileError && profileData) {
-                                foundUserId = profileData.id;
-                                foundDisplayName = profileData.username || deviceId || 'User';
-                                console.log('[HomeScreen] ✅ Found in profiles - username:', foundDisplayName, 'userId:', foundUserId);
-                              }
                             }
                             
                             if (foundUserId) {
@@ -3166,20 +3149,6 @@ export default function HomeScreen() {
                               foundUserId = userProfileData.user_id;
                               foundDisplayName = userProfileData.name || cleanName || 'User';
                               console.log('[HomeScreen] ✅ Found in user_profiles by name - display name:', foundDisplayName, 'userId:', foundUserId);
-                            } else {
-                              // Fallback: try profiles table (for AUTH_BYPASS users)
-                              console.log('[HomeScreen] Not found in user_profiles, trying profiles table...');
-                              const { data: profileData, error: profileError } = await supabase
-                                .from('profiles')
-                                .select('id, username')
-                                .or(`username.ilike.%${cleanName}%,id.ilike.${cleanName}%`)
-                                .maybeSingle();
-                              
-                              if (!profileError && profileData) {
-                                foundUserId = profileData.id;
-                                foundDisplayName = profileData.username || cleanName || 'User';
-                                console.log('[HomeScreen] ✅ Found in profiles by name - username:', foundDisplayName, 'userId:', foundUserId);
-                              }
                             }
                             
                             if (foundUserId) {
