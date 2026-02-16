@@ -200,26 +200,22 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           if (deviceId) {
             (async () => {
               try {
-                const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '').trim();
+                const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
                 let displayName: string | null = null;
                 
-                // Query user_profiles first (for display name)
-                const { data: allUserProfiles, error: userProfileError } = await supabase
+                // Query user_profiles with server-side prefix matching
+                // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
+                const { data: userProfileData, error: userProfileError } = await supabase
                   .from('user_profiles')
-                  .select('user_id, name');
+                  .select('user_id, name')
+                  .ilike('user_id', `${normalizedDeviceId}%`)
+                  .limit(1)
+                  .maybeSingle();
                 
-                if (!userProfileError && allUserProfiles) {
-                  const userProfileData = allUserProfiles.find(profile => {
-                    if (!profile.user_id) return false;
-                    const normalizedProfileId = profile.user_id.toString().toLowerCase().replace(/-/g, '');
-                    return normalizedProfileId.startsWith(normalizedDeviceId);
-                  });
-                  
-                  if (userProfileData) {
-                    userId = userProfileData.user_id;
-                    displayName = userProfileData.name || deviceId || 'User';
-                  }
+                if (!userProfileError && userProfileData) {
+                  userId = userProfileData.user_id;
+                  displayName = userProfileData.name || deviceId || 'User';
                 }
                 
                 // Update device if found, or use deviceId as fallback
