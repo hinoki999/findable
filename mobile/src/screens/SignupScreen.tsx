@@ -245,7 +245,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: name,           // Use the name field entered by user for BLE discovery
+        username: username,   // Login username for identification
+        name: name,           // Display name for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
@@ -369,7 +370,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: name,           // Use the name field entered by user for BLE discovery
+        username: username,   // Login username for identification
+        name: name,           // Display name for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
