@@ -18,11 +18,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const theme = getTheme(isDarkMode);
   const { signup, refreshAuth } = useAuth();
 
+  const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
-
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -30,6 +30,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [error, setError] = useState('');
 
   // Validation states
+  const [nameError, setNameError] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
@@ -170,6 +171,12 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
   const handleSignup = () => {
     // Final validation
+    if (!name || name.trim().length < 1) {
+      setNameError('Full name is required');
+      setError('Please enter your full name');
+      return;
+    }
+
     if (!username || username.length < 3 || username.length > 20) {
       setError('Please enter a valid username (3-20 characters)');
       return;
@@ -234,11 +241,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log(`SUCCESS: Account created, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
-      // Use username as initial display name so BLE scanner can find users
+      console.log('[SIGNUP-DEBUG] Creating profile with name:', name, 'username:', username, 'email:', email);
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: username,       // Use username as display name for BLE discovery
+        name: name,           // Use the name field entered by user for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
@@ -254,6 +261,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
       console.log('SUCCESS: user_profiles record created');
+      console.log('[SIGNUP-DEBUG] Profile created successfully, user_id:', userId);
 
       // Create user_settings record in Supabase
       const { error: settingsError } = await supabase.from('user_settings').insert({
@@ -357,11 +365,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log(`SUCCESS: Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
-      // Use username as initial display name so BLE scanner can find users
+      console.log('[SIGNUP-VERIFY-DEBUG] Creating profile after verification, name:', name, 'email:', email);
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: username,       // Use username as display name for BLE discovery
+        name: name,           // Use the name field entered by user for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
@@ -377,6 +385,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
       console.log('SUCCESS: user_profiles record created');
+      console.log('[SIGNUP-VERIFY-DEBUG] Profile created successfully after verification');
 
       // Create user_settings record in Supabase
       const { error: settingsError } = await supabase.from('user_settings').insert({
@@ -419,7 +428,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = name.length >= 1 && username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !nameError && !usernameError && !passwordError && !confirmPasswordError && !emailError;
 
   return (
     <KeyboardAvoidingView
@@ -449,6 +458,35 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
         {/* Form */}
         <View style={styles.form}>
+          {/* Full Name */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>Full Name</Text>
+            <View style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: nameError ? '#FF3B30' : theme.colors.border,
+              }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
+                value={name}
+                onChangeText={(text) => {
+                  setName(text);
+                  setNameError('');
+                }}
+                placeholder="Your display name"
+                placeholderTextColor={theme.colors.muted}
+                autoCapitalize="words"
+                autoCorrect={false}
+                editable={!loading}
+              />
+            </View>
+            {nameError ? (
+              <Text style={styles.errorText}>{nameError}</Text>
+            ) : null}
+          </View>
+
           {/* Username */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: theme.colors.text }]}>Username</Text>
