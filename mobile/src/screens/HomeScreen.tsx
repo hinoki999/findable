@@ -637,7 +637,7 @@ export default function HomeScreen() {
   const { showToast } = useToast();
   const { navigateToTab } = useTabNavigation();
   const phoneVerified = profile?.phoneVerified || false;
-  const { userId, loading } = useAuth();
+  const { userId, username, loading } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
   const { maxDistance } = useSettings();
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
@@ -647,7 +647,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
   console.log('[CRASH-DEBUG] ========== HomeScreen Render Start ==========');
   console.log('[CRASH-DEBUG] useBLEScanner result:', { devices, isScanning, startScan: typeof startScan, stopScan: typeof stopScan, startScanCount });
@@ -945,6 +945,7 @@ export default function HomeScreen() {
     return false;
   });
   
+  console.log('[BLIP-DEBUG] DropLink devices found:', dropLinkDevices.length);
   console.log('[CRASH-DEBUG] About to filter by distance');
   console.log('[CRASH-DEBUG] dropLinkDevices type:', typeof dropLinkDevices);
   console.log('[CRASH-DEBUG] dropLinkDevices is array?', Array.isArray(dropLinkDevices));
@@ -952,6 +953,8 @@ export default function HomeScreen() {
   console.log('[CRASH-DEBUG] maxDistance:', maxDistance);
 
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
+  
+  console.log('[BLIP-DEBUG] Filtered devices:', filteredDevices.map(d => d.name));
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -1916,6 +1919,7 @@ export default function HomeScreen() {
         {console.log('[CRASH-DEBUG] About to render filteredDevices, count:', filteredDevices.length)}
         {filteredDevices.map((device) => {
           const position = getGridPosition(device);
+          console.log('[BLIP-DEBUG] Rendering blip for:', device.name, 'at position:', position);
 
           return (
             <DeviceBlip
@@ -1928,6 +1932,7 @@ export default function HomeScreen() {
               viewTransform={viewTransformTensor}
               onPress={() => {
                 console.log('SUCCESS: Blip press handler called for:', device.name);
+                console.log('[BLIP-DEBUG] Blip tapped:', device.name, 'username:', device.username);
                 setSelectedBlipDevice(device);
                 setSelectedBlipDeviceId(device.id); // Store device ID to sync later
                 setShowBlipModal(true);
@@ -2389,6 +2394,43 @@ export default function HomeScreen() {
             </Text>
           </Pressable>
           </View>
+
+        {/* Debug: Add Me Button - Injects current user as fake nearby device */}
+        <View pointerEvents="auto">
+          <Pressable
+            onPress={() => {
+              if (!userId) {
+                console.log('[BLIP-DEBUG] Cannot add debug device: userId is null');
+                showToast('Error: userId is null');
+                return;
+              }
+              const deviceIdPrefix = userId.substring(0, 8).toLowerCase();
+              const debugDevice: BleDevice = {
+                id: `debug-${Date.now()}`,
+                name: `DL-${deviceIdPrefix}`,
+                rssi: -60,
+                distanceFeet: 10,
+                username: username || profile?.name || 'Debug User',
+                userId: userId,
+              };
+              console.log('[BLIP-DEBUG] Adding debug device:', debugDevice);
+              addDebugDevice(debugDevice);
+              showToast(`Added: DL-${deviceIdPrefix}`);
+            }}
+            style={{
+              borderWidth: 1,
+              borderColor: '#FF6600',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              backgroundColor: 'rgba(255, 102, 0, 0.1)',
+            }}
+          >
+            <Text style={{ color: '#FF6600', fontSize: 11, fontWeight: '600' }}>
+              Debug: Add Me
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Zoom & Rotation Indicators (visual feedback only) */}
         <View 

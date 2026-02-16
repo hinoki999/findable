@@ -32,6 +32,7 @@ interface UseBLEScannerReturn {
   debugLog: string[];
   devicesScanned: number; // Total devices detected
   recentScans: RecentScanEntry[]; // All scanned devices (for debugging)
+  addDebugDevice: (device: BleDevice) => void; // Debug: inject a fake device
 }
 
 // Use shared BleManager instance from bleManager.ts
@@ -406,6 +407,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     };
   }, [stopScan]);
 
+  // Debug function to inject a fake device for testing
+  const addDebugDevice = useCallback((device: BleDevice) => {
+    console.log('[BLE-DEBUG] Adding debug device:', device);
+    setDevices(prevDevices => {
+      const exists = prevDevices.find(d => d.id === device.id);
+      if (exists) {
+        return prevDevices.map(d => d.id === device.id ? device : d);
+      }
+      return [...prevDevices, device];
+    });
+  }, []);
+
   return {
     devices,
     isScanning,
@@ -416,5 +429,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     debugLog,
     devicesScanned,
     recentScans,
+    addDebugDevice,
   };
 };
