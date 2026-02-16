@@ -837,7 +837,7 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
 // DISABLED: Twilio account suspended - stub functions to prevent app crashes
 export async function sendPhoneVerificationCodeTwilio(phoneNumber: string): Promise<void> {
   throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
-}
+  }
 
 export async function verifyPhoneCodeTwilio(phoneNumber: string, code: string, userId: string): Promise<void> {
   throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
