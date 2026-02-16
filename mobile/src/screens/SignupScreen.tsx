@@ -234,10 +234,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log(`SUCCESS: Account created, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
+      // Use username as initial display name so BLE scanner can find users
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: null,
+        name: username,       // Use username as display name for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
@@ -356,10 +357,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log(`SUCCESS: Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
+      // Use username as initial display name so BLE scanner can find users
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
         email: email,
-        name: null,
+        name: username,       // Use username as display name for BLE discovery
         phone: null,
         bio: null,
         profile_photo: null,
