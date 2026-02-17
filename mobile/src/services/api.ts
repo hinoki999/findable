@@ -382,6 +382,341 @@ export async function restoreDevice(device: Device, userId: string): Promise<voi
   await saveDevice(device, userId);
 }
 
+// ==================== DROPS API ====================
+
+export interface Drop {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted' | 'returned' | 'declined';
+  createdAt: Date;
+  respondedAt?: Date;
+  // Sender's contact info (shared when drop is sent)
+  senderName?: string;
+  senderUsername?: string;
+  senderEmail?: string;
+  senderPhone?: string;
+  senderBio?: string;
+  senderProfilePhoto?: string;
+  senderSocialMedia?: Array<{ platform: string; handle: string }>;
+}
+
+// Helper to map database format to frontend format
+function mapDropFromDb(d: any): Drop {
+  return {
+    id: d.id,
+    senderId: d.sender_id,
+    receiverId: d.receiver_id,
+    status: d.status,
+    createdAt: new Date(d.created_at),
+    respondedAt: d.responded_at ? new Date(d.responded_at) : undefined,
+    senderName: d.sender_name,
+    senderUsername: d.sender_username,
+    senderEmail: d.sender_email,
+    senderPhone: d.sender_phone,
+    senderBio: d.sender_bio,
+    senderProfilePhoto: d.sender_profile_photo,
+    senderSocialMedia: d.sender_social_media,
+  };
+}
+
+/**
+ * Send a drop to another user
+ * @param receiverId - UUID of the user receiving the drop
+ * @param senderProfile - Sender's contact info to share
+ */
+export async function sendDrop(
+  receiverId: string,
+  senderProfile: {
+    name?: string;
+    username?: string;
+    email?: string;
+    phone?: string;
+    bio?: string;
+    profilePhoto?: string;
+    socialMedia?: Array<{ platform: string; handle: string }>;
+  }
+): Promise<Drop> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const senderId = session.user.id;
+
+    // Validate receiverId
+    if (!receiverId || receiverId.trim() === '') {
+      throw new Error('Invalid receiver ID');
+    }
+
+    console.log('[DROPS] Sending drop from', senderId, 'to', receiverId);
+
+    // Insert into drops table
+    const { data, error } = await supabase
+      .from('drops')
+      .insert({
+        sender_id: senderId,
+        receiver_id: receiverId,
+        status: 'pending',
+        sender_name: senderProfile.name || null,
+        sender_username: senderProfile.username || null,
+        sender_email: senderProfile.email || null,
+        sender_phone: senderProfile.phone || null,
+        sender_bio: senderProfile.bio || null,
+        sender_profile_photo: senderProfile.profilePhoto || null,
+        sender_social_media: senderProfile.socialMedia || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DROPS] Supabase drop insert error:', error);
+      throw new Error('Failed to send drop. Please try again.');
+    }
+
+    console.log('[DROPS] SUCCESS: Drop sent:', data.id);
+    return mapDropFromDb(data);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Send drop error:', error);
+    throw new Error(error.message || 'Failed to send drop. Please try again.');
+  }
+}
+
+/**
+ * Get incoming drops for the current user (pending drops sent TO them)
+ */
+export async function getIncomingDrops(): Promise<Drop[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    console.log('[DROPS] Fetching incoming drops for user:', session.user.id);
+
+    const { data, error } = await supabase
+      .from('drops')
+      .select('*')
+      .eq('receiver_id', session.user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[DROPS] Supabase incoming drops query error:', error);
+      throw new Error('Failed to load incoming drops. Please try again.');
+    }
+
+    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} incoming drops`);
+    return (data || []).map(mapDropFromDb);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Get incoming drops error:', error);
+    throw new Error(error.message || 'Failed to load incoming drops. Please try again.');
+  }
+}
+
+/**
+ * Get linked drops (accepted or returned) for the current user
+ * These are mutual connections to show in History
+ */
+export async function getLinkedDrops(): Promise<Drop[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const userId = session.user.id;
+    console.log('[DROPS] Fetching linked drops for user:', userId);
+
+    // Get drops where user is sender OR receiver AND status is accepted/returned
+    const { data, error } = await supabase
+      .from('drops')
+      .select('*')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .in('status', ['accepted', 'returned'])
+      .order('responded_at', { ascending: false });
+
+    if (error) {
+      console.error('[DROPS] Supabase linked drops query error:', error);
+      throw new Error('Failed to load linked drops. Please try again.');
+    }
+
+    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} linked drops`);
+    return (data || []).map(mapDropFromDb);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Get linked drops error:', error);
+    throw new Error(error.message || 'Failed to load linked drops. Please try again.');
+  }
+}
+
+/**
+ * Update drop status (accept, return, or decline)
+ * When status is 'returned', creates a SECOND drop row in reverse direction
+ * @param dropId - The drop to update
+ * @param status - New status
+ * @param responseProfile - If returning, include responder's contact info for the reverse drop
+ */
+export async function updateDropStatus(
+  dropId: string,
+  status: 'accepted' | 'returned' | 'declined',
+  responseProfile?: {
+    name?: string;
+    username?: string;
+    email?: string;
+    phone?: string;
+    bio?: string;
+    profilePhoto?: string;
+    socialMedia?: Array<{ platform: string; handle: string }>;
+  }
+): Promise<Drop> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    console.log('[DROPS] Updating drop status:', dropId, 'to', status);
+
+    // First, get the original drop to know the sender_id
+    const { data: originalDrop, error: fetchError } = await supabase
+      .from('drops')
+      .select('*')
+      .eq('id', dropId)
+      .eq('receiver_id', session.user.id) // Security: only update drops sent to you
+      .single();
+
+    if (fetchError || !originalDrop) {
+      console.error('[DROPS] Could not find drop to update:', fetchError);
+      throw new Error('Drop not found or you are not the receiver.');
+    }
+
+    // Update the original drop status
+    const { data, error } = await supabase
+      .from('drops')
+      .update({
+        status,
+        responded_at: new Date().toISOString(),
+      })
+      .eq('id', dropId)
+      .eq('receiver_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[DROPS] Supabase drop update error:', error);
+      throw new Error('Failed to update drop. Please try again.');
+    }
+
+    console.log('[DROPS] SUCCESS: Drop status updated:', dropId, status);
+    
+    // If status is 'returned', create a SECOND drop in reverse direction
+    // This shares the responder's contact info with the original sender
+    if (status === 'returned' && responseProfile) {
+      console.log('[DROPS] Creating reverse drop (return) to sender:', originalDrop.sender_id);
+      
+      const { data: reverseDrop, error: reverseError } = await supabase
+        .from('drops')
+        .insert({
+          sender_id: session.user.id,           // Current user is now the sender
+          receiver_id: originalDrop.sender_id,  // Original sender is now the receiver
+          status: 'accepted',                   // Auto-accepted (mutual link)
+          responded_at: new Date().toISOString(),
+          sender_name: responseProfile.name || null,
+          sender_username: responseProfile.username || null,
+          sender_email: responseProfile.email || null,
+          sender_phone: responseProfile.phone || null,
+          sender_bio: responseProfile.bio || null,
+          sender_profile_photo: responseProfile.profilePhoto || null,
+          sender_social_media: responseProfile.socialMedia || null,
+        })
+        .select()
+        .single();
+
+      if (reverseError) {
+        console.error('[DROPS] Failed to create reverse drop:', reverseError);
+        // Don't throw - the original update succeeded, just log the error
+      } else {
+        console.log('[DROPS] SUCCESS: Reverse drop created:', reverseDrop?.id);
+      }
+    }
+
+    return mapDropFromDb(data);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Update drop status error:', error);
+    throw new Error(error.message || 'Failed to update drop. Please try again.');
+  }
+}
+
+/**
+ * Get a specific drop by ID
+ */
+export async function getDrop(dropId: string): Promise<Drop | null> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const userId = session.user.id;
+
+    const { data, error } = await supabase
+      .from('drops')
+      .select('*')
+      .eq('id', dropId)
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // Not found
+      console.error('[DROPS] Supabase get drop error:', error);
+      throw new Error('Failed to load drop. Please try again.');
+    }
+
+    return data ? mapDropFromDb(data) : null;
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Get drop error:', error);
+    throw new Error(error.message || 'Failed to load drop. Please try again.');
+  }
+}
+
+/**
+ * Delete a drop (for cleanup or user request)
+ */
+export async function deleteDrop(dropId: string): Promise<void> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const userId = session.user.id;
+
+    // Only allow deleting drops you sent or received
+    const { error } = await supabase
+      .from('drops')
+      .delete()
+      .eq('id', dropId)
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+
+    if (error) {
+      console.error('[DROPS] Supabase drop delete error:', error);
+      throw new Error('Failed to delete drop. Please try again.');
+    }
+
+    console.log('[DROPS] SUCCESS: Drop deleted:', dropId);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Delete drop error:', error);
+    throw new Error(error.message || 'Failed to delete drop. Please try again.');
+  }
+}
+
 // ==================== USER PROFILE ====================
 export interface UserProfile {
   name: string;

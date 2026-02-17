@@ -3,7 +3,7 @@ import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
-import { saveDevice } from '../services/api';
+import { sendDrop, updateDropStatus, Drop } from '../services/api';
 import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -16,7 +16,7 @@ import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConf
 
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
-  const [incomingDrop, setIncomingDrop] = useState<{ name: string; text: string } | null>(null);
+  const [incomingDrop, setIncomingDrop] = useState<Drop | null>(null);
   const [bounceAnim] = useState(new Animated.Value(0));
   const [refreshing, setRefreshing] = useState(false);
   const { isDarkMode } = useDarkMode();
@@ -77,100 +77,83 @@ export default function DropScreen() {
 
   const handleDrop = async (device: BleDevice) => {
     // Phone verification check disabled - users can drop without phone verification
+    
+    // Validate device has userId for sending drop
+    if (!device.userId) {
+      console.error('[DROPS] Cannot send drop - device has no userId');
+      showToast({
+        message: 'Cannot send drop - user not found',
+        type: 'error',
+        duration: 3000,
+      });
+      setActive(null);
+      return;
+    }
+    
     try {
-      await saveDevice({ 
-        name: device.name, 
-        rssi: device.rssi, 
-        distanceFeet: device.distanceFeet, 
-        action: 'dropped' 
-      }, userId!);
+      console.log('[DROPS] Sending drop to:', device.userId, device.username || device.name);
+      
+      // Send drop with current user's profile info
+      await sendDrop(device.userId, {
+        name: profile?.name || 'User',
+        email: profile?.email,
+        phone: profile?.phone,
+        bio: profile?.bio,
+        profilePhoto: profile?.profilePhoto,
+        socialMedia: profile?.socialMedia,
+      });
+      
       setActive(null);
       showToast({
-        message: `Drop sent to ${device.name}!`,
+        message: `Drop sent to ${device.username || device.name}!`,
         type: 'success',
         duration: 3000,
       });
       
-      // For testing: Simulate them linking back after 3 seconds
-      setTimeout(async () => {
-        // Generate a unique ID for both device and notification
-        const uniqueId = Date.now();
-        
-        const linkData = {
-          name: device.name,
-          phoneNumber: '(555) 123-4567',
-          email: `${device.name.toLowerCase().replace(' ', '.')}@example.com`,
-          bio: 'This is a test bio for the linked contact.',
-          socialMedia: [
-            { platform: 'Instagram', handle: `@${device.name.toLowerCase().replace(' ', '')}` },
-            { platform: 'Twitter', handle: `@${device.name.toLowerCase().replace(' ', '_')}` },
-            { platform: 'LinkedIn', handle: device.name },
-          ],
-        };
-        
-        // Save to devices store with specific id
-        await saveDevice({
-          id: uniqueId,
-          name: linkData.name,
-          rssi: -55,
-          distanceFeet: 18,
-          action: 'returned',
-          phoneNumber: linkData.phoneNumber,
-          email: linkData.email,
-          bio: linkData.bio,
-          socialMedia: linkData.socialMedia,
-        }, userId!);
-        
-        // Add link notification with reference to the device id
-        addLinkNotification({
-          ...linkData,
-          deviceId: uniqueId, // Link to the device in the store
-        });
-      }, 3000);
+      // Note: No more simulated return - real returns come from receiver's device
     } catch (error) {
-      console.error('Failed to save device:', error);
+      console.error('[DROPS] Failed to send drop:', error);
       showToast({
-        message: error instanceof Error ? error.message : 'Failed to save device',
+        message: error instanceof Error ? error.message : 'Failed to send drop',
         type: 'error',
         duration: 3000,
       });
     }
   };
 
-  // Simulate receiving a drop (you can trigger this manually for testing)
-  const simulateIncomingDrop = () => {
-    const mockDrops = [
-      { name: 'Sarah Chen', text: 'Wants to share their contact card.' },
-      { name: 'Alex Rivera', text: 'Interested in networking.' },
-      { name: 'Jordan Kim', text: 'Looking to connect professionally.' },
-    ];
-    const randomDrop = mockDrops[Math.floor(Math.random() * mockDrops.length)];
-    setIncomingDrop(randomDrop);
-    
-    // Trigger bounce animation
-    Animated.sequence([
-      Animated.timing(bounceAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(bounceAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  // Note: simulateIncomingDrop removed - use real drops from drops table now
 
   const handleIncomingAction = async (action: 'accepted' | 'returned' | 'declined') => {
     if (incomingDrop) {
-      await saveDevice({ 
-        name: incomingDrop.name, 
-        rssi: -55, 
-        distanceFeet: 18, 
-        action 
-      }, userId!);
-      setIncomingDrop(null);
+      try {
+        // Get current user's profile to share if returning
+        const responseProfile = action === 'returned' ? {
+          name: profile?.name,
+          email: profile?.email,
+          phone: profile?.phone,
+          bio: profile?.bio,
+          profilePhoto: profile?.profilePhoto,
+          socialMedia: profile?.socialMedia,
+        } : undefined;
+        
+        await updateDropStatus(incomingDrop.id, action, responseProfile);
+        setIncomingDrop(null);
+        
+        if (action === 'returned') {
+          showToast({
+            message: `Linked with ${incomingDrop.senderName || 'User'}!`,
+            type: 'success',
+            duration: 3000,
+          });
+        }
+      } catch (error) {
+        console.error('[DROPS] Failed to respond to drop:', error);
+        showToast({
+          message: 'Failed to respond to drop. Please try again.',
+          type: 'error',
+          duration: 3000,
+        });
+      }
     }
   };
 
@@ -282,7 +265,7 @@ export default function DropScreen() {
               <Text style={[theme.type.h2, { fontSize: 14 }]}>New Drop</Text>
             </View>
             <Text style={[theme.type.body, { fontSize: 14, marginBottom: 8 }]}>
-              {incomingDrop.name} just sent you a drop
+              {incomingDrop.senderName || incomingDrop.senderUsername || 'Someone'} just sent you a drop
             </Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               <Pressable

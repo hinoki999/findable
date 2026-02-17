@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -566,7 +566,7 @@ export default function HomeScreen() {
   const [flashAnim] = useState(new Animated.Value(0));
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
-  const [incomingDrops, setIncomingDrops] = useState<{ name: string; text: string }[]>([]);
+  const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
@@ -826,35 +826,23 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch incoming drops (devices where action='dropped' sent TO current user)
+  // Fetch incoming drops from drops table (pending drops sent TO current user)
   useEffect(() => {
-    const fetchIncomingDrops = async () => {
+    const fetchIncomingDropsFromTable = async () => {
       try {
-        const allDevices = await getDevices();
-        // Filter for drops sent TO the current user (action='dropped')
-        // The devices table stores user_id as the receiver (who the drop was sent TO)
-        const drops = (allDevices ?? []).filter(device => 
-          device.action === 'dropped'
-        );
-        
-        // Convert to incomingDrops format
-        const formattedDrops = drops.map(device => ({
-          name: device.name,
-          text: 'Wants to share their contact card.',
-        }));
-        
-        setIncomingDrops(formattedDrops);
-        console.log(`SUCCESS: Loaded ${formattedDrops.length} incoming drops`);
+        const drops = await getIncomingDrops();
+        setIncomingDrops(drops);
+        console.log(`[DROPS] SUCCESS: Loaded ${drops.length} incoming drops`);
       } catch (error) {
-        console.error('Failed to fetch incoming drops:', error);
+        console.error('[DROPS] Failed to fetch incoming drops:', error);
       }
     };
     
     // Load immediately
-    fetchIncomingDrops();
+    fetchIncomingDropsFromTable();
     
     // Refresh every 5 seconds to catch new drops
-    const interval = setInterval(fetchIncomingDrops, 5000);
+    const interval = setInterval(fetchIncomingDropsFromTable, 5000);
     
     return () => clearInterval(interval);
   }, [userId]);
@@ -1388,27 +1376,57 @@ export default function HomeScreen() {
     setShowDrops(true);
   };
 
-  const handleDropAction = async (action: 'accepted' | 'returned' | 'declined', drop: { name: string; text: string }) => {
-    console.log('Drop action:', action, 'for:', drop.name);
+  const handleDropAction = async (action: 'accepted' | 'returned' | 'declined', drop: Drop) => {
+    console.log('[DROPS] Drop action:', action, 'for drop ID:', drop.id, 'from:', drop.senderName);
     
     // Show link popup for returned drops IMMEDIATELY
     if (action === 'returned') {
       showLinkPopupAnimation();
     }
     
-    await saveDevice({ 
-      name: drop.name, 
-      rssi: -55, 
-      distanceFeet: 18, 
-      action 
-    }, userId!);
+    // Get current user's profile to share if returning
+    const responseProfile = action === 'returned' ? {
+      name: profile?.name,
+      username: username,
+      email: profile?.email,
+      phone: profile?.phone,
+      bio: profile?.bio,
+      profilePhoto: profile?.profilePhoto,
+      socialMedia: profile?.socialMedia,
+    } : undefined;
     
-    // Remove the drop from the list
-    setIncomingDrops(prev => prev.filter(d => d.name !== drop.name));
-    
-    // Close modal if no more drops
-    if (incomingDrops.length <= 1) {
-      setShowDrops(false);
+    try {
+      await updateDropStatus(drop.id, action, responseProfile);
+      
+      // Remove the drop from the list
+      setIncomingDrops(prev => prev.filter(d => d.id !== drop.id));
+      
+      // Close modal if no more drops
+      if (incomingDrops.length <= 1) {
+        setShowDrops(false);
+      }
+      
+      // Show success toast
+      if (action === 'returned') {
+        showToast({
+          message: `Linked with ${drop.senderName || 'User'}!`,
+          type: 'success',
+          duration: 3000,
+        });
+      } else if (action === 'accepted') {
+        showToast({
+          message: `Accepted drop from ${drop.senderName || 'User'}`,
+          type: 'success',
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('[DROPS] Failed to update drop status:', error);
+      showToast({
+        message: 'Failed to respond to drop. Please try again.',
+        type: 'error',
+        duration: 3000,
+      });
     }
   };
 
@@ -2718,8 +2736,8 @@ export default function HomeScreen() {
                 </Text>
               </View>
             ) : (
-              incomingDrops.map((drop, index) => (
-                <View key={index} style={{
+              incomingDrops.map((drop) => (
+                <View key={drop.id} style={{
                   backgroundColor: theme.colors.bg,
                   borderRadius: 12,
                   padding: 16,
@@ -2728,7 +2746,7 @@ export default function HomeScreen() {
                   borderColor: theme.colors.border,
                 }}>
                   <Text style={[theme.type.h2, { marginBottom: 4 }]}>
-                    {drop.name} just sent you a drop
+                    {drop.senderName || drop.senderUsername || 'Someone'} just sent you a drop
                   </Text>
                   
                   <View style={{ 
@@ -3227,19 +3245,18 @@ export default function HomeScreen() {
                         throw new Error(errorMsg);
                       }
                       
-                      console.log('[HomeScreen] Sending drop to userId:', receiverUserId);
-                      // Use username if available, otherwise device name, otherwise extract deviceId, otherwise fallback
-                      const dropName = selectedBlipDevice.username || 
-                                      selectedBlipDevice.name || 
-                                      (selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`))?.[1]) ||
-                                      'User';
+                      console.log('[DROPS] Sending drop to userId:', receiverUserId);
                       
-                      await saveDevice({ 
-                        name: dropName, 
-                        rssi: selectedBlipDevice.rssi, 
-                        distanceFeet: selectedBlipDevice.distanceFeet, 
-                        action: 'dropped' 
-                      }, receiverUserId);
+                      // Send drop with current user's profile info
+                      await sendDrop(receiverUserId, {
+                        name: profile?.name || 'User',
+                        username: username,
+                        email: profile?.email,
+                        phone: profile?.phone,
+                        bio: profile?.bio,
+                        profilePhoto: profile?.profilePhoto,
+                        socialMedia: profile?.socialMedia,
+                      });
                       
                       // Close modal after successful send
                       setShowBlipModal(false);
@@ -3250,41 +3267,8 @@ export default function HomeScreen() {
                         type: 'success',
                         duration: 3000,
                       });
-                    
-                    // Simulate link back after 3 seconds
-                    setTimeout(async () => {
-                      const uniqueId = Date.now();
-                      const linkData = {
-                        name: selectedBlipDevice.username || selectedBlipDevice.name,
-                        phoneNumber: '(555) 123-4567',
-                        email: `${(selectedBlipDevice.username || selectedBlipDevice.name).toLowerCase().replace(' ', '.')}@example.com`,
-                        bio: 'This is a test bio for the linked contact.',
-                        socialMedia: [
-                          { platform: 'Instagram', handle: `@${(selectedBlipDevice.username || selectedBlipDevice.name).toLowerCase().replace(' ', '')}` },
-                        ],
-                      };
                       
-                      await saveDevice({
-                        id: uniqueId,
-                        name: linkData.name,
-                        rssi: -55,
-                        distanceFeet: 18,
-                        action: 'returned',
-                        phoneNumber: linkData.phoneNumber,
-                        email: linkData.email,
-                        bio: linkData.bio,
-                        socialMedia: linkData.socialMedia,
-                      }, userId!);
-                      
-                      addLinkNotification({
-                        deviceId: uniqueId,
-                        name: linkData.name,
-                        phoneNumber: linkData.phoneNumber,
-                        email: linkData.email,
-                        bio: linkData.bio,
-                        socialMedia: linkData.socialMedia,
-                      });
-                    }, 3000);
+                      // Note: No more simulated return - real returns come from receiver's device
                     } catch (error: any) {
                       // Set detailed error message with actual error details
                       const errorMsg = error instanceof Error ? error.message : String(error);

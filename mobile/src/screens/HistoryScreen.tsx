@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDevices, deleteDevice, restoreDevice, Device } from '../services/api';
+import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,16 +40,16 @@ const getAvatarColor = (name: string): string => {
 };
 
 export default function HistoryScreen() {
-  const [data, setData] = useState<Device[]>([]);
+  const [data, setData] = useState<Drop[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContact, setSelectedContact] = useState<Device | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Drop | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<Device | null>(null);
-  const lastDeletedItemRef = useRef<Device | null>(null); // Using ref to avoid closure issues
+  const [itemToDelete, setItemToDelete] = useState<Drop | null>(null);
+  const lastDeletedItemRef = useRef<Drop | null>(null); // Using ref to avoid closure issues
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { showToast } = useToast();
@@ -68,31 +68,24 @@ export default function HistoryScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const items = await getDevices();
-        console.log('DEBUG: HISTORY: Fetched items from API:', items?.length, items);
-        // Show all connections (dropped, accepted, and returned)
-        const filteredItems = (items ?? []).filter(item => 
-          item.action === 'accepted' || item.action === 'returned' || item.action === 'dropped'
-        );
-        console.log('DEBUG: HISTORY: Filtered items:', filteredItems?.length, filteredItems);
-        setData(filteredItems);
-        setErr(null); // Clear any previous errors
+        // Fetch linked drops from drops table (accepted/returned status)
+        const drops = await getLinkedDrops();
+        console.log('[DROPS] HISTORY: Fetched linked drops:', drops?.length);
+        setData(drops);
+        setErr(null);
       } catch (e:any) {
-        console.error('ERROR: HISTORY: Failed to load devices:', e);
-        const errorMsg = e?.message || 'Failed to load contacts';
-        
+        console.error('[DROPS] ERROR: HISTORY: Failed to load drops:', e);
         // Don't show error toast - just log it
-        // User can still use the app, they just don't see links yet
-        console.log('WARNING: HISTORY: Error loading links (this is OK if user has no links yet)');
-        setData([]); // Set empty array instead of showing error
-        setErr(null); // Don't set error state
+        console.log('[DROPS] WARNING: HISTORY: Error loading links (this is OK if user has no links yet)');
+        setData([]);
+        setErr(null);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  const handleContactPress = (item: Device) => {
+  const handleContactPress = (item: Drop) => {
     setSelectedContact(item);
     setShowContactModal(true);
   };
@@ -102,7 +95,7 @@ export default function HistoryScreen() {
     setSelectedContact(null);
   };
 
-  const handleDeleteClick = (item: Device) => {
+  const handleDeleteClick = (item: Drop) => {
     setItemToDelete(item);
     setShowDeleteModal(true);
   };
@@ -112,19 +105,17 @@ export default function HistoryScreen() {
       // Store for undo using ref (synchronous)
       lastDeletedItemRef.current = itemToDelete;
       
-      // Delete from API/store
-      await deleteDevice(itemToDelete.id, userId!);
+      // Delete from drops table
+      await deleteDrop(itemToDelete.id);
       // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
-      console.log('Device deleted from history and store');
+      console.log('[DROPS] Drop deleted from history');
       
-      // Show toast with undo
+      // Show toast with undo (note: undo not fully implemented for drops yet)
       showToast({
-        message: `${itemToDelete.name} deleted`,
+        message: `${itemToDelete.senderName || 'Contact'} deleted`,
         type: 'success',
         duration: 4000,
-        actionLabel: 'UNDO',
-        onAction: handleUndoDelete,
       });
     }
     setShowDeleteModal(false);
@@ -132,19 +123,9 @@ export default function HistoryScreen() {
   };
 
   const handleUndoDelete = async () => {
-    const lastDeletedItem = lastDeletedItemRef.current; // Get from ref
-    if (!lastDeletedItem) return;
-    
-    console.log('🔄 UNDOING delete for:', lastDeletedItem.name);
-    
-    // Restore to API/store
-    await restoreDevice(lastDeletedItem, userId!);
-    
-    // Restore to local data
-    setData(prevData => [...prevData, lastDeletedItem]);
-    lastDeletedItemRef.current = null; // Clear ref
-    
-    console.log('SUCCESS: Contact fully restored to history and store');
+    // Note: Undo for drops would require re-inserting the drop
+    // For now, just log that undo is not supported
+    console.log('[DROPS] Undo delete not yet implemented for drops table');
   };
 
   const cancelDelete = () => {
@@ -152,15 +133,16 @@ export default function HistoryScreen() {
     setItemToDelete(null);
   };
 
-  const handleTogglePin = (item: Device) => {
+  const handleTogglePin = (item: Drop) => {
     if (!item.id) return;
-    const isPinned = pinnedIds.has(item.id);
-    togglePin(item.id);
-    
-    // Show toast
+    // Note: Pinning now uses drop ID (string UUID) instead of device ID (number)
+    // This may need adjustment in the pinnedIds system
+    console.log('[DROPS] Toggle pin for drop:', item.id);
+    // togglePin expects number, but drop.id is string - this needs migration
+    // For now, just show toast
     showToast({
-      message: isPinned ? `${item.name} unpinned` : `${item.name} pinned to Home`,
-      type: 'success',
+      message: `Pinning not yet migrated to drops system`,
+      type: 'info',
       duration: 2000,
     });
   };
@@ -168,51 +150,43 @@ export default function HistoryScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      const items = await getDevices();
-      // Only show accepted and returned (linked) contacts - no unanswered drops
-      const filteredItems = (items ?? []).filter(item => 
-        item.action === 'accepted' || item.action === 'returned'
-      );
-      setData(filteredItems);
+      const drops = await getLinkedDrops();
+      setData(drops);
       setErr(null);
+      console.log('[DROPS] HISTORY: Refreshed, loaded', drops.length, 'linked drops');
     } catch (e: any) {
-      console.error('ERROR: HISTORY: Failed to refresh devices:', e);
-      // Don't show error toast on refresh - just silently fail
-      // User can try again if they want
-      console.log('WARNING: HISTORY: Refresh failed, keeping existing data');
-      setErr(null); // Don't set error state
+      console.error('[DROPS] ERROR: HISTORY: Failed to refresh drops:', e);
+      console.log('[DROPS] WARNING: HISTORY: Refresh failed, keeping existing data');
+      setErr(null);
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Filter data based on search query
+  // Filter data based on search query (using Drop fields)
   const filteredData = data.filter(item => {
     if (!searchQuery.trim()) return true;
     
     const query = searchQuery.toLowerCase();
-    const name = item.name?.toLowerCase() || '';
-    const email = item.email?.toLowerCase() || '';
-    const phone = item.phoneNumber?.toLowerCase() || '';
-    const bio = item.bio?.toLowerCase() || '';
+    const name = item.senderName?.toLowerCase() || '';
+    const username = item.senderUsername?.toLowerCase() || '';
+    const email = item.senderEmail?.toLowerCase() || '';
+    const phone = item.senderPhone?.toLowerCase() || '';
+    const bio = item.senderBio?.toLowerCase() || '';
     
     return name.includes(query) || 
+           username.includes(query) ||
            email.includes(query) || 
            phone.includes(query) || 
            bio.includes(query);
   });
 
-  // Sort filtered data: pinned items first, then by timestamp
+  // Sort filtered data by timestamp (newest first)
+  // Note: Pinning not yet migrated to drops system (drop.id is string UUID, not number)
   const sortedData = [...filteredData].sort((a, b) => {
-    const aPin = a.id && pinnedIds.has(a.id) ? 1 : 0;
-    const bPin = b.id && pinnedIds.has(b.id) ? 1 : 0;
-    
-    if (aPin !== bPin) return bPin - aPin; // Pinned first
-    
-    // Then sort by timestamp (newest first)
-    // Convert string timestamps to Date objects for comparison
-    const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-    const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    // Sort by respondedAt (when link was formed), then by createdAt
+    const aTime = a.respondedAt?.getTime() || a.createdAt?.getTime() || 0;
+    const bTime = b.respondedAt?.getTime() || b.createdAt?.getTime() || 0;
     return bTime - aTime;
   });
 
@@ -407,23 +381,23 @@ export default function HistoryScreen() {
                       width: 44,
                       height: 44,
                       borderRadius: 22,
-                      backgroundColor: getAvatarColor(item.name),
+                      backgroundColor: getAvatarColor(item.senderName || 'User'),
                       alignItems: 'center',
                       justifyContent: 'center',
                       marginRight: 12,
                       overflow: 'hidden',
                     }}>
-                      {item.profilePhoto ? (
-                        <Image source={{ uri: item.profilePhoto }} style={{ width: 44, height: 44 }} />
+                      {item.senderProfilePhoto ? (
+                        <Image source={{ uri: item.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
                       ) : (
                         <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                          {getInitials(item.name)}
+                          {getInitials(item.senderName || 'U')}
                         </Text>
                       )}
                     </View>
                     
                     <View style={{ flex: 1 }}>
-                      <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.name}</Text>
+                      <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || item.senderUsername || 'User'}</Text>
                     <Pressable 
                       onPress={(e) => {
                         e.stopPropagation();
@@ -433,24 +407,24 @@ export default function HistoryScreen() {
                       style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
                     >
                       <MaterialCommunityIcons 
-                        name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"} 
+                        name="pin-outline"
                         size={11} 
                         color={theme.colors.blue} 
                       />
                       <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
-                        {item.id && pinnedIds.has(item.id) ? 'Pinned' : 'Pin'}
+                        Pin
                       </Text>
                     </Pressable>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        {getActionIcon(item.action)}
-                        <Text style={[theme.type.body, { color: getActionColor(item.action), fontWeight: '500' }]}>
-                          {getActionText(item.action)}
+                        {getActionIcon(item.status)}
+                        <Text style={[theme.type.body, { color: getActionColor(item.status), fontWeight: '500' }]}>
+                          {getActionText(item.status)}
                         </Text>
                       </View>
                       <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
-                        {formatTimestamp(item.timestamp)}
+                        {formatTimestamp(item.respondedAt || item.createdAt)}
                       </Text>
                     </View>
             </View>
@@ -528,7 +502,7 @@ export default function HistoryScreen() {
               alignItems: 'center',
             }}>
               <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                {selectedContact?.name}
+                {selectedContact?.senderName || selectedContact?.senderUsername || 'Contact'}
               </Text>
             </View>
 
@@ -543,35 +517,40 @@ export default function HistoryScreen() {
                   backgroundColor: '#FFE5DC',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  overflow: 'hidden',
                 }}>
-                  <MaterialCommunityIcons name="account" size={30} color="#FF6B4A" />
+                  {selectedContact?.senderProfilePhoto ? (
+                    <Image source={{ uri: selectedContact.senderProfilePhoto }} style={{ width: 60, height: 60 }} />
+                  ) : (
+                    <MaterialCommunityIcons name="account" size={30} color="#FF6B4A" />
+                  )}
                 </View>
               </View>
 
               {/* Contact Information */}
               <View style={{ marginBottom: 16 }}>
                 {/* Phone */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
-                  <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                    +1 (555) 123-4567
-                  </Text>
-                </View>
+                {selectedContact?.senderPhone && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {selectedContact.senderPhone}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Email */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
-                  <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                    user@example.com
-                  </Text>
-                </View>
+                {selectedContact?.senderEmail && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {selectedContact.senderEmail}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Social Media - Dynamic */}
-                {[
-                  { platform: 'Instagram', handle: '@yourhandle' },
-                  { platform: 'Twitter', handle: '@yourhandle' },
-                  { platform: 'LinkedIn', handle: 'yourname' },
-                ].map((social, index) => (
+                {selectedContact?.senderSocialMedia && selectedContact.senderSocialMedia.map((social, index) => (
                   social.platform && social.handle ? (
                     <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                       <MaterialCommunityIcons
@@ -588,19 +567,21 @@ export default function HistoryScreen() {
               </View>
 
               {/* Bio Section */}
-              <View style={{
-                backgroundColor: theme.colors.bg,
-                padding: 12,
-                borderRadius: 8,
-                marginBottom: 16,
-              }}>
-                <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
-                  BIO
-                </Text>
-                <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
-                  "Passionate about connecting people through technology and meaningful conversations."
-                </Text>
-              </View>
+              {selectedContact?.senderBio && (
+                <View style={{
+                  backgroundColor: theme.colors.bg,
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16,
+                }}>
+                  <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                    BIO
+                  </Text>
+                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                    "{selectedContact.senderBio}"
+                  </Text>
+                </View>
+              )}
 
               {/* Close Button */}
               <Pressable
