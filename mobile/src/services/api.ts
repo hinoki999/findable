@@ -391,6 +391,7 @@ export interface Drop {
   status: 'pending' | 'accepted' | 'returned' | 'declined';
   createdAt: Date;
   respondedAt?: Date;
+  distanceFeet?: number;
   // Sender's contact info (shared when drop is sent)
   senderName?: string;
   senderUsername?: string;
@@ -410,6 +411,7 @@ function mapDropFromDb(d: any): Drop {
     status: d.status,
     createdAt: new Date(d.created_at),
     respondedAt: d.responded_at ? new Date(d.responded_at) : undefined,
+    distanceFeet: d.distance_feet,
     senderName: d.sender_name,
     senderUsername: d.sender_username,
     senderEmail: d.sender_email,
@@ -424,6 +426,7 @@ function mapDropFromDb(d: any): Drop {
  * Send a drop to another user
  * @param receiverId - UUID of the user receiving the drop
  * @param senderProfile - Sender's contact info to share
+ * @param distanceFeet - Distance to receiver in feet (from BLE RSSI)
  */
 export async function sendDrop(
   receiverId: string,
@@ -435,7 +438,8 @@ export async function sendDrop(
     bio?: string;
     profilePhoto?: string;
     socialMedia?: Array<{ platform: string; handle: string }>;
-  }
+  },
+  distanceFeet?: number
 ): Promise<Drop> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -451,7 +455,7 @@ export async function sendDrop(
       throw new Error('Invalid receiver ID');
     }
 
-    console.log('[DROPS] Sending drop from', senderId, 'to', receiverId);
+    console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
 
     // Insert into drops table
     const { data, error } = await supabase
@@ -460,6 +464,7 @@ export async function sendDrop(
         sender_id: senderId,
         receiver_id: receiverId,
         status: 'pending',
+        distance_feet: distanceFeet || null,
         sender_name: senderProfile.name || null,
         sender_username: senderProfile.username || null,
         sender_email: senderProfile.email || null,
@@ -518,8 +523,9 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 }
 
 /**
- * Get linked drops (accepted or returned) for the current user
+ * Get linked drops (returned only) for the current user
  * These are mutual connections to show in History
+ * Only 'returned' drops are shown here - 'accepted' drops stay on Drops page
  */
 export async function getLinkedDrops(): Promise<Drop[]> {
   try {
@@ -532,12 +538,12 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching linked drops for user:', userId);
 
-    // Get drops where user is sender OR receiver AND status is accepted/returned
+    // Get drops where user is sender OR receiver AND status is 'returned' (mutual links only)
     const { data, error } = await supabase
       .from('drops')
       .select('*')
       .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .in('status', ['accepted', 'returned'])
+      .in('status', ['returned'])
       .order('responded_at', { ascending: false });
 
     if (error) {

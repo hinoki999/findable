@@ -91,9 +91,9 @@ export default function DropScreen() {
     }
     
     try {
-      console.log('[DROPS] Sending drop to:', device.userId, device.username || device.name);
+      console.log('[DROPS] Sending drop to:', device.userId, device.username || device.name, 'distance:', device.distanceFeet);
       
-      // Send drop with current user's profile info
+      // Send drop with current user's profile info and distance
       await sendDrop(device.userId, {
         name: profile?.name || 'User',
         email: profile?.email,
@@ -101,7 +101,7 @@ export default function DropScreen() {
         bio: profile?.bio,
         profilePhoto: profile?.profilePhoto,
         socialMedia: profile?.socialMedia,
-      });
+      }, device.distanceFeet);
       
       setActive(null);
       showToast({

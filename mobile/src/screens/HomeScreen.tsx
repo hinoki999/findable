@@ -2749,6 +2749,20 @@ export default function HomeScreen() {
                     {drop.senderName || drop.senderUsername || 'Someone'} just sent you a drop
                   </Text>
                   
+                  {/* Distance indicator */}
+                  {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                    <View style={{ 
+                      flexDirection: 'row', 
+                      alignItems: 'center',
+                      marginTop: 4,
+                    }}>
+                      <MaterialCommunityIcons name="map-marker-distance" size={14} color={theme.colors.muted} />
+                      <Text style={[theme.type.muted, { fontSize: 12, marginLeft: 4 }]}>
+                        {drop.distanceFeet.toFixed(1)} ft away
+                      </Text>
+                    </View>
+                  )}
+                  
                   <View style={{ 
                     flexDirection: 'row', 
                     gap: 8, 
@@ -3245,9 +3259,9 @@ export default function HomeScreen() {
                         throw new Error(errorMsg);
                       }
                       
-                      console.log('[DROPS] Sending drop to userId:', receiverUserId);
+                      console.log('[DROPS] Sending drop to userId:', receiverUserId, 'distance:', selectedBlipDevice.distanceFeet);
                       
-                      // Send drop with current user's profile info
+                      // Send drop with current user's profile info and distance
                       await sendDrop(receiverUserId, {
                         name: profile?.name || 'User',
                         username: username,
@@ -3256,7 +3270,7 @@ export default function HomeScreen() {
                         bio: profile?.bio,
                         profilePhoto: profile?.profilePhoto,
                         socialMedia: profile?.socialMedia,
-                      });
+                      }, selectedBlipDevice.distanceFeet);
                       
                       // Close modal after successful send
                       setShowBlipModal(false);
