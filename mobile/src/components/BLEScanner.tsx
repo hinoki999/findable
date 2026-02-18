@@ -209,14 +209,15 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
                 const { data: userProfileData, error: userProfileError } = await supabase
                   .from('user_profiles')
-                  .select('user_id, name')
+                  .select('user_id, name, username')
                   .ilike('user_id', `${normalizedDeviceId}%`)
                   .limit(1)
                   .maybeSingle();
                 
                 if (!userProfileError && userProfileData) {
                   userId = userProfileData.user_id;
-                  displayName = userProfileData.name || deviceId || 'User';
+                  // Use name for display, fall back to username, then deviceId
+                  displayName = userProfileData.name || userProfileData.username || deviceId || 'User';
                 }
                 
                 // Update device if found, or use deviceId as fallback

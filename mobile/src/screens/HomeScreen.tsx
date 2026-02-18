@@ -2613,8 +2613,8 @@ export default function HomeScreen() {
             backgroundColor: theme.colors.white,
             borderRadius: 16,
             padding: 20,
-            width: '100%',
-            maxWidth: 400,
+            width: '95%',
+            maxWidth: 500,
             maxHeight: '80%',
           }}>
             <Text style={[theme.type.h1, { marginBottom: 16, textAlign: 'center' }]}>
@@ -2749,19 +2749,29 @@ export default function HomeScreen() {
                     {drop.senderName || drop.senderUsername || 'Someone'} just sent you a drop
                   </Text>
                   
-                  {/* Distance indicator */}
-                  {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      alignItems: 'center',
-                      marginTop: 4,
-                    }}>
-                      <MaterialCommunityIcons name="map-marker-distance" size={14} color={theme.colors.muted} />
-                      <Text style={[theme.type.muted, { fontSize: 12, marginLeft: 4 }]}>
-                        {drop.distanceFeet.toFixed(1)} ft away
+                  {/* Distance and username indicator */}
+                  <View style={{ 
+                    flexDirection: 'row', 
+                    alignItems: 'center',
+                    marginTop: 4,
+                  }}>
+                    {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                      <>
+                        <MaterialCommunityIcons name="map-marker-distance" size={14} color={theme.colors.muted} />
+                        <Text style={[theme.type.muted, { fontSize: 12, marginLeft: 4 }]}>
+                          {drop.distanceFeet.toFixed(1)} ft away
+                        </Text>
+                      </>
+                    )}
+                    {drop.distanceFeet !== undefined && drop.senderUsername && (
+                      <Text style={[theme.type.muted, { fontSize: 12, marginHorizontal: 6 }]}>•</Text>
+                    )}
+                    {drop.senderUsername && (
+                      <Text style={[theme.type.muted, { fontSize: 12 }]}>
+                        @{drop.senderUsername}
                       </Text>
-                    </View>
-                  )}
+                    )}
+                  </View>
                   
                   <View style={{ 
                     flexDirection: 'row', 
