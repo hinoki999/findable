@@ -536,28 +536,48 @@ function MainApp() {
     }
     
     try {
-      if (!userId) return;
+      if (!userId) {
+        console.log('[PROFILE-UPDATE] No userId, skipping update');
+        return;
+      }
+      
+      // Build the update object with all profile fields
+      const updateData = {
+        name: newProfile.name,
+        email: newProfile.email,
+        phone: newProfile.phone,
+        bio: newProfile.bio,
+        social_media: newProfile.socialMedia,
+        phone_verified: newProfile.phoneVerified || false,
+        profile_photo: newProfile.profilePhoto || null,
+      };
+      
+      console.log('[PROFILE-UPDATE] Before UPDATE - userId:', userId);
+      console.log('[PROFILE-UPDATE] Before UPDATE - fields being sent:', JSON.stringify(updateData, null, 2));
       
       // Update user_profiles in Supabase
-      await supabase
+      const { data, error } = await supabase
         .from('user_profiles')
-        .update({
-          name: newProfile.name,
-          email: newProfile.email,
-          phone: newProfile.phone,
-          bio: newProfile.bio,
-          social_media: newProfile.socialMedia,
-          phone_verified: newProfile.phoneVerified || false,
-        })
-        .eq('user_id', userId);
+        .update(updateData)
+        .eq('user_id', userId)
+        .select();
+      
+      if (error) {
+        console.error('[PROFILE-UPDATE] Supabase UPDATE error:', error);
+        console.error('[PROFILE-UPDATE] Error details:', JSON.stringify(error, null, 2));
+        throw new Error(error.message || 'Failed to update profile in database');
+      }
+      
+      console.log('[PROFILE-UPDATE] After UPDATE - success, returned data:', JSON.stringify(data, null, 2));
       
       // Update local state
       setUserProfile(newProfile);
       
-      console.log('✅ Profile updated successfully');
+      console.log('[PROFILE-UPDATE] ✅ Profile updated successfully');
       showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
     } catch (error: any) {
-      console.error('Error updating profile:', error);
+      console.error('[PROFILE-UPDATE] Error updating profile:', error);
+      console.error('[PROFILE-UPDATE] Error message:', error.message);
       showToast({
         message: error.message || 'Failed to update profile',
         type: 'error',

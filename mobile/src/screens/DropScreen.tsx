@@ -137,7 +137,7 @@ export default function DropScreen() {
         } : undefined;
         
         await updateDropStatus(incomingDrop.id, action, responseProfile);
-        setIncomingDrop(null);
+      setIncomingDrop(null);
         
         if (action === 'returned') {
           showToast({

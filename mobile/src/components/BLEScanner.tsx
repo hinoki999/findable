@@ -215,7 +215,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   .maybeSingle();
                 
                 if (!userProfileError && userProfileData) {
-                  userId = userProfileData.user_id;
+                    userId = userProfileData.user_id;
                   // Use name for display, fall back to username, then deviceId
                   displayName = userProfileData.name || userProfileData.username || deviceId || 'User';
                 }
