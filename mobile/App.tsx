@@ -156,7 +156,8 @@ const formatPhoneNumber = (text: string): string => {
 };
 
 // AUTH BYPASS: Set to true to skip all backend calls for BLE testing
-const AUTH_BYPASS_ENABLED = true;
+// NOTE: Set to false for production - profile updates need Supabase
+const AUTH_BYPASS_ENABLED = false;
 
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
