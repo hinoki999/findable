@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 14, 2026 (Gray Screen Crash RESOLVED - BLEAdvertiserNative fix + DB cleanup)
+**Last Updated:** February 18, 2026 (BLE Native Module Recreated + Drops Migration + Contact Card Modals)
 
 ---
 
@@ -2964,9 +2964,359 @@ Added comprehensive debug logging throughout `HomeScreen.tsx` to trace crash:
 
 ---
 
+## Drops System Migration & Contact Card Enhancement (February 18, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Full migration from `devices` table to `drops` table + Enhanced contact card UI
+
+### Overview
+
+Complete overhaul of the drops (contact sharing) functionality. Migrated from using the `devices` table to a dedicated `drops` table with proper sender contact fields. Enhanced incoming drop modals to display full contact cards instead of just names.
+
+### 1. Drops Table Schema
+
+**New Table:** `drops` in Supabase
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `sender_id` | UUID | User who sent the drop (FK to auth.users) |
+| `receiver_id` | UUID | User receiving the drop (FK to auth.users) |
+| `status` | TEXT | 'pending', 'accepted', 'returned', 'declined' |
+| `created_at` | TIMESTAMP | When drop was sent |
+| `responded_at` | TIMESTAMP | When drop was accepted/declined |
+| `distance_feet` | REAL | Distance between users when drop was sent |
+| `sender_name` | TEXT | Sender's display name |
+| `sender_username` | TEXT | Sender's @username |
+| `sender_email` | TEXT | Sender's email (if shared) |
+| `sender_phone` | TEXT | Sender's phone (if shared) |
+| `sender_bio` | TEXT | Sender's bio |
+| `sender_profile_photo` | TEXT | URL to sender's profile photo |
+| `sender_social_media` | JSONB | Array of {platform, handle} objects |
+
+### 2. New API Functions (api.ts)
+
+| Function | Purpose |
+|----------|---------|
+| `sendDrop(receiverId, senderProfile, distanceFeet)` | Send a drop with all profile fields |
+| `getIncomingDrops()` | Get pending drops for current user |
+| `getLinkedDrops()` | Get 'returned' drops (mutual links) for History |
+| `updateDropStatus(dropId, status, responseProfile?)` | Accept/return/decline a drop |
+| `getDrop(dropId)` | Get a specific drop by ID |
+| `deleteDrop(dropId)` | Delete a drop |
+
+**Drop Interface:**
+```typescript
+interface Drop {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted' | 'returned' | 'declined';
+  createdAt: Date;
+  respondedAt?: Date;
+  distanceFeet?: number;
+  senderName?: string;
+  senderUsername?: string;
+  senderEmail?: string;
+  senderPhone?: string;
+  senderBio?: string;
+  senderProfilePhoto?: string;
+  senderSocialMedia?: Array<{ platform: string; handle: string }>;
+}
+```
+
+### 3. Drop Flow Logic
+
+**Sending a Drop:**
+1. User taps blip on radar → Modal shows name, username, distance (NO contact info yet)
+2. User taps "Drop Card" → `sendDrop()` inserts row with sender's full profile
+3. Receiver sees drop in their "Your Drops" modal
+
+**Receiving a Drop:**
+1. Incoming drop modal shows **full contact card**: photo, bio, email, phone, social media
+2. **Accept:** Updates status to 'accepted', stays in drops system
+3. **Return Drop:** Updates status to 'returned' + creates REVERSE drop row (mutual link)
+4. **Decline:** Updates status to 'declined', drop is removed
+
+**Return Drop Logic:**
+- When user taps "Return Drop", TWO things happen:
+  1. Original drop status → 'returned'
+  2. NEW drop created: sender ↔ receiver swapped, auto-status 'accepted'
+- This creates a mutual link visible to both users in History
+
+### 4. Contact Card Modal (Incoming Drops)
+
+**Location:** `HomeScreen.tsx` - Drops modal
+
+**Enhanced Display:**
+- Orange header with sender name + distance + @username
+- Large profile photo (or initials fallback)
+- Contact info section: phone, email, social media with icons
+- Bio in styled quote box
+- Three action buttons: Accept, Return Drop, Decline
+
+**Before (minimal):**
+```
+[Name] just sent you a drop
+15.0 ft away • @username
+[Accept] [Return] [Decline]
+```
+
+**After (full contact card):**
+```
+┌─────────────────────────────────┐
+│  [Orange Header]                │
+│  John Smith sent you a drop     │
+│  15.0 ft away • @johnsmith      │
+├─────────────────────────────────┤
+│         [Profile Photo]         │
+│                                 │
+│  📱 (555) 123-4567              │
+│  📧 john@example.com            │
+│  🐦 @johntwitter                │
+│                                 │
+│  ┌─────────────────────────┐   │
+│  │ BIO                      │   │
+│  │ "Tech enthusiast..."     │   │
+│  └─────────────────────────┘   │
+│                                 │
+│ [Accept] [Return Drop] [Decline]│
+└─────────────────────────────────┘
+```
+
+### 5. Files Modified
+
+| File | Changes |
+|------|---------|
+| `mobile/src/services/api.ts` | Added `Drop` interface, `sendDrop()`, `getIncomingDrops()`, `getLinkedDrops()`, `updateDropStatus()`, `getDrop()`, `deleteDrop()`, `mapDropFromDb()` |
+| `mobile/src/screens/HomeScreen.tsx` | Incoming drop modal with full contact card, Image import added |
+| `mobile/src/screens/DropScreen.tsx` | Updated to use new drops API |
+| `mobile/src/screens/HistoryScreen.tsx` | Updated to use `getLinkedDrops()`, contact modal uses `Drop` fields |
+
+### 6. Key Behavior Changes
+
+| Before | After |
+|--------|-------|
+| Drops stored in `devices` table | Drops stored in dedicated `drops` table |
+| Only receiver contact info stored | Full sender contact info stored with drop |
+| Minimal drop notification | Full contact card in drop modal |
+| Accepted drops went to History | Only 'returned' (mutual) drops go to History |
+| No distance tracking | Distance stored with each drop |
+
+---
+
+## BLE Native Module Recreation (February 18, 2026)
+
+**Status:** ✅ COMPLETED
+**Issue:** Native BLE advertising module files were deleted, breaking advertising functionality
+
+### Problem
+
+The BLE advertising native module files (`BLEAdvertiserNative.kt`, `BLEAdvertiserPackage.kt`) were accidentally deleted, causing the TypeScript wrapper to fail and advertising to be disabled.
+
+### Solution: Recreated Native Module
+
+**Location:** `mobile/android/app/src/main/java/com/hirule/mobile/ble/`
+
+**Files Recreated:**
+
+1. **BLEAdvertiserNative.kt** (~150 lines)
+   - Implements `ReactContextBaseJavaModule`
+   - Uses Android's native `BluetoothLeAdvertiser` API
+   - Sets Bluetooth device name to `"DL-{deviceId}"` format
+   - Broadcasts with `setIncludeDeviceName(true)` for scanner detection
+   - Restores original Bluetooth name when advertising stops
+
+2. **BLEAdvertiserPackage.kt**
+   - Registers `BLEAdvertiserNative` module with React Native
+
+3. **MainApplication.kt** (Updated)
+   - Added import: `import com.hirule.mobile.ble.BLEAdvertiserPackage`
+   - Added package registration: `add(BLEAdvertiserPackage())`
+
+### Key Implementation Details
+
+**Advertising Flow:**
+```kotlin
+// Set device name to DropLink format
+adapter.setName("$DROPLINK_PREFIX$deviceId")  // e.g., "DL-abc12345"
+
+// Build advertise data with device name included
+AdvertiseData.Builder()
+  .setIncludeDeviceName(true)  // Critical for scanner detection
+  .addServiceUuid(ParcelUuid(serviceUuid))
+  .build()
+```
+
+**Cleanup on Stop:**
+```kotlin
+private fun restoreOriginalBluetoothName() {
+  originalBluetoothName?.let { adapter.setName(it) }
+  originalBluetoothName = null
+}
+```
+
+### TypeScript Interface
+
+**Location:** `mobile/src/native/BLEAdvertiserNative.ts`
+
+```typescript
+interface BLEAdvertiserNativeInterface {
+  startAdvertising(serviceUUID: string, deviceId: string): Promise<{ success: boolean; serviceUUID: string }>;
+  stopAdvertising(): Promise<void>;
+  isAdvertising(): Promise<boolean>;
+}
+```
+
+**Stub Fallback:** If native module is unavailable (e.g., iOS), returns safe stub that logs warnings and returns `success: false`.
+
+---
+
+## Profile Update Logic Enhancement (February 18, 2026)
+
+**Status:** ✅ COMPLETED
+**Issue:** `profile_photo` field was missing from Supabase UPDATE statement
+
+### Problem
+
+When users updated their profile in AccountScreen, the `profile_photo` field was not included in the Supabase UPDATE, causing photos to not persist properly.
+
+### Solution
+
+**Location:** `mobile/App.tsx` - `updateProfile()` function
+
+**Before:**
+```typescript
+await supabase.from('user_profiles').update({
+  name: newProfile.name,
+  email: newProfile.email,
+  phone: newProfile.phone,
+  bio: newProfile.bio,
+  social_media: newProfile.socialMedia,
+  phone_verified: newProfile.phoneVerified || false,
+  // profile_photo was MISSING
+})
+```
+
+**After:**
+```typescript
+const updateData = {
+  name: newProfile.name,
+  email: newProfile.email,
+  phone: newProfile.phone,
+  bio: newProfile.bio,
+  social_media: newProfile.socialMedia,
+  phone_verified: newProfile.phoneVerified || false,
+  profile_photo: newProfile.profilePhoto || null,  // Added
+};
+
+console.log('[PROFILE-UPDATE] Before UPDATE - fields being sent:', JSON.stringify(updateData, null, 2));
+
+const { data, error } = await supabase
+  .from('user_profiles')
+  .update(updateData)
+  .eq('user_id', userId)
+  .select();
+
+if (error) {
+  console.error('[PROFILE-UPDATE] Supabase UPDATE error:', error);
+}
+
+console.log('[PROFILE-UPDATE] After UPDATE - success, returned data:', JSON.stringify(data, null, 2));
+```
+
+### Debug Logging Added
+
+| Log Prefix | Purpose |
+|------------|---------|
+| `[PROFILE-UPDATE] Before UPDATE` | Shows all fields being sent to Supabase |
+| `[PROFILE-UPDATE] After UPDATE` | Confirms success and shows returned data |
+| `[PROFILE-UPDATE] Supabase UPDATE error` | Shows detailed error info if update fails |
+
+---
+
+## BLEScanner Query Optimization (February 18, 2026)
+
+**Status:** ✅ COMPLETED (Previous Session)
+**Issue:** Scanner was fetching ALL users from Supabase, then filtering client-side
+
+### Problem
+
+The BLE scanner was running inefficient queries:
+```typescript
+// BAD: Fetches all users, then filters
+const { data } = await supabase.from('user_profiles').select('*');
+const match = data?.find(p => p.user_id.startsWith(deviceId));
+```
+
+### Solution
+
+**Server-Side Filtering + Client-Side Caching**
+
+**Location:** `mobile/src/components/BLEScanner.tsx`
+
+```typescript
+// Cache to prevent redundant queries
+const queryCache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// Server-side filtering with ILIKE prefix match
+const { data } = await supabase
+  .from('user_profiles')
+  .select('user_id, name, username')
+  .ilike('user_id', `${normalizedDeviceId}%`)
+  .limit(1)
+  .maybeSingle();
+```
+
+### Performance Improvement
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Query scope | All users (potentially thousands) | Single matching user |
+| Network payload | All profile data | user_id, name, username only |
+| Query frequency | Every scan cycle | Once per 10 minutes per device |
+
+---
+
+## SignupScreen User Profile Fixes (February 18, 2026)
+
+**Status:** ✅ COMPLETED (Previous Session)
+**Issue:** `name` and `username` fields were not being inserted into `user_profiles` during signup
+
+### Changes Made
+
+1. **Added "Full Name" input field** - First input in signup form
+2. **Updated both INSERT statements** to include `name` and `username`:
+
+```typescript
+// Direct signup INSERT
+await supabase.from('user_profiles').insert({
+  user_id: userId,
+  email: email.toLowerCase(),
+  name: name,        // From name input field
+  username: username, // From username input field
+});
+
+// Email verification flow INSERT
+await supabase.from('user_profiles').insert({
+  user_id: userId,
+  email: email.toLowerCase(),
+  name: name,
+  username: username,
+});
+```
+
+3. **Added debug logging:**
+```typescript
+console.log('[SIGNUP-DEBUG] Creating profile with name:', name, 'username:', username, 'email:', email);
+```
+
+---
+
 ## Next Steps (Priority Order)
 
-1. **Implement BLEAdvertiserModule.kt** - Native Kotlin module for actual BLE advertising
+1. ~~**Implement BLEAdvertiserModule.kt**~~ ✅ COMPLETED Feb 18, 2026
 2. **Re-implement tutorial system** - Core onboarding feature, currently disabled
 3. **Create Supabase RPC function** - Required for account deletion
 4. **Complete Railway deprecation** - Remove all Railway backend dependencies
@@ -3003,9 +3353,11 @@ Added comprehensive debug logging throughout `HomeScreen.tsx` to trace crash:
 - ~~Gray screen crashes not fully resolved~~ **RESOLVED Feb 14, 2026** (See crash investigation section)
 - Profile photo upload RLS policy error persists
 - Supabase Storage requires explicit auth headers (workaround in place)
-- **BLEAdvertiserNative has no native implementation** - Stub in place, advertising disabled until Kotlin module implemented
+- ~~**BLEAdvertiserNative has no native implementation**~~ **RESOLVED Feb 18, 2026** - Native Kotlin module recreated and functional
 - **Twilio account suspended** - Phone verification disabled, credentials exposed in git history
 - **Debug logging in HomeScreen.tsx** - Remove `[CRASH-DEBUG]` logs after stability confirmed
+- **Debug logging in App.tsx** - Remove `[PROFILE-UPDATE]` logs after stability confirmed
+- **Old `devices` table** - Can be deprecated now that drops use `drops` table
 
 ### Code Patterns (Supabase)
 
@@ -3221,19 +3573,21 @@ const arrayBuffer = base64ToArrayBuffer(base64Data);
 - `react-native-gesture-handler`: For pinch/zoom/rotate
 - `expo-file-system`: `^19.0.19` (legacy API for SDK 54)
 - `react-native-ble-plx`: `^3.5.0` - BLE scanning (central mode)
-- **Native Android BLE Advertiser Module** - Custom Kotlin module for BLE advertising (replaces `munim-bluetooth-peripheral`)
+- **Native Android BLE Advertiser Module** - Custom Kotlin module for BLE advertising at `mobile/android/app/src/main/java/com/hirule/mobile/ble/` (recreated Feb 18, 2026)
 
 ---
 
-## BLE Advertising & Drop Functionality (January 2025)
+## BLE Advertising & Drop Functionality (January 2025, Updated February 2026)
 
 ### Overview
 
 Complete implementation of BLE advertising and drop sending/receiving system. Devices broadcast their presence via BLE and exchange contact information ("drops") with nearby users.
 
+**⚠️ NOTE:** This section documents the original January 2025 implementation. The native module was recreated in February 2026 - see "BLE Native Module Recreation" section above for the current implementation.
+
 ### Native Android BLE Advertising Module
 
-**Location:** `mobile/android/app/src/main/java/com/droplink/ble/`
+**Location:** `mobile/android/app/src/main/java/com/hirule/mobile/ble/` (Updated path)
 
 **Files:**
 - `BLEAdvertiserModule.kt` - Main native module (288 lines)
@@ -3320,7 +3674,7 @@ interface BleDevice {
 - Manual close button (X icon)
 - Shows actual error message (not generic)
 
-**Database:** `devices` table stores drops with `user_id` = receiver's ID, `action` = 'dropped'
+**Database:** ~~`devices` table~~ **Now uses `drops` table** (Feb 2026) - See "Drops System Migration" section above
 
 ### Drop Receiving Flow
 
@@ -3449,9 +3803,13 @@ interface BleDevice {
 14. **Bluetooth state monitoring prevents silent failures** - Always listen for Bluetooth disabled events
 
 ### Feature Requests / TODOs
-- [ ] Fix gray screen crash after signup/login (CRITICAL)
+- [x] ~~Fix gray screen crash after signup/login~~ (RESOLVED Feb 14, 2026 - BLEAdvertiserNative stub + DB cleanup)
 - [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
 - [x] ~~Re-implement tutorial system~~ (RESOLVED - Per-screen tracking implemented December 2024)
+- [x] ~~Implement BLE advertising native module~~ (RESOLVED Feb 18, 2026 - Kotlin module recreated)
+- [x] ~~Migrate drops to dedicated table~~ (RESOLVED Feb 18, 2026 - `drops` table with sender contact fields)
+- [x] ~~Enhance incoming drop modal~~ (RESOLVED Feb 18, 2026 - Full contact card display)
+- [x] ~~Optimize BLE scanner queries~~ (RESOLVED Feb 18, 2026 - Server-side filtering + caching)
 - [ ] Complete phone verification feature (HomeScreen banner + drop blocking logic)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
@@ -3460,3 +3818,4 @@ interface BleDevice {
 - [ ] Grid performance optimization (memoization)
 - [ ] Complete Railway backend deprecation
 - [ ] Add Supabase RLS policy documentation
+- [ ] Deprecate old `devices` table (drops now use `drops` table)
