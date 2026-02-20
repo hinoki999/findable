@@ -135,14 +135,11 @@ export default function HistoryScreen() {
 
   const handleTogglePin = (item: Drop) => {
     if (!item.id) return;
-    // Note: Pinning now uses drop ID (string UUID) instead of device ID (number)
-    // This may need adjustment in the pinnedIds system
-    console.log('[DROPS] Toggle pin for drop:', item.id);
-    // togglePin expects number, but drop.id is string - this needs migration
-    // For now, just show toast
+    const isPinned = pinnedIds.has(item.id);
+    togglePin(item.id);
     showToast({
-      message: `Pinning not yet migrated to drops system`,
-      type: 'info',
+      message: isPinned ? `Unpinned ${item.senderName || 'contact'}` : `Pinned ${item.senderName || 'contact'}`,
+      type: 'success',
       duration: 2000,
     });
   };
@@ -181,10 +178,15 @@ export default function HistoryScreen() {
            bio.includes(query);
   });
 
-  // Sort filtered data by timestamp (newest first)
-  // Note: Pinning not yet migrated to drops system (drop.id is string UUID, not number)
+  // Sort filtered data: pinned items first, then by timestamp (newest first)
   const sortedData = [...filteredData].sort((a, b) => {
-    // Sort by respondedAt (when link was formed), then by createdAt
+    // First sort by pinned status
+    const aPinned = a.id ? pinnedIds.has(a.id) : false;
+    const bPinned = b.id ? pinnedIds.has(b.id) : false;
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    
+    // Then sort by respondedAt (when link was formed), then by createdAt
     const aTime = a.respondedAt?.getTime() || a.createdAt?.getTime() || 0;
     const bTime = b.respondedAt?.getTime() || b.createdAt?.getTime() || 0;
     return bTime - aTime;
@@ -407,12 +409,12 @@ export default function HistoryScreen() {
                       style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
                     >
                       <MaterialCommunityIcons 
-                        name="pin-outline"
+                        name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"}
                         size={11} 
-                        color={theme.colors.blue} 
+                        color={item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.blue} 
                       />
-                      <Text style={[theme.type.muted, { fontSize: 11, color: theme.colors.blue, marginLeft: 4 }]}>
-                        Pin
+                      <Text style={[theme.type.muted, { fontSize: 11, color: item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.blue, marginLeft: 4 }]}>
+                        {item.id && pinnedIds.has(item.id) ? 'Unpin' : 'Pin'}
                       </Text>
                     </Pressable>
                     </View>

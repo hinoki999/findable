@@ -34,10 +34,10 @@ const DarkModeContext = createContext<{
 
 export const useDarkMode = () => useContext(DarkModeContext);
 
-// Pinned Profiles Context
+// Pinned Profiles Context - supports both number (legacy devices) and string (drops UUIDs)
 const PinnedProfilesContext = createContext<{
-  pinnedIds: Set<number>;
-  togglePin: (id: number) => void;
+  pinnedIds: Set<string | number>;
+  togglePin: (id: string | number) => void;
 }>({
   pinnedIds: new Set(),
   togglePin: () => { },
@@ -178,7 +178,7 @@ function MainApp() {
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like ProfilePhoto, SecuritySettings
   const [isDarkMode, setIsDarkMode] = useState(true);
   const insets = useSafeAreaInsets();
-  const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set([1001, 1002, 1003, 1004, 1005]));
+  const [pinnedIds, setPinnedIds] = useState<Set<string | number>>(new Set());
 
   // ✅ FIXED: Initialize with socialMedia array to prevent crashes
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -494,7 +494,7 @@ function MainApp() {
     }
   };
 
-  const togglePin = async (id: number) => {
+  const togglePin = async (id: string | number) => {
     let wasPinned = false;
     setPinnedIds(prev => {
       const newSet = new Set(prev);
@@ -511,18 +511,23 @@ function MainApp() {
       return; // Skip backend calls for testing
     }
 
-    // Save to backend
-    try {
-      const api = await import('./src/services/api');
-      if (wasPinned) {
-        await api.unpinContact(id);
-        console.log('✅ Unpinned contact saved to backend:', id);
-      } else {
-        await api.pinContact(id);
-        console.log('✅ Pinned contact saved to backend:', id);
+    // Save to backend (only for numeric IDs from legacy devices)
+    if (typeof id === 'number') {
+      try {
+        const api = await import('./src/services/api');
+        if (wasPinned) {
+          await api.unpinContact(id);
+          console.log('✅ Unpinned contact saved to backend:', id);
+        } else {
+          await api.pinContact(id);
+          console.log('✅ Pinned contact saved to backend:', id);
+        }
+      } catch (error) {
+        console.error('❌ Failed to save pin state:', error);
       }
-    } catch (error) {
-      console.error('❌ Failed to save pin status:', error);
+    } else {
+      // For string IDs (drop UUIDs), pinning is handled locally
+      console.log(`📌 Pin toggled for drop: ${id}, pinned: ${!wasPinned}`);
     }
   };
 

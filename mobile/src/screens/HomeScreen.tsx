@@ -649,9 +649,6 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
-  console.log('[CRASH-DEBUG] ========== HomeScreen Render Start ==========');
-  console.log('[CRASH-DEBUG] useBLEScanner result:', { devices, isScanning, startScan: typeof startScan, stopScan: typeof stopScan, startScanCount });
-
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, localName } = useBLEAdvertiser();
 
@@ -910,12 +907,6 @@ export default function HomeScreen() {
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
   
-  console.log('[CRASH-DEBUG] About to filter dropLinkDevices');
-  console.log('[CRASH-DEBUG] devices type:', typeof devices);
-  console.log('[CRASH-DEBUG] devices is array?', Array.isArray(devices));
-  console.log('[CRASH-DEBUG] devices length:', devices?.length);
-  console.log('[CRASH-DEBUG] devices value:', devices);
-  
   const dropLinkDevices = devices.filter(device => {
     // Check if name starts with "DL-"
     if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
@@ -933,16 +924,7 @@ export default function HomeScreen() {
     return false;
   });
   
-  console.log('[BLIP-DEBUG] DropLink devices found:', dropLinkDevices.length);
-  console.log('[CRASH-DEBUG] About to filter by distance');
-  console.log('[CRASH-DEBUG] dropLinkDevices type:', typeof dropLinkDevices);
-  console.log('[CRASH-DEBUG] dropLinkDevices is array?', Array.isArray(dropLinkDevices));
-  console.log('[CRASH-DEBUG] dropLinkDevices length:', dropLinkDevices?.length);
-  console.log('[CRASH-DEBUG] maxDistance:', maxDistance);
-  
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
-  
-  console.log('[BLIP-DEBUG] Filtered devices:', filteredDevices.map(d => d.name));
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -1574,166 +1556,8 @@ export default function HomeScreen() {
   };
 
 
-  const testTimestamp = new Date().toLocaleString();
-  
-  console.log('[CRASH-DEBUG] About to render JSX');
-  console.log('[CRASH-DEBUG] filteredDevices type:', typeof filteredDevices);
-  console.log('[CRASH-DEBUG] filteredDevices is array?', Array.isArray(filteredDevices));
-  console.log('[CRASH-DEBUG] filteredDevices length:', filteredDevices?.length);
-  console.log('[CRASH-DEBUG] linkedDevices type:', typeof linkedDevices);
-  console.log('[CRASH-DEBUG] linkedDevices length:', linkedDevices?.length);
-  console.log('[CRASH-DEBUG] ========== HomeScreen Render End ==========');
-  
   return (
     <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      {/* HUGE TEST BANNER - at very top of screen */}
-      <View style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 99999,
-        backgroundColor: '#FF0000',
-        paddingVertical: 20,
-        paddingHorizontal: 16,
-        borderBottomWidth: 4,
-        borderBottomColor: '#CC0000',
-      }}>
-        {/* Test Update Banner */}
-        <View style={{ marginBottom: 12 }}>
-          <Text style={{
-            fontSize: 24,
-            fontWeight: '900',
-            color: '#FFFFFF',
-            textAlign: 'center',
-            textTransform: 'uppercase',
-          }}>
-            TEST UPDATE LOADED
-          </Text>
-          <Text style={{
-            fontSize: 16,
-            fontWeight: '700',
-            color: '#FFFFFF',
-            textAlign: 'center',
-            marginTop: 4,
-          }}>
-            {testTimestamp}
-          </Text>
-        </View>
-        
-        {/* Drop Error Display */}
-        {dropError && (
-          <View style={{
-            backgroundColor: '#990000',
-            padding: 16,
-            borderRadius: 8,
-            marginBottom: 12,
-            borderWidth: 3,
-            borderColor: '#FFFFFF',
-          }}>
-            <Text style={{
-              fontSize: 20,
-              fontWeight: '900',
-              color: '#FFFFFF',
-              marginBottom: 8,
-              textTransform: 'uppercase',
-            }}>
-              DROP ERROR:
-            </Text>
-            <Text style={{
-              fontSize: 18,
-              fontWeight: '700',
-              color: '#FFFFFF',
-              lineHeight: 24,
-            }}>
-              {dropError}
-            </Text>
-          </View>
-        )}
-        
-        {/* Error Logs */}
-        {errorLogs.length > 0 && (
-          <View style={{
-            backgroundColor: '#330000',
-            padding: 12,
-            borderRadius: 8,
-            maxHeight: 200,
-          }}>
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '900',
-              color: '#FFFFFF',
-              marginBottom: 8,
-              textTransform: 'uppercase',
-            }}>
-              Last 5 Console Errors:
-            </Text>
-            <ScrollView
-              style={{ maxHeight: 150 }}
-              nestedScrollEnabled={true}
-            >
-              {errorLogs.map((log, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: '#FFAAAA',
-                    marginBottom: 4,
-                    fontFamily: 'monospace',
-                  }}
-                >
-                  {log}
-                </Text>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-      </View>
-      
-      {/* Drop Error Banner - at top of screen */}
-      {dropError && (
-        <View style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10000,
-          backgroundColor: '#FF0000',
-          paddingVertical: 12,
-          paddingHorizontal: 16,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-          elevation: 8,
-        }}>
-          <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{
-              fontSize: 14,
-              fontWeight: '600',
-              color: '#FFFFFF',
-              marginBottom: 2,
-            }}>
-              Drop Failed
-            </Text>
-            <Text style={{ fontSize: 12, color: '#FFFFFF', lineHeight: 16 }}>
-              {dropError}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => setDropError(null)}
-            style={{
-              padding: 4,
-            }}
-          >
-            <MaterialCommunityIcons name="close" size={20} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      )}
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
@@ -1934,10 +1758,8 @@ export default function HomeScreen() {
           pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
         }}
       >
-        {console.log('[CRASH-DEBUG] About to render filteredDevices, count:', filteredDevices.length)}
         {filteredDevices.map((device) => {
           const position = getGridPosition(device);
-          console.log('[BLIP-DEBUG] Rendering blip for:', device.name, 'at position:', position);
 
           return (
             <DeviceBlip
@@ -1949,8 +1771,6 @@ export default function HomeScreen() {
               nucleusY={nucleusY}
               viewTransform={viewTransformTensor}
               onPress={() => {
-                console.log('SUCCESS: Blip press handler called for:', device.name);
-                console.log('[BLIP-DEBUG] Blip tapped:', device.name, 'username:', device.username);
                 setSelectedBlipDevice(device);
                 setSelectedBlipDeviceId(device.id); // Store device ID to sync later
                 setShowBlipModal(true);
@@ -1960,7 +1780,6 @@ export default function HomeScreen() {
         })}
 
         {/* Link Markers - for accepted and returned links (no pulsation) */}
-        {console.log('[CRASH-DEBUG] About to render linkedDevices, count:', linkedDevices.length)}
         {linkedDevices.map((device) => {
           // Use same positioning logic as blips to ensure grid snapping
           const position = getGridPosition(device as any); // Device has distanceFeet property

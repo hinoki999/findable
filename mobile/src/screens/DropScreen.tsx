@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
 import { sendDrop, updateDropStatus, getAcceptedDrops, deleteDrop, Drop } from '../services/api';
-import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile } from '../../App';
+import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile, usePinnedProfiles } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
@@ -52,6 +52,7 @@ export default function DropScreen() {
   const { userId } = useAuth();
   const { profile } = useUserProfile();
   const { navigateToTab } = useTabNavigation();
+  const { pinnedIds, togglePin } = usePinnedProfiles();
   const theme = getTheme(isDarkMode);
   const phoneVerified = profile?.phoneVerified || false;
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
@@ -82,6 +83,29 @@ export default function DropScreen() {
     setDropToDelete(drop);
     setShowDeleteModal(true);
   };
+
+  const handleTogglePin = (drop: Drop) => {
+    if (!drop.id) return;
+    const isPinned = pinnedIds.has(drop.id);
+    togglePin(drop.id);
+    showToast({
+      message: isPinned ? `Unpinned ${drop.senderName || 'contact'}` : `Pinned ${drop.senderName || 'contact'}`,
+      type: 'success',
+      duration: 2000,
+    });
+  };
+
+  // Sort accepted drops: pinned first, then by date
+  const sortedAcceptedDrops = [...acceptedDrops].sort((a, b) => {
+    const aPinned = a.id ? pinnedIds.has(a.id) : false;
+    const bPinned = b.id ? pinnedIds.has(b.id) : false;
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    
+    const aTime = a.createdAt?.getTime() || 0;
+    const bTime = b.createdAt?.getTime() || 0;
+    return bTime - aTime;
+  });
 
   const confirmDeleteDrop = async () => {
     if (dropToDelete) {
@@ -395,17 +419,18 @@ export default function DropScreen() {
             <NetworkBanner isDarkMode={isDarkMode} />
             
             {/* Accepted Drops Section */}
-            {acceptedDrops.length > 0 && (
+            {sortedAcceptedDrops.length > 0 && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 12, color: '#FF6B4A' }]}>
                   Your Accepted Drops
                 </Text>
-                {acceptedDrops.map((drop) => (
+                {sortedAcceptedDrops.map((drop) => (
                   <SwipeableRow
                     key={drop.id}
                     onSwipeLeft={() => handleDeleteDrop(drop)}
-                    onSwipeRight={() => {}}
-                    isPinned={false}
+                    onSwipeRight={() => handleTogglePin(drop)}
+                    isPinned={drop.id ? pinnedIds.has(drop.id) : false}
+                    rightActionColor="#0066FF"
                   >
                     <View style={{
                       ...theme.card,
@@ -443,6 +468,20 @@ export default function DropScreen() {
                             @{drop.senderUsername}
                           </Text>
                         )}
+                        {/* Pin button */}
+                        <Pressable
+                          onPress={() => handleTogglePin(drop)}
+                          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
+                        >
+                          <MaterialCommunityIcons 
+                            name={drop.id && pinnedIds.has(drop.id) ? "pin" : "pin-outline"}
+                            size={11} 
+                            color={drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.blue} 
+                          />
+                          <Text style={[theme.type.muted, { fontSize: 11, color: drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.blue, marginLeft: 4 }]}>
+                            {drop.id && pinnedIds.has(drop.id) ? 'Unpin' : 'Pin'}
+                          </Text>
+                        </Pressable>
                       </View>
                       
                       {/* Delete button */}
