@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop } from '../services/api';
@@ -85,6 +85,8 @@ export default function HistoryScreen() {
   }, []);
 
   const handleContactPress = (item: Drop) => {
+    console.log('[DROPS] Opening contact card for:', item.senderName);
+    console.log('[DROPS] Profile photo URL:', item.senderProfilePhoto || 'NULL');
     setSelectedContact(item);
     setShowContactModal(true);
   };

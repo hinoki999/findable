@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
-import { colors, card, type, radius, getTheme } from '../theme';
+import { colors, card, type, radius, getTheme, shadow } from '../theme';
 import { sendDrop, updateDropStatus, getAcceptedDrops, deleteDrop, Drop } from '../services/api';
 import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile, usePinnedProfiles } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
@@ -44,6 +44,8 @@ export default function DropScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [dropToDelete, setDropToDelete] = useState<Drop | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Drop | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
   const { isDarkMode } = useDarkMode();
   const { addLinkNotification } = useLinkNotifications();
   const { showToast } = useToast();
@@ -81,6 +83,34 @@ export default function DropScreen() {
   const handleDeleteDrop = (drop: Drop) => {
     setDropToDelete(drop);
     setShowDeleteModal(true);
+  };
+
+  const handleContactPress = (drop: Drop) => {
+    console.log('[DROPS] Opening contact card for:', drop.senderName);
+    console.log('[DROPS] Profile photo URL:', drop.senderProfilePhoto || 'NULL');
+    setSelectedContact(drop);
+    setShowContactModal(true);
+  };
+
+  const closeContactModal = () => {
+    setShowContactModal(false);
+    setSelectedContact(null);
+  };
+
+  const formatTimeAgo = (timestamp?: Date): string => {
+    if (!timestamp) return 'Recently';
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    
+    return timestamp.toLocaleDateString();
   };
 
   const handleTogglePin = (drop: Drop) => {
@@ -424,14 +454,16 @@ export default function DropScreen() {
                   Your Accepted Drops
                 </Text>
                 {sortedAcceptedDrops.map((drop) => (
-                  <View 
+                  <Pressable 
                     key={drop.id}
-                    style={{
+                    onPress={() => handleContactPress(drop)}
+                    style={({ pressed }) => ({
                       ...theme.card,
                       marginBottom: 12,
                       flexDirection: 'row',
                       alignItems: 'center',
-                    }}
+                      opacity: pressed ? 0.8 : 1,
+                    })}
                   >
                     {/* Avatar */}
                     <View style={{
@@ -463,13 +495,19 @@ export default function DropScreen() {
                           @{drop.senderUsername}
                         </Text>
                       )}
+                      <Text style={[theme.type.muted, { fontSize: 11, marginTop: 2 }]}>
+                        Accepted {formatTimeAgo(drop.respondedAt || drop.createdAt)}
+                      </Text>
                     </View>
                     
                     {/* Action Icons */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       {/* Pin Icon */}
                       <Pressable
-                        onPress={() => handleTogglePin(drop)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleTogglePin(drop);
+                        }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={{ padding: 6 }}
                       >
@@ -482,14 +520,17 @@ export default function DropScreen() {
                       
                       {/* Delete Icon */}
                       <Pressable
-                        onPress={() => handleDeleteDrop(drop)}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteDrop(drop);
+                        }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={{ padding: 6 }}
                       >
                         <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.colors.muted} />
                       </Pressable>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -615,6 +656,148 @@ export default function DropScreen() {
                 })}
               >
                 <Text style={{ ...theme.type.body, color: theme.colors.muted }}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Contact Card Modal */}
+      <Modal
+        visible={showContactModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={closeContactModal}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 16,
+            width: '100%',
+            maxWidth: 350,
+            overflow: 'hidden',
+            ...shadow.lite,
+          }}>
+            {/* ID Header */}
+            <View style={{
+              backgroundColor: '#FF6B4A',
+              paddingVertical: 12,
+              paddingHorizontal: 20,
+              alignItems: 'center',
+            }}>
+              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                {selectedContact?.senderName || selectedContact?.senderUsername || 'Contact'}
+              </Text>
+            </View>
+
+            {/* ID Content */}
+            <View style={{ padding: 20 }}>
+              {/* Profile Picture */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <View style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  backgroundColor: selectedContact?.senderProfilePhoto ? 'transparent' : '#FFE5DC',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}>
+                  {selectedContact?.senderProfilePhoto ? (
+                    <Image source={{ uri: selectedContact.senderProfilePhoto }} style={{ width: 60, height: 60 }} />
+                  ) : (
+                    <Text style={{ color: '#FF6B4A', fontSize: 22, fontWeight: '600' }}>
+                      {getInitials(selectedContact?.senderName || 'U')}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Username */}
+              {selectedContact?.senderUsername && (
+                <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={[theme.type.muted, { fontSize: 14 }]}>
+                    @{selectedContact.senderUsername}
+                  </Text>
+                </View>
+              )}
+
+              {/* Contact Information */}
+              <View style={{ marginBottom: 16 }}>
+                {/* Phone */}
+                {selectedContact?.senderPhone && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {selectedContact.senderPhone}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Email */}
+                {selectedContact?.senderEmail && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                      {selectedContact.senderEmail}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Social Media - Dynamic */}
+                {selectedContact?.senderSocialMedia && selectedContact.senderSocialMedia.map((social, index) => (
+                  social.platform && social.handle ? (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <MaterialCommunityIcons
+                        name={social.platform.toLowerCase() as any}
+                        size={16}
+                        color={theme.colors.muted}
+                      />
+                      <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                        {social.handle}
+                      </Text>
+                    </View>
+                  ) : null
+                ))}
+              </View>
+
+              {/* Bio Section */}
+              {selectedContact?.senderBio && (
+                <View style={{
+                  backgroundColor: theme.colors.bg,
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16,
+                }}>
+                  <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                    BIO
+                  </Text>
+                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                    "{selectedContact.senderBio}"
+                  </Text>
+                </View>
+              )}
+
+              {/* Close Button */}
+              <Pressable
+                onPress={closeContactModal}
+                style={{
+                  backgroundColor: '#FF6B4A',
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={[theme.type.button, { fontSize: 14 }]}>
+                  Close
+                </Text>
               </Pressable>
             </View>
           </View>
