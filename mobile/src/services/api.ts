@@ -523,6 +523,42 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 }
 
 /**
+ * Get accepted drops for the current user (drops they accepted but haven't returned)
+ * These appear on the Drops page, separate from nearby BLE users
+ */
+export async function getAcceptedDrops(): Promise<Drop[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const userId = session.user.id;
+    console.log('[DROPS] Fetching accepted drops for user:', userId);
+
+    // Get drops where user is the receiver AND status is 'accepted'
+    const { data, error } = await supabase
+      .from('drops')
+      .select('*')
+      .eq('receiver_id', userId)
+      .eq('status', 'accepted')
+      .order('responded_at', { ascending: false });
+
+    if (error) {
+      console.error('[DROPS] Supabase accepted drops query error:', error);
+      throw new Error('Failed to load accepted drops. Please try again.');
+    }
+
+    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} accepted drops`);
+    return (data || []).map(mapDropFromDb);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Get accepted drops error:', error);
+    throw new Error(error.message || 'Failed to load accepted drops. Please try again.');
+  }
+}
+
+/**
  * Get linked drops (returned only) for the current user
  * These are mutual connections to show in History
  * Only 'returned' drops are shown here - 'accepted' drops stay on Drops page

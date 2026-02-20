@@ -2413,43 +2413,6 @@ export default function HomeScreen() {
           </Pressable>
           </View>
 
-        {/* Debug: Add Me Button - Injects current user as fake nearby device */}
-        <View pointerEvents="auto">
-          <Pressable
-            onPress={() => {
-              if (!userId) {
-                console.log('[BLIP-DEBUG] Cannot add debug device: userId is null');
-                showToast('Error: userId is null');
-                return;
-              }
-              const deviceIdPrefix = userId.substring(0, 8).toLowerCase();
-              const debugDevice: BleDevice = {
-                id: `debug-${Date.now()}`,
-                name: `DL-${deviceIdPrefix}`,
-                rssi: -60,
-                distanceFeet: 10,
-                username: username || profile?.name || 'Debug User',
-                userId: userId,
-              };
-              console.log('[BLIP-DEBUG] Adding debug device:', debugDevice);
-              addDebugDevice(debugDevice);
-              showToast(`Added: DL-${deviceIdPrefix}`);
-            }}
-            style={{
-              borderWidth: 1,
-              borderColor: '#FF6600',
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              backgroundColor: 'rgba(255, 102, 0, 0.1)',
-            }}
-          >
-            <Text style={{ color: '#FF6600', fontSize: 11, fontWeight: '600' }}>
-              Debug: Add Me
-            </Text>
-          </Pressable>
-          </View>
-
         {/* Zoom & Rotation Indicators (visual feedback only) */}
         <View 
           style={{

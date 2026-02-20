@@ -63,7 +63,7 @@ interface UserProfile {
 
 const UserProfileContext = createContext<{
   profile: UserProfile;
-  updateProfile: (updates: Partial<UserProfile>) => void;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
 }>({
   profile: {
     name: 'Your Name',
@@ -73,7 +73,7 @@ const UserProfileContext = createContext<{
     socialMedia: [],
     phoneVerified: false,
   },
-  updateProfile: () => { },
+  updateProfile: async () => { console.log('[PROFILE-UPDATE] WARNING: Using default empty updateProfile!'); },
 });
 
 export const useUserProfile = () => useContext(UserProfileContext);
@@ -527,6 +527,10 @@ function MainApp() {
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
+    console.log('[PROFILE-UPDATE] ===== updateProfile CALLED =====');
+    console.log('[PROFILE-UPDATE] Received updates:', JSON.stringify(updates, null, 2));
+    console.log('[PROFILE-UPDATE] AUTH_BYPASS_ENABLED:', AUTH_BYPASS_ENABLED);
+    
     const newProfile = { ...userProfile, ...updates };
     
     if (AUTH_BYPASS_ENABLED) {

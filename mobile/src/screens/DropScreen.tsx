@@ -1,9 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, FlatList, Pressable, Modal, Animated, Alert, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme } from '../theme';
-import { sendDrop, updateDropStatus, Drop } from '../services/api';
+import { sendDrop, updateDropStatus, getAcceptedDrops, deleteDrop, Drop } from '../services/api';
 import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,12 +13,38 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import SwipeableRow from '../components/SwipeableRow';
+
+// Helper function to get initials from name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+// Helper function to generate consistent color from name
+const getAvatarColor = (name: string): string => {
+  const colorList = [
+    '#FF6B4A', '#4A90FF', '#FF4A7F', '#4AFF8C',
+    '#FF4AE8', '#FFA84A', '#4AFFEF', '#A84AFF',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colorList[Math.abs(hash) % colorList.length];
+};
 
 export default function DropScreen() {
   const [active, setActive] = useState<BleDevice|null>(null);
   const [incomingDrop, setIncomingDrop] = useState<Drop | null>(null);
+  const [acceptedDrops, setAcceptedDrops] = useState<Drop[]>([]);
   const [bounceAnim] = useState(new Animated.Value(0));
   const [refreshing, setRefreshing] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [dropToDelete, setDropToDelete] = useState<Drop | null>(null);
   const { isDarkMode } = useDarkMode();
   const { addLinkNotification } = useLinkNotifications();
   const { showToast } = useToast();
@@ -37,6 +63,48 @@ export default function DropScreen() {
   useEffect(() => {
     startScreenTutorial('Drop', 1);
   }, []);
+
+  // Fetch accepted drops on mount
+  useEffect(() => {
+    fetchAcceptedDrops();
+  }, []);
+
+  const fetchAcceptedDrops = async () => {
+    try {
+      const drops = await getAcceptedDrops();
+      setAcceptedDrops(drops);
+    } catch (error) {
+      console.error('[DROPS] Failed to fetch accepted drops:', error);
+    }
+  };
+
+  const handleDeleteDrop = (drop: Drop) => {
+    setDropToDelete(drop);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteDrop = async () => {
+    if (dropToDelete) {
+      try {
+        await deleteDrop(dropToDelete.id);
+        setAcceptedDrops(prev => prev.filter(d => d.id !== dropToDelete.id));
+        showToast({
+          message: `Removed ${dropToDelete.senderName || 'drop'}`,
+          type: 'success',
+          duration: 2000,
+        });
+      } catch (error) {
+        console.error('[DROPS] Failed to delete drop:', error);
+        showToast({
+          message: 'Failed to delete drop',
+          type: 'error',
+          duration: 3000,
+        });
+      }
+    }
+    setShowDeleteModal(false);
+    setDropToDelete(null);
+  };
 
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
@@ -159,6 +227,8 @@ export default function DropScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    // Refresh accepted drops
+    await fetchAcceptedDrops();
     // Stop current scan and start a new one
     stopScan();
     await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause
@@ -322,13 +392,79 @@ export default function DropScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom:80 }}
         ListHeaderComponent={
           <>
-            <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 12 }]}>
-              {isScanning ? 'Scanning for nearby devices...' : 'Scan completed'}
-            </Text>
-            <Text style={[theme.type.muted, { fontSize: 11, marginBottom: 12 }]}>
-              Showing devices within {maxDistance} ft
-            </Text>
             <NetworkBanner isDarkMode={isDarkMode} />
+            
+            {/* Accepted Drops Section */}
+            {acceptedDrops.length > 0 && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 12, color: '#FF6B4A' }]}>
+                  Your Accepted Drops
+                </Text>
+                {acceptedDrops.map((drop) => (
+                  <SwipeableRow
+                    key={drop.id}
+                    onSwipeLeft={() => handleDeleteDrop(drop)}
+                    onSwipeRight={() => {}}
+                    isPinned={false}
+                  >
+                    <View style={{
+                      ...theme.card,
+                      marginBottom: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                    }}>
+                      {/* Avatar */}
+                      <View style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        backgroundColor: getAvatarColor(drop.senderName || 'User'),
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                        overflow: 'hidden',
+                      }}>
+                        {drop.senderProfilePhoto ? (
+                          <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
+                        ) : (
+                          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                            {getInitials(drop.senderName || 'U')}
+                          </Text>
+                        )}
+                      </View>
+                      
+                      {/* Info */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[theme.type.h2, { fontSize: 15 }]}>
+                          {drop.senderName || drop.senderUsername || 'User'}
+                        </Text>
+                        {drop.senderUsername && (
+                          <Text style={[theme.type.muted, { fontSize: 12 }]}>
+                            @{drop.senderUsername}
+                          </Text>
+                        )}
+                      </View>
+                      
+                      {/* Delete button */}
+                      <Pressable
+                        onPress={() => handleDeleteDrop(drop)}
+                        style={{ padding: 8 }}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={20} color={theme.colors.muted} />
+                      </Pressable>
+                    </View>
+                  </SwipeableRow>
+                ))}
+              </View>
+            )}
+            
+            {/* Nearby Users Section Header */}
+            <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 8, color: theme.colors.blue }]}>
+              Nearby Users
+            </Text>
+            <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 12 }]}>
+              {isScanning ? 'Scanning for nearby devices...' : 'Scan completed'} • Within {maxDistance} ft
+            </Text>
           </>
         }
         refreshControl={
@@ -358,21 +494,24 @@ export default function DropScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          <View style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 400,
-            paddingHorizontal: 40,
-          }}>
-            <Text style={[theme.type.body, {
-              textAlign: 'center',
-              fontSize: 15,
-              color: theme.colors.muted,
-            }]}>
-              No DropLink users nearby
-            </Text>
-          </View>
+          acceptedDrops.length === 0 ? (
+            <View style={{
+              flex: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 300,
+              paddingHorizontal: 40,
+            }}>
+              <MaterialCommunityIcons name="account-search" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
+              <Text style={[theme.type.body, {
+                textAlign: 'center',
+                fontSize: 15,
+                color: theme.colors.muted,
+              }]}>
+                No DropLink users nearby
+              </Text>
+            </View>
+          ) : null
         }
       />
 
@@ -440,6 +579,65 @@ export default function DropScreen() {
                 })}
               >
                 <Text style={{ ...theme.type.body, color: theme.colors.muted }}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={[theme.card, { width: '100%', maxWidth: 220, padding: 14 }]}>
+            <Text style={[theme.type.h2, { fontSize: 15, textAlign: 'center', marginBottom: 6 }]}>
+              Delete Drop
+            </Text>
+            <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.muted }]}>
+              Remove this accepted drop?
+            </Text>
+            
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={() => setShowDeleteModal(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  borderWidth: 1.5,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.bg,
+                }}
+              >
+                <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.muted }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={confirmDeleteDrop}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  backgroundColor: '#FF6B4A',
+                }}
+              >
+                <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
+                  Delete
+                </Text>
               </Pressable>
             </View>
           </View>
