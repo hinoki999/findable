@@ -8,7 +8,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
-import SwipeableRow from '../components/SwipeableRow';
 import TopBar from '../components/TopBar';
 
 // Helper function to get initials from name
@@ -362,76 +361,83 @@ export default function HistoryScreen() {
                         };
 
             return (
-              <SwipeableRow
-                onSwipeRight={() => handleTogglePin(item)}
-                onSwipeLeft={() => handleDeleteClick(item)}
-                isPinned={item.id ? pinnedIds.has(item.id) : false}
-                rightActionColor="#0066FF" // More vibrant blue
+              <Pressable 
+                onPress={() => handleContactPress(item)}
+                style={({ pressed }) => ({
+                  ...theme.card,
+                  marginHorizontal: 16,
+                  marginBottom: 12,
+                  opacity: pressed ? 0.8 : 1,
+                })}
               >
-                <Pressable 
-                  onPress={() => handleContactPress(item)}
-                  style={({ pressed }) => ({
-                    ...theme.card,
-                    marginHorizontal: 16,
-                    marginBottom: 12,
-                    opacity: pressed ? 0.8 : 1,
-                  })}
-                >
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    {/* Avatar */}
-                    <View style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: getAvatarColor(item.senderName || 'User'),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 12,
-                      overflow: 'hidden',
-                    }}>
-                      {item.senderProfilePhoto ? (
-                        <Image source={{ uri: item.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
-                      ) : (
-                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                          {getInitials(item.senderName || 'U')}
-                        </Text>
-                      )}
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {/* Avatar */}
+                  <View style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: getAvatarColor(item.senderName || 'User'),
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                    overflow: 'hidden',
+                  }}>
+                    {item.senderProfilePhoto ? (
+                      <Image source={{ uri: item.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
+                    ) : (
+                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                        {getInitials(item.senderName || 'U')}
+                      </Text>
+                    )}
+                  </View>
+                  
+                  {/* Name & Status */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || item.senderUsername || 'User'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                      {getActionIcon(item.status)}
+                      <Text style={[theme.type.muted, { fontSize: 11, marginLeft: 4 }]}>
+                        {getActionText(item.status)} • {formatTimestamp(item.respondedAt || item.createdAt)}
+                      </Text>
                     </View>
-                    
-                    <View style={{ flex: 1 }}>
-                      <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || item.senderUsername || 'User'}</Text>
+                  </View>
+                  
+                  {/* Action Icons */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {/* Pin Icon */}
                     <Pressable 
                       onPress={(e) => {
                         e.stopPropagation();
                         handleTogglePin(item);
-                      }} 
-                      hitSlop={0}
-                      style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ padding: 6 }}
                     >
                       <MaterialCommunityIcons 
                         name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"}
-                        size={11} 
-                        color={item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.blue} 
+                        size={18} 
+                        color={item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.muted} 
                       />
-                      <Text style={[theme.type.muted, { fontSize: 11, color: item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.blue, marginLeft: 4 }]}>
-                        {item.id && pinnedIds.has(item.id) ? 'Unpin' : 'Pin'}
-                      </Text>
                     </Pressable>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        {getActionIcon(item.status)}
-                        <Text style={[theme.type.body, { color: getActionColor(item.status), fontWeight: '500' }]}>
-                          {getActionText(item.status)}
-                        </Text>
-                      </View>
-                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 2 }]}>
-                        {formatTimestamp(item.respondedAt || item.createdAt)}
-                      </Text>
-                    </View>
-            </View>
-                </Pressable>
-              </SwipeableRow>
+                    
+                    {/* Delete Icon */}
+                    <Pressable 
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteClick(item);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={{ padding: 6 }}
+                    >
+                      <MaterialCommunityIcons 
+                        name="trash-can-outline"
+                        size={18} 
+                        color={theme.colors.muted} 
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+              </Pressable>
             );
           }}
           ListEmptyComponent={

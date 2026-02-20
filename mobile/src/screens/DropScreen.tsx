@@ -13,7 +13,6 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
-import SwipeableRow from '../components/SwipeableRow';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -425,74 +424,72 @@ export default function DropScreen() {
                   Your Accepted Drops
                 </Text>
                 {sortedAcceptedDrops.map((drop) => (
-                  <SwipeableRow
+                  <View 
                     key={drop.id}
-                    onSwipeLeft={() => handleDeleteDrop(drop)}
-                    onSwipeRight={() => handleTogglePin(drop)}
-                    isPinned={drop.id ? pinnedIds.has(drop.id) : false}
-                    rightActionColor="#0066FF"
-                  >
-                    <View style={{
+                    style={{
                       ...theme.card,
                       marginBottom: 12,
                       flexDirection: 'row',
                       alignItems: 'center',
+                    }}
+                  >
+                    {/* Avatar */}
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: getAvatarColor(drop.senderName || 'User'),
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                      overflow: 'hidden',
                     }}>
-                      {/* Avatar */}
-                      <View style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: getAvatarColor(drop.senderName || 'User'),
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginRight: 12,
-                        overflow: 'hidden',
-                      }}>
-                        {drop.senderProfilePhoto ? (
-                          <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
-                        ) : (
-                          <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                            {getInitials(drop.senderName || 'U')}
-                          </Text>
-                        )}
-                      </View>
-                      
-                      {/* Info */}
-                      <View style={{ flex: 1 }}>
-                        <Text style={[theme.type.h2, { fontSize: 15 }]}>
-                          {drop.senderName || drop.senderUsername || 'User'}
+                      {drop.senderProfilePhoto ? (
+                        <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
+                      ) : (
+                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                          {getInitials(drop.senderName || 'U')}
                         </Text>
-                        {drop.senderUsername && (
-                          <Text style={[theme.type.muted, { fontSize: 12 }]}>
-                            @{drop.senderUsername}
-                          </Text>
-                        )}
-                        {/* Pin button */}
-                        <Pressable
-                          onPress={() => handleTogglePin(drop)}
-                          style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, alignSelf: 'flex-start' }}
-                        >
-                          <MaterialCommunityIcons 
-                            name={drop.id && pinnedIds.has(drop.id) ? "pin" : "pin-outline"}
-                            size={11} 
-                            color={drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.blue} 
-                          />
-                          <Text style={[theme.type.muted, { fontSize: 11, color: drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.blue, marginLeft: 4 }]}>
-                            {drop.id && pinnedIds.has(drop.id) ? 'Unpin' : 'Pin'}
-                          </Text>
-                        </Pressable>
-                      </View>
+                      )}
+                    </View>
+                    
+                    {/* Info */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={[theme.type.h2, { fontSize: 15 }]}>
+                        {drop.senderName || drop.senderUsername || 'User'}
+                      </Text>
+                      {drop.senderUsername && (
+                        <Text style={[theme.type.muted, { fontSize: 12 }]}>
+                          @{drop.senderUsername}
+                        </Text>
+                      )}
+                    </View>
+                    
+                    {/* Action Icons */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {/* Pin Icon */}
+                      <Pressable
+                        onPress={() => handleTogglePin(drop)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ padding: 6 }}
+                      >
+                        <MaterialCommunityIcons 
+                          name={drop.id && pinnedIds.has(drop.id) ? "pin" : "pin-outline"}
+                          size={18} 
+                          color={drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.muted} 
+                        />
+                      </Pressable>
                       
-                      {/* Delete button */}
+                      {/* Delete Icon */}
                       <Pressable
                         onPress={() => handleDeleteDrop(drop)}
-                        style={{ padding: 8 }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ padding: 6 }}
                       >
-                        <MaterialCommunityIcons name="trash-can-outline" size={20} color={theme.colors.muted} />
+                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.colors.muted} />
                       </Pressable>
                     </View>
-                  </SwipeableRow>
+                  </View>
                 ))}
               </View>
             )}
