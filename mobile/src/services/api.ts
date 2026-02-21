@@ -575,13 +575,19 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching linked drops for user:', userId);
 
-    // Get drops where user is sender OR receiver AND status is 'returned' (mutual links only)
-    // Note: 'deleted' drops are excluded because we filter for 'returned' status only
+    // Get drops where user is the RECEIVER and status is 'returned' (mutual links only)
+    // We only fetch drops where user is receiver because:
+    // - The sender_* fields contain the OTHER person's contact info
+    // - When user A and B link, there are 2 drop records:
+    //   1. A→B (A's info stored as sender)
+    //   2. B→A (B's info stored as sender)
+    // - User A sees drop B→A (where A is receiver) → shows B's info ✓
+    // - User B sees drop A→B (where B is receiver) → shows A's info ✓
     const { data, error } = await supabase
       .from('drops')
       .select('*')
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .in('status', ['returned'])
+      .eq('receiver_id', userId)
+      .eq('status', 'returned')
       .order('responded_at', { ascending: false });
 
     if (error) {
