@@ -17,6 +17,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
 import com.hirule.mobile.ble.BLEAdvertiserPackage
+import com.hirule.mobile.ble.BLEScannerPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -27,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
               add(BLEAdvertiserPackage())
+              add(BLEScannerPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
