@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -2209,6 +2209,59 @@ export default function HomeScreen() {
         }}
         pointerEvents="box-none"
       >
+        {/* DEBUG: Test Send Drop Button - TEMPORARY */}
+        <View pointerEvents="auto">
+          <Pressable
+            onPress={async () => {
+              console.log('[DROP-SEND-TEST] Starting test drop send...');
+              console.log('[DROP-SEND-TEST] Current profile:', profile);
+              console.log('[DROP-SEND-TEST] Current username:', username);
+              try {
+                const senderProfile = {
+                  name: profile?.name || 'Test User',
+                  username: username || undefined,
+                  email: profile?.email || undefined,
+                  phone: profile?.phone || undefined,
+                  bio: profile?.bio || undefined,
+                  profilePhoto: profile?.profilePhoto || undefined,
+                  socialMedia: profile?.socialMedia || undefined,
+                };
+                console.log('[DROP-SEND-TEST] Sender profile being sent:', senderProfile);
+                
+                await sendDrop(
+                  '744df100-0ea0-4614-a7fe-18f04dc579a6', // Kaytea's user_id
+                  senderProfile,
+                  12.5 // hardcoded distance
+                );
+                
+                console.log('[DROP-SEND-TEST] Drop created successfully, check Supabase');
+                showToast({
+                  message: 'Test drop sent to Kaytea',
+                  type: 'success',
+                  duration: 3000,
+                });
+              } catch (error: any) {
+                console.error('[DROP-SEND-TEST] Failed to send drop:', error);
+                showToast({
+                  message: error.message || 'Failed to send test drop',
+                  type: 'error',
+                  duration: 4000,
+                });
+              }
+            }}
+            style={{
+              backgroundColor: '#FF6B4A',
+              borderRadius: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}>
+              Test Send
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Reset View Button */}
         <View pointerEvents="auto">
           <Pressable
