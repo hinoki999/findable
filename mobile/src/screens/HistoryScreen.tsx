@@ -347,6 +347,8 @@ export default function HistoryScreen() {
 
                         const getActionText = (action?: string) => {
                           switch (action) {
+                            case 'sent': return 'Sent';
+                            case 'pending': return 'Pending';
                             case 'accepted': return 'Accepted';
                             case 'returned': return 'Link';
                             case 'linked': return 'Linked';
@@ -359,6 +361,9 @@ export default function HistoryScreen() {
                         const getActionIcon = (action?: string) => {
                           if (action === 'returned' || action === 'linked') {
                             return <MaterialCommunityIcons name="link-variant" size={16} color="#FF6B4A" />;
+                          }
+                          if (action === 'sent') {
+                            return <MaterialCommunityIcons name="send" size={16} color={theme.colors.muted} />;
                           }
                           return null;
                         };
