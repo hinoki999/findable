@@ -388,7 +388,7 @@ export interface Drop {
   id: string;
   senderId: string;
   receiverId: string;
-  status: 'pending' | 'sent' | 'accepted' | 'returned' | 'declined' | 'deleted' | 'linked';
+  status: 'sent' | 'received' | 'accepted' | 'returned' | 'declined' | 'deleted' | 'linked';
   createdAt: Date;
   respondedAt?: Date;
   distanceFeet?: number;
@@ -426,7 +426,7 @@ function mapDropFromDb(d: any): Drop {
 
 /**
  * Send a drop to another user
- * Creates TWO rows: one for sender (status='sent'), one for receiver (status='pending')
+ * Creates TWO rows: one for sender (status='sent'), one for receiver (status='received')
  * @param receiverId - UUID of the user receiving the drop
  * @param senderProfile - Sender's contact info to share
  * @param distanceFeet - Distance to receiver in feet (from BLE RSSI)
@@ -478,8 +478,8 @@ export async function sendDrop(
     const { data, error } = await supabase
       .from('drops')
       .insert([
-        { ...dropData, status: 'sent' },     // Sender's outgoing record
-        { ...dropData, status: 'pending' },  // Receiver's incoming record
+        { ...dropData, status: 'sent' },      // Sender's outgoing record
+        { ...dropData, status: 'received' }, // Receiver's incoming record
       ])
       .select();
 
@@ -488,10 +488,10 @@ export async function sendDrop(
       throw new Error('Failed to send drop. Please try again.');
     }
 
-    console.log('[DROPS] SUCCESS: Drop pair created - sent:', data[0]?.id, 'pending:', data[1]?.id);
+    console.log('[DROPS] SUCCESS: Drop pair created - sent:', data[0]?.id, 'received:', data[1]?.id);
     
-    // Return the receiver's record (pending) as the primary drop
-    const receiverDrop = data.find(d => d.status === 'pending') || data[0];
+    // Return the receiver's record (received) as the primary drop
+    const receiverDrop = data.find(d => d.status === 'received') || data[0];
     return mapDropFromDb(receiverDrop);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Send drop error:', error);
@@ -500,7 +500,7 @@ export async function sendDrop(
 }
 
 /**
- * Get incoming drops for the current user (pending drops sent TO them)
+ * Get incoming drops for the current user (received drops sent TO them)
  */
 export async function getIncomingDrops(): Promise<Drop[]> {
   try {
@@ -516,7 +516,7 @@ export async function getIncomingDrops(): Promise<Drop[]> {
       .from('drops')
       .select('*')
       .eq('receiver_id', session.user.id)
-      .eq('status', 'pending')
+      .eq('status', 'received')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -748,7 +748,7 @@ export async function updateDropStatus(
 
     console.log('[DROPS] Updating drop status:', dropId, 'to', status);
 
-    // First, get the receiver's drop record (status='pending')
+    // First, get the receiver's drop record (status='received')
     const { data: receiverDrop, error: fetchError } = await supabase
       .from('drops')
       .select('*')
@@ -766,7 +766,7 @@ export async function updateDropStatus(
     const dbStatus = status === 'returned' ? 'linked' : status;
     const respondedAt = new Date().toISOString();
 
-    // Update the RECEIVER's drop record (the 'pending' one we're responding to)
+    // Update the RECEIVER's drop record (the 'received' one we're responding to)
     const { data, error } = await supabase
       .from('drops')
       .update({

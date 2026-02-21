@@ -348,7 +348,7 @@ export default function HistoryScreen() {
                         const getActionText = (action?: string) => {
                           switch (action) {
                             case 'sent': return 'Sent';
-                            case 'pending': return 'Pending';
+                            case 'received': return 'Received';
                             case 'accepted': return 'Accepted';
                             case 'returned': return 'Link';
                             case 'linked': return 'Linked';

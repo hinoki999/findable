@@ -826,7 +826,7 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch incoming drops from drops table (pending drops sent TO current user)
+  // Fetch incoming drops from drops table (received drops sent TO current user)
   useEffect(() => {
     const fetchIncomingDropsFromTable = async () => {
       try {
