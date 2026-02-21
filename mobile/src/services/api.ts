@@ -388,7 +388,7 @@ export interface Drop {
   id: string;
   senderId: string;
   receiverId: string;
-  status: 'pending' | 'accepted' | 'returned' | 'declined';
+  status: 'pending' | 'accepted' | 'returned' | 'declined' | 'deleted';
   createdAt: Date;
   respondedAt?: Date;
   distanceFeet?: number;
@@ -538,6 +538,7 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
     console.log('[DROPS] Fetching accepted drops for user:', userId);
 
     // Get drops where user is the receiver AND status is 'accepted'
+    // Note: 'deleted' drops are excluded because we filter for 'accepted' status only
     const { data, error } = await supabase
       .from('drops')
       .select('*')
@@ -575,6 +576,7 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     console.log('[DROPS] Fetching linked drops for user:', userId);
 
     // Get drops where user is sender OR receiver AND status is 'returned' (mutual links only)
+    // Note: 'deleted' drops are excluded because we filter for 'returned' status only
     const { data, error } = await supabase
       .from('drops')
       .select('*')
@@ -739,22 +741,37 @@ export async function deleteDrop(dropId: string): Promise<void> {
     }
 
     const userId = session.user.id;
+    
+    console.log('[DROPS] SOFT-DELETE: Starting soft delete operation');
+    console.log('[DROPS] SOFT-DELETE: dropId =', dropId);
+    console.log('[DROPS] SOFT-DELETE: userId =', userId);
 
-    // Only allow deleting drops you sent or received
-    const { error } = await supabase
+    // Soft delete: update status to 'deleted' instead of removing row
+    const { data, error } = await supabase
       .from('drops')
-      .delete()
+      .update({ 
+        status: 'deleted',
+        responded_at: new Date().toISOString()
+      })
       .eq('id', dropId)
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .select();
+
+    console.log('[DROPS] SOFT-DELETE: Supabase response - data:', data, ', error:', error);
 
     if (error) {
-      console.error('[DROPS] Supabase drop delete error:', error);
+      console.error('[DROPS] SOFT-DELETE: Supabase update error:', error);
       throw new Error('Failed to delete drop. Please try again.');
     }
 
-    console.log('[DROPS] SUCCESS: Drop deleted:', dropId);
+    if (!data || data.length === 0) {
+      console.error('[DROPS] SOFT-DELETE: No rows updated - drop not found or not owned by user');
+      throw new Error('Drop not found or you do not have permission to delete it');
+    }
+
+    console.log('[DROPS] SUCCESS: Drop soft-deleted (status set to deleted):', dropId);
   } catch (error: any) {
-    console.error('[DROPS] ERROR: Delete drop error:', error);
+    console.error('[DROPS] ERROR: Soft delete drop error:', error);
     throw new Error(error.message || 'Failed to delete drop. Please try again.');
   }
 }
