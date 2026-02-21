@@ -388,10 +388,11 @@ export interface Drop {
   id: string;
   senderId: string;
   receiverId: string;
-  status: 'pending' | 'accepted' | 'returned' | 'declined' | 'deleted';
+  status: 'pending' | 'accepted' | 'returned' | 'declined' | 'deleted' | 'linked';
   createdAt: Date;
   respondedAt?: Date;
   distanceFeet?: number;
+  linkViewedAt?: Date;
   // Sender's contact info (shared when drop is sent)
   senderName?: string;
   senderUsername?: string;
@@ -412,6 +413,7 @@ function mapDropFromDb(d: any): Drop {
     createdAt: new Date(d.created_at),
     respondedAt: d.responded_at ? new Date(d.responded_at) : undefined,
     distanceFeet: d.distance_feet,
+    linkViewedAt: d.link_viewed_at ? new Date(d.link_viewed_at) : undefined,
     senderName: d.sender_name,
     senderUsername: d.sender_username,
     senderEmail: d.sender_email,
@@ -575,19 +577,19 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching linked drops for user:', userId);
 
-    // Get drops where user is the RECEIVER and status is 'returned' (mutual links only)
+    // Get drops where user is the RECEIVER and status is 'linked' (mutual links only)
     // We only fetch drops where user is receiver because:
     // - The sender_* fields contain the OTHER person's contact info
     // - When user A and B link, there are 2 drop records:
-    //   1. A→B (A's info stored as sender)
-    //   2. B→A (B's info stored as sender)
+    //   1. A→B (A's info stored as sender, status='linked')
+    //   2. B→A (B's info stored as sender, status='linked')
     // - User A sees drop B→A (where A is receiver) → shows B's info ✓
     // - User B sees drop A→B (where B is receiver) → shows A's info ✓
     const { data, error } = await supabase
       .from('drops')
       .select('*')
       .eq('receiver_id', userId)
-      .eq('status', 'returned')
+      .eq('status', 'linked')
       .order('responded_at', { ascending: false });
 
     if (error) {
@@ -600,6 +602,78 @@ export async function getLinkedDrops(): Promise<Drop[]> {
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get linked drops error:', error);
     throw new Error(error.message || 'Failed to load linked drops. Please try again.');
+  }
+}
+
+/**
+ * Get unviewed link notifications
+ * Returns drops where user is receiver, status is 'linked', and link_viewed_at is null
+ * These are new mutual connections the user hasn't acknowledged yet
+ */
+export async function getUnviewedLinks(): Promise<Drop[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const userId = session.user.id;
+    console.log('[DROPS] Fetching unviewed links for user:', userId);
+
+    const { data, error } = await supabase
+      .from('drops')
+      .select('*')
+      .eq('receiver_id', userId)
+      .eq('status', 'linked')
+      .is('link_viewed_at', null)
+      .order('responded_at', { ascending: false });
+
+    if (error) {
+      console.error('[DROPS] Supabase unviewed links query error:', error);
+      throw new Error('Failed to load unviewed links.');
+    }
+
+    console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
+    return (data || []).map(mapDropFromDb);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Get unviewed links error:', error);
+    throw new Error(error.message || 'Failed to load unviewed links.');
+  }
+}
+
+/**
+ * Mark a link as viewed
+ * Sets link_viewed_at timestamp so it won't show as a new notification
+ * @param dropId - The drop to mark as viewed
+ */
+export async function markLinkViewed(dropId: string): Promise<void> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    console.log('[DROPS] Marking link as viewed:', dropId);
+
+    const { error } = await supabase
+      .from('drops')
+      .update({
+        link_viewed_at: new Date().toISOString(),
+      })
+      .eq('id', dropId)
+      .eq('receiver_id', session.user.id);
+
+    if (error) {
+      console.error('[DROPS] Supabase mark link viewed error:', error);
+      throw new Error('Failed to mark link as viewed.');
+    }
+
+    console.log('[DROPS] SUCCESS: Link marked as viewed:', dropId);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Mark link viewed error:', error);
+    throw new Error(error.message || 'Failed to mark link as viewed.');
   }
 }
 
@@ -645,11 +719,15 @@ export async function updateDropStatus(
       throw new Error('Drop not found or you are not the receiver.');
     }
 
+    // Determine the actual status to set in database
+    // 'returned' becomes 'linked' for mutual connections
+    const dbStatus = status === 'returned' ? 'linked' : status;
+
     // Update the original drop status
     const { data, error } = await supabase
       .from('drops')
       .update({
-        status,
+        status: dbStatus,
         responded_at: new Date().toISOString(),
       })
       .eq('id', dropId)
@@ -662,19 +740,20 @@ export async function updateDropStatus(
       throw new Error('Failed to update drop. Please try again.');
     }
 
-    console.log('[DROPS] SUCCESS: Drop status updated:', dropId, status);
+    console.log('[DROPS] SUCCESS: Drop status updated:', dropId, dbStatus);
     
-    // If status is 'returned', create a SECOND drop in reverse direction
+    // If status is 'returned' (mutual link), create a SECOND drop in reverse direction
     // This shares the responder's contact info with the original sender
+    // Both drops get 'linked' status to indicate mutual connection
     if (status === 'returned' && responseProfile) {
-      console.log('[DROPS] Creating reverse drop (return) to sender:', originalDrop.sender_id);
+      console.log('[DROPS] Creating reverse drop (linked) to sender:', originalDrop.sender_id);
       
       const { data: reverseDrop, error: reverseError } = await supabase
         .from('drops')
         .insert({
           sender_id: session.user.id,           // Current user is now the sender
           receiver_id: originalDrop.sender_id,  // Original sender is now the receiver
-          status: 'accepted',                   // Auto-accepted (mutual link)
+          status: 'linked',                     // Both drops are 'linked' for mutual connection
           responded_at: new Date().toISOString(),
           sender_name: responseProfile.name || null,
           sender_username: responseProfile.username || null,
@@ -683,6 +762,7 @@ export async function updateDropStatus(
           sender_bio: responseProfile.bio || null,
           sender_profile_photo: responseProfile.profilePhoto || null,
           sender_social_media: responseProfile.socialMedia || null,
+          // link_viewed_at is null - original sender hasn't seen the link notification yet
         })
         .select()
         .single();
@@ -691,7 +771,7 @@ export async function updateDropStatus(
         console.error('[DROPS] Failed to create reverse drop:', reverseError);
         // Don't throw - the original update succeeded, just log the error
       } else {
-        console.log('[DROPS] SUCCESS: Reverse drop created:', reverseDrop?.id);
+        console.log('[DROPS] SUCCESS: Reverse drop (linked) created:', reverseDrop?.id);
       }
     }
 

@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -567,6 +567,9 @@ export default function HomeScreen() {
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
+  const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Drop[]>([]);
+  const [showNewLinkModal, setShowNewLinkModal] = useState(false);
+  const [currentNewLink, setCurrentNewLink] = useState<Drop | null>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
@@ -843,10 +846,33 @@ export default function HomeScreen() {
     
     return () => clearInterval(interval);
   }, [userId]);
+
+  // Fetch unviewed links from database (status='linked' with link_viewed_at=null)
+  useEffect(() => {
+    const fetchUnviewedLinksFromDb = async () => {
+      try {
+        const links = await getUnviewedLinks();
+        setUnviewedLinksFromDb(links);
+        
+        // If there are new unviewed links, show the modal for the first one
+        if (links.length > 0 && !showNewLinkModal && !currentNewLink) {
+          setCurrentNewLink(links[0]);
+          setShowNewLinkModal(true);
+          console.log('[LINKS] New link notification:', links[0].senderName);
+        }
+      } catch (error) {
+        console.error('[LINKS] Failed to fetch unviewed links:', error);
+      }
+    };
+    
+    fetchUnviewedLinksFromDb();
+    const interval = setInterval(fetchUnviewedLinksFromDb, 5000);
+    return () => clearInterval(interval);
+  }, [userId, showNewLinkModal, currentNewLink]);
   
-  // Get unviewed and not dismissed link notifications for badge
-  const unviewedLinks = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
-  const hasUnviewedLinks = unviewedLinks.length > 0;
+  // Combine context-based and database-based unviewed links for badge
+  const unviewedLinksFromContext = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
+  const hasUnviewedLinks = unviewedLinksFromContext.length > 0 || unviewedLinksFromDb.length > 0;
 
   // Tutorial steps for Home screen
   const tutorialSteps = [
@@ -1412,6 +1438,34 @@ export default function HomeScreen() {
     }
   };
 
+  // Handle dismissing the new link notification modal
+  const handleDismissNewLink = async () => {
+    if (currentNewLink) {
+      try {
+        await markLinkViewed(currentNewLink.id);
+        console.log('[LINKS] Marked link as viewed:', currentNewLink.id);
+        
+        // Remove from unviewed list
+        setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== currentNewLink.id));
+        
+        // Check if there are more unviewed links to show
+        const remainingLinks = unviewedLinksFromDb.filter(l => l.id !== currentNewLink.id);
+        if (remainingLinks.length > 0) {
+          setCurrentNewLink(remainingLinks[0]);
+        } else {
+          setCurrentNewLink(null);
+          setShowNewLinkModal(false);
+        }
+      } catch (error) {
+        console.error('[LINKS] Failed to mark link as viewed:', error);
+        setShowNewLinkModal(false);
+        setCurrentNewLink(null);
+      }
+    } else {
+      setShowNewLinkModal(false);
+    }
+  };
+
   // Handle quick action button press (unpin or delete)
   const handleQuickActionPress = (action: 'unpin' | 'delete', cardId: number, cardName: string) => {
     console.log('Quick action pressed:', action, cardName);
@@ -1868,7 +1922,7 @@ export default function HomeScreen() {
             
           <View style={{ position: 'relative' }}>
             <MaterialCommunityIcons 
-              name={incomingDrops.length > 0 ? "water" : "water-outline"} 
+              name={(incomingDrops.length > 0 || unviewedLinksFromDb.length > 0) ? "water" : "water-outline"} 
               size={30} 
               color={theme.colors.green} 
             />
@@ -2458,8 +2512,8 @@ export default function HomeScreen() {
             
             <ScrollView style={{ maxHeight: 500 }}>
               <>
-              {/* Link Notifications Section */}
-              {unviewedLinks.length > 0 && (
+              {/* Link Notifications Section (from context) */}
+              {unviewedLinksFromContext.length > 0 && (
                 <View style={{ marginBottom: 16 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                     <LinkIcon size={16} />
@@ -2467,8 +2521,8 @@ export default function HomeScreen() {
                       Links
               </Text>
                   </View>
-                  {console.log('[CRASH-DEBUG] About to render unviewedLinks, count:', unviewedLinks?.length)}
-                  {unviewedLinks.map((linkNotif) => (
+                  {console.log('[CRASH-DEBUG] About to render unviewedLinksFromContext, count:', unviewedLinksFromContext?.length)}
+                  {unviewedLinksFromContext.map((linkNotif) => (
                     <View
                       key={linkNotif.id}
                       style={{
@@ -2560,7 +2614,7 @@ export default function HomeScreen() {
                 </View>
               )}
             
-              {incomingDrops.length === 0 && unviewedLinks.length === 0 ? (
+              {incomingDrops.length === 0 && unviewedLinksFromContext.length === 0 && unviewedLinksFromDb.length === 0 ? (
               <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
                 <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
                 <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
@@ -2786,6 +2840,135 @@ export default function HomeScreen() {
             </Pressable>
       </View>
     </View>
+      </Modal>
+
+      {/* New Link Notification Modal */}
+      <Modal
+        visible={showNewLinkModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleDismissNewLink}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20,
+        }}>
+          <View style={{
+            backgroundColor: theme.colors.white,
+            borderRadius: 20,
+            padding: 24,
+            width: '90%',
+            maxWidth: 320,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.25,
+            shadowRadius: 16,
+            elevation: 12,
+          }}>
+            {/* Link Icon */}
+            <View style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: 'rgba(0, 200, 130, 0.15)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 16,
+            }}>
+              <LinkIcon size={40} />
+            </View>
+
+            {/* Title */}
+            <Text style={[theme.type.h1, { 
+              fontSize: 24, 
+              color: theme.colors.green,
+              marginBottom: 8,
+              textAlign: 'center',
+            }]}>
+              New Link!
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={[theme.type.body, { 
+              fontSize: 16, 
+              color: theme.colors.text,
+              marginBottom: 4,
+              textAlign: 'center',
+            }]}>
+              You're now linked with
+            </Text>
+
+            {/* Contact Name */}
+            <Text style={[theme.type.h2, { 
+              fontSize: 20, 
+              color: theme.colors.text,
+              marginBottom: 4,
+              textAlign: 'center',
+            }]}>
+              {currentNewLink?.senderName || 'User'}
+            </Text>
+
+            {/* Username */}
+            {currentNewLink?.senderUsername && (
+              <Text style={[theme.type.body, { 
+                fontSize: 14, 
+                color: theme.colors.muted,
+                marginBottom: 20,
+                textAlign: 'center',
+              }]}>
+                @{currentNewLink.senderUsername}
+              </Text>
+            )}
+
+            {/* Info Text */}
+            <Text style={[theme.type.body, { 
+              fontSize: 13, 
+              color: theme.colors.muted,
+              marginBottom: 24,
+              textAlign: 'center',
+              paddingHorizontal: 10,
+            }]}>
+              View their contact info on the Links page
+            </Text>
+
+            {/* OK Button */}
+            <Pressable
+              onPress={handleDismissNewLink}
+              style={{
+                backgroundColor: theme.colors.green,
+                paddingVertical: 14,
+                paddingHorizontal: 40,
+                borderRadius: 12,
+                width: '100%',
+              }}
+            >
+              <Text style={[theme.type.body, { 
+                color: '#fff', 
+                textAlign: 'center',
+                fontWeight: '600',
+                fontSize: 16,
+              }]}>
+                Got it!
+              </Text>
+            </Pressable>
+
+            {/* Badge count if more links */}
+            {unviewedLinksFromDb.length > 1 && (
+              <Text style={[theme.type.body, { 
+                fontSize: 12, 
+                color: theme.colors.muted,
+                marginTop: 12,
+                textAlign: 'center',
+              }]}>
+                +{unviewedLinksFromDb.length - 1} more new link{unviewedLinksFromDb.length > 2 ? 's' : ''}
+              </Text>
+            )}
+          </View>
+        </View>
       </Modal>
 
       {/* Contact Card Modal */}
