@@ -349,6 +349,7 @@ export default function HistoryScreen() {
                           switch (action) {
                             case 'accepted': return 'Accepted';
                             case 'returned': return 'Link';
+                            case 'linked': return 'Linked';
                             case 'dropped': return 'Dropped';
                             case 'declined': return 'Declined';
                             default: return 'Unknown';
@@ -356,7 +357,7 @@ export default function HistoryScreen() {
                         };
 
                         const getActionIcon = (action?: string) => {
-                          if (action === 'returned') {
+                          if (action === 'returned' || action === 'linked') {
                             return <MaterialCommunityIcons name="link-variant" size={16} color="#FF6B4A" />;
                           }
                           return null;
