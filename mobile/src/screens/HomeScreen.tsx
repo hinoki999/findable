@@ -761,41 +761,47 @@ export default function HomeScreen() {
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {
-    console.log('[HOME-DIAG] ========== ADVERTISING useEffect ==========');
-    console.log('[HOME-DIAG] isAvailable:', isAvailable);
-    console.log('[HOME-DIAG] loading:', loading);
-    console.log('[HOME-DIAG] userId:', userId ? 'present' : 'null');
-    console.log('[HOME-DIAG] isDiscoverable:', isDiscoverable, '(default: true)');
-    console.log('[HOME-DIAG] isAdvertising (current state):', isAdvertising);
-    console.log('[HOME-DIAG] startAdvertising function type:', typeof startAdvertising);
+    console.log('[GHOST-MODE] ========== isDiscoverable CHANGED ==========');
+    console.log('[GHOST-MODE] isDiscoverable:', isDiscoverable);
+    console.log('[GHOST-MODE] Mode:', isDiscoverable ? 'ACTIVE (visible)' : 'GHOST (hidden)');
+    console.log('[GHOST-MODE] isAvailable:', isAvailable);
+    console.log('[GHOST-MODE] loading:', loading);
+    console.log('[GHOST-MODE] userId:', userId ? userId.substring(0, 8) + '...' : 'null');
+    console.log('[GHOST-MODE] isAdvertising (current):', isAdvertising);
     
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!isAvailable || loading || !userId) {
-      console.log('[HOME-DIAG] ⏳ Waiting for prerequisites:', {
+      console.log('[GHOST-MODE] ⏳ Prerequisites not ready:', {
         isAvailable,
         loading,
         hasUserId: !!userId
       });
-      console.log('[HOME-DIAG] ============================================');
+      console.log('[GHOST-MODE] ===========================================');
       return;
     }
 
-    // Start advertising when isDiscoverable is true
+    // Start advertising when isDiscoverable is true (ACTIVE mode)
     if (isDiscoverable) {
-      console.log('[HOME-DIAG] ✅ All prerequisites met, calling startAdvertising() NOW');
-      console.log('[HOME-DIAG] startAdvertising function exists:', typeof startAdvertising === 'function');
+      console.log('[GHOST-MODE] ✅ ACTIVE MODE - Starting BLE advertising');
+      console.log('[GHOST-MODE] DeviceId to broadcast:', userId ? `DL-${userId.substring(0, 8)}` : 'unknown');
+      console.log('[GHOST-MODE] Calling startAdvertising()...');
       startAdvertising();
-      console.log('[HOME-DIAG] startAdvertising() call completed');
+      console.log('[GHOST-MODE] startAdvertising() call dispatched');
     } else {
-      // Stop advertising when isDiscoverable is false
-      console.log('[HOME-DIAG] Discoverable toggle OFF, stopping advertising');
+      // Stop advertising when isDiscoverable is false (GHOST mode)
+      console.log('[GHOST-MODE] 👻 GHOST MODE - Stopping BLE advertising');
+      console.log('[GHOST-MODE] User will be invisible to nearby devices');
+      console.log('[GHOST-MODE] Calling stopAdvertising()...');
       stopAdvertising();
+      console.log('[GHOST-MODE] stopAdvertising() call dispatched');
     }
-    console.log('[HOME-DIAG] ============================================');
+    console.log('[GHOST-MODE] ===========================================');
     
     return () => {
       // Stop advertising when HomeScreen unmounts
+      console.log('[GHOST-MODE] HomeScreen unmounting, cleaning up advertising');
       if (isDiscoverable) {
+        console.log('[GHOST-MODE] Stopping advertising on unmount');
         stopAdvertising();
       }
     };
@@ -1576,21 +1582,32 @@ export default function HomeScreen() {
   // Handle toggle button press
   const handleTogglePress = () => {
     const newState = !isDiscoverable;
+    console.log('[GHOST-MODE] ========== TOGGLE PRESSED ==========');
+    console.log('[GHOST-MODE] Current isDiscoverable:', isDiscoverable);
+    console.log('[GHOST-MODE] Requested new state:', newState);
+    console.log('[GHOST-MODE] Showing confirmation modal...');
     setPendingDiscoverableState(newState);
     setShowToggleConfirmModal(true);
   };
 
   // Confirm toggle change
   const confirmToggleChange = () => {
+    console.log('[GHOST-MODE] ========== TOGGLE CONFIRMED ==========');
+    console.log('[GHOST-MODE] pendingDiscoverableState:', pendingDiscoverableState);
     if (pendingDiscoverableState !== null) {
+      console.log('[GHOST-MODE] Setting isDiscoverable to:', pendingDiscoverableState);
+      console.log('[GHOST-MODE] This will trigger useEffect to', pendingDiscoverableState ? 'START' : 'STOP', 'advertising');
       setIsDiscoverable(pendingDiscoverableState);
     }
     setShowToggleConfirmModal(false);
     setPendingDiscoverableState(null);
+    console.log('[GHOST-MODE] Modal closed, state update dispatched');
+    console.log('[GHOST-MODE] =====================================');
   };
 
   // Cancel toggle change
   const cancelToggleChange = () => {
+    console.log('[GHOST-MODE] Toggle cancelled by user');
     setShowToggleConfirmModal(false);
     setPendingDiscoverableState(null);
   };

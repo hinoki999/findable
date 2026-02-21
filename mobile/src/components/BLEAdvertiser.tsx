@@ -216,11 +216,11 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
 
   // Start advertising
   const startAdvertising = useCallback(async () => {
-    console.log('[BLE-ADV-DIAG] ========== startAdvertising CALLED ==========');
-    console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
-    console.log('[BLE-ADV-DIAG] isAdvertising (current):', isAdvertising);
-    console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
-    console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
+    console.log('[GHOST-MODE] ========== startAdvertising() CALLED ==========');
+    console.log('[GHOST-MODE] Platform:', Platform.OS);
+    console.log('[GHOST-MODE] isAvailable:', isAvailable);
+    console.log('[GHOST-MODE] isAdvertising (already?):', isAdvertising);
+    console.log('[GHOST-MODE] UserId:', userId ? userId.substring(0, 8) + '...' : 'null');
     
     if (!isAvailable) {
       console.error('[BLE-ADV-DIAG] ❌ Advertising not available (not Android or disabled)');
@@ -287,43 +287,51 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         return; // Exit gracefully without crashing
       }
       
-      console.log('[BLE-ADV-DIAG] Step 4: Advertising started successfully');
+      console.log('[GHOST-MODE] ✅ SUCCESS: Native module returned success');
       setIsAdvertising(true);
       setError(null);
-      console.log('[BLE-ADV-DIAG] ✅ State set to isAdvertising=true');
-      console.log('[BLE-ADV-DIAG] ✅ Advertising started successfully');
-      console.log('[BLE-ADV-DIAG] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
-      console.log('[BLE-ADV-DIAG] ✅ Broadcasting as:', currentLocalName);
-      console.log('[BLE-ADV-DIAG] ✅ RESULT: SUCCESS - Advertising is now ACTIVE');
-      console.log('[BLE-ADV-DIAG] ============================================');
+      console.log('[GHOST-MODE] ✅ Broadcasting as:', currentLocalName);
+      console.log('[GHOST-MODE] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[GHOST-MODE] ✅ RESULT: Advertising is NOW ACTIVE');
+      console.log('[GHOST-MODE] ✅ You are now VISIBLE to nearby devices');
+      console.log('[GHOST-MODE] ============================================');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start advertising';
-      console.error('[BLE-ADV-DIAG] ❌ ERROR in startAdvertising:', errorMessage);
-      console.error('[BLE-ADV-DIAG] Error details:', err);
-      console.error('[BLE-ADV-DIAG] ❌ RESULT: FAILED - Advertising did not start');
+      console.error('[GHOST-MODE] ❌ FAILED: startAdvertising error:', errorMessage);
+      console.error('[GHOST-MODE] ❌ Error details:', err);
+      console.error('[GHOST-MODE] ❌ RESULT: Advertising did NOT start');
       setError(errorMessage);
       setIsAdvertising(false);
       setBroadcastName(null);
-      console.log('[BLE-ADV-DIAG] ============================================');
+      console.log('[GHOST-MODE] ============================================');
     }
   }, [isAvailable, isAdvertising, requestPermissions, userId]); // Removed deviceId - we calculate it from userId
 
   // Stop advertising
   const stopAdvertising = useCallback(async () => {
+    console.log('[GHOST-MODE] ========== stopAdvertising() CALLED ==========');
+    console.log('[GHOST-MODE] isAvailable:', isAvailable);
+    console.log('[GHOST-MODE] isAdvertising:', isAdvertising);
+    
     if (!isAvailable || !isAdvertising) {
+      console.log('[GHOST-MODE] Skip: Not available or not currently advertising');
+      console.log('[GHOST-MODE] ============================================');
       return;
     }
 
     try {
-      // Stop advertising using native module
+      console.log('[GHOST-MODE] Calling native stopAdvertising()...');
       await BLEAdvertiserNative.stopAdvertising();
       setIsAdvertising(false);
       setBroadcastName(null);
       setError(null);
-      console.log('[BLEAdvertiser] Advertising stopped');
+      console.log('[GHOST-MODE] ✅ SUCCESS: Advertising stopped');
+      console.log('[GHOST-MODE] ✅ You are now INVISIBLE (Ghost Mode)');
+      console.log('[GHOST-MODE] ============================================');
     } catch (err) {
-      console.error('[BLEAdvertiser] Error stopping advertising:', err);
+      console.error('[GHOST-MODE] ❌ FAILED: stopAdvertising error:', err);
       setError('Failed to stop advertising');
+      console.log('[GHOST-MODE] ============================================');
     }
   }, [isAvailable, isAdvertising]);
 
