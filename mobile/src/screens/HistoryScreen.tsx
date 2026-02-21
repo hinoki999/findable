@@ -396,7 +396,10 @@ export default function HistoryScreen() {
                   
                   {/* Name & Status */}
                   <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || item.senderUsername || 'User'}</Text>
+                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || 'User'}</Text>
+                    {item.senderUsername && (
+                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>@{item.senderUsername}</Text>
+                    )}
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
                       {getActionIcon(item.status)}
                       <Text style={[theme.type.muted, { fontSize: 11, marginLeft: 4 }]}>
