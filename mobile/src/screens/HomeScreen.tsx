@@ -1635,7 +1635,7 @@ export default function HomeScreen() {
                 
                 for (let seg = 0; seg <= segmentsPerLine; seg++) {
                   const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
-                  const y = t * viewableHeight * 0.6;
+                  const y = t * viewableHeight * 1.2;
                   const p = projectToSphere(offset, y);
                   const screenX = svgOffsetX + nucleusX + p.x;
                   const screenY = svgOffsetY + nucleusY + p.y;
