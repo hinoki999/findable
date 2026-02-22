@@ -65,6 +65,8 @@ class BLEScannerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        
         Log.d(TAG, "onStartCommand: ${intent?.action}")
         
         when (intent?.action) {
@@ -77,10 +79,7 @@ class BLEScannerService : Service() {
             }
         }
         
-        // Show foreground notification
-        startForeground(NOTIFICATION_ID, createNotification())
-        
-        return START_STICKY // Restart if killed
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

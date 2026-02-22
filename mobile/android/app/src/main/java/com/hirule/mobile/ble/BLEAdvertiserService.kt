@@ -57,6 +57,8 @@ class BLEAdvertiserService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        
         Log.d(TAG, "onStartCommand: ${intent?.action}")
         
         when (intent?.action) {
@@ -77,8 +79,6 @@ class BLEAdvertiserService : Service() {
                 return START_NOT_STICKY
             }
         }
-        
-        startForeground(NOTIFICATION_ID, createNotification())
         
         return START_STICKY
     }
