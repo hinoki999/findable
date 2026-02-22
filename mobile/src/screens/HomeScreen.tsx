@@ -1611,11 +1611,17 @@ export default function HomeScreen() {
             };
           };
           
+          // Extended SVG canvas to cover zoom-out and rotation
+          const svgWidth = screenWidth * 1.5;
+          const svgHeight = viewableHeight * 1.5;
+          const svgOffsetX = (svgWidth - screenWidth) / 2;
+          const svgOffsetY = (svgHeight - viewableHeight) / 2;
+          
           return (
             <Svg
-              width={screenWidth}
-              height={viewableHeight}
-              style={{ position: 'absolute', top: 0, left: 0 }}
+              width={svgWidth}
+              height={svgHeight}
+              style={{ position: 'absolute', top: -svgOffsetY, left: -svgOffsetX }}
               pointerEvents="none"
             >
               {/* Vertical lines curved by spherical projection - 1 Path per line */}
@@ -1630,8 +1636,8 @@ export default function HomeScreen() {
                   const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
                   const y = t * viewableHeight * 0.6;
                   const p = projectToSphere(offset, y);
-                  const screenX = nucleusX + p.x;
-                  const screenY = nucleusY + p.y;
+                  const screenX = svgOffsetX + nucleusX + p.x;
+                  const screenY = svgOffsetY + nucleusY + p.y;
                   totalDepth += p.depth;
                   
                   if (seg === 0) {
@@ -1671,8 +1677,8 @@ export default function HomeScreen() {
                   const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
                   const x = t * screenWidth * 1.2;
                   const p = projectToSphere(x, offset);
-                  const screenX = nucleusX + p.x;
-                  const screenY = nucleusY + p.y;
+                  const screenX = svgOffsetX + nucleusX + p.x;
+                  const screenY = svgOffsetY + nucleusY + p.y;
                   totalDepth += p.depth;
                   
                   if (seg === 0) {
