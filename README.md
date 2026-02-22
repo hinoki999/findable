@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 18, 2026 (BLE Native Module Recreated + Drops Migration + Contact Card Modals)
+**Last Updated:** February 20, 2026 (Android Background BLE Scanning + Mutual Link System + Two-Row Drops)
 
 ---
 
@@ -12,12 +12,15 @@
 
 **Core Features:**
 - Real-time proximity detection via BLE (DropLink users only)
+- Background BLE scanning on Android (Foreground Service)
 - Profile creation with photos and contact info
-- Accept/decline connection requests
+- Accept/decline connection requests ("drops")
+- Mutual link notifications ("New Link!" modal)
 - Contact history and pinned favorites
 - Privacy zones to disable scanning in specific locations
 - Radar view showing nearby DropLink users as blips
-- Link markers for accepted/returned connections
+- Link markers for mutual connections (`linked` status)
+- Ghost mode toggle to disable advertising
 - Tutorial system for first-time users (per-screen tracking)
 
 **Tech Stack:**
@@ -39,9 +42,20 @@ droplin/
 │   ├── src/
 │   │   ├── screens/     # App screens (Home, Drop, Account, History)
 │   │   ├── contexts/    # React contexts (AuthContext, TutorialContext)
-│   │   ├── services/    # api.ts (930 lines), supabase.ts, storage.ts, BLE
-│   │   ├── components/  # TopBar, TutorialOverlay
+│   │   ├── services/    # api.ts (1000+ lines), supabase.ts, storage.ts, BLE
+│   │   ├── components/  # TopBar, TutorialOverlay, BLEAdvertiser, BLEScanner
+│   │   ├── native/      # TypeScript bridges for native modules
+│   │   │   ├── BLEAdvertiserNative.ts  # Advertising bridge
+│   │   │   └── BLEScannerModule.ts     # Background scanning bridge
 │   │   └── theme.ts     # Theme/styling
+│   ├── android/app/src/main/java/com/hirule/mobile/
+│   │   ├── MainApplication.kt          # App entry, registers native packages
+│   │   └── ble/                         # BLE native modules
+│   │       ├── BLEAdvertiserNative.kt  # Advertising native module
+│   │       ├── BLEAdvertiserPackage.kt # Advertiser package registration
+│   │       ├── BLEScannerService.kt    # Background scanning foreground service
+│   │       ├── BLEScannerModule.kt     # Scanner React Native bridge
+│   │       └── BLEScannerPackage.kt    # Scanner package registration
 │   ├── App.tsx          # Root component (932 lines)
 │   ├── eas.json         # EAS build config (APK output)
 │   └── package.json
@@ -2982,10 +2996,11 @@ Complete overhaul of the drops (contact sharing) functionality. Migrated from us
 | `id` | UUID | Primary key |
 | `sender_id` | UUID | User who sent the drop (FK to auth.users) |
 | `receiver_id` | UUID | User receiving the drop (FK to auth.users) |
-| `status` | TEXT | 'pending', 'accepted', 'returned', 'declined' |
+| `status` | TEXT | 'sent', 'received', 'accepted', 'declined', 'deleted', 'linked' |
 | `created_at` | TIMESTAMP | When drop was sent |
 | `responded_at` | TIMESTAMP | When drop was accepted/declined |
 | `distance_feet` | REAL | Distance between users when drop was sent |
+| `link_viewed_at` | TIMESTAMP | When mutual link notification was viewed (nullable) |
 | `sender_name` | TEXT | Sender's display name |
 | `sender_username` | TEXT | Sender's @username |
 | `sender_email` | TEXT | Sender's email (if shared) |
@@ -2998,12 +3013,15 @@ Complete overhaul of the drops (contact sharing) functionality. Migrated from us
 
 | Function | Purpose |
 |----------|---------|
-| `sendDrop(receiverId, senderProfile, distanceFeet)` | Send a drop with all profile fields |
-| `getIncomingDrops()` | Get pending drops for current user |
-| `getLinkedDrops()` | Get 'returned' drops (mutual links) for History |
-| `updateDropStatus(dropId, status, responseProfile?)` | Accept/return/decline a drop |
+| `sendDrop(receiverId, senderProfile, distanceFeet)` | Send a drop (creates 2 rows: sent + received) |
+| `getIncomingDrops()` | Get drops with `status='received'` for current user |
+| `getSentDrops()` | Get drops with `status='sent'` for current user |
+| `getLinkedDrops()` | Get drops with `status='linked'` (mutual links) for History |
+| `getUnviewedLinks()` | Get `linked` drops where `link_viewed_at IS NULL` |
+| `markLinkViewed(dropId)` | Set `link_viewed_at = NOW()` for a drop |
+| `updateDropStatus(dropId, status, responseProfile?)` | Accept/return/decline (updates BOTH sender + receiver rows) |
 | `getDrop(dropId)` | Get a specific drop by ID |
-| `deleteDrop(dropId)` | Delete a drop |
+| `deleteDrop(dropId)` | Soft delete a drop (`status='deleted'`) |
 
 **Drop Interface:**
 ```typescript
@@ -3011,10 +3029,11 @@ interface Drop {
   id: string;
   senderId: string;
   receiverId: string;
-  status: 'pending' | 'accepted' | 'returned' | 'declined';
+  status: 'sent' | 'received' | 'accepted' | 'declined' | 'deleted' | 'linked';
   createdAt: Date;
   respondedAt?: Date;
   distanceFeet?: number;
+  linkViewedAt?: Date;  // When mutual link notification was viewed
   senderName?: string;
   senderUsername?: string;
   senderEmail?: string;
@@ -3024,6 +3043,16 @@ interface Drop {
   senderSocialMedia?: Array<{ platform: string; handle: string }>;
 }
 ```
+
+**Status Values:**
+| Status | Description |
+|--------|-------------|
+| `sent` | Sender's record - outgoing drop sent, awaiting response |
+| `received` | Receiver's record - incoming drop received, awaiting action |
+| `accepted` | Drop accepted by receiver (one-way) |
+| `declined` | Drop declined by receiver |
+| `deleted` | Soft-deleted drop |
+| `linked` | Mutual link established (both parties returned drops) |
 
 ### 3. Drop Flow Logic
 
@@ -3169,6 +3198,422 @@ interface BLEAdvertiserNativeInterface {
 ```
 
 **Stub Fallback:** If native module is unavailable (e.g., iOS), returns safe stub that logs warnings and returns `success: false`.
+
+---
+
+## Android Background BLE Scanning Service (February 20, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Native Android Foreground Service for continuous BLE scanning even when app is backgrounded
+
+### Overview
+
+Implemented a native Android Foreground Service that enables continuous BLE scanning for DropLink devices (`DL-*` prefix) even when the app is in the background or closed. This allows the app to detect nearby users at all times, not just when on the HomeScreen.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    React Native Layer                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEScannerModule.ts (TypeScript Bridge)                │   │
+│  │  - startBackgroundScan() / stopBackgroundScan()         │   │
+│  │  - getBackgroundDevices()                               │   │
+│  │  - onBackgroundDeviceFound(callback)                    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              ↕                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                    Native Android Layer                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEScannerModule.kt (React Native Bridge)              │   │
+│  │  - Exposes methods to JavaScript                        │   │
+│  │  - Listens for broadcast events from service            │   │
+│  │  - Emits events to React Native                         │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              ↕                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEScannerService.kt (Foreground Service)              │   │
+│  │  - Runs with persistent notification                    │   │
+│  │  - Scans for DL-* devices continuously                  │   │
+│  │  - Persists detected devices to SharedPreferences       │   │
+│  │  - Broadcasts device found events                       │   │
+│  │  - Auto-cleans stale devices (30s timeout)              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEScannerService.kt` | Android Foreground Service (~280 lines) |
+| `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEScannerModule.kt` | React Native bridge module (~200 lines) |
+| `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEScannerPackage.kt` | Package registration |
+| `mobile/src/native/BLEScannerModule.ts` | TypeScript bridge interface (~160 lines) |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `mobile/android/app/src/main/AndroidManifest.xml` | Added `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_CONNECTED_DEVICE`, `POST_NOTIFICATIONS` permissions + `<service>` declaration |
+| `mobile/android/app/src/main/java/com/hirule/mobile/MainApplication.kt` | Added `BLEScannerPackage()` registration |
+
+### Key Features
+
+**Foreground Service (`BLEScannerService.kt`):**
+- `START_STICKY` - automatically restarts if killed by system
+- Persistent notification: "DropLink Active - X DropLink users nearby"
+- Scans only for `DL-*` prefixed devices (DropLink users)
+- 30-second device timeout - removes stale devices automatically
+- Persists detected devices to `SharedPreferences` for recovery
+- Broadcasts device found events via `Intent`
+
+**React Native Bridge (`BLEScannerModule.kt`):**
+- `startBackgroundScan()` / `stopBackgroundScan()` - Control service
+- `isServiceRunning()` - Check service status
+- `getDetectedDevices()` - Retrieve persisted devices
+- `clearDetectedDevices()` - Clear device storage
+- Listens for broadcast events and emits to JavaScript
+
+**TypeScript Interface (`BLEScannerModule.ts`):**
+```typescript
+import { 
+  startBackgroundScan, 
+  stopBackgroundScan,
+  getBackgroundDevices,
+  onBackgroundDeviceFound,
+  isBackgroundScanAvailable
+} from '../native/BLEScannerModule';
+
+// Start scanning (shows persistent notification on Android)
+await startBackgroundScan();
+
+// Get detected devices (persists even when app closed)
+const devices = await getBackgroundDevices();
+// Returns: BackgroundBLEDevice[] with id, name, rssi, distanceFeet, lastSeen
+
+// Subscribe to real-time device detection
+const unsubscribe = onBackgroundDeviceFound((device) => {
+  console.log('Found:', device.name, device.distanceFeet, 'ft');
+});
+
+// Stop scanning
+await stopBackgroundScan();
+```
+
+### Android Manifest Additions
+
+```xml
+<!-- New Permissions -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+<!-- Service Declaration -->
+<service
+  android:name=".ble.BLEScannerService"
+  android:enabled="true"
+  android:exported="false"
+  android:foregroundServiceType="connectedDevice"/>
+```
+
+### Device Detection Flow
+
+1. Service starts with `ACTION_START_SCAN` intent
+2. Creates notification channel and shows foreground notification
+3. Starts BLE scan with `SCAN_MODE_LOW_LATENCY`
+4. For each scan result:
+   - Check if device name starts with `DL-`
+   - Calculate distance from RSSI
+   - Store in `detectedDevices` map
+   - Persist to `SharedPreferences`
+   - Broadcast `ACTION_DEVICE_FOUND` intent
+5. Every 5 seconds, cleanup devices not seen for 30+ seconds
+6. Update notification with current device count
+
+### Distance Calculation
+
+```kotlin
+private fun calculateDistanceFeet(rssi: Int): Float {
+    val measuredPower = -59  // RSSI at 1 meter
+    val distanceMeters = 10.0.pow((measuredPower - rssi) / (10.0 * 2.0))
+    return (distanceMeters * 3.28084).toFloat()  // Convert to feet
+}
+```
+
+---
+
+## Mutual Link Notification System (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** New `linked` status for mutual connections + "New Link!" notification modal
+
+### Overview
+
+When two users both "return" drops to each other, they form a mutual link. This feature adds:
+1. New `linked` status for mutual connections
+2. Real-time "New Link!" notification modal on HomeScreen
+3. Tracking of which links have been viewed
+
+### New Status: `linked`
+
+When a user returns a drop and the original sender had ALSO returned a drop to them, BOTH drops are updated to `status = 'linked'`. This replaces the previous `returned` status for mutual connections.
+
+**Flow:**
+```
+User A sends drop to User B → A has 'sent', B has 'received'
+User B returns drop to A → B's drop becomes 'accepted', A gets reverse drop with 'received'
+User A returns drop to B → BOTH users' drops become 'linked'
+```
+
+### New API Functions (api.ts)
+
+| Function | Purpose |
+|----------|---------|
+| `getUnviewedLinks()` | Get drops where `status='linked'` AND `link_viewed_at IS NULL` |
+| `markLinkViewed(dropId)` | Set `link_viewed_at = NOW()` for a drop |
+| `getLinkedDrops()` | Get all drops with `status='linked'` (for History screen) |
+
+### HomeScreen Integration
+
+**New State Variables:**
+```typescript
+const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Drop[]>([]);
+const [showNewLinkModal, setShowNewLinkModal] = useState(false);
+const [currentNewLink, setCurrentNewLink] = useState<Drop | null>(null);
+```
+
+**Polling:** Every 5 seconds, fetches `getUnviewedLinks()` to check for new mutual links
+
+**Modal Trigger:** When `unviewedLinksFromDb` changes and has items, shows "New Link!" modal
+
+**Modal Display:**
+```
+┌─────────────────────────────────┐
+│         🔗 New Link!            │
+│                                 │
+│  You and [Name] are now linked! │
+│  @username                      │
+│                                 │
+│        [View in History]        │
+└─────────────────────────────────┘
+```
+
+**Dismiss Handler:** Calls `markLinkViewed()` then removes from `unviewedLinksFromDb`
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `mobile/src/services/api.ts` | Added `getUnviewedLinks()`, `markLinkViewed()`, updated `Drop` interface with `linkViewedAt` |
+| `mobile/src/screens/HomeScreen.tsx` | Added polling, modal state, "New Link!" modal UI |
+| `mobile/src/screens/HistoryScreen.tsx` | Updated `getActionText()` and `getActionIcon()` to handle `linked` status |
+
+---
+
+## Two-Row Drop Creation (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Create both sender and receiver drop records simultaneously
+
+### Overview
+
+Previously, `sendDrop()` only created ONE row in the database (for the receiver). This meant senders had no record of drops they sent. Now, sending a drop creates TWO rows:
+
+1. **Sender's row:** `status = 'sent'` - The sender's outgoing record
+2. **Receiver's row:** `status = 'received'` - The receiver's incoming record
+
+### sendDrop() Changes
+
+**Before:**
+```typescript
+// Created 1 row with status='pending' for receiver
+const { data } = await supabase.from('drops').insert({
+  sender_id: session.user.id,
+  receiver_id: receiverId,
+  status: 'pending',
+  // ... sender profile fields
+}).select().single();
+```
+
+**After:**
+```typescript
+// Create 2 rows simultaneously
+const { data } = await supabase.from('drops').insert([
+  {
+    sender_id: session.user.id,
+    receiver_id: receiverId,
+    status: 'sent',  // Sender's record
+    // ... sender profile fields
+  },
+  {
+    sender_id: session.user.id,
+    receiver_id: receiverId,
+    status: 'received',  // Receiver's record
+    // ... sender profile fields
+  }
+]).select();
+
+// Returns the 'received' drop for backward compatibility
+```
+
+### updateDropStatus() Changes
+
+When the receiver responds to a drop, BOTH rows must be updated:
+
+```typescript
+// 1. Update receiver's drop (the one they're viewing)
+await supabase.from('drops').update({ status }).eq('id', dropId);
+
+// 2. Find and update sender's corresponding 'sent' drop
+const { data: senderDrop } = await supabase.from('drops')
+  .select('id')
+  .eq('sender_id', receiverDrop.sender_id)
+  .eq('receiver_id', receiverDrop.receiver_id)
+  .eq('status', 'sent')
+  .single();
+
+if (senderDrop) {
+  await supabase.from('drops').update({ status }).eq('id', senderDrop.id);
+}
+```
+
+### New API Function
+
+| Function | Purpose |
+|----------|---------|
+| `getSentDrops()` | Get drops where `sender_id = current_user` AND `status = 'sent'` |
+
+---
+
+## Status Renaming: 'pending' → 'received' (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Global replacement of 'pending' status with 'received'
+
+### Rationale
+
+The term 'pending' was ambiguous - it could mean "waiting to be sent" or "waiting for response". The new status `received` is clearer: it indicates the receiver has received the drop and needs to take action.
+
+### Changes Made
+
+| Location | Change |
+|----------|--------|
+| `api.ts` - `Drop` interface | `status` enum: `'pending'` → `'received'` |
+| `api.ts` - `sendDrop()` | Insert with `status: 'received'` |
+| `api.ts` - `getIncomingDrops()` | Query for `status = 'received'` |
+| `api.ts` - `updateDropStatus()` | Comments updated |
+| `HistoryScreen.tsx` - `getActionText()` | `case 'received': return 'Received';` |
+
+### Final Status Values
+
+| Status | Description |
+|--------|-------------|
+| `sent` | Sender's outgoing record |
+| `received` | Receiver's incoming record (replaces 'pending') |
+| `accepted` | One-way acceptance |
+| `declined` | Drop declined |
+| `deleted` | Soft-deleted |
+| `linked` | Mutual link established |
+
+---
+
+## HistoryScreen Username Display Fix (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Issue:** Username showing "Unknown" or status text instead of actual @username
+
+### Problem
+
+The HistoryScreen contact rows were displaying incorrect data:
+1. "Unknown" appeared because `getActionText()` didn't handle `linked` status
+2. Status text "Linked" appeared where username should be
+
+### Solution
+
+**1. Added `linked` status handling:**
+```typescript
+const getActionText = (action: string): string => {
+  switch(action) {
+    case 'sent': return 'Sent';
+    case 'received': return 'Received';
+    case 'accepted': return 'Accepted';
+    case 'declined': return 'Declined';
+    case 'linked': return 'Linked';  // NEW
+    default: return 'Unknown';
+  }
+};
+
+const getActionIcon = (action: string) => {
+  if (action === 'linked' || action === 'returned') {
+    return <MaterialCommunityIcons name="link-variant" size={16} />;
+  }
+  // ...
+};
+```
+
+**2. Fixed username display structure:**
+```tsx
+// Name field (primary)
+<Text style={theme.type.body}>
+  {item.senderName || 'User'}
+</Text>
+
+// Username field (secondary) - NEW DEDICATED COMPONENT
+{item.senderUsername && (
+  <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>
+    @{item.senderUsername}
+  </Text>
+)}
+```
+
+---
+
+## Ghost Mode Toggle Logging (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Comprehensive logging for BLE advertising ghost mode functionality
+
+### Overview
+
+Added detailed `[GHOST-MODE]` prefixed logging throughout the ghost mode toggle flow to aid debugging and provide visibility into BLE advertising state changes.
+
+### Logged Events
+
+**HomeScreen.tsx:**
+- `handleTogglePress()` - Toggle interaction started
+- `confirmToggleChange()` - User confirmed mode change
+- `cancelToggleChange()` - User cancelled mode change
+- `useEffect` advertising control - `startAdvertising()` / `stopAdvertising()` calls
+
+**BLEAdvertiser.tsx:**
+- `startAdvertising()` entry, prerequisites check, native module call, success/failure
+- `stopAdvertising()` entry, skip conditions, native module call, success/failure
+
+### Log Format
+
+```
+[GHOST-MODE] handleTogglePress - newValue: false, showingModal: true
+[GHOST-MODE] confirmToggleChange - confirming change to: false
+[GHOST-MODE] useEffect - isDiscoverable changed to: false, userId: abc123
+[GHOST-MODE] startAdvertising - calling native module with deviceId: abc123
+[GHOST-MODE] startAdvertising - SUCCESS: broadcasting as DL-abc123
+```
+
+---
+
+## Security Settings Cleanup (February 19, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Removed "Force Update" button from SecuritySettingsScreen
+
+### Changes
+
+| Item | Action |
+|------|--------|
+| `import * as Updates from 'expo-updates'` | Removed |
+| `handleForceUpdate()` async function (32 lines) | Removed |
+| "Force Update Now" button JSX (18 lines) | Removed |
 
 ---
 
@@ -3715,9 +4160,15 @@ interface BleDevice {
 
 **Location:** `mobile/android/app/src/main/AndroidManifest.xml`
 
+**BLE Permissions:**
 - Android 12+: `BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`
 - Android 6-11: `ACCESS_FINE_LOCATION`, `BLUETOOTH`, `BLUETOOTH_ADMIN`
 - Feature: `<uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />`
+
+**Background Scanning Permissions (Added Feb 20, 2026):**
+- `FOREGROUND_SERVICE` - Required for foreground service
+- `FOREGROUND_SERVICE_CONNECTED_DEVICE` - Required for BLE in Android 14+
+- `POST_NOTIFICATIONS` - Required for persistent notification in Android 13+
 
 ### Testing & Debugging
 
@@ -3732,6 +4183,10 @@ interface BleDevice {
 - `[BLE-ADV-DIAG]` - General diagnostics
 - `[AUTH-CONTEXT-TRACE]` - Auth state
 - `[BLEScanner]` - Scanner detection
+- `[GHOST-MODE]` - Ghost mode toggle and advertising state changes
+- `[BG-SCAN]` - Background BLE scanning service (TypeScript)
+- `BLEScannerService` - Background scanning (Android native logcat)
+- `BLEScannerModule` - React Native bridge (Android native logcat)
 
 ### Known Issues & Solutions
 
@@ -3802,6 +4257,22 @@ interface BleDevice {
 13. **iOS background limitations** - Advertising pauses in background, must be controlled by app state, not auto-resume
 14. **Bluetooth state monitoring prevents silent failures** - Always listen for Bluetooth disabled events
 
+### Lessons Learned (Android Native Modules)
+1. **Foreground Services require START_STICKY** - Ensures service restarts if killed by system
+2. **Android 14+ requires FOREGROUND_SERVICE_CONNECTED_DEVICE** - New permission for BLE foreground services
+3. **SharedPreferences for persistence** - Native services can't directly access React Native state
+4. **Broadcast intents for service-to-module communication** - Use LocalBroadcastManager or explicit broadcasts
+5. **NativeEventEmitter for real-time events** - Bridge broadcasts to JavaScript event listeners
+6. **LifecycleEventListener for cleanup** - Unregister receivers when React Native host is destroyed
+7. **Two-row database patterns simplify queries** - Sender + receiver records enable filtering by perspective
+
+### Lessons Learned (Drops System)
+1. **Dual records for bidirectional tracking** - Create both sender and receiver rows simultaneously
+2. **Status values should be unambiguous** - 'received' is clearer than 'pending'
+3. **Separate viewed tracking from status** - Use `link_viewed_at` timestamp, not a separate status
+4. **Polling for notifications** - Simple and reliable for non-critical real-time features
+5. **Modal queuing** - Process notification modals one at a time to avoid UI conflicts
+
 ### Feature Requests / TODOs
 - [x] ~~Fix gray screen crash after signup/login~~ (RESOLVED Feb 14, 2026 - BLEAdvertiserNative stub + DB cleanup)
 - [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
@@ -3810,12 +4281,21 @@ interface BleDevice {
 - [x] ~~Migrate drops to dedicated table~~ (RESOLVED Feb 18, 2026 - `drops` table with sender contact fields)
 - [x] ~~Enhance incoming drop modal~~ (RESOLVED Feb 18, 2026 - Full contact card display)
 - [x] ~~Optimize BLE scanner queries~~ (RESOLVED Feb 18, 2026 - Server-side filtering + caching)
+- [x] ~~Implement background BLE scanning~~ (RESOLVED Feb 20, 2026 - Android Foreground Service with native module)
+- [x] ~~Add mutual link notifications~~ (RESOLVED Feb 19, 2026 - 'linked' status + "New Link!" modal)
+- [x] ~~Two-row drop creation~~ (RESOLVED Feb 19, 2026 - Sender + receiver records created simultaneously)
+- [x] ~~Rename 'pending' to 'received'~~ (RESOLVED Feb 19, 2026 - Clearer status naming)
+- [x] ~~Fix HistoryScreen username display~~ (RESOLVED Feb 19, 2026 - Dedicated username component)
+- [x] ~~Add ghost mode logging~~ (RESOLVED Feb 19, 2026 - Comprehensive [GHOST-MODE] prefixed logs)
+- [x] ~~Remove Force Update button~~ (RESOLVED Feb 19, 2026 - Cleaned up SecuritySettingsScreen)
+- [x] ~~Investigate radar blip visibility~~ (RESOLVED - BLE scanning overhaul December 2024)
 - [ ] Complete phone verification feature (HomeScreen banner + drop blocking logic)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
 - [ ] Update all tests for Supabase endpoints
-- [x] ~~Investigate radar blip visibility~~ (RESOLVED - BLE scanning overhaul December 2024)
 - [ ] Grid performance optimization (memoization)
 - [ ] Complete Railway backend deprecation
 - [ ] Add Supabase RLS policy documentation
 - [ ] Deprecate old `devices` table (drops now use `drops` table)
+- [ ] Integrate background scanner with HomeScreen radar (merge foreground + background devices)
+- [ ] iOS background scanning implementation (when iOS native module needed)
