@@ -213,6 +213,9 @@ function MainApp() {
 
   // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
   const hasCachedProfileRef = useRef(false);
+  
+  // Track whether background scan was started (to avoid stopping when never started)
+  const scanStartedRef = useRef(false);
 
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
@@ -381,12 +384,12 @@ function MainApp() {
     if (authLoading) return;
     
     if (isAuthenticated && userId) {
-      console.log('[BG-SCAN] Starting background scan after auth');
+      scanStartedRef.current = true;
       startBackgroundScan()
         .then(() => console.log('[BG-SCAN] Background scan started'))
         .catch(err => console.error('[BG-SCAN] Failed to start:', err));
-    } else {
-      console.log('[BG-SCAN] Stopping background scan (logged out)');
+    } else if (scanStartedRef.current) {
+      scanStartedRef.current = false;
       stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
     }
   }, [isAuthenticated, userId, authLoading]);
