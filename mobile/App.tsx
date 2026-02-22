@@ -23,6 +23,7 @@ import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
 import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
+import usePushNotifications from './src/hooks/usePushNotifications';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -163,6 +164,8 @@ const AUTH_BYPASS_ENABLED = false;
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
+  
+  usePushNotifications(isAuthenticated && !authLoading ? userId : null);
 
   const [fontsReady] = useFonts({
     Inter_300Light,
