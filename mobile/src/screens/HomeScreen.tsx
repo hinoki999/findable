@@ -1539,7 +1539,7 @@ export default function HomeScreen() {
       
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
-        style={{ flex: 1 }}
+        style={{ flex: 1, overflow: 'visible' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -1552,6 +1552,7 @@ export default function HomeScreen() {
         width: screenWidth,
         height: viewableHeight,
         zIndex: 0,
+        overflow: 'visible',
             // Native RN transformOrigin - rotate/zoom around raindrop icon (array syntax)
             transformOrigin: [nucleusX, nucleusY],
             transform: [
