@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
@@ -1576,7 +1577,7 @@ export default function HomeScreen() {
           const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
           const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
           const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
-          const segmentsPerLine = 20; // Fewer segments = better performance
+          const segmentsPerLine = 20; // Segments per line for curve smoothness
           
           // Helper: Cubed Sphere Projection - (x, y, 1) / √(x² + y² + 1)
           // Optimized for 33 ft visible range with dramatic curvature
@@ -1610,113 +1611,94 @@ export default function HomeScreen() {
           };
           
           return (
-            <>
-              {/* Vertical lines curved by spherical projection - 1 ft spacing */}
+            <Svg
+              width={screenWidth}
+              height={viewableHeight}
+              style={{ position: 'absolute', top: 0, left: 0 }}
+              pointerEvents="none"
+            >
+              {/* Vertical lines curved by spherical projection - 1 Path per line */}
               {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET; // 1 foot intervals
+                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
                 
-                return Array.from({ length: segmentsPerLine }, (_, seg) => {
-                  const t1 = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
-                  const t2 = ((seg + 1) / segmentsPerLine) * 2 - 1;
+                // Build SVG path string with all segment points
+                let pathData = '';
+                let totalDepth = 0;
+                
+                for (let seg = 0; seg <= segmentsPerLine; seg++) {
+                  const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
+                  const y = t * viewableHeight * 0.6;
+                  const p = projectToSphere(offset, y);
+                  const screenX = nucleusX + p.x;
+                  const screenY = nucleusY + p.y;
+                  totalDepth += p.depth;
                   
-                  // Extend lines to full screen height for complete background coverage
-                  const y1 = t1 * viewableHeight * 0.6;
-                  const y2 = t2 * viewableHeight * 0.6;
-                  
-                  // Apply cubed sphere projection to create outward bulge
-                  const p1 = projectToSphere(offset, y1);
-                  const p2 = projectToSphere(offset, y2);
-                  
-                  // Use base positions (parent Animated.View handles scale/rotation)
-                  const start = { x: p1.x, y: p1.y };
-                  const end = { x: p2.x, y: p2.y };
-                  
-                  const dx = end.x - start.x;
-                  const dy = end.y - start.y;
-                  const length = Math.sqrt(dx * dx + dy * dy);
-                  const angle = Math.atan2(dy, dx);
-                  
-                  if (length < 0.5) return null;
-                  
-                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
-                  const avgDepth = (p1.depth + p2.depth) / 2;
-                  const depthFactor = avgDepth * avgDepth; // Square for contrast
-                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
-                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
-                  
-                  return (
-          <View
-                      key={`v-${i}-${seg}`}
-            style={{
-              position: 'absolute',
-                        left: nucleusX + start.x,
-                        top: nucleusY + start.y,
-                        width: length,
-                        height: 1,
-              backgroundColor: '#00D4FF',
-                        opacity,
-                        transform: [{ rotate: `${angle}rad` }],
-                        transformOrigin: 'top left',
-                      }}
-                      pointerEvents="none"
-                    />
-                  );
-                });
+                  if (seg === 0) {
+                    pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                  } else {
+                    pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                  }
+                }
+                
+                // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                const avgDepth = totalDepth / (segmentsPerLine + 1);
+                const depthFactor = avgDepth * avgDepth; // Square for contrast
+                const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
+                
+                return (
+                  <Path
+                    key={`v-${i}`}
+                    d={pathData}
+                    stroke="#00D4FF"
+                    strokeWidth={1}
+                    opacity={opacity}
+                    fill="none"
+                  />
+                );
               })}
               
-              {/* Horizontal lines curved by spherical projection - 1 ft spacing */}
+              {/* Horizontal lines curved by spherical projection - 1 Path per line */}
               {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET; // 1 foot intervals
+                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
                 
-                return Array.from({ length: segmentsPerLine }, (_, seg) => {
-                  const t1 = (seg / segmentsPerLine) * 2 - 1;
-                  const t2 = ((seg + 1) / segmentsPerLine) * 2 - 1;
+                // Build SVG path string with all segment points
+                let pathData = '';
+                let totalDepth = 0;
+                
+                for (let seg = 0; seg <= segmentsPerLine; seg++) {
+                  const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
+                  const x = t * screenWidth * 1.2;
+                  const p = projectToSphere(x, offset);
+                  const screenX = nucleusX + p.x;
+                  const screenY = nucleusY + p.y;
+                  totalDepth += p.depth;
                   
-                  // Extend lines to full screen width for complete background coverage (even when zoomed out)
-                  const x1 = t1 * screenWidth * 1.2;
-                  const x2 = t2 * screenWidth * 1.2;
-                  
-                  // Apply cubed sphere projection to create outward bulge
-                  const p1 = projectToSphere(x1, offset);
-                  const p2 = projectToSphere(x2, offset);
-                  
-                  // Use base positions (parent Animated.View handles scale/rotation)
-                  const start = { x: p1.x, y: p1.y };
-                  const end = { x: p2.x, y: p2.y };
-                  
-                  const dx = end.x - start.x;
-                  const dy = end.y - start.y;
-                  const length = Math.sqrt(dx * dx + dy * dy);
-                  const angle = Math.atan2(dy, dx);
-                  
-                  if (length < 0.5) return null;
-                  
-                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
-                  const avgDepth = (p1.depth + p2.depth) / 2;
-                  const depthFactor = avgDepth * avgDepth; // Square for contrast
-                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
-                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
-                  
-                  return (
-          <View
-                      key={`h-${i}-${seg}`}
-            style={{
-              position: 'absolute',
-                        left: nucleusX + start.x,
-                        top: nucleusY + start.y,
-                        width: length,
-                        height: 1,
-                        backgroundColor: '#00D4FF',
-                        opacity,
-                        transform: [{ rotate: `${angle}rad` }],
-                        transformOrigin: 'top left',
-                      }}
-                      pointerEvents="none"
-                    />
-                  );
-                });
+                  if (seg === 0) {
+                    pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                  } else {
+                    pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                  }
+                }
+                
+                // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                const avgDepth = totalDepth / (segmentsPerLine + 1);
+                const depthFactor = avgDepth * avgDepth; // Square for contrast
+                const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
+                
+                return (
+                  <Path
+                    key={`h-${i}`}
+                    d={pathData}
+                    stroke="#00D4FF"
+                    strokeWidth={1}
+                    opacity={opacity}
+                    fill="none"
+                  />
+                );
               })}
-            </>
+            </Svg>
           );
         }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
 
