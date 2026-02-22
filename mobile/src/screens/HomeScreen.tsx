@@ -1571,7 +1571,7 @@ export default function HomeScreen() {
           const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
           
           // Sphere radius extended to cover entire screen for full background grid
-          const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Full screen coverage
+          const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85; // Full screen coverage
           
           // Grid Configuration - 3 FOOT INTERVALS for better performance (extends beyond 33 ft for visual fill)
           const GRID_SPACING_FEET = 3; // Wider spacing = fewer lines = better performance
