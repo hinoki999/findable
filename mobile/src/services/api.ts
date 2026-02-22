@@ -1586,5 +1586,12 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
     return publicUrl;
 }
 
-
-
+// Save push notification token to user profile
+export const savePushToken = async (token: string): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  await supabase
+    .from('user_profiles')
+    .update({ push_token: token })
+    .eq('user_id', user.id);
+};
