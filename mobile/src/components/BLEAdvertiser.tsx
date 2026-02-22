@@ -219,7 +219,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[GHOST-MODE] ========== startAdvertising() CALLED ==========');
     console.log('[GHOST-MODE] Platform:', Platform.OS);
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
-    console.log('[GHOST-MODE] isAdvertising (already?):', isAdvertising);
+    console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
     console.log('[GHOST-MODE] UserId:', userId ? userId.substring(0, 8) + '...' : 'null');
     
     if (!isAvailable) {
@@ -234,7 +234,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       return;
     }
 
-    if (isAdvertising) {
+    if (isAdvertisingRef.current) {
       console.log('[BLE-ADV-DIAG] Already advertising, skipping start');
       return;
     }
@@ -305,15 +305,15 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setBroadcastName(null);
       console.log('[GHOST-MODE] ============================================');
     }
-  }, [isAvailable, isAdvertising, requestPermissions, userId]); // Removed deviceId - we calculate it from userId
+  }, [isAvailable, requestPermissions, userId]); // Removed isAdvertising - use ref to prevent useEffect re-triggers
 
   // Stop advertising
   const stopAdvertising = useCallback(async () => {
     console.log('[GHOST-MODE] ========== stopAdvertising() CALLED ==========');
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
-    console.log('[GHOST-MODE] isAdvertising:', isAdvertising);
+    console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
     
-    if (!isAvailable || !isAdvertising) {
+    if (!isAvailable || !isAdvertisingRef.current) {
       console.log('[GHOST-MODE] Skip: Not available or not currently advertising');
       console.log('[GHOST-MODE] ============================================');
       return;
@@ -333,7 +333,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setError('Failed to stop advertising');
       console.log('[GHOST-MODE] ============================================');
     }
-  }, [isAvailable, isAdvertising]);
+  }, [isAvailable]); // Removed isAdvertising - use ref to prevent useEffect re-triggers
 
   // Handle app state changes (pause advertising in background on iOS)
   // NOTE: We only pause on background, NOT resume on foreground.
