@@ -1,4 +1,4 @@
-﻿import 'react-native-gesture-handler';
+import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder } from 'react-native';
@@ -22,6 +22,7 @@ import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
+import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -363,6 +364,19 @@ function MainApp() {
       loadUserData(isAuthenticated, userId);
     }
   }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
+
+  // Start/stop background BLE scanning based on auth state
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      console.log('[BG-SCAN] Starting background scan after auth');
+      startBackgroundScan()
+        .then(() => console.log('[BG-SCAN] Background scan started'))
+        .catch(err => console.error('[BG-SCAN] Failed to start:', err));
+    } else {
+      console.log('[BG-SCAN] Stopping background scan (logged out)');
+      stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
+    }
+  }, [isAuthenticated, userId]);
 
   // Check for OTA updates on app launch
   useEffect(() => {
