@@ -1612,8 +1612,9 @@ export default function HomeScreen() {
           };
           
           // Extended SVG canvas to cover zoom-out and rotation
-          const svgWidth = screenWidth * 1.5;
-          const svgHeight = viewableHeight * 1.5;
+          const svgSize = Math.max(screenWidth, viewableHeight) * 1.5;
+          const svgWidth = svgSize;
+          const svgHeight = svgSize;
           const svgOffsetX = (svgWidth - screenWidth) / 2;
           const svgOffsetY = (svgHeight - viewableHeight) / 2;
           
