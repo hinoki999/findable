@@ -23,7 +23,17 @@ import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
 import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
-import usePushNotifications from './src/hooks/usePushNotifications';
+import * as Notifications from 'expo-notifications';
+import { savePushToken } from './src/services/api';
+
+// Set notification handler once at top level
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -164,8 +174,6 @@ const AUTH_BYPASS_ENABLED = false;
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
-  
-  usePushNotifications(isAuthenticated && !authLoading ? userId : null);
 
   const [fontsReady] = useFonts({
     Inter_300Light,
@@ -370,6 +378,8 @@ function MainApp() {
 
   // Start/stop background BLE scanning based on auth state
   useEffect(() => {
+    if (authLoading) return;
+    
     if (isAuthenticated && userId) {
       console.log('[BG-SCAN] Starting background scan after auth');
       startBackgroundScan()
@@ -379,7 +389,7 @@ function MainApp() {
       console.log('[BG-SCAN] Stopping background scan (logged out)');
       stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
     }
-  }, [isAuthenticated, userId]);
+  }, [isAuthenticated, userId, authLoading]);
 
   // Check for OTA updates on app launch
   useEffect(() => {
@@ -462,6 +472,20 @@ function MainApp() {
 
   const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
     console.log('✅ [App] Profile photo prompt completed');
+    
+    // Register for push notifications for first-time users
+    if (isFirstTimeUser) {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status === 'granted') {
+          const token = await Notifications.getExpoPushTokenAsync();
+          await savePushToken(token.data);
+        }
+      } catch (error) {
+        console.error('[Push] Failed to register push notifications:', error);
+      }
+    }
+    
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
 
