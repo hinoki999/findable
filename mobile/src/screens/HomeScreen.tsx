@@ -463,7 +463,6 @@ const DeviceBlip: React.FC<{
     <Pressable
       onTouchEnd={(e) => {
         e.stopPropagation();
-        console.log('[DeviceBlip] Touch detected for device:', device.name);
         onPress();
       }}
       onPress={(e) => {
@@ -740,6 +739,16 @@ export default function HomeScreen() {
     stopScanRef.current = stopScan;
   }, [startScan, stopScan]);
 
+  // Refs to stabilize startAdvertising/stopAdvertising callbacks (prevents useEffect re-runs)
+  const startAdvertisingRef = useRef(startAdvertising);
+  const stopAdvertisingRef = useRef(stopAdvertising);
+  useEffect(() => {
+    startAdvertisingRef.current = startAdvertising;
+  }, [startAdvertising]);
+  useEffect(() => {
+    stopAdvertisingRef.current = stopAdvertising;
+  }, [stopAdvertising]);
+
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
     startScanRef.current();
@@ -748,7 +757,6 @@ export default function HomeScreen() {
     // Use ref to check current scanning state without causing effect re-runs
     const scanInterval = setInterval(() => {
       if (!isScanningRef.current) {
-        console.log('[BLE-DEBUG] Scanning stopped, restarting...');
         startScanRef.current();
       }
     }, 5000); // Check every 5 seconds and restart if stopped
@@ -761,113 +769,78 @@ export default function HomeScreen() {
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {
-    console.log('[GHOST-MODE] ========== isDiscoverable CHANGED ==========');
-    console.log('[GHOST-MODE] isDiscoverable:', isDiscoverable);
-    console.log('[GHOST-MODE] Mode:', isDiscoverable ? 'ACTIVE (visible)' : 'GHOST (hidden)');
-    console.log('[GHOST-MODE] isAvailable:', isAvailable);
-    console.log('[GHOST-MODE] loading:', loading);
-    console.log('[GHOST-MODE] userId:', userId ? userId.substring(0, 8) + '...' : 'null');
-    console.log('[GHOST-MODE] isAdvertising (current):', isAdvertising);
     
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!isAvailable || loading || !userId) {
-      console.log('[GHOST-MODE] ⏳ Prerequisites not ready:', {
-        isAvailable,
-        loading,
-        hasUserId: !!userId
-      });
-      console.log('[GHOST-MODE] ===========================================');
       return;
     }
 
     // Start advertising when isDiscoverable is true (ACTIVE mode)
     if (isDiscoverable) {
-      console.log('[GHOST-MODE] ✅ ACTIVE MODE - Starting BLE advertising');
-      console.log('[GHOST-MODE] DeviceId to broadcast:', userId ? `DL-${userId.substring(0, 8)}` : 'unknown');
-      console.log('[GHOST-MODE] Calling startAdvertising()...');
-      startAdvertising();
-      console.log('[GHOST-MODE] startAdvertising() call dispatched');
+      // Guard: startAdvertising already checks isAdvertisingRef internally,
+      // but log here for visibility
+      startAdvertisingRef.current();
     } else {
       // Stop advertising when isDiscoverable is false (GHOST mode)
-      console.log('[GHOST-MODE] 👻 GHOST MODE - Stopping BLE advertising');
-      console.log('[GHOST-MODE] User will be invisible to nearby devices');
-      console.log('[GHOST-MODE] Calling stopAdvertising()...');
-      stopAdvertising();
-      console.log('[GHOST-MODE] stopAdvertising() call dispatched');
+      stopAdvertisingRef.current();
     }
-    console.log('[GHOST-MODE] ===========================================');
-    
-    return () => {
-      // Stop advertising when HomeScreen unmounts
-      console.log('[GHOST-MODE] HomeScreen unmounting, cleaning up advertising');
-      if (isDiscoverable) {
-        console.log('[GHOST-MODE] Stopping advertising on unmount');
-        stopAdvertising();
-      }
-    };
-  }, [isDiscoverable, isAvailable, startAdvertising, stopAdvertising, loading, userId]);
+    // No cleanup needed here - stop is handled in effect body when isDiscoverable=false
+    // Native BLEAdvertiserService handles cleanup on app termination via onDestroy()
+  }, [isDiscoverable, isAvailable, loading, userId]);
   
-  // Fetch linked devices (accepted and returned links) when component mounts and periodically
+  // Fetch linked devices (accepted and returned links) on mount and periodically
+  // Note: HomeScreen unmounts/remounts on tab change, so this fires on each "focus"
   useEffect(() => {
     const fetchLinkedDevices = async () => {
       try {
         const allDevices = await getDevices();
-        // Filter for accepted and returned links (show all successful connections on map)
         const links = (allDevices ?? []).filter(device => 
           device.action === 'accepted' || device.action === 'returned'
         );
         setLinkedDevices(links);
-        console.log(`SUCCESS: Loaded ${links.length} linked contacts on map`);
       } catch (error) {
-        console.error('Failed to fetch linked devices:', error);
+        // Silent fail - linked devices will refresh on next mount
       }
     };
     
-    // Load immediately
     fetchLinkedDevices();
-    
-    // Refresh every 5 seconds to catch new links
     const interval = setInterval(fetchLinkedDevices, 5000);
-    
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch incoming drops from drops table (received drops sent TO current user)
+  // Fetch incoming drops from drops table on mount and periodically
   useEffect(() => {
+    if (!userId) return;
+    
     const fetchIncomingDropsFromTable = async () => {
       try {
         const drops = await getIncomingDrops();
         setIncomingDrops(drops);
-        console.log(`[DROPS] SUCCESS: Loaded ${drops.length} incoming drops`);
       } catch (error) {
-        console.error('[DROPS] Failed to fetch incoming drops:', error);
+        // Silent fail - drops will refresh on next mount
       }
     };
     
-    // Load immediately
     fetchIncomingDropsFromTable();
-    
-    // Refresh every 5 seconds to catch new drops
     const interval = setInterval(fetchIncomingDropsFromTable, 5000);
-    
     return () => clearInterval(interval);
   }, [userId]);
 
-  // Fetch unviewed links from database (status='linked' with link_viewed_at=null)
+  // Fetch unviewed links from database on mount and periodically
   useEffect(() => {
+    if (!userId) return;
+    
     const fetchUnviewedLinksFromDb = async () => {
       try {
         const links = await getUnviewedLinks();
         setUnviewedLinksFromDb(links);
         
-        // If there are new unviewed links, show the modal for the first one
         if (links.length > 0 && !showNewLinkModal && !currentNewLink) {
           setCurrentNewLink(links[0]);
           setShowNewLinkModal(true);
-          console.log('[LINKS] New link notification:', links[0].senderName);
         }
       } catch (error) {
-        console.error('[LINKS] Failed to fetch unviewed links:', error);
+        // Silent fail - links will refresh on next mount
       }
     };
     
@@ -967,7 +940,6 @@ export default function HomeScreen() {
         currentDevice.username !== selectedBlipDevice.username ||
         currentDevice.userId !== selectedBlipDevice.userId
       )) {
-        console.log('[HomeScreen] Syncing selectedBlipDevice with updated device data');
         setSelectedBlipDevice(currentDevice);
       }
     }
@@ -1190,7 +1162,6 @@ export default function HomeScreen() {
       gestureState.initialAngle = viewRotation;
       gestureState.startAngle = angle;
       
-      console.log('DEBUG: TWO FINGER TOUCH START - Distance:', distance, 'Angle:', angle);
     }
   };
 
@@ -1218,11 +1189,6 @@ export default function HomeScreen() {
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
         
-        console.log('📏 ZOOM UPDATE:', {
-          scale: constrainedScale,
-          nucleusX: nucleusXRef.current,
-          nucleusY: nucleusYRef.current
-        });
       }
       
       // ROTATION
@@ -1233,19 +1199,12 @@ export default function HomeScreen() {
         setViewRotation(rotation);
         rotationAnimValue.setValue(rotation);
         
-        console.log('🔄 ROTATION UPDATE:', {
-          rotation: rotation,
-          nucleusX: nucleusXRef.current,
-          nucleusY: nucleusYRef.current,
-          transformOrigin: `(${nucleusXRef.current.toFixed(1)}, ${nucleusYRef.current.toFixed(1)})`
-        });
       }
     }
   };
 
   const handleTouchEnd = () => {
     touchPositions.current = {};
-    console.log('DEBUG: TOUCH END - Reset');
   };
 
   // Stack drag animation
@@ -1275,12 +1234,9 @@ export default function HomeScreen() {
 
   // Load pinned profiles
   useEffect(() => {
-    console.log('📌 useEffect triggered - pinnedIds changed, size:', pinnedIds.size);
     (async () => {
       const devices = await getDevices();
-      console.log('📋 Got devices from API:', devices.length);
       const pinned = devices.filter(d => d.id && pinnedIds.has(d.id));
-      console.log('📌 Filtered to pinned devices:', pinned.length, 'IDs:', Array.from(pinnedIds));
       setPinnedProfiles(pinned);
     })();
   }, [pinnedIds]);
@@ -1343,7 +1299,6 @@ export default function HomeScreen() {
   ).current;
 
   const showLinkPopupAnimation = () => {
-    console.log('Showing link popup animation');
     setPopupKey(prev => prev + 1);
     setShowLinkPopup(true);
     setIsAnimating(true);
@@ -1391,8 +1346,6 @@ export default function HomeScreen() {
   };
 
   const handleDropAction = async (action: 'accepted' | 'returned' | 'declined', drop: Drop) => {
-    console.log('[DROPS] Drop action:', action, 'for drop ID:', drop.id, 'from:', drop.senderName);
-    
     // Show link popup for returned drops IMMEDIATELY
     if (action === 'returned') {
       showLinkPopupAnimation();
@@ -1449,7 +1402,6 @@ export default function HomeScreen() {
     if (currentNewLink) {
       try {
         await markLinkViewed(currentNewLink.id);
-        console.log('[LINKS] Marked link as viewed:', currentNewLink.id);
         
         // Remove from unviewed list
         setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== currentNewLink.id));
@@ -1474,59 +1426,41 @@ export default function HomeScreen() {
 
   // Handle quick action button press (unpin or delete)
   const handleQuickActionPress = (action: 'unpin' | 'delete', cardId: number, cardName: string) => {
-    console.log('Quick action pressed:', action, cardName);
     setConfirmAction(action);
     setConfirmCardId(cardId);
     setConfirmCardName(cardName);
     setShowConfirmModal(true);
-    setActiveQuickActionCardId(null); // Hide action buttons
-    console.log('Confirmation modal should now be visible');
+    setActiveQuickActionCardId(null);
   };
 
   // Handle confirmation
   const handleConfirmAction = async () => {
-    console.log('=== handleConfirmAction called ===');
-    
     if (!confirmCardId || !confirmAction || !confirmCardName) {
-      console.log('EARLY RETURN - missing data');
       return;
     }
 
     const actionName = confirmCardName;
     const actionType = confirmAction;
 
-    console.log('Performing action:', actionType, 'for', actionName);
-
     // Store the card for undo BEFORE performing the action
     const cardToStore = pinnedProfiles.find(p => p.id === confirmCardId) || null;
-    console.log('Storing card for undo:', cardToStore?.name, 'ID:', cardToStore?.id);
-    
     const actionData = { type: actionType, cardId: confirmCardId, card: cardToStore };
-    lastActionRef.current = actionData; // Store in ref synchronously
-    console.log('Ref updated with:', actionData);
+    lastActionRef.current = actionData;
     
     // Perform the action
     if (actionType === 'unpin') {
       togglePin(confirmCardId);
     } else if (actionType === 'delete') {
-      // Delete from API/store (removes from Link page)
       await deleteDevice(confirmCardId, userId!);
-      // Remove from pinned profiles (removes from Home page)
       setPinnedProfiles(prev => prev.filter(p => p.id !== confirmCardId));
-      // Unpin
       togglePin(confirmCardId);
-      console.log('Device deleted from all locations');
     }
 
-    // Close confirmation modal
     setShowConfirmModal(false);
-    
-    // Reset confirmation states
     setConfirmAction(null);
     setConfirmCardId(null);
     setConfirmCardName('');
     
-    // Show toast with undo option
     showToast({
       message: `${actionName} ${actionType === 'unpin' ? 'unpinned' : 'deleted'}`,
       type: 'success',
@@ -1534,80 +1468,52 @@ export default function HomeScreen() {
       actionLabel: 'UNDO',
       onAction: handleUndo,
     });
-    console.log('SUCCESS: TOAST WITH UNDO SHOWN');
   };
 
   // Handle undo
   const handleUndo = async () => {
-    const lastAction = lastActionRef.current; // Get current value from ref
-    console.log('🔘 handleUndo CALLED! lastAction:', lastAction);
+    const lastAction = lastActionRef.current;
     
     if (!lastAction) {
-      console.log('WARNING: No lastAction stored, cannot undo');
       return;
     }
 
-    console.log('🔄 UNDOING action:', lastAction.type, 'for card ID:', lastAction.cardId);
-
     if (lastAction.type === 'unpin') {
-      // Re-pin the contact
       togglePin(lastAction.cardId);
-      console.log('SUCCESS: Contact re-pinned');
     } else if (lastAction.type === 'delete' && lastAction.card) {
-      console.log('Starting restore process for:', lastAction.card.name);
-      
-      // Step 1: Restore to API/store first and wait for it
       await restoreDevice(lastAction.card, userId!);
-      console.log('SUCCESS: Device restored to API/store');
       
-      // Step 2: Re-add to pinnedProfiles immediately for instant UI feedback
       setPinnedProfiles(prev => {
-        // Make sure it's not already there
         if (prev.some(p => p.id === lastAction.cardId)) {
-          console.log('WARNING: Card already in pinnedProfiles');
           return prev;
         }
-        console.log('SUCCESS: Adding card back to pinnedProfiles UI');
         return [...prev, lastAction.card!];
       });
       
-      // Step 3: Re-pin to persist it (this will be saved in the context)
       togglePin(lastAction.cardId);
-      console.log('SUCCESS: Pin toggled back on, ID added to pinnedIds');
     }
 
-    lastActionRef.current = null; // Clear the ref
+    lastActionRef.current = null;
   };
 
   // Handle toggle button press
   const handleTogglePress = () => {
     const newState = !isDiscoverable;
-    console.log('[GHOST-MODE] ========== TOGGLE PRESSED ==========');
-    console.log('[GHOST-MODE] Current isDiscoverable:', isDiscoverable);
-    console.log('[GHOST-MODE] Requested new state:', newState);
-    console.log('[GHOST-MODE] Showing confirmation modal...');
     setPendingDiscoverableState(newState);
     setShowToggleConfirmModal(true);
   };
 
   // Confirm toggle change
   const confirmToggleChange = () => {
-    console.log('[GHOST-MODE] ========== TOGGLE CONFIRMED ==========');
-    console.log('[GHOST-MODE] pendingDiscoverableState:', pendingDiscoverableState);
     if (pendingDiscoverableState !== null) {
-      console.log('[GHOST-MODE] Setting isDiscoverable to:', pendingDiscoverableState);
-      console.log('[GHOST-MODE] This will trigger useEffect to', pendingDiscoverableState ? 'START' : 'STOP', 'advertising');
       setIsDiscoverable(pendingDiscoverableState);
     }
     setShowToggleConfirmModal(false);
     setPendingDiscoverableState(null);
-    console.log('[GHOST-MODE] Modal closed, state update dispatched');
-    console.log('[GHOST-MODE] =====================================');
   };
 
   // Cancel toggle change
   const cancelToggleChange = () => {
-    console.log('[GHOST-MODE] Toggle cancelled by user');
     setShowToggleConfirmModal(false);
     setPendingDiscoverableState(null);
   };
@@ -1865,7 +1771,6 @@ export default function HomeScreen() {
               nucleusY={nucleusY}
               viewTransform={viewTransformTensor}
               onPress={() => {
-                console.log('SUCCESS: Link marker clicked for:', device.name);
                 setSelectedLink(device);
                 setShowLinkModal(true);
               }}
@@ -2033,7 +1938,6 @@ export default function HomeScreen() {
               contentContainerStyle={{ minHeight: totalStackHeight }}
               scrollEnabled={!isDragging}
             >
-              {console.log('[CRASH-DEBUG] About to render pinnedProfiles, count:', pinnedProfiles?.length)}
               {pinnedProfiles.map((profile, index) => {
                 const isExpanded = expandedCardId === profile.id;
                 const isBottomCard = index === 0;
@@ -2065,7 +1969,6 @@ export default function HomeScreen() {
 
                   if (isDoubleTap) {
                     // Double tap - toggle quick actions
-                    console.log('Double tap detected on:', profile.name);
                     setActiveQuickActionCardId(activeQuickActionCardId === profile.id ? null : profile.id);
                   } else {
                     // Single tap - pulse animation and expand (not collapse)
@@ -2284,9 +2187,6 @@ export default function HomeScreen() {
         <View pointerEvents="auto">
           <Pressable
             onPress={async () => {
-              console.log('[DROP-SEND-TEST] Starting test drop send...');
-              console.log('[DROP-SEND-TEST] Current profile:', profile);
-              console.log('[DROP-SEND-TEST] Current username:', username);
               try {
                 const senderProfile = {
                   name: profile?.name || 'Test User',
@@ -2297,7 +2197,6 @@ export default function HomeScreen() {
                   profilePhoto: profile?.profilePhoto || undefined,
                   socialMedia: profile?.socialMedia || undefined,
                 };
-                console.log('[DROP-SEND-TEST] Sender profile being sent:', senderProfile);
                 
                 await sendDrop(
                   '744df100-0ea0-4614-a7fe-18f04dc579a6', // Kaytea's user_id
@@ -2305,7 +2204,6 @@ export default function HomeScreen() {
                   12.5 // hardcoded distance
                 );
                 
-                console.log('[DROP-SEND-TEST] Drop created successfully, check Supabase');
                 showToast({
                   message: 'Test drop sent to Kaytea',
                   type: 'success',
@@ -2538,7 +2436,6 @@ export default function HomeScreen() {
                       Links
               </Text>
                   </View>
-                  {console.log('[CRASH-DEBUG] About to render unviewedLinksFromContext, count:', unviewedLinksFromContext?.length)}
                   {unviewedLinksFromContext.map((linkNotif) => (
                     <View
                       key={linkNotif.id}
@@ -3108,7 +3005,6 @@ export default function HomeScreen() {
                     // Just toggle the pin
                     togglePin(deviceId);
                     markAsViewed(selectedContactCard.id);
-                    console.log(`SUCCESS: Contact ${selectedContactCard.name} ${pinnedIds.has(deviceId) ? 'unpinned' : 'pinned'}`);
                   }
                 }}
                 style={({ pressed }) => ({
@@ -3304,12 +3200,10 @@ export default function HomeScreen() {
                       let receiverUserId = selectedBlipDevice.userId;
                       
                       if (!receiverUserId) {
-                        console.log('[HomeScreen] userId not available, attempting lookup...');
                         // Extract deviceId from device name
                         const deviceIdMatch = selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
                         if (deviceIdMatch && deviceIdMatch[1]) {
                           const deviceId = deviceIdMatch[1];
-                          console.log('[HomeScreen] Extracted deviceId:', deviceId, 'from device name:', selectedBlipDevice.name);
                           
                           // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
                           try {
@@ -3329,15 +3223,13 @@ export default function HomeScreen() {
                             let foundDisplayName: string | null = null;
                             
                             if (!userProfileError && userProfileData) {
-                              // Found in user_profiles - use display name (e.g., "cheese")
+                              // Found in user_profiles - use display name
                               foundUserId = userProfileData.user_id;
                               foundDisplayName = userProfileData.name || deviceId || 'User';
-                              console.log('[HomeScreen] ✅ Found in user_profiles - display name:', foundDisplayName, 'userId:', foundUserId);
                             }
                             
                             if (foundUserId) {
                               receiverUserId = foundUserId;
-                              console.log('[HomeScreen] ✅ Final result - display name:', foundDisplayName, 'userId:', receiverUserId);
                               
                               // Update the device object with the found userId and display name
                               (selectedBlipDevice as any).username = foundDisplayName;
@@ -3352,7 +3244,6 @@ export default function HomeScreen() {
                           }
                         } else {
                           // Device name doesn't match expected pattern - try to find user by device name directly
-                          console.log('[HomeScreen] Device name does not match DL- pattern, trying direct lookup by name:', selectedBlipDevice.name);
                           try {
                             // Try to find user by display name matching the device name (without DL- prefix)
                             const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
@@ -3368,15 +3259,13 @@ export default function HomeScreen() {
                             let foundDisplayName: string | null = null;
                             
                             if (!userProfileError && userProfileData) {
-                              // Found in user_profiles - use display name (e.g., "cheese")
+                              // Found in user_profiles - use display name
                               foundUserId = userProfileData.user_id;
                               foundDisplayName = userProfileData.name || cleanName || 'User';
-                              console.log('[HomeScreen] ✅ Found in user_profiles by name - display name:', foundDisplayName, 'userId:', foundUserId);
                             }
                             
                             if (foundUserId) {
                               receiverUserId = foundUserId;
-                              console.log('[HomeScreen] ✅ Final result by name - display name:', foundDisplayName, 'userId:', receiverUserId);
                               // Update with display name
                               (selectedBlipDevice as any).username = foundDisplayName;
                               (selectedBlipDevice as any).userId = foundUserId;
@@ -3407,8 +3296,6 @@ export default function HomeScreen() {
                         setDropError('Invalid receiver ID. Please try again.');
                         throw new Error(errorMsg);
                       }
-                      
-                      console.log('[DROPS] Sending drop to userId:', receiverUserId, 'distance:', selectedBlipDevice.distanceFeet);
                       
                       // Send drop with current user's profile info and distance
                       await sendDrop(receiverUserId, {
@@ -3690,7 +3577,6 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
               <Pressable
                 onPress={() => {
-                  console.log('Cancel pressed');
                   setShowConfirmModal(false);
                 }}
                 style={{
@@ -3708,7 +3594,6 @@ export default function HomeScreen() {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  console.log('Confirm pressed');
                   handleConfirmAction();
                 }}
                 style={{

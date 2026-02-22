@@ -117,15 +117,9 @@ class BLEAdvertiserService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = if (isAdvertising) {
-            "Broadcasting as ${DROPLINK_PREFIX}${currentDeviceId ?: "..."}"
-        } else {
-            "Preparing to broadcast..."
-        }
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("DropLink Active")
-            .setContentText(contentText)
+            .setContentText("Currently broadcasting")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
