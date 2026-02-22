@@ -42,15 +42,7 @@
         <data android:scheme="exp+mobile"/>
       </intent-filter>
     </activity>
-    <service
-      android:name=".ble.BLEScannerService"
-      android:enabled="true"
-      android:exported="false"
-      android:foregroundServiceType="connectedDevice"/>
-    <service
-      android:name=".ble.BLEAdvertiserService"
-      android:enabled="true"
-      android:exported="false"
-      android:foregroundServiceType="connectedDevice"/>
+    <service android:name=".ble.BLEScannerService" android:enabled="true" android:exported="false" android:foregroundServiceType="connectedDevice"/>
+    <service android:name=".ble.BLEAdvertiserService" android:enabled="true" android:exported="false" android:foregroundServiceType="connectedDevice"/>
   </application>
 </manifest>
