@@ -10,6 +10,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import com.facebook.react.bridge.Arguments
@@ -166,6 +167,9 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             // Register Bluetooth state receiver to handle Bluetooth being turned off
             registerBluetoothStateReceiver()
 
+            // Start the foreground service for persistent background advertising
+            startForegroundService(serviceUUID, deviceId)
+
             // Start advertising
             Log.d(TAG, "Starting BLE advertising...")
             advertiser.startAdvertising(settings, advertiseData, scanResponse, advertiseCallback)
@@ -222,6 +226,38 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             currentServiceUUID = null
             restoreOriginalBluetoothName()
             unregisterBluetoothStateReceiver()
+            stopForegroundServiceInternal()
+        }
+    }
+
+    private fun startForegroundService(serviceUUID: String, deviceId: String) {
+        try {
+            val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
+                action = BLEAdvertiserService.ACTION_START_ADVERTISE
+                putExtra(BLEAdvertiserService.EXTRA_SERVICE_UUID, serviceUUID)
+                putExtra(BLEAdvertiserService.EXTRA_DEVICE_ID, deviceId)
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                reactApplicationContext.startForegroundService(intent)
+            } else {
+                reactApplicationContext.startService(intent)
+            }
+            Log.d(TAG, "✅ Foreground service started for advertising")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground service", e)
+        }
+    }
+
+    private fun stopForegroundServiceInternal() {
+        try {
+            val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
+                action = BLEAdvertiserService.ACTION_STOP_ADVERTISE
+            }
+            reactApplicationContext.startService(intent)
+            Log.d(TAG, "✅ Foreground service stop requested")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop foreground service", e)
         }
     }
 
