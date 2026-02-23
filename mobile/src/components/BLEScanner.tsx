@@ -108,7 +108,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         try {
           const { status } = await Notifications.requestPermissionsAsync();
           if (status === 'granted') {
-            const token = await Notifications.getExpoPushTokenAsync();
+            const token = await Notifications.getExpoPushTokenAsync({
+              projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
+            });
             await savePushToken(token.data);
           }
         } catch (error) {
