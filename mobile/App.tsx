@@ -476,17 +476,15 @@ function MainApp() {
   const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
     console.log('✅ [App] Profile photo prompt completed');
     
-    // Register for push notifications for first-time users
-    if (isFirstTimeUser) {
-      try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status === 'granted') {
-          const token = await Notifications.getExpoPushTokenAsync();
-          await savePushToken(token.data);
-        }
-      } catch (error) {
-        console.error('[Push] Failed to register push notifications:', error);
+    // Register for push notifications
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === 'granted') {
+        const token = await Notifications.getExpoPushTokenAsync();
+        await savePushToken(token.data);
       }
+    } catch (error) {
+      console.error('[Push] Failed to register push notifications:', error);
     }
     
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
