@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
+import * as Notifications from 'expo-notifications';
+import { savePushToken } from '../services/api';
+
+// Set notification handler once at top level
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
@@ -91,6 +102,17 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         if (!allGranted) {
           setError('Bluetooth permissions not granted');
           return false;
+        }
+        
+        // Request push notification permissions
+        try {
+          const { status } = await Notifications.requestPermissionsAsync();
+          if (status === 'granted') {
+            const token = await Notifications.getExpoPushTokenAsync();
+            await savePushToken(token.data);
+          }
+        } catch (error) {
+          console.error('[Push] Failed to register push notifications:', error);
         }
       } catch (err) {
         console.warn('Permission request error:', err);
