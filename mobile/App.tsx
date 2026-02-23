@@ -23,17 +23,6 @@ import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
 import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
-import * as Notifications from 'expo-notifications';
-import { savePushToken } from './src/services/api';
-
-// Set notification handler once at top level
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -475,17 +464,6 @@ function MainApp() {
 
   const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
     console.log('✅ [App] Profile photo prompt completed');
-    
-    // Register for push notifications
-    try {
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status === 'granted') {
-        const token = await Notifications.getExpoPushTokenAsync();
-        await savePushToken(token.data);
-      }
-    } catch (error) {
-      console.error('[Push] Failed to register push notifications:', error);
-    }
     
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
