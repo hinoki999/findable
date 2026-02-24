@@ -57,19 +57,13 @@ class BLEAdvertiserService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        
-        Log.d(TAG, "onStartCommand: ${intent?.action}")
-        
         when (intent?.action) {
             ACTION_START_ADVERTISE -> {
+                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
                 val serviceUUID = intent.getStringExtra(EXTRA_SERVICE_UUID)
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
-                
                 if (serviceUUID != null && deviceId != null) {
                     startAdvertising(serviceUUID, deviceId)
-                } else {
-                    Log.e(TAG, "Missing serviceUUID or deviceId extras")
                 }
             }
             ACTION_STOP_ADVERTISE -> {
@@ -78,8 +72,10 @@ class BLEAdvertiserService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+            else -> {
+                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            }
         }
-        
         return START_STICKY
     }
 
