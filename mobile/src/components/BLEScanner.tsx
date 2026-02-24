@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
 import { savePushToken } from '../services/api';
@@ -12,6 +13,7 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 });
+console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top level');
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
@@ -87,34 +89,55 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Request necessary permissions for Android
   const requestPermissions = useCallback(async (): Promise<boolean> => {
+    console.log('[PERMS-DEBUG] requestPermissions called, Platform.OS:', Platform.OS);
     if (Platform.OS === 'android') {
       try {
+        console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
         const granted = await PermissionsAndroid.requestMultiple([
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ]);
+        console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
+        console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
         
         const allGranted = Object.values(granted).every(
           permission => permission === PermissionsAndroid.RESULTS.GRANTED
         );
+        console.log('[PERMS-DEBUG] allGranted:', allGranted);
         
         if (!allGranted) {
+          console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
           setError('Bluetooth permissions not granted');
           return false;
         }
         
         // Request push notification permissions
         try {
+          console.log('[PUSH-DEBUG] Starting push notification registration...');
+          console.log('[PUSH-DEBUG] Before Notifications.requestPermissionsAsync...');
           const { status } = await Notifications.requestPermissionsAsync();
+          console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
+          console.log('[PUSH-DEBUG] Permission status:', status);
           if (status === 'granted') {
+            console.log('[PUSH-DEBUG] Permission granted, getting token...');
+            console.log('[PUSH-DEBUG] Before getExpoPushTokenAsync...');
             const token = await Notifications.getExpoPushTokenAsync({
               projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
             });
+            console.log('[PUSH-DEBUG] After getExpoPushTokenAsync');
+            console.log('[PUSH-DEBUG] Token received:', token.data);
+            console.log('[PUSH-DEBUG] Before AsyncStorage.setItem...');
+            await AsyncStorage.setItem('pendingPushToken', token.data);
+            console.log('[PUSH-DEBUG] After AsyncStorage.setItem - Token stored locally');
+            console.log('[PUSH-DEBUG] Before savePushToken...');
             await savePushToken(token.data);
+            console.log('[PUSH-DEBUG] After savePushToken - Token save attempted');
+          } else {
+            console.log('[PUSH-DEBUG] Push permission NOT granted, status:', status);
           }
-        } catch (error) {
-          console.error('[Push] Failed to register push notifications:', error);
+        } catch (error: any) {
+          console.error('[PUSH-DEBUG] Error in push registration:', error.message);
         }
       } catch (err) {
         console.warn('Permission request error:', err);

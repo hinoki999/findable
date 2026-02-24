@@ -1588,10 +1588,18 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
 // Save push notification token to user profile
 export const savePushToken = async (token: string): Promise<void> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-  await supabase
+  console.log('[PUSH-DEBUG] savePushToken called with token:', token.substring(0, 30) + '...');
+  console.log('[PUSH-DEBUG] Calling supabase.auth.getUser()...');
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  console.log('[PUSH-DEBUG] getUser result - user:', user ? 'EXISTS (id: ' + user.id.substring(0, 8) + '...)' : 'NULL', 'authError:', authError ? authError.message : 'none');
+  if (!user) {
+    console.log('[PUSH-DEBUG] No user found, returning early without saving token');
+    return;
+  }
+  console.log('[PUSH-DEBUG] User found, updating user_profiles with push_token...');
+  const { error: updateError } = await supabase
     .from('user_profiles')
     .update({ push_token: token })
     .eq('user_id', user.id);
+  console.log('[PUSH-DEBUG] Supabase update result - error:', updateError ? updateError.message : 'none (success)');
 };

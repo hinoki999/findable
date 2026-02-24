@@ -23,6 +23,7 @@ import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
 import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
+import { savePushToken } from './src/services/api';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -370,18 +371,52 @@ function MainApp() {
 
   // Start/stop background BLE scanning based on auth state
   useEffect(() => {
-    if (authLoading) return;
+    console.log('[BG-SCAN-DEBUG] useEffect fired - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
+    if (authLoading) {
+      console.log('[BG-SCAN-DEBUG] Early return - authLoading is true');
+      return;
+    }
     
     if (isAuthenticated && userId) {
+      console.log('[BG-SCAN-DEBUG] START branch - authenticated with userId');
       scanStartedRef.current = true;
       startBackgroundScan()
         .then(() => console.log('[BG-SCAN] Background scan started'))
         .catch(err => console.error('[BG-SCAN] Failed to start:', err));
     } else if (scanStartedRef.current) {
+      console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
       scanStartedRef.current = false;
       stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
+    } else {
+      console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
     }
   }, [isAuthenticated, userId, authLoading]);
+
+  // Save pending push token after auth resolves
+  useEffect(() => {
+    console.log('[PUSH-DEBUG] Pending token useEffect fired - isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
+    if (!isAuthenticated || !userId) {
+      console.log('[PUSH-DEBUG] Pending token useEffect early return - not authenticated or no userId');
+      return;
+    }
+    const savePendingToken = async () => {
+      try {
+        console.log('[PUSH-DEBUG] Checking AsyncStorage for pendingPushToken...');
+        const token = await AsyncStorage.getItem('pendingPushToken');
+        console.log('[PUSH-DEBUG] Pending token found in AsyncStorage:', token ? 'YES (' + token.substring(0, 20) + '...)' : 'NO');
+        if (token) {
+          console.log('[PUSH-DEBUG] Calling savePushToken with pending token...');
+          await savePushToken(token);
+          console.log('[PUSH-DEBUG] savePushToken completed, removing from AsyncStorage...');
+          await AsyncStorage.removeItem('pendingPushToken');
+          console.log('[PUSH-DEBUG] Pending token saved after auth and removed from AsyncStorage');
+        }
+      } catch (error) {
+        console.error('[PUSH-DEBUG] Failed to save pending token:', error);
+      }
+    };
+    savePendingToken();
+  }, [isAuthenticated, userId]);
 
   // Check for OTA updates on app launch
   useEffect(() => {
@@ -410,19 +445,24 @@ function MainApp() {
   const handleSignupSuccess = async (
     profileData?: { name: string; phone: string; bio: string }
   ) => {
+    console.log('[SIGNUP-DEBUG] handleSignupSuccess called with profileData:', profileData ? 'YES' : 'NO');
     console.log('SUCCESS: [App] Signup successful');
     
     // Refresh auth state to detect the new Supabase session created during signup
+    console.log('[SIGNUP-DEBUG] About to call refreshAuth()...');
     console.log('[App] Refreshing auth state after signup...');
     await refreshAuth();
+    console.log('[SIGNUP-DEBUG] refreshAuth() completed');
     console.log('SUCCESS: [App] Auth state refreshed');
 
     // Set flag to prevent automatic data reload (prevents race condition)
+    console.log('[SIGNUP-DEBUG] Calling setIsSignupInProgress(true)');
     setIsSignupInProgress(true);
 
     // Set profile data directly from signup form instead of reloading from backend
     // This prevents race condition where GET /profile happens before POST /profile completes
     if (profileData) {
+      console.log('[SIGNUP-DEBUG] profileData exists, setting user profile from form data');
       const phoneDigitsOnly = profileData.phone.replace(/\D/g, '');
 
       console.log('🔢 [DEBUG] setUserProfile CALL #4: Signup flow');
@@ -433,16 +473,21 @@ function MainApp() {
         bio: profileData.bio || 'Add bio',
         socialMedia: [],
       });
+      console.log('[SIGNUP-DEBUG] setUserProfile completed');
     }
 
+    console.log('[SIGNUP-DEBUG] Calling setIsFirstTimeUser(true)');
     setIsFirstTimeUser(true);
 
     // Reset flag - normal data loads can proceed from here
+    console.log('[SIGNUP-DEBUG] Calling setIsSignupInProgress(false)');
     setIsSignupInProgress(false);
     console.log('✅ [App] Signup flow complete, flag reset');
 
+    console.log('[SIGNUP-DEBUG] Calling setShowProfilePhotoPrompt(true)');
     console.log('✅ [App] Setting showProfilePhotoPrompt = true');
     setShowProfilePhotoPrompt(true);
+    console.log('[SIGNUP-DEBUG] handleSignupSuccess completed');
   };
 
   const handleLoginSuccess = () => {
