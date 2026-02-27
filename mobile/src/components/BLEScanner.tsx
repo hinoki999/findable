@@ -17,7 +17,8 @@ console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
-
+import { startBackgroundScan } from '../native/BLEScannerModule';
+import messaging from '@react-native-firebase/messaging';
 export interface BleDevice {
   id: string;
   name: string;
@@ -112,27 +113,27 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return false;
         }
         
+        // Start background BLE scan now that permissions are confirmed
+          console.log('[BG-SCAN-DEBUG] Permissions granted - starting background scan from BLEScanner');
+          startBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to start from BLEScanner:', err));
         // Request push notification permissions
         try {
           console.log('[PUSH-DEBUG] Starting push notification registration...');
           console.log('[PUSH-DEBUG] Before Notifications.requestPermissionsAsync...');
           const { status } = await Notifications.requestPermissionsAsync();
           console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
-          console.log('[PUSH-DEBUG] Permission status:', status);
-          if (status === 'granted') {
-            console.log('[PUSH-DEBUG] Permission granted, getting token...');
-            console.log('[PUSH-DEBUG] Before getExpoPushTokenAsync...');
-            const token = await Notifications.getExpoPushTokenAsync({
-              projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
-            });
-            console.log('[PUSH-DEBUG] After getExpoPushTokenAsync');
-            console.log('[PUSH-DEBUG] Token received:', token.data);
-            console.log('[PUSH-DEBUG] Before AsyncStorage.setItem...');
-            await AsyncStorage.setItem('pendingPushToken', token.data);
-            console.log('[PUSH-DEBUG] After AsyncStorage.setItem - Token stored locally');
-            console.log('[PUSH-DEBUG] Before savePushToken...');
-            await savePushToken(token.data);
-            console.log('[PUSH-DEBUG] After savePushToken - Token save attempted');
+          cif (status === 'granted') {
+              console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
+              const token = await messaging().getToken();
+              console.log('[PUSH-DEBUG] FCM token received:', token ? 'YES' : 'NO');
+              if (token) {
+                await AsyncStorage.setItem('pendingPushToken', token);
+                console.log('[PUSH-DEBUG] Token stored in AsyncStorage');
+                await savePushToken(token);
+                console.log('[PUSH-DEBUG] Token saved to Supabase');
+              } else {
+                console.error('[PUSH-DEBUG] No FCM token returned from messaging()');
+              }
           } else {
             console.log('[PUSH-DEBUG] Push permission NOT granted, status:', status);
           }
