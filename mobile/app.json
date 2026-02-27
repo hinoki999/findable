@@ -41,7 +41,8 @@
         "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_ADVERTISE"
+        "android.permission.BLUETOOTH_ADVERTISE",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -54,10 +55,12 @@
       }
     },
     "plugins": [
-      "react-native-ble-plx",
-      "expo-font",
-      "expo-secure-store",
-      "./app.plugin.js"
-    ]
+        "react-native-ble-plx",
+        "expo-font",
+        "expo-secure-store",
+        "./app.plugin.js",
+        "@react-native-firebase/app",
+        "expo-notifications"
+      ]
+    }
   }
-}
