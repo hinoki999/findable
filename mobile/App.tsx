@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
-import { View, Pressable, Text, PanResponder } from 'react-native';
+import { View, Pressable, Text, PanResponder, PermissionsAndroid } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -379,11 +379,18 @@ function MainApp() {
     
     if (isAuthenticated && userId) {
       console.log('[BG-SCAN-DEBUG] START branch - authenticated with userId');
-      scanStartedRef.current = true;
-      startBackgroundScan()
-        .then(() => console.log('[BG-SCAN] Background scan started'))
-        .catch(err => console.error('[BG-SCAN] Failed to start:', err));
-    } else if (scanStartedRef.current) {
+      const bleGranted = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN
+      );
+      if (bleGranted) {
+        console.log('[BG-SCAN-DEBUG] BLE permissions confirmed - starting scan');
+        scanStartedRef.current = true;
+        startBackgroundScan()
+          .then(() => console.log('[BG-SCAN] Background scan started'))
+          .catch(err => console.error('[BG-SCAN] Failed to start:', err));
+      } else {
+        console.log('[BG-SCAN-DEBUG] BLE permissions not yet granted - scan deferred');
+      }    } else if (scanStartedRef.current) {
       console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
       scanStartedRef.current = false;
       stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
