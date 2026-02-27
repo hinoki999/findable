@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (Android Background BLE Scanning + Mutual Link System + Two-Row Drops)
+**Last Updated:** February 20, 2026 (Push Notifications + Foreground Service Fixes + Permissions Consolidation)
 
 ---
 
@@ -51,7 +51,8 @@ droplin/
 │   ├── android/app/src/main/java/com/hirule/mobile/
 │   │   ├── MainApplication.kt          # App entry, registers native packages
 │   │   └── ble/                         # BLE native modules
-│   │       ├── BLEAdvertiserNative.kt  # Advertising native module
+│   │       ├── BLEAdvertiserNative.kt  # Advertising native module (bridge)
+│   │       ├── BLEAdvertiserService.kt # Advertising foreground service (Feb 20, 2026)
 │   │       ├── BLEAdvertiserPackage.kt # Advertiser package registration
 │   │       ├── BLEScannerService.kt    # Background scanning foreground service
 │   │       ├── BLEScannerModule.kt     # Scanner React Native bridge
@@ -3301,6 +3302,16 @@ const unsubscribe = onBackgroundDeviceFound((device) => {
 await stopBackgroundScan();
 ```
 
+**Event Names:**
+```typescript
+export const BLE_EVENTS = {
+  DEVICE_FOUND: 'BLEBackgroundDeviceFound',      // Single device detected
+  DEVICES_UPDATED: 'BLEBackgroundDevicesUpdated', // Device list cleanup (stale devices removed)
+};
+```
+
+**Note:** `BLEBackgroundDevicesUpdated` event is defined but not currently listened to in the React Native layer. This could be used to refresh the UI when stale devices are removed.
+
 ### Android Manifest Additions
 
 ```xml
@@ -3340,6 +3351,109 @@ private fun calculateDistanceFeet(rssi: Int): Float {
     return (distanceMeters * 3.28084).toFloat()  // Convert to feet
 }
 ```
+
+---
+
+## Android BLE Advertising Foreground Service (February 20, 2026)
+
+**Status:** ✅ COMPLETED
+**Scope:** Dedicated foreground service for continuous BLE advertising
+
+### Overview
+
+To match the background scanning implementation, BLE advertising was refactored into a dedicated Android Foreground Service. This ensures advertising continues reliably when the app is backgrounded and follows the same architectural pattern as `BLEScannerService`.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    React Native Layer                           │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEAdvertiser.tsx (React Hook)                          │   │
+│  │  - startAdvertising() / stopAdvertising()                │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              ↕                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                    Android Native Layer                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEAdvertiserNative.kt (React Native Bridge)            │   │
+│  │  - Saves/restores original Bluetooth name                │   │
+│  │  - Starts/stops BLEAdvertiserService via Intent          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              ↕                                  │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  BLEAdvertiserService.kt (Foreground Service)            │   │
+│  │  - Runs with persistent notification                     │   │
+│  │  - Handles actual BLE advertising via BluetoothLeAdvertiser│
+│  │  - START_STICKY for automatic restart                    │   │
+│  │  - Monitors Bluetooth state changes                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### File Created
+
+| File | Purpose |
+|------|---------|
+| `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEAdvertiserService.kt` | Android Foreground Service (~200 lines) |
+
+### Key Features
+
+**Service Configuration:**
+- Notification ID: `1002` (different from scanner's `1001`)
+- Notification Channel: `droplink_ble_advertiser`
+- Notification Text: "Currently broadcasting" (static, no device ID)
+- `START_STICKY` - restarts automatically if killed
+
+**Intent Actions:**
+- `ACTION_START_ADVERTISE` - Start advertising with serviceUUID and deviceId extras
+- `ACTION_STOP_ADVERTISE` - Stop advertising and restore original Bluetooth name
+
+**Bluetooth State Monitoring:**
+- Registers `BroadcastReceiver` for `BluetoothAdapter.ACTION_STATE_CHANGED`
+- Restarts advertising if Bluetooth is toggled off/on
+
+**onStartCommand Pattern:**
+```kotlin
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    when (intent?.action) {
+        ACTION_START_ADVERTISE -> {
+            startForeground(NOTIFICATION_ID, createNotification(), 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            val serviceUUID = intent.getStringExtra(EXTRA_SERVICE_UUID)
+            val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
+            if (serviceUUID != null && deviceId != null) {
+                startAdvertising(serviceUUID, deviceId)
+            }
+        }
+        ACTION_STOP_ADVERTISE -> {
+            stopAdvertising()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        else -> {
+            // System restart case
+            startForeground(NOTIFICATION_ID, createNotification(), 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        }
+    }
+    return START_STICKY
+}
+```
+
+### Integration with BLEAdvertiserNative.kt
+
+`BLEAdvertiserNative.kt` was refactored to delegate actual BLE advertising to the service:
+
+**startAdvertising():**
+1. Saves original Bluetooth device name to `SharedPreferences`
+2. Sets Bluetooth name to `DL-{deviceId}`
+3. Starts `BLEAdvertiserService` with `ACTION_START_ADVERTISE` intent
+
+**stopAdvertising():**
+1. Stops `BLEAdvertiserService` with `ACTION_STOP_ADVERTISE` intent
+2. Restores original Bluetooth name from `SharedPreferences`
 
 ---
 
@@ -4185,8 +4299,13 @@ interface BleDevice {
 - `[BLEScanner]` - Scanner detection
 - `[GHOST-MODE]` - Ghost mode toggle and advertising state changes
 - `[BG-SCAN]` - Background BLE scanning service (TypeScript)
+- `[BG-SCAN-DEBUG]` - Detailed background scan useEffect firing
 - `BLEScannerService` - Background scanning (Android native logcat)
 - `BLEScannerModule` - React Native bridge (Android native logcat)
+- `BLEAdvertiserService` - Advertising foreground service (Android native logcat)
+- `[PERMS-DEBUG]` - Permission request flow tracing
+- `[PUSH-DEBUG]` - Push notification token registration
+- `[SIGNUP-DEBUG]` - Signup flow state changes
 
 ### Known Issues & Solutions
 
@@ -4194,6 +4313,218 @@ interface BleDevice {
 - **Device name too long:** Shortened to "DL-XXXX"
 - **Scanner couldn't find users:** Query by userId prefix
 - **Drop sending failed silently:** Added error banner with actual messages
+
+---
+
+## Recent Changes (February 20, 2026)
+
+### Push Notifications Implementation
+
+**Status:** Implemented with known issues (see below)
+
+**Files Modified:**
+- `mobile/src/components/BLEScanner.tsx` - Added push notification registration in `requestPermissions()`
+- `mobile/src/services/api.ts` - Added `savePushToken()` function
+- `mobile/App.tsx` - Added pending token useEffect for post-auth token saving
+- `mobile/app.json` - Added `googleServicesFile` configuration
+
+**Implementation Details:**
+1. Push notification permissions are requested alongside BLE permissions in `BLEScanner.tsx`
+2. Token registration flow:
+   - `Notifications.requestPermissionsAsync()` requests permission
+   - `Notifications.getExpoPushTokenAsync({ projectId: '...' })` gets Expo push token
+   - Token is saved to AsyncStorage as `pendingPushToken` (fallback)
+   - Token is saved to Supabase `user_profiles.push_token` via `savePushToken()`
+3. Backup mechanism: `App.tsx` has a useEffect that checks for pending tokens after auth resolves
+
+**Configuration:**
+```json
+// app.json android block
+"googleServicesFile": "./android/app/google-services.json"
+```
+
+**Known Issues:**
+- Firebase/FCM not initializing properly on app startup (google-services.json may be missing or misconfigured)
+- Token registration may fail silently if user is not authenticated when permissions are requested
+- `getExpoPushTokenAsync` requires valid `projectId` from Expo dashboard
+
+### Foreground Service Fixes (ForegroundServiceDidNotStartInTimeException)
+
+**Problem:** App was crashing with `ForegroundServiceDidNotStartInTimeException` immediately after login on Android 12+.
+
+**Root Cause:** Android 12+ enforces a strict ~5-second timeout for calling `startForeground()` after `startForegroundService()` is invoked. The original implementation had `startForeground()` called after other initialization code, which could exceed this timeout.
+
+**Solution Applied:**
+1. **Restructured `onStartCommand()` in both services:**
+   - `BLEScannerService.kt` and `BLEAdvertiserService.kt` now call `startForeground()` only in the START action branch
+   - `startForeground()` is NOT called in the STOP action branch (which would cause issues)
+   - Added `else` branch for system restarts (START_STICKY behavior)
+
+2. **Updated `startForeground()` calls for Android 14+ compatibility:**
+   ```kotlin
+   startForeground(NOTIFICATION_ID, createNotification(), 
+       android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+   ```
+
+3. **Added auth guards in App.tsx:**
+   - BLE scan useEffect now checks `authLoading` before starting services
+   - Added `scanStartedRef` to prevent `stopBackgroundScan()` from being called when scan was never started
+
+**Current `onStartCommand()` Pattern:**
+```kotlin
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    when (intent?.action) {
+        ACTION_START_SCAN -> {
+            startForeground(NOTIFICATION_ID, createNotification(), 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            startScanning()
+        }
+        ACTION_STOP_SCAN -> {
+            stopScanning()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        else -> {
+            // System restart case (START_STICKY)
+            startForeground(NOTIFICATION_ID, createNotification(), 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        }
+    }
+    return START_STICKY
+}
+```
+
+### Permissions Consolidation
+
+**Change:** Push notification permissions are now requested as part of the BLE permissions flow in `BLEScanner.tsx`, not separately.
+
+**Flow:**
+1. `startScan()` is called
+2. `requestPermissions()` is invoked
+3. BLE permissions requested: `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, `ACCESS_FINE_LOCATION`
+4. If BLE permissions granted, push notification permissions requested
+5. If push permissions granted, Expo push token is obtained and saved
+
+**Rationale:** Consolidating permissions into a single flow provides better UX and ensures permissions are requested at a logical time (when BLE features are first used).
+
+### SVG Grid Rendering Optimization
+
+**Problem:** HomeScreen radar grid was rendering ~2,800 individual View components, causing performance issues.
+
+**Solution:** Converted grid rendering from individual View components to SVG paths using `react-native-svg`.
+
+**Changes:**
+- Installed `react-native-svg` via `npx expo install react-native-svg`
+- Grid lines are now rendered as SVG `Path` elements
+- SVG canvas extended to 1.5x screen size for zoom/rotation coverage
+- Added `overflow: 'visible'` to container Views
+
+**SVG Configuration:**
+```typescript
+const svgSize = Math.max(screenWidth, viewableHeight) * 1.5;
+const svgWidth = svgSize;
+const svgHeight = svgSize;
+const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
+```
+
+### Console.log Cleanup
+
+**Removed:** All active `console.log` statements from `HomeScreen.tsx` (approximately 70 statements).
+
+**Retained:** Debug logging in other files with prefixes like `[PUSH-DEBUG]`, `[BG-SCAN-DEBUG]`, etc. for troubleshooting.
+
+---
+
+## Current Known Issues (As of February 20, 2026)
+
+### 1. Push Notification Token Not Saving to Expo/Supabase
+
+**Symptoms:**
+- `[PUSH-DEBUG]` logs show token received but Supabase update may fail silently
+- Token may not appear in `user_profiles.push_token` column
+
+**Potential Causes:**
+- User not authenticated when `savePushToken()` is called
+- Supabase RLS policy blocking update
+- Network error during token save
+
+**Debugging:**
+```
+[PUSH-DEBUG] savePushToken called with token: ExponentPushToken[...]
+[PUSH-DEBUG] getUser result - user: EXISTS/NULL
+[PUSH-DEBUG] Supabase update result - error: none/message
+```
+
+**Workaround:** Pending token is saved to AsyncStorage and retried after auth resolves in App.tsx useEffect.
+
+### 2. Firebase/Google Services Not Initializing
+
+**Symptoms:**
+- Push notifications not working on physical devices
+- No FCM token generated
+- Google Services plugin warnings during build
+
+**Configuration Required:**
+1. Download `google-services.json` from Firebase Console
+2. Place in `mobile/android/app/google-services.json`
+3. Ensure `app.json` has `googleServicesFile` configured
+
+**Note:** The manual `build.gradle` changes for Google Services plugin were reverted. Expo handles this automatically via `app.json` configuration.
+
+### 3. Foreground Service Timing Issues (Android 14+)
+
+**Status:** Mostly resolved, but edge cases may exist.
+
+**If crash occurs:**
+- Check logcat for `ForegroundServiceDidNotStartInTimeException`
+- Verify `startForeground()` is first call in START action branch
+- Ensure `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission is in AndroidManifest.xml
+
+### 4. BLE Permissions Flow
+
+**Current State:** Working, but permissions are requested every time `startScan()` is called.
+
+**Potential Improvement:** Cache permission state and only request if not already granted.
+
+### 5. Advertising useEffect Double-Firing
+
+**Status:** Resolved via refs pattern.
+
+**Solution Applied:**
+- Added `startAdvertisingRef` and `stopAdvertisingRef` 
+- Removed cleanup function from advertising useEffect
+- Changed dependency array to exclude function references
+
+---
+
+## Android Manifest Permissions (Complete List)
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.BLUETOOTH"/>
+<uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+<uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+<uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.INTERNET"/>
+```
+
+**Service Declarations:**
+```xml
+<service android:name=".ble.BLEScannerService" 
+         android:enabled="true" 
+         android:exported="false" 
+         android:foregroundServiceType="connectedDevice"/>
+<service android:name=".ble.BLEAdvertiserService" 
+         android:enabled="true" 
+         android:exported="false" 
+         android:foregroundServiceType="connectedDevice"/>
+```
 
 ---
 
@@ -4266,6 +4597,30 @@ interface BleDevice {
 6. **LifecycleEventListener for cleanup** - Unregister receivers when React Native host is destroyed
 7. **Two-row database patterns simplify queries** - Sender + receiver records enable filtering by perspective
 
+### Lessons Learned (Foreground Services & Android 12+)
+1. **startForeground() must be called immediately** - Android 12+ enforces ~5-second timeout after startForegroundService()
+2. **Don't call startForeground() in STOP branch** - Only call in START or system restart (else) branches
+3. **Use 3-parameter startForeground() for Android 14+** - Include ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+4. **Guard service starts with auth state** - Check authLoading before starting services to prevent race conditions
+5. **Track service start state with refs** - Use `scanStartedRef` to prevent stopping services that were never started
+6. **onStartCommand restructure pattern** - when block with START -> startForeground + work, STOP -> cleanup + stopSelf, else -> startForeground only
+
+### Lessons Learned (Push Notifications with Expo)
+1. **projectId is required for getExpoPushTokenAsync** - Must match Expo project ID from dashboard
+2. **Token registration requires authentication** - savePushToken needs authenticated user to update database
+3. **AsyncStorage as fallback** - Store pending token locally, retry after auth resolves
+4. **Notifications.setNotificationHandler at module level** - Must be outside component to prevent re-registration
+5. **Permission timing matters** - Request push permissions after BLE permissions for logical UX flow
+6. **google-services.json required for FCM** - Physical device push notifications require Firebase configuration
+7. **Expo handles Google Services plugin** - Don't manually add build.gradle changes, use app.json googleServicesFile
+
+### Lessons Learned (React Performance)
+1. **SVG paths beat View components** - Converting ~2800 Views to SVG Paths dramatically improves render performance
+2. **Extended canvas for transforms** - SVG canvas should be 1.5x+ screen size to handle rotation/zoom without clipping
+3. **overflow: visible on containers** - Required for SVG content that extends beyond its positioned container
+4. **Console.log statements have cost** - Remove debug logging from hot code paths in production
+5. **useEffect dependencies matter** - Function references in deps cause re-runs; use refs for stable references
+
 ### Lessons Learned (Drops System)
 1. **Dual records for bidirectional tracking** - Create both sender and receiver rows simultaneously
 2. **Status values should be unambiguous** - 'received' is clearer than 'pending'
@@ -4299,3 +4654,10 @@ interface BleDevice {
 - [ ] Deprecate old `devices` table (drops now use `drops` table)
 - [ ] Integrate background scanner with HomeScreen radar (merge foreground + background devices)
 - [ ] iOS background scanning implementation (when iOS native module needed)
+- [ ] Fix Firebase/FCM initialization for push notifications
+- [ ] Add google-services.json to repository (or document setup process)
+- [ ] Implement Supabase Edge Function for drop notifications (send-drop-notification)
+- [ ] Cache BLE permission state to avoid repeated requests
+- [ ] Add proper error handling for push token registration failures
+- [ ] Implement push notification handlers for incoming drops and links
+- [ ] Test push notifications on physical devices with Firebase configured
