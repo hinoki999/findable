@@ -5,6 +5,7 @@ import { View, Pressable, Text, PanResponder, PermissionsAndroid } from 'react-n
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -203,7 +204,7 @@ function MainApp() {
 
   // ✅ Track whether AsyncStorage has cached profile (for fresh install detection)
   const hasCachedProfileRef = useRef(false);
-  
+
   // Track whether background scan was started (to avoid stopping when never started)
   const scanStartedRef = useRef(false);
 
@@ -295,7 +296,7 @@ function MainApp() {
       return; // Skip backend calls for testing
     }
     if (!auth || !uid) return;
-    
+
     try {
       // Load profile from Supabase
       const { data: profile } = await supabase
@@ -303,27 +304,27 @@ function MainApp() {
         .select('*')
         .eq('user_id', uid)
         .single();
-      
+
       // Handle onlyPhoto option
       if (options?.onlyPhoto && profile) {
         setProfilePhotoUri(profile.profile_photo);
         return;
       }
-      
+
       // Load settings from Supabase
       const { data: settings } = await supabase
         .from('user_settings')
         .select('*')
         .eq('user_id', uid)
         .single();
-      
+
       // Load devices/contacts from Supabase
       const { data: devices } = await supabase
         .from('devices')
         .select('*')
         .eq('user_id', uid)
         .order('last_seen', { ascending: false });
-      
+
       if (profile) {
         setUserProfile({
           name: profile.name || 'Your Name',
@@ -336,12 +337,12 @@ function MainApp() {
         });
         setProfilePhotoUri(profile.profile_photo);
       }
-      
+
       if (settings) {
         setIsDarkMode(settings.dark_mode);
         setMaxDistance(settings.max_distance);
       }
-      
+
       if (devices) {
         setLinkNotifications(devices.map(d => ({
           id: d.id,
@@ -455,7 +456,7 @@ function MainApp() {
   ) => {
     console.log('[SIGNUP-DEBUG] handleSignupSuccess called with profileData:', profileData ? 'YES' : 'NO');
     console.log('SUCCESS: [App] Signup successful');
-    
+
     // Refresh auth state to detect the new Supabase session created during signup
     console.log('[SIGNUP-DEBUG] About to call refreshAuth()...');
     console.log('[App] Refreshing auth state after signup...');
@@ -502,11 +503,11 @@ function MainApp() {
     console.log('✅ Login successful');
     // Auth state is already set by AuthContext.login() called in LoginScreen
     // loadUserData will be triggered by useEffect that watches isAuthenticated
-    
+
     // Navigate to Home tab
     setTab('Home');
     setSubScreen(null);
-    
+
     // Show success message
     showToast({
       message: 'Successfully logged in!',
@@ -517,7 +518,7 @@ function MainApp() {
 
   const handleProfilePhotoPromptComplete = async (uploadedPhotoUri?: string) => {
     console.log('✅ [App] Profile photo prompt completed');
-    
+
     console.log('✅ [App] Setting showProfilePhotoPrompt = false');
     setShowProfilePhotoPrompt(false);
 
@@ -608,22 +609,22 @@ function MainApp() {
     console.log('[PROFILE-UPDATE] ===== updateProfile CALLED =====');
     console.log('[PROFILE-UPDATE] Received updates:', JSON.stringify(updates, null, 2));
     console.log('[PROFILE-UPDATE] AUTH_BYPASS_ENABLED:', AUTH_BYPASS_ENABLED);
-    
+
     const newProfile = { ...userProfile, ...updates };
-    
+
     if (AUTH_BYPASS_ENABLED) {
       // Update local state only for testing
       setUserProfile(newProfile);
       showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
       return;
     }
-    
+
     try {
       if (!userId) {
         console.log('[PROFILE-UPDATE] No userId, skipping update');
         return;
       }
-      
+
       // Build the update object with all profile fields
       const updateData = {
         name: newProfile.name,
@@ -634,28 +635,28 @@ function MainApp() {
         phone_verified: newProfile.phoneVerified || false,
         profile_photo: newProfile.profilePhoto || null,
       };
-      
+
       console.log('[PROFILE-UPDATE] Before UPDATE - userId:', userId);
       console.log('[PROFILE-UPDATE] Before UPDATE - fields being sent:', JSON.stringify(updateData, null, 2));
-      
+
       // Update user_profiles in Supabase
       const { data, error } = await supabase
         .from('user_profiles')
         .update(updateData)
         .eq('user_id', userId)
         .select();
-      
+
       if (error) {
         console.error('[PROFILE-UPDATE] Supabase UPDATE error:', error);
         console.error('[PROFILE-UPDATE] Error details:', JSON.stringify(error, null, 2));
         throw new Error(error.message || 'Failed to update profile in database');
       }
-      
+
       console.log('[PROFILE-UPDATE] After UPDATE - success, returned data:', JSON.stringify(data, null, 2));
-      
+
       // Update local state
       setUserProfile(newProfile);
-      
+
       console.log('[PROFILE-UPDATE] ✅ Profile updated successfully');
       showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
     } catch (error: any) {
@@ -874,14 +875,14 @@ function MainApp() {
   // Tutorial initializer component (must be inside TutorialProvider)
   const TutorialInitializer = () => {
     const { initializeTutorials } = useTutorial();
-    
+
     useEffect(() => {
       if (isAuthenticated && userId) {
         console.log('[TUTORIAL] Auth state changed - initializing tutorials');
         initializeTutorials();
       }
     }, [isAuthenticated, userId, initializeTutorials]);
-    
+
     return null; // This component doesn't render anything
   };
 
@@ -906,112 +907,112 @@ function MainApp() {
                         <Screen />
                       </View>
 
-                    {/* Bottom nav - Hide when sub-screen is active */}
-                    {!subScreen && (
-                      <View style={{
-                        flexDirection: 'row',
-                        borderTopWidth: 1,
-                        borderTopColor: theme.colors.border,
-                        backgroundColor: theme.colors.white,
-                        paddingBottom: insets.bottom
-                      }}>
-                        {/* Home */}
-                        <Pressable
-                          onPress={() => {
-                            logAction('Navigation', 'Home Tab');
-                            setTab('Home');
-                          }}
-                          style={{
-                            flex: 1, paddingVertical: 14, alignItems: 'center',
-                            backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
-                          }}
-                        >
-                          <MaterialCommunityIcons
-                            name="home-outline"
-                            size={24}
-                            color="#FF6B4A"
-                            style={{ fontWeight: '100' }}
-                          />
-                        </Pressable>
+                      {/* Bottom nav - Hide when sub-screen is active */}
+                      {!subScreen && (
+                        <View style={{
+                          flexDirection: 'row',
+                          borderTopWidth: 1,
+                          borderTopColor: theme.colors.border,
+                          backgroundColor: theme.colors.white,
+                          paddingBottom: insets.bottom
+                        }}>
+                          {/* Home */}
+                          <Pressable
+                            onPress={() => {
+                              logAction('Navigation', 'Home Tab');
+                              setTab('Home');
+                            }}
+                            style={{
+                              flex: 1, paddingVertical: 14, alignItems: 'center',
+                              backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="home-outline"
+                              size={24}
+                              color="#FF6B4A"
+                              style={{ fontWeight: '100' }}
+                            />
+                          </Pressable>
 
-                        {/* Drop */}
-                        <Pressable
-                          onPress={() => {
-                            logAction('Navigation', 'Drop Tab');
-                            setTab('Drop');
-                          }}
-                          style={{
-                            flex: 1, paddingVertical: 14, alignItems: 'center',
-                            backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
-                          }}
-                        >
-                          <MaterialCommunityIcons
-                            name="water-outline"
-                            size={24}
-                            color={theme.colors.blue}
-                          />
-                        </Pressable>
+                          {/* Drop */}
+                          <Pressable
+                            onPress={() => {
+                              logAction('Navigation', 'Drop Tab');
+                              setTab('Drop');
+                            }}
+                            style={{
+                              flex: 1, paddingVertical: 14, alignItems: 'center',
+                              backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="water-outline"
+                              size={24}
+                              color={theme.colors.blue}
+                            />
+                          </Pressable>
 
-                        {/* History */}
-                        <Pressable
-                          onPress={() => {
-                            logAction('Navigation', 'History Tab');
-                            setTab('History');
-                          }}
-                          style={{
-                            flex: 1, paddingVertical: 14, alignItems: 'center',
-                            backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
-                          }}
-                        >
-                          <MaterialCommunityIcons
-                            name="link-variant"
-                            size={24}
-                            color="#FF6B4A"
-                          />
-                        </Pressable>
+                          {/* History */}
+                          <Pressable
+                            onPress={() => {
+                              logAction('Navigation', 'History Tab');
+                              setTab('History');
+                            }}
+                            style={{
+                              flex: 1, paddingVertical: 14, alignItems: 'center',
+                              backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="link-variant"
+                              size={24}
+                              color="#FF6B4A"
+                            />
+                          </Pressable>
 
-                        {/* Account */}
-                        <Pressable
-                          onPress={() => {
-                            logAction('Navigation', 'Account Tab');
-                            setTab('Account');
-                          }}
-                          style={{
-                            flex: 1, paddingVertical: 14, alignItems: 'center',
-                            backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
-                          }}
-                        >
-                          <MaterialCommunityIcons
-                            name="account-outline"
-                            size={24}
-                            color={theme.colors.blue}
-                          />
-                        </Pressable>
-                      </View>
-                    )}
+                          {/* Account */}
+                          <Pressable
+                            onPress={() => {
+                              logAction('Navigation', 'Account Tab');
+                              setTab('Account');
+                            }}
+                            style={{
+                              flex: 1, paddingVertical: 14, alignItems: 'center',
+                              backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
+                            }}
+                          >
+                            <MaterialCommunityIcons
+                              name="account-outline"
+                              size={24}
+                              color={theme.colors.blue}
+                            />
+                          </Pressable>
+                        </View>
+                      )}
 
-                    {/* Toast Notification */}
-                    {toastConfig && (
-                      <Toast
-                        message={toastConfig.message}
-                        type={toastConfig.type}
-                        duration={toastConfig.duration}
-                        actionLabel={toastConfig.actionLabel}
-                        onAction={toastConfig.onAction}
-                        onDismiss={() => setToastConfig(null)}
-                      />
-                    )}
-                  </View>
-                </LinkNotificationsContext.Provider>
-              </SettingsContext.Provider>
-            </ToastContext.Provider>
-          </UserProfileContext.Provider>
-            </PinnedProfilesContext.Provider>
-          </DarkModeContext.Provider>
-        </TutorialProvider>
-      </TabNavigationProvider>
-    );
-  }
+                      {/* Toast Notification */}
+                      {toastConfig && (
+                        <Toast
+                          message={toastConfig.message}
+                          type={toastConfig.type}
+                          duration={toastConfig.duration}
+                          actionLabel={toastConfig.actionLabel}
+                          onAction={toastConfig.onAction}
+                          onDismiss={() => setToastConfig(null)}
+                        />
+                      )}
+                    </View>
+                  </LinkNotificationsContext.Provider>
+                </SettingsContext.Provider>
+              </ToastContext.Provider>
+            </UserProfileContext.Provider>
+          </PinnedProfilesContext.Provider>
+        </DarkModeContext.Provider>
+      </TutorialProvider>
+    </TabNavigationProvider>
+  );
+}
 
 // Export App wrapped with AuthProvider
 export default function App() {
