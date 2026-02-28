@@ -68,7 +68,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
-  
+
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
   const isScanningRef = useRef(isScanning);
   useEffect(() => {
@@ -101,39 +101,39 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         ]);
         console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
         console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
-        
+
         const allGranted = Object.values(granted).every(
           permission => permission === PermissionsAndroid.RESULTS.GRANTED
         );
         console.log('[PERMS-DEBUG] allGranted:', allGranted);
-        
+
         if (!allGranted) {
           console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
           setError('Bluetooth permissions not granted');
           return false;
         }
-        
+
         // Start background BLE scan now that permissions are confirmed
-          console.log('[BG-SCAN-DEBUG] Permissions granted - starting background scan from BLEScanner');
-          startBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to start from BLEScanner:', err));
+        console.log('[BG-SCAN-DEBUG] Permissions granted - starting background scan from BLEScanner');
+        startBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to start from BLEScanner:', err));
         // Request push notification permissions
         try {
           console.log('[PUSH-DEBUG] Starting push notification registration...');
           console.log('[PUSH-DEBUG] Before Notifications.requestPermissionsAsync...');
           const { status } = await Notifications.requestPermissionsAsync();
           console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
-          cif (status === 'granted') {
-              console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
-              const token = await messaging().getToken();
-              console.log('[PUSH-DEBUG] FCM token received:', token ? 'YES' : 'NO');
-              if (token) {
-                await AsyncStorage.setItem('pendingPushToken', token);
-                console.log('[PUSH-DEBUG] Token stored in AsyncStorage');
-                await savePushToken(token);
-                console.log('[PUSH-DEBUG] Token saved to Supabase');
-              } else {
-                console.error('[PUSH-DEBUG] No FCM token returned from messaging()');
-              }
+          if (status === 'granted') {
+            console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
+            const token = await messaging().getToken();
+            console.log('[PUSH-DEBUG] FCM token received:', token ? 'YES' : 'NO');
+            if (token) {
+              await AsyncStorage.setItem('pendingPushToken', token);
+              console.log('[PUSH-DEBUG] Token stored in AsyncStorage');
+              await savePushToken(token);
+              console.log('[PUSH-DEBUG] Token saved to Supabase');
+            } else {
+              console.error('[PUSH-DEBUG] No FCM token returned from messaging()');
+            }
           } else {
             console.log('[PUSH-DEBUG] Push permission NOT granted, status:', status);
           }
@@ -152,7 +152,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {
     addDebugLog('startScan called');
-    
+
     // Prevent multiple simultaneous scan starts
     if (isScanning) {
       addDebugLog('startScan: already scanning, skipping');
@@ -166,7 +166,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     setError(null);
     // FIX #2: Don't clear devices array - preserve existing devices and update them
     // setDevices([]); // REMOVED - this was causing devices to disappear
-    
+
     // Web platform: BLE is not available, devices will remain empty
     if (Platform.OS === 'web') {
       console.log('[BLE-DEBUG] Web platform detected, BLE not available');
@@ -205,7 +205,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         // Add ALL detected devices (no filtering)
         if (device) {
           setDevicesScanned(prev => prev + 1);
-          
+
           // Check if device has DropLink Service UUID (for recent scans tracking)
           let hasDropLinkUUID = false;
           if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
@@ -214,7 +214,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
             );
           }
-          
+
           // Add to recent scans list (keep all devices, remove duplicates)
           setRecentScans(prev => {
             const newEntry: RecentScanEntry = {
@@ -226,7 +226,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             const filtered = prev.filter(entry => entry.id !== device.id);
             return [...filtered, newEntry];
           });
-          
+
           // Validate device has required properties
           if (!device.id) {
             return;
@@ -244,7 +244,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           };
 
           const deviceId = extractDeviceId(device.name);
-          
+
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
             (async () => {
@@ -252,7 +252,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
                 let displayName: string | null = null;
-                
+
                 // Query user_profiles with server-side prefix matching
                 // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
                 const { data: userProfileData, error: userProfileError } = await supabase
@@ -261,17 +261,17 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   .ilike('user_id', `${normalizedDeviceId}%`)
                   .limit(1)
                   .maybeSingle();
-                
+
                 if (!userProfileError && userProfileData) {
-                    userId = userProfileData.user_id;
+                  userId = userProfileData.user_id;
                   // Use name for display, fall back to username, then deviceId
                   displayName = userProfileData.name || userProfileData.username || deviceId || 'User';
                 }
-                
+
                 // Update device if found, or use deviceId as fallback
                 if (userId) {
-                  setDevices(prevDevices => 
-                    prevDevices.map(d => 
+                  setDevices(prevDevices =>
+                    prevDevices.map(d =>
                       d.id === device.id
                         ? { ...d, username: displayName || deviceId || 'User', userId: userId }
                         : d
@@ -280,8 +280,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 } else {
                   // User not found in database, but device exists - use deviceId as identifier
                   // This allows the device to be displayed even if profile lookup fails
-                  setDevices(prevDevices => 
-                    prevDevices.map(d => 
+                  setDevices(prevDevices =>
+                    prevDevices.map(d =>
                       d.id === device.id
                         ? { ...d, username: deviceId, userId: null }
                         : d
@@ -300,7 +300,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             const distanceFeet = calculateDistanceFeet(device.rssi || -100);
             // Use device name or generate a fallback name
             const deviceName = device.name || `BLE-Device-${device.id.substring(0, 8)}`;
-            
+
             if (!exists) {
               // Add new device
               return [...prevDevices, {
@@ -313,8 +313,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               }];
             } else {
               // Update existing device with new RSSI/distance (preserve username if already set)
-              return prevDevices.map(d => 
-                d.id === device.id 
+              return prevDevices.map(d =>
+                d.id === device.id
                   ? { ...d, rssi: device.rssi || -100, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
                   : d
               );
@@ -340,7 +340,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   // Stop scanning
   const stopScan = useCallback(() => {
     addDebugLog('stopScan called');
-    
+
     if (Platform.OS === 'web') {
       addDebugLog('stopScan: web platform, skipping');
       return;
@@ -382,7 +382,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     const subscription = bleManager.onStateChange((state) => {
       addDebugLog(`stateChange: ${State[state]} (${state})`);
-      
+
       // Skip the initial state emission if we're already scanning
       // This prevents the loop where PoweredOn -> startScan -> state change -> loop
       if (!hasHandledInitialState) {
@@ -412,12 +412,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
       // Handle subsequent state changes
       if (state === State.PoweredOff) {
-            addDebugLog('stateChange: PoweredOff -> stopping scan');
-            console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
-            setDevices([]);
-            setIsScanning(false);
-            addDebugLog('setIsScanning(false) - from PoweredOff');
-            setError('Bluetooth is disabled');
+        addDebugLog('stateChange: PoweredOff -> stopping scan');
+        console.warn('[BLE-DEBUG] Bluetooth powered off, stopping scan');
+        setDevices([]);
+        setIsScanning(false);
+        addDebugLog('setIsScanning(false) - from PoweredOff');
+        setError('Bluetooth is disabled');
       } else if (state === State.PoweredOn) {
         addDebugLog(`stateChange: PoweredOn (isScanningRef: ${isScanningRef.current})`);
         console.log('[BLE-DEBUG] Bluetooth powered on');

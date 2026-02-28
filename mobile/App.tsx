@@ -371,32 +371,34 @@ function MainApp() {
 
   // Start/stop background BLE scanning based on auth state
   useEffect(() => {
-    console.log('[BG-SCAN-DEBUG] useEffect fired - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
-    if (authLoading) {
-      console.log('[BG-SCAN-DEBUG] Early return - authLoading is true');
-      return;
-    }
-    
-    if (isAuthenticated && userId) {
-      console.log('[BG-SCAN-DEBUG] START branch - authenticated with userId');
-      const bleGranted = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN
-      );
-      if (bleGranted) {
-        console.log('[BG-SCAN-DEBUG] BLE permissions confirmed - starting scan');
-        scanStartedRef.current = true;
-        startBackgroundScan()
-          .then(() => console.log('[BG-SCAN] Background scan started'))
-          .catch(err => console.error('[BG-SCAN] Failed to start:', err));
+    const checkAndStart = async () => {
+      console.log('[BG-SCAN-DEBUG] useEffect fired - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
+      if (authLoading) {
+        console.log('[BG-SCAN-DEBUG] Early return - authLoading is true');
+        return;
+      }
+      if (isAuthenticated && userId) {
+        console.log('[BG-SCAN-DEBUG] START branch - authenticated with userId');
+        const bleGranted = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN
+        );
+        if (bleGranted) {
+          console.log('[BG-SCAN-DEBUG] BLE permissions confirmed - starting scan');
+          scanStartedRef.current = true;
+          startBackgroundScan()
+            .catch(err => console.error('[BG-SCAN] Failed to start:', err));
+        } else {
+          console.log('[BG-SCAN-DEBUG] BLE permissions not yet granted - scan deferred');
+        }
+      } else if (scanStartedRef.current) {
+        console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
+        scanStartedRef.current = false;
+        stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
       } else {
-        console.log('[BG-SCAN-DEBUG] BLE permissions not yet granted - scan deferred');
-      }    } else if (scanStartedRef.current) {
-      console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
-      scanStartedRef.current = false;
-      stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
-    } else {
-      console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
-    }
+        console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
+      }
+    };
+    checkAndStart();
   }, [isAuthenticated, userId, authLoading]);
 
   // Save pending push token after auth resolves
