@@ -17,7 +17,6 @@ console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
-import { startBackgroundScan } from '../native/BLEScannerModule';
 export interface BleDevice {
   id: string;
   name: string;
@@ -112,9 +111,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           return false;
         }
 
-        // Start background BLE scan now that permissions are confirmed
-        console.log('[BG-SCAN-DEBUG] Permissions granted - starting background scan from BLEScanner');
-        startBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to start from BLEScanner:', err));
         // Request push notification permissions
         try {
           console.log('[PUSH-DEBUG] Starting push notification registration...');
