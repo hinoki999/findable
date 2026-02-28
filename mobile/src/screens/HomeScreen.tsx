@@ -279,7 +279,7 @@ const Sphere3D = {
   project: (point: Vector3D, cameraDistance: number, fov: number): ProjectedPoint => {
     // Camera is at (0, 0, -cameraDistance) looking at origin
     const z = point.z + cameraDistance;
-    
+
     // Check if point is behind camera
     if (z <= 0) {
       return { x: 0, y: 0, z: point.z, visible: false };
@@ -288,7 +288,7 @@ const Sphere3D = {
     // Perspective projection
     const scale = cameraDistance / z;
     const fovScale = Math.tan(fov / 2);
-    
+
     return {
       x: (point.x * scale) / fovScale,
       y: (point.y * scale) / fovScale,
@@ -346,10 +346,10 @@ const Sphere3D = {
   // Convert projected points to SVG path string
   pointsToSVGPath: (points: ProjectedPoint[]): string => {
     if (points.length === 0) return '';
-    
+
     const visiblePoints = points.filter(p => p.visible);
     if (visiblePoints.length === 0) return '';
-    
+
     let path = `M ${visiblePoints[0].x} ${visiblePoints[0].y}`;
     for (let i = 1; i < visiblePoints.length; i++) {
       path += ` L ${visiblePoints[i].x} ${visiblePoints[i].y}`;
@@ -379,7 +379,7 @@ const DeviceBlip: React.FC<{
   const randomDelay = useState(() => Math.random() * 1000)[0];
   const [pulseAnim] = useState(new Animated.Value(0));
   const BLIP_SIZE = 6; // pixels
-  
+
   // DRAMATIZED pulse speed based on distance - closer = MUCH faster
   // Distance-based pulsation:
   // 0-5 feet: No pulsing (stay bright)
@@ -390,7 +390,7 @@ const DeviceBlip: React.FC<{
   const distance = device.distanceFeet;
   let pulseDuration;
   let shouldPulse = true;
-  
+
   if (distance <= 5) {
     shouldPulse = false; // No pulsing, stay solid bright
     pulseDuration = 0;
@@ -403,14 +403,14 @@ const DeviceBlip: React.FC<{
   } else {
     pulseDuration = 2500; // Very slow
   }
-  
+
   useEffect(() => {
     if (!shouldPulse) {
       // Keep at full brightness for very close devices
       pulseAnim.setValue(1);
       return;
     }
-    
+
     // Start with random delay for staggered effect
     const timer = setTimeout(() => {
       const pulse = Animated.loop(
@@ -429,37 +429,37 @@ const DeviceBlip: React.FC<{
       );
       pulse.start();
     }, randomDelay);
-    
+
     return () => {
       clearTimeout(timer);
       pulseAnim.stopAnimation();
     };
   }, [pulseDuration, shouldPulse]);
-  
+
   // Calculate depth-based effects (farther away = smaller & dimmer)
   const depthFactor = depth !== undefined ? Math.max(0.4, 1 - Math.abs(depth) / 200) : 1;
-  
+
   // More dramatic scale changes with depth factor
   const baseScale = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.3], // More dramatic scaling
   }) : 1.2; // Slightly larger when not pulsing
-  
+
   const scale = typeof baseScale === 'number' ? baseScale * depthFactor : baseScale;
-  
+
   // More dramatic opacity changes with depth factor
   const baseOpacity = shouldPulse ? pulseAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.5, 1.0], // Wider range
   }) : 1.0; // Full brightness when not pulsing
-  
+
   const opacity = typeof baseOpacity === 'number' ? baseOpacity * depthFactor : baseOpacity;
-  
+
   // Apply view transformation (rotation + zoom) to position
   const transformedPosition = TensorMath.transformVector(viewTransform, position);
-  
+
   const hitAreaSize = 50; // Increased hit area for easier tapping
-  
+
   return (
     <Pressable
       onTouchEnd={(e) => {
@@ -514,15 +514,15 @@ const LinkMarker: React.FC<{
   onPress: () => void;
 }> = ({ device, position, nucleusX, nucleusY, viewTransform, depth = 0, onPress }) => {
   const LINK_ICON_SIZE = 18; // Slightly larger than blips for visibility
-  
+
   // Apply view transformation (rotation + zoom) to position
   const transformedPosition = TensorMath.transformVector(viewTransform, position);
-  
+
   // Calculate depth-based effects (farther away = dimmer)
   const depthFactor = depth !== undefined ? Math.max(0.5, 1 - Math.abs(depth) / 200) : 1;
-  
+
   const hitAreaSize = 30; // Large hit area for easy tapping
-  
+
   return (
     <Pressable
       onPress={(e) => {
@@ -550,9 +550,9 @@ const LinkMarker: React.FC<{
         }}
         pointerEvents="none"
       >
-        <MaterialCommunityIcons 
-          name="link-variant" 
-          size={LINK_ICON_SIZE} 
+        <MaterialCommunityIcons
+          name="link-variant"
+          size={LINK_ICON_SIZE}
           color="#FFB366"
         />
       </View>
@@ -584,7 +584,7 @@ export default function HomeScreen() {
   const [isSendingDrop, setIsSendingDrop] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
-  
+
   // Auto-dismiss drop error after 5 seconds
   useEffect(() => {
     if (dropError) {
@@ -594,12 +594,12 @@ export default function HomeScreen() {
       return () => clearTimeout(timer);
     }
   }, [dropError]);
-  
+
   // Capture console.error messages
   useEffect(() => {
     const originalError = console.error;
     console.error = (...args: any[]) => {
-      const errorMessage = args.map(arg => 
+      const errorMessage = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
       ).join(' ');
       const timestamp = new Date().toLocaleTimeString();
@@ -609,23 +609,23 @@ export default function HomeScreen() {
       });
       originalError.apply(console, args);
     };
-    
+
     return () => {
       console.error = originalError;
     };
   }, []);
-  
+
   // Link markers state (accepted links only, not returned drops)
   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
   const [selectedLink, setSelectedLink] = useState<Device | null>(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
-  
+
   // ========== ROTATION & ZOOM STATE ==========
   const [viewRotation, setViewRotation] = useState(0); // Rotation angle in radians
   const [viewScale, setViewScale] = useState(1); // Zoom scale factor (1 = normal, 2 = 2x zoom)
   const rotationAnimValue = useRef(new Animated.Value(0)).current;
   const scaleAnimValue = useRef(new Animated.Value(1)).current;
-  
+
   // Gesture tracking for pinch and rotation
   const gestureState = useRef({
     initialScale: 1,
@@ -645,10 +645,10 @@ export default function HomeScreen() {
   const { maxDistance } = useSettings();
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   const theme = getTheme(isDarkMode);
-  
+
   // Safe area insets for Android/iOS system UI
   const insets = useSafeAreaInsets();
-  
+
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
@@ -662,7 +662,7 @@ export default function HomeScreen() {
   });
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
-  
+
   // Calculate available space after accounting for system UI
   const availableHeight = screenHeight - insets.top - insets.bottom;
   const availableWidth = screenWidth - insets.left - insets.right;
@@ -675,25 +675,25 @@ export default function HomeScreen() {
 
     return () => subscription?.remove();
   }, []);
-  
+
   // MATHEMATICAL CONSTANTS FOR UI LAYOUT
   const TOP_CONTROLS_HEIGHT = 80; // Height of top controls (discoverability toggle, reset view, etc.)
   const BOTTOM_TABS_HEIGHT = 60; // Height of bottom navigation tabs
   const DROP_ICON_SIZE = 30; // Size of water drop icon (pixels)
   const MAX_RADIUS_FEET = 33; // Maximum radius in feet
   const UI_PADDING = 16; // Padding for UI elements
-  
+
   // Calculate radar size (square, scaled to fit available space)
   const radarAvailableHeight = availableHeight - TOP_CONTROLS_HEIGHT - BOTTOM_TABS_HEIGHT - (UI_PADDING * 2);
   const radarSize = Math.min(radarAvailableHeight, availableWidth - (UI_PADDING * 2));
-  
+
   // Calculate the viewable area for backwards compatibility
   const viewableHeight = screenHeight - BOTTOM_TABS_HEIGHT;
-  
+
   // Calculate the NUCLEUS (origin point 0,0) - center of radar area
   const nucleusX = screenWidth / 2; // Exact horizontal center
   const nucleusY = insets.top + TOP_CONTROLS_HEIGHT + (radarAvailableHeight / 2); // Centered in radar area
-  
+
   // Stable nucleus refs for transforms (prevents drift during gestures)
   // Transform origin must match the raindrop icon position for proper rotation centering
   const nucleusXRef = useRef(nucleusX);
@@ -713,11 +713,11 @@ export default function HomeScreen() {
   //     viewableHeight
   //   });
   // }, [nucleusX, nucleusY, screenWidth, viewableHeight]);
-  
+
   // Icon offset to center it perfectly (half the icon size)
   const iconOffsetX = DROP_ICON_SIZE / 2; // 15 pixels
   const iconOffsetY = DROP_ICON_SIZE / 2; // 15 pixels
-  
+
   // Update grid spacing to scale with radar size
   const PIXELS_PER_FOOT = radarSize / (MAX_RADIUS_FEET * 2);
 
@@ -753,7 +753,7 @@ export default function HomeScreen() {
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
     startScanRef.current();
-    
+
     // FIX #4: Restart scanning if it stops (continuous scanning loop)
     // Use ref to check current scanning state without causing effect re-runs
     const scanInterval = setInterval(() => {
@@ -761,7 +761,7 @@ export default function HomeScreen() {
         startScanRef.current();
       }
     }, 5000); // Check every 5 seconds and restart if stopped
-    
+
     return () => {
       stopScanRef.current(); // Cleanup on unmount
       clearInterval(scanInterval);
@@ -770,7 +770,7 @@ export default function HomeScreen() {
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {
-    
+
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!isAvailable || loading || !userId) {
       return;
@@ -778,9 +778,9 @@ export default function HomeScreen() {
 
     // Start advertising when isDiscoverable is true (ACTIVE mode)
     if (isDiscoverable) {
-      // Guard: startAdvertising already checks isAdvertisingRef internally,
-      // but log here for visibility
-      startAdvertisingRef.current();
+      if (!isAdvertising) {
+        startAdvertisingRef.current();
+      }
     } else {
       // Stop advertising when isDiscoverable is false (GHOST mode)
       stopAdvertisingRef.current();
@@ -788,14 +788,14 @@ export default function HomeScreen() {
     // No cleanup needed here - stop is handled in effect body when isDiscoverable=false
     // Native BLEAdvertiserService handles cleanup on app termination via onDestroy()
   }, [isDiscoverable, isAvailable, loading, userId]);
-  
+
   // Fetch linked devices (accepted and returned links) on mount and periodically
   // Note: HomeScreen unmounts/remounts on tab change, so this fires on each "focus"
   useEffect(() => {
     const fetchLinkedDevices = async () => {
       try {
         const allDevices = await getDevices();
-        const links = (allDevices ?? []).filter(device => 
+        const links = (allDevices ?? []).filter(device =>
           device.action === 'accepted' || device.action === 'returned'
         );
         setLinkedDevices(links);
@@ -803,7 +803,7 @@ export default function HomeScreen() {
         // Silent fail - linked devices will refresh on next mount
       }
     };
-    
+
     fetchLinkedDevices();
     const interval = setInterval(fetchLinkedDevices, 5000);
     return () => clearInterval(interval);
@@ -812,7 +812,7 @@ export default function HomeScreen() {
   // Fetch incoming drops from drops table on mount and periodically
   useEffect(() => {
     if (!userId) return;
-    
+
     const fetchIncomingDropsFromTable = async () => {
       try {
         const drops = await getIncomingDrops();
@@ -821,7 +821,7 @@ export default function HomeScreen() {
         // Silent fail - drops will refresh on next mount
       }
     };
-    
+
     fetchIncomingDropsFromTable();
     const interval = setInterval(fetchIncomingDropsFromTable, 5000);
     return () => clearInterval(interval);
@@ -830,12 +830,12 @@ export default function HomeScreen() {
   // Fetch unviewed links from database on mount and periodically
   useEffect(() => {
     if (!userId) return;
-    
+
     const fetchUnviewedLinksFromDb = async () => {
       try {
         const links = await getUnviewedLinks();
         setUnviewedLinksFromDb(links);
-        
+
         if (links.length > 0 && !showNewLinkModal && !currentNewLink) {
           setCurrentNewLink(links[0]);
           setShowNewLinkModal(true);
@@ -844,12 +844,12 @@ export default function HomeScreen() {
         // Silent fail - links will refresh on next mount
       }
     };
-    
+
     fetchUnviewedLinksFromDb();
     const interval = setInterval(fetchUnviewedLinksFromDb, 5000);
     return () => clearInterval(interval);
   }, [userId, showNewLinkModal, currentNewLink]);
-  
+
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
   const hasUnviewedLinks = unviewedLinksFromContext.length > 0 || unviewedLinksFromDb.length > 0;
@@ -912,7 +912,7 @@ export default function HomeScreen() {
   // Then filter by max distance
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
-  
+
   const dropLinkDevices = devices.filter(device => {
     // Check if name starts with "DL-"
     if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
@@ -929,7 +929,7 @@ export default function HomeScreen() {
     }
     return false;
   });
-  
+
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
@@ -947,19 +947,19 @@ export default function HomeScreen() {
   }, [devices, selectedBlipDeviceId, selectedBlipDevice]);
 
   // ========== TENSOR-BASED SPATIAL SYSTEM ==========
-  
+
   // Memoized spatial transformation tensors
   const spatialTensors = useMemo(() => {
     const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
     const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
-    
+
     return {
       // Scaling tensor: maps feet to pixels
       feetToPixels: TensorMath.scalingTensor(pixelsPerFoot),
-      
+
       // Grid quantization tensor: snaps to 1-foot intervals
       gridSnap: TensorMath.scalingTensor(1 / pixelsPerFoot),
-      
+
       maxRadiusPixels,
       pixelsPerFoot,
     };
@@ -970,26 +970,26 @@ export default function HomeScreen() {
 
   // Map device to 2D position with ACCURATE grid snapping (3 ft intervals to match visible grid)
   const GRID_SPACING_FEET = 3; // Must match grid configuration (3 ft intervals)
-  
+
   const getGridPosition = (device: BleDevice): { x: number; y: number; z: number } => {
     const deviceId = device.id || device.name;
     const currentTime = Date.now();
-    
+
     // Generate consistent angle based on device ID hash (deterministic positioning)
     // Using device.id ensures unique distribution across 360 degrees since IDs are always unique
     const hash = deviceId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     const angleInRadians = (hash % 360) * (Math.PI / 180);
-    
+
     // ACCURATE distance mapping to pixel radius (linear scale for symmetry)
     const distanceInFeet = Math.min(device.distanceFeet, MAX_RADIUS_FEET);
     const radiusInPixels = (distanceInFeet / MAX_RADIUS_FEET) * spatialTensors.maxRadiusPixels;
-    
+
     // Calculate raw 2D position (polar to cartesian)
     const rawPosition: Vector2D = {
       x: radiusInPixels * Math.cos(angleInRadians),
       y: radiusInPixels * Math.sin(angleInRadians),
     };
-    
+
     // SNAP TO NEAREST GRID INTERSECTION (1 ft intervals) - BEFORE sphere projection
     // This ensures nodes align perfectly with visible grid lines for accuracy
     const gridPixelSpacing = spatialTensors.pixelsPerFoot * GRID_SPACING_FEET;
@@ -997,7 +997,7 @@ export default function HomeScreen() {
       x: Math.round(rawPosition.x / gridPixelSpacing) * gridPixelSpacing,
       y: Math.round(rawPosition.y / gridPixelSpacing) * gridPixelSpacing,
     };
-    
+
     // Apply CUBED SPHERE PROJECTION to match curved grid (EXACT same formula as grid lines)
     // CRITICAL: Must use same sphere radius calculation as grid for alignment
     const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.7; // Matches grid exactly
@@ -1012,30 +1012,30 @@ export default function HomeScreen() {
       x: projectedX * sphereRadius * bulgeFactor,
       y: projectedY * sphereRadius * bulgeFactor,
     };
-    
+
     const z = depth; // Depth factor from sphere projection (0-1)
-    
+
     // Update spatial tensor tracking (for future velocity/acceleration features)
     // Track snapped position (pre-curve) for accurate velocity/acceleration
     const previousTensor = deviceSpatialTensors.current.get(deviceId);
-    
+
     if (previousTensor) {
       const deltaTime = (currentTime - previousTensor.timestamp) / 1000; // seconds
-      
+
       // Compute velocity using finite difference
       const velocity = TensorMath.computeVelocity(
         snappedPosition,
         previousTensor.position,
         deltaTime
       );
-      
+
       // Compute acceleration (change in velocity)
       const acceleration = TensorMath.computeVelocity(
         velocity,
         previousTensor.velocity,
         deltaTime
       );
-      
+
       // Store updated tensor
       deviceSpatialTensors.current.set(deviceId, {
         position: snappedPosition,
@@ -1056,7 +1056,7 @@ export default function HomeScreen() {
         timestamp: currentTime,
       });
     }
-    
+
     // Return CURVED position that matches the 3D grid projection
     return {
       x: curvedPosition.x,
@@ -1066,14 +1066,14 @@ export default function HomeScreen() {
   };
 
   // ========== ADVANCED TENSOR FEATURES ==========
-  
+
   // Calculate spatial density field (heat map) using tensor operations
   const calculateSpatialDensity = useMemo(() => {
     const devicePositions: Vector2D[] = filteredDevices.map(device => {
       const pos = getGridPosition(device);
       return { x: pos.x, y: pos.y }; // Extract 2D position
     });
-    
+
     // Create density field function
     return (testPoint: Vector2D): number => {
       return TensorMath.distanceField(testPoint, devicePositions, spatialTensors.maxRadiusPixels);
@@ -1084,14 +1084,14 @@ export default function HomeScreen() {
   const calculateInteractionStrength = (device1: BleDevice, device2: BleDevice): number => {
     const pos1 = getGridPosition(device1);
     const pos2 = getGridPosition(device2);
-    
+
     const displacement: Vector2D = { x: pos2.x - pos1.x, y: pos2.y - pos1.y };
     const distance = TensorMath.magnitude(displacement);
-    
+
     // Interaction strength falls off with distance (inverse square law)
     const maxInteractionDistance = spatialTensors.maxRadiusPixels;
     const strength = Math.max(0, 1 - Math.pow(distance / maxInteractionDistance, 2));
-    
+
     return strength;
   };
 
@@ -1099,21 +1099,21 @@ export default function HomeScreen() {
   const predictFuturePosition = (device: BleDevice, futureDeltaTime: number): Vector2D | null => {
     const deviceId = device.id || device.name;
     const spatialTensor = deviceSpatialTensors.current.get(deviceId);
-    
+
     if (!spatialTensor) return null;
-    
+
     // Use physics-based prediction (position + velocity*t + 0.5*acceleration*t²)
     return TensorMath.predictPosition(spatialTensor, futureDeltaTime);
   };
 
   // ========== VIEW TRANSFORMATION TENSORS (ROTATION & ZOOM) ==========
-  
+
   // Create combined view transformation tensor (scale + rotation)
   const viewTransformTensor = useMemo((): Tensor2x2 => {
     // First scale, then rotate (order matters in transformation composition)
     const scaleTensor = TensorMath.scalingTensor(viewScale);
     const rotationTensor = TensorMath.rotationTensor(viewRotation);
-    
+
     // Compose transformations: T_final = T_rotation × T_scale
     return TensorMath.multiply2x2(rotationTensor, scaleTensor);
   }, [viewScale, viewRotation]);
@@ -1127,9 +1127,9 @@ export default function HomeScreen() {
   const calculateMomentum = (device: BleDevice): Vector2D | null => {
     const deviceId = device.id || device.name;
     const spatialTensor = deviceSpatialTensors.current.get(deviceId);
-    
+
     if (!spatialTensor) return null;
-    
+
     // Momentum = mass × velocity (mass = 1 for simplicity)
     return spatialTensor.velocity;
   };
@@ -1137,69 +1137,69 @@ export default function HomeScreen() {
   // Tensor system is active but logging removed for production
 
   // ========== RAW TOUCH HANDLERS (PINCH ZOOM & ROTATION) ==========
-  
+
   const handleTouchStart = (event: any) => {
     const touches = event.nativeEvent.touches;
-    
+
     // Only handle multi-touch gestures (pinch/rotate) - let single taps pass through to blips
     if (touches.length === 1) {
       return; // Don't capture single touches - allow blips to receive them
     }
-    
+
     touches.forEach((touch: any) => {
       touchPositions.current[touch.identifier] = { x: touch.pageX, y: touch.pageY };
     });
-    
+
     if (touches.length === 2) {
       const [touch1, touch2] = touches;
       const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageX - touch1.pageX, 2) +
         Math.pow(touch2.pageY - touch1.pageY, 2)
       );
       gestureState.initialScale = viewScale;
       gestureState.initialDistance = distance;
-      
+
       const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
       gestureState.initialAngle = viewRotation;
       gestureState.startAngle = angle;
-      
+
     }
   };
 
   const handleTouchMove = (event: any) => {
     const touches = event.nativeEvent.touches;
-    
+
     // Only handle multi-touch gestures - let single taps pass through
     if (touches.length !== 2) {
       return;
     }
-    
+
     if (touches.length === 2) {
       const [touch1, touch2] = touches;
-      
+
       // PINCH (zoom)
       const distance = Math.sqrt(
-        Math.pow(touch2.pageX - touch1.pageX, 2) + 
+        Math.pow(touch2.pageX - touch1.pageX, 2) +
         Math.pow(touch2.pageY - touch1.pageY, 2)
       );
       if (gestureState.initialDistance) {
         const scale = (distance / gestureState.initialDistance) * gestureState.initialScale;
         // Constrain zoom: min 0.91x (91%), max 4x (400%)
         const constrainedScale = Math.max(0.91, Math.min(4, scale));
-        
+
         setViewScale(constrainedScale);
         scaleAnimValue.setValue(constrainedScale);
-        
+
       }
-      
+
       // ROTATION
       const angle = Math.atan2(touch2.pageY - touch1.pageY, touch2.pageX - touch1.pageX);
       if (gestureState.startAngle !== undefined) {
         const rotation = gestureState.initialAngle + (angle - gestureState.startAngle);
-        
+
         setViewRotation(rotation);
         rotationAnimValue.setValue(rotation);
-        
+
       }
     }
   };
@@ -1211,7 +1211,7 @@ export default function HomeScreen() {
   // Stack drag animation
   const dragOffset = useRef(new Animated.Value(0)).current;
   const [isDragging, setIsDragging] = useState(false);
-  
+
   // Tap animations for each card (stored by profile ID)
   const tapScales = useRef<{ [key: number]: Animated.Value }>({}).current;
 
@@ -1225,11 +1225,11 @@ export default function HomeScreen() {
   const [successMessage, setSuccessMessage] = useState('');
   const lastTapTime = useRef<number>(0);
   const lastTapCardId = useRef<number | null>(null);
-  
+
   // Toggle confirmation states
   const [showToggleConfirmModal, setShowToggleConfirmModal] = useState(false);
   const [pendingDiscoverableState, setPendingDiscoverableState] = useState<boolean | null>(null);
-  
+
   // Undo state - using ref to avoid closure issues
   const lastActionRef = useRef<{ type: 'unpin' | 'delete', cardId: number, card: Device | null } | null>(null);
 
@@ -1303,10 +1303,10 @@ export default function HomeScreen() {
     setPopupKey(prev => prev + 1);
     setShowLinkPopup(true);
     setIsAnimating(true);
-    
+
     // Reset animation value
     linkPopupAnim.setValue(0);
-    
+
     Animated.sequence([
       Animated.timing(linkPopupAnim, {
         toValue: 1,
@@ -1351,7 +1351,7 @@ export default function HomeScreen() {
     if (action === 'returned') {
       showLinkPopupAnimation();
     }
-    
+
     // Get current user's profile to share if returning
     const responseProfile = action === 'returned' ? {
       name: profile?.name,
@@ -1362,18 +1362,18 @@ export default function HomeScreen() {
       profilePhoto: profile?.profilePhoto,
       socialMedia: profile?.socialMedia,
     } : undefined;
-    
+
     try {
       await updateDropStatus(drop.id, action, responseProfile);
-    
-    // Remove the drop from the list
+
+      // Remove the drop from the list
       setIncomingDrops(prev => prev.filter(d => d.id !== drop.id));
-    
-    // Close modal if no more drops
-    if (incomingDrops.length <= 1) {
-      setShowDrops(false);
+
+      // Close modal if no more drops
+      if (incomingDrops.length <= 1) {
+        setShowDrops(false);
       }
-      
+
       // Show success toast
       if (action === 'returned') {
         showToast({
@@ -1403,10 +1403,10 @@ export default function HomeScreen() {
     if (currentNewLink) {
       try {
         await markLinkViewed(currentNewLink.id);
-        
+
         // Remove from unviewed list
         setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== currentNewLink.id));
-        
+
         // Check if there are more unviewed links to show
         const remainingLinks = unviewedLinksFromDb.filter(l => l.id !== currentNewLink.id);
         if (remainingLinks.length > 0) {
@@ -1447,7 +1447,7 @@ export default function HomeScreen() {
     const cardToStore = pinnedProfiles.find(p => p.id === confirmCardId) || null;
     const actionData = { type: actionType, cardId: confirmCardId, card: cardToStore };
     lastActionRef.current = actionData;
-    
+
     // Perform the action
     if (actionType === 'unpin') {
       togglePin(confirmCardId);
@@ -1461,7 +1461,7 @@ export default function HomeScreen() {
     setConfirmAction(null);
     setConfirmCardId(null);
     setConfirmCardName('');
-    
+
     showToast({
       message: `${actionName} ${actionType === 'unpin' ? 'unpinned' : 'deleted'}`,
       type: 'success',
@@ -1474,7 +1474,7 @@ export default function HomeScreen() {
   // Handle undo
   const handleUndo = async () => {
     const lastAction = lastActionRef.current;
-    
+
     if (!lastAction) {
       return;
     }
@@ -1483,14 +1483,14 @@ export default function HomeScreen() {
       togglePin(lastAction.cardId);
     } else if (lastAction.type === 'delete' && lastAction.card) {
       await restoreDevice(lastAction.card, userId!);
-      
+
       setPinnedProfiles(prev => {
         if (prev.some(p => p.id === lastAction.cardId)) {
           return prev;
         }
         return [...prev, lastAction.card!];
       });
-      
+
       togglePin(lastAction.cardId);
     }
 
@@ -1535,8 +1535,8 @@ export default function HomeScreen() {
 
 
   return (
-    <Animated.View style={{ flex:1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
-      
+    <Animated.View style={{ flex: 1, backgroundColor: theme.colors.bg, opacity: fadeAnim }}>
+
       {/* Curved Grid Background - 2D grid with slight curve for 3D effect */}
       <View
         style={{ flex: 1, overflow: 'visible' }}
@@ -1544,1577 +1544,1895 @@ export default function HomeScreen() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-          <Animated.View
-            style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: screenWidth,
-        height: viewableHeight,
-        zIndex: 0,
-        overflow: 'visible',
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: screenWidth,
+            height: viewableHeight,
+            zIndex: 0,
+            overflow: 'visible',
             // Native RN transformOrigin - rotate/zoom around raindrop icon (array syntax)
             transformOrigin: [nucleusX, nucleusY],
             transform: [
               { scale: scaleAnimValue },
-              { rotate: rotationAnimValue.interpolate({
-                inputRange: [-100, 100],
-                outputRange: ['-100rad', '100rad']
-              }) },
+              {
+                rotate: rotationAnimValue.interpolate({
+                  inputRange: [-100, 100],
+                  outputRange: ['-100rad', '100rad']
+                })
+              },
             ],
           }}
-            pointerEvents="box-none" // Allow touches to pass through to blips
-          >
-        {React.useMemo(() => {
-          // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
-          const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
-          const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
-          
-          // Sphere radius extended to cover entire screen for full background grid
-          const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85; // Full screen coverage
-          
-          // Grid Configuration - 3 FOOT INTERVALS for better performance (extends beyond 33 ft for visual fill)
-          const GRID_SPACING_FEET = 3; // Wider spacing = fewer lines = better performance
-          const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
-          const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
-          const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
-          const segmentsPerLine = 20; // Segments per line for curve smoothness
-          
-          // Helper: Cubed Sphere Projection - (x, y, 1) / √(x² + y² + 1)
-          // Optimized for 33 ft visible range with dramatic curvature
-          const projectToSphere = (x: number, y: number): { x: number; y: number; depth: number } => {
-            // Normalize coordinates relative to 33 ft sphere radius
-            const normalizedX = x / sphereRadius;
-            const normalizedY = y / sphereRadius;
-            
-            // Cubed sphere projection formula: (x, y, 1) / √(x² + y² + 1)
-            // This projects the flat plane onto a sphere surface
-            const denominator = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY + 1);
-            
-            // The z-component (depth) from the projection
-            const depth = 1 / denominator;
-            
-            // Project x and y coordinates onto sphere
-            const projectedX = normalizedX / denominator;
-            const projectedY = normalizedY / denominator;
-            
-            // Scale back to screen coordinates
-            // Multiply by a factor > 1 to create outward bulge effect
-            const bulgeFactor = 1.15; // Subtle outward expansion for mobile-friendly 3D effect
-            const bulgedX = projectedX * sphereRadius * bulgeFactor;
-            const bulgedY = projectedY * sphereRadius * bulgeFactor;
-            
-            return {
-              x: bulgedX,
-              y: bulgedY,
-              depth: depth, // 0 (far) to 1 (center)
+          pointerEvents="box-none" // Allow touches to pass through to blips
+        >
+          {React.useMemo(() => {
+            // 2D Grid with 3D Cubed Sphere Projection (FULL SCREEN, 33 ft node accuracy maintained)
+            const maxRadiusPixels = Math.min(nucleusX, nucleusY, screenWidth - nucleusX, viewableHeight - nucleusY);
+            const pixelsPerFoot = maxRadiusPixels / MAX_RADIUS_FEET;
+
+            // Sphere radius extended to cover entire screen for full background grid
+            const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85; // Full screen coverage
+
+            // Grid Configuration - 3 FOOT INTERVALS for better performance (extends beyond 33 ft for visual fill)
+            const GRID_SPACING_FEET = 3; // Wider spacing = fewer lines = better performance
+            const screenMaxFeet = Math.ceil(Math.max(screenWidth, viewableHeight) / pixelsPerFoot); // Grid to screen edges
+            const gridRange = Math.max(MAX_RADIUS_FEET, screenMaxFeet); // Extend grid to fill screen
+            const totalLines = gridRange * 2 + 1; // Total lines spanning entire screen
+            const segmentsPerLine = 20; // Segments per line for curve smoothness
+
+            // Helper: Cubed Sphere Projection - (x, y, 1) / √(x² + y² + 1)
+            // Optimized for 33 ft visible range with dramatic curvature
+            const projectToSphere = (x: number, y: number): { x: number; y: number; depth: number } => {
+              // Normalize coordinates relative to 33 ft sphere radius
+              const normalizedX = x / sphereRadius;
+              const normalizedY = y / sphereRadius;
+
+              // Cubed sphere projection formula: (x, y, 1) / √(x² + y² + 1)
+              // This projects the flat plane onto a sphere surface
+              const denominator = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY + 1);
+
+              // The z-component (depth) from the projection
+              const depth = 1 / denominator;
+
+              // Project x and y coordinates onto sphere
+              const projectedX = normalizedX / denominator;
+              const projectedY = normalizedY / denominator;
+
+              // Scale back to screen coordinates
+              // Multiply by a factor > 1 to create outward bulge effect
+              const bulgeFactor = 1.15; // Subtle outward expansion for mobile-friendly 3D effect
+              const bulgedX = projectedX * sphereRadius * bulgeFactor;
+              const bulgedY = projectedY * sphereRadius * bulgeFactor;
+
+              return {
+                x: bulgedX,
+                y: bulgedY,
+                depth: depth, // 0 (far) to 1 (center)
+              };
             };
-          };
-          
-          // Extended SVG canvas to cover zoom-out and rotation
-          const svgSize = Math.max(screenWidth, viewableHeight) * 1.5;
-          const svgWidth = svgSize;
-          const svgHeight = svgSize;
-          const svgOffsetX = (svgWidth - screenWidth) / 2;
-          const svgOffsetY = (svgHeight - viewableHeight) / 2;
-          
-          return (
-            <Svg
-              width={svgWidth}
-              height={svgHeight}
-              style={{ position: 'absolute', top: -svgOffsetY, left: -svgOffsetX }}
-              pointerEvents="none"
-            >
-              {/* Vertical lines curved by spherical projection - 1 Path per line */}
-              {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
-                
-                // Build SVG path string with all segment points
-                let pathData = '';
-                let totalDepth = 0;
-                
-                for (let seg = 0; seg <= segmentsPerLine; seg++) {
-                  const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
-                  const y = t * viewableHeight * 1.2;
-                  const p = projectToSphere(offset, y);
-                  const screenX = svgOffsetX + nucleusX + p.x;
-                  const screenY = svgOffsetY + nucleusY + p.y;
-                  totalDepth += p.depth;
-                  
-                  if (seg === 0) {
-                    pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
-                  } else {
-                    pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
-                  }
-                }
-                
-                // Depth-based opacity: center bright, edges dim (creates 3D illusion)
-                const avgDepth = totalDepth / (segmentsPerLine + 1);
-                const depthFactor = avgDepth * avgDepth; // Square for contrast
-                const baseOpacity = offset === 0 ? 0.5 : 0.3;
-                const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
-                
-                return (
-                  <Path
-                    key={`v-${i}`}
-                    d={pathData}
-                    stroke="#00D4FF"
-                    strokeWidth={1}
-                    opacity={opacity}
-                    fill="none"
-                  />
-                );
-              })}
-              
-              {/* Horizontal lines curved by spherical projection - 1 Path per line */}
-              {Array.from({ length: totalLines }, (_, i) => {
-                const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
-                
-                // Build SVG path string with all segment points
-                let pathData = '';
-                let totalDepth = 0;
-                
-                for (let seg = 0; seg <= segmentsPerLine; seg++) {
-                  const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
-                  const x = t * screenWidth * 1.2;
-                  const p = projectToSphere(x, offset);
-                  const screenX = svgOffsetX + nucleusX + p.x;
-                  const screenY = svgOffsetY + nucleusY + p.y;
-                  totalDepth += p.depth;
-                  
-                  if (seg === 0) {
-                    pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
-                  } else {
-                    pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
-                  }
-                }
-                
-                // Depth-based opacity: center bright, edges dim (creates 3D illusion)
-                const avgDepth = totalDepth / (segmentsPerLine + 1);
-                const depthFactor = avgDepth * avgDepth; // Square for contrast
-                const baseOpacity = offset === 0 ? 0.5 : 0.3;
-                const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
-                
-                return (
-                  <Path
-                    key={`h-${i}`}
-                    d={pathData}
-                    stroke="#00D4FF"
-                    strokeWidth={1}
-                    opacity={opacity}
-                    fill="none"
-                  />
-                );
-              })}
-            </Svg>
-          );
-        }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
 
+            // Extended SVG canvas to cover zoom-out and rotation
+            const svgSize = Math.max(screenWidth, viewableHeight) * 1.5;
+            const svgWidth = svgSize;
+            const svgHeight = svgSize;
+            const svgOffsetX = (svgWidth - screenWidth) / 2;
+            const svgOffsetY = (svgHeight - viewableHeight) / 2;
 
-          </Animated.View>  {/* ← Close transformed grid container */}
-
-      {/* Blips Layer - Completely separate from gesture handlers for reliable touch detection */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 2000,
-          pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
-        }}
-      >
-        {filteredDevices.map((device) => {
-          const position = getGridPosition(device);
-
-          return (
-            <DeviceBlip
-              key={device.id || device.name}
-              device={device}
-              position={{ x: position.x, y: position.y }}
-              depth={position.z}
-              nucleusX={nucleusX}
-              nucleusY={nucleusY}
-              viewTransform={viewTransformTensor}
-              onPress={() => {
-                setSelectedBlipDevice(device);
-                setSelectedBlipDeviceId(device.id); // Store device ID to sync later
-                setShowBlipModal(true);
-              }}
-            />
-          );
-        })}
-
-        {/* Link Markers - for accepted and returned links (no pulsation) */}
-        {linkedDevices.map((device) => {
-          // Use same positioning logic as blips to ensure grid snapping
-          const position = getGridPosition(device as any); // Device has distanceFeet property
-
-          return (
-            <LinkMarker
-              key={device.id || `link-${device.name}`}
-              device={device}
-              position={{ x: position.x, y: position.y }}
-              depth={position.z}
-              nucleusX={nucleusX}
-              nucleusY={nucleusY}
-              viewTransform={viewTransformTensor}
-              onPress={() => {
-                setSelectedLink(device);
-                setShowLinkModal(true);
-              }}
-            />
-          );
-        })}
-      </View>
-
-      {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
-      {filteredDevices.length === 0 && linkedDevices.length === 0 && (
-        <View
-          style={{
-            position: 'absolute',
-            top: '45%',
-            left: 0,
-            right: 0,
-            alignItems: 'center',
-          }}
-          pointerEvents="none"
-        >
-          <Text style={[theme.type.muted, {
-            textAlign: 'center',
-            fontSize: 15,
-          }]}>
-            No drops nearby
-          </Text>
-        </View>
-      )}
-      
-      {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ROTATES WITH GRID */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          top: nucleusY,
-          left: nucleusX,
-          transform: [
-            { translateX: -iconOffsetX },
-            { translateY: -iconOffsetY },
-            { rotate: rotationAnimValue.interpolate({
-              inputRange: [-100, 100],
-              outputRange: ['-100rad', '100rad']
-            }) }
-          ],
-          zIndex: 999,
-        }}
-        pointerEvents="box-none"
-      >
-        <View pointerEvents="auto">
-          <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
-            {/* Ripple Effect */}
-            <Animated.View
-              style={{
-                position: 'absolute',
-              width: 60,
-              height: 60,
-              borderRadius: 30,
-                borderWidth: 2,
-                borderColor: theme.colors.green,
-                opacity: rippleAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 0.3],
-                }),
-                transform: [{
-                  scale: rippleAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1.2],
-                  }),
-                }],
-              }}
-            />
-            
-          <View style={{ position: 'relative' }}>
-            <MaterialCommunityIcons 
-              name={(incomingDrops.length > 0 || unviewedLinksFromDb.length > 0) ? "water" : "water-outline"} 
-              size={30} 
-              color={theme.colors.green} 
-            />
-            
-            {/* Link notification badge */}
-            {hasUnviewedLinks && (
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -6,
-                  opacity: flashAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.4, 1],
-                  }),
-                }}
+            return (
+              <Svg
+                width={svgWidth}
+                height={svgHeight}
+                style={{ position: 'absolute', top: -svgOffsetY, left: -svgOffsetX }}
+                pointerEvents="none"
               >
-                <MaterialCommunityIcons 
-                  name="link-variant" 
-                  size={14} 
-                  color="#FF6B4A" 
-                />
-              </Animated.View>
-            )}
-          </View>
-          </Pressable>
-        </View>
-      </Animated.View>
+                {/* Vertical lines curved by spherical projection - 1 Path per line */}
+                {Array.from({ length: totalLines }, (_, i) => {
+                  const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.blue}
-            colors={[theme.colors.blue]}
-          />
-        }
-        scrollEnabled={false}
-      >
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: Dimensions.get('window').height || 800 }}>
-        {/* Background overlay to close expanded cards and quick actions when clicking outside */}
-        {(expandedCardId !== null || activeQuickActionCardId !== null) && (
-          <Pressable
-            onPress={() => {
-              setExpandedCardId(null);
-              setActiveQuickActionCardId(null);
-            }}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 5,
-            }}
-          />
-        )}
+                  // Build SVG path string with all segment points
+                  let pathData = '';
+                  let totalDepth = 0;
 
-        {/* Pinned Profiles Stack - REMOVED */}
-        {false && pinnedProfiles.length > 0 && (() => {
-          // Calculate total height of the stack
-          const cardHeight = 280; // Approximate full card height
-          // Dynamic spacing: increase when dragging
-          const baseSpacing = 45;
-          const spacingMultiplier = isDragging ? 1.8 : 1;
-          const stackSpacing = baseSpacing * spacingMultiplier;
-          const totalStackHeight = cardHeight + ((pinnedProfiles.length - 1) * stackSpacing);
-          
-          return (
-          <Animated.View 
-            style={{
-            position: 'absolute',
-              left: '3%',
-            top: '50%',
-              transform: [
-                { translateY: -240 },
-                { translateY: dragOffset }
-              ],
-              width: 150,
-            maxHeight: 600,
-            zIndex: 10,
-            }}
-            {...panResponder.panHandlers}
-          >
-            <ScrollView 
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ minHeight: totalStackHeight }}
-              scrollEnabled={!isDragging}
-            >
-              {pinnedProfiles.map((profile, index) => {
-                const isExpanded = expandedCardId === profile.id;
-                const isBottomCard = index === 0;
-                // Reverse order: bottom card should be rendered last (highest in stack visually at bottom)
-                const stackPosition = pinnedProfiles.length - 1 - index;
-                
-                // Parallax effect: cards deeper in stack move MORE to spread out
-                const parallaxMultiplier = stackPosition * 0.5; // 50% more per position
-                const parallaxOffset = dragOffset.interpolate({
-                  inputRange: [0, 200],
-                  outputRange: [0, 200 * parallaxMultiplier], // Positive to spread cards apart
-                });
+                  for (let seg = 0; seg <= segmentsPerLine; seg++) {
+                    const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
+                    const y = t * viewableHeight * 1.2;
+                    const p = projectToSphere(offset, y);
+                    const screenX = svgOffsetX + nucleusX + p.x;
+                    const screenY = svgOffsetY + nucleusY + p.y;
+                    totalDepth += p.depth;
 
-                // Get or create tap animation value for this card
-                if (profile.id && !tapScales[profile.id]) {
-                  tapScales[profile.id] = new Animated.Value(1);
-                }
-                const tapScale = profile.id ? tapScales[profile.id] : new Animated.Value(1);
-
-                const handleTap = () => {
-                  if (!profile.id) return;
-
-                  const now = Date.now();
-                  const timeSinceLastTap = now - lastTapTime.current;
-                  const isDoubleTap = timeSinceLastTap < 800 && lastTapCardId.current === profile.id;
-
-                  lastTapTime.current = now;
-                  lastTapCardId.current = profile.id;
-
-                  if (isDoubleTap) {
-                    // Double tap - toggle quick actions
-                    setActiveQuickActionCardId(activeQuickActionCardId === profile.id ? null : profile.id);
-                  } else {
-                    // Single tap - pulse animation and expand (not collapse)
-                    Animated.sequence([
-                      Animated.timing(tapScale, {
-                        toValue: 1.05,
-                        duration: 100,
-                        useNativeDriver: true,
-                      }),
-                      Animated.timing(tapScale, {
-                        toValue: 1,
-                        duration: 100,
-                        useNativeDriver: true,
-                      }),
-                    ]).start();
-
-                    // Hide quick actions when switching cards
-                    if (activeQuickActionCardId !== null && activeQuickActionCardId !== profile.id) {
-                      setActiveQuickActionCardId(null);
-                    }
-
-                    // Expand card - clicking on already expanded card keeps it expanded
-                    // Clicking on different card switches the expanded card
-                    if (!isBottomCard) {
-                      setExpandedCardId(profile.id);
+                    if (seg === 0) {
+                      pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                    } else {
+                      pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
                     }
                   }
-                };
-                
-                return (
-                <Animated.View
-                  key={profile.id}
-                  style={{
-                    position: 'absolute',
-                    top: stackPosition * stackSpacing,
-                    left: 0,
-                    right: 0,
-                    zIndex: activeQuickActionCardId === profile.id ? 1001 : (isExpanded ? 1000 : (pinnedProfiles.length - index)),
-                    transform: [
-                      { translateY: parallaxOffset },
-                      { scale: tapScale }
-                    ],
-                  }}
-                >
-                  <Pressable
-                    onPress={handleTap}
-                    style={{
-                      ...theme.card,
-                      width: 150,
-                      overflow: isExpanded || activeQuickActionCardId === profile.id || isDragging ? 'visible' : 'hidden',
-                      zIndex: activeQuickActionCardId === profile.id ? 999 : 1,
-                    }}
-                  >
-                    {/* ID Header - Always visible */}
-                    <View style={{
-                      backgroundColor: '#FF6B4A',
-                      paddingVertical: 6,
-                      paddingHorizontal: 12,
-                      alignItems: 'center',
-                    }}>
-                      <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
-                        {profile.name}
-                      </Text>
-                    </View>
 
-                    {/* ID Content - Show for bottom card, when expanded, or when dragging */}
-                    {(isBottomCard || isExpanded || isDragging) && (
-                    <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 4 }}>
-                      {/* Profile Picture */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                        <View style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: '#FFE5DC',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <MaterialCommunityIcons name="account" size={18} color="#FF6B4A" />
-                        </View>
-                      </View>
+                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                  const avgDepth = totalDepth / (segmentsPerLine + 1);
+                  const depthFactor = avgDepth * avgDepth; // Square for contrast
+                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
 
-                      {/* Contact Information */}
-                      <View style={{ marginBottom: 6 }}>
-                        {/* Phone */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <MaterialCommunityIcons name="phone" size={10} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                            +1 (555) 123-4567
-                          </Text>
-                        </View>
+                  return (
+                    <Path
+                      key={`v-${i}`}
+                      d={pathData}
+                      stroke="#00D4FF"
+                      strokeWidth={1}
+                      opacity={opacity}
+                      fill="none"
+                    />
+                  );
+                })}
 
-                        {/* Email */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <MaterialCommunityIcons name="email" size={10} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                            user@example.com
-                          </Text>
-                        </View>
+                {/* Horizontal lines curved by spherical projection - 1 Path per line */}
+                {Array.from({ length: totalLines }, (_, i) => {
+                  const offset = (i - gridRange) * pixelsPerFoot * GRID_SPACING_FEET;
 
-                        {/* Social Media */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <MaterialCommunityIcons name="instagram" size={10} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                            @yourhandle
-                          </Text>
-                        </View>
+                  // Build SVG path string with all segment points
+                  let pathData = '';
+                  let totalDepth = 0;
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <MaterialCommunityIcons name="twitter" size={10} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                            @yourhandle
-                          </Text>
-                        </View>
+                  for (let seg = 0; seg <= segmentsPerLine; seg++) {
+                    const t = (seg / segmentsPerLine) * 2 - 1; // -1 to 1
+                    const x = t * screenWidth * 1.2;
+                    const p = projectToSphere(x, offset);
+                    const screenX = svgOffsetX + nucleusX + p.x;
+                    const screenY = svgOffsetY + nucleusY + p.y;
+                    totalDepth += p.depth;
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                          <MaterialCommunityIcons name="linkedin" size={10} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                            yourname
-                          </Text>
-                        </View>
-                      </View>
+                    if (seg === 0) {
+                      pathData = `M ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                    } else {
+                      pathData += ` L ${screenX.toFixed(2)} ${screenY.toFixed(2)}`;
+                    }
+                  }
 
-                      {/* Bio Section */}
-                      <View style={{
-                        backgroundColor: theme.colors.bg,
-                        padding: 6,
-                        borderRadius: 6,
-                      }}>
-                        <Text style={[theme.type.muted, { fontSize: 6, marginBottom: 1 }]}>
-                          BIO
-                        </Text>
-                        <Text style={[theme.type.body, { fontSize: 7, color: theme.colors.text }]}>
-                          "Bio will display here once created"
-                        </Text>
-                      </View>
-                      </View>
-                    )}
-                  </Pressable>
+                  // Depth-based opacity: center bright, edges dim (creates 3D illusion)
+                  const avgDepth = totalDepth / (segmentsPerLine + 1);
+                  const depthFactor = avgDepth * avgDepth; // Square for contrast
+                  const baseOpacity = offset === 0 ? 0.5 : 0.3;
+                  const opacity = baseOpacity * (0.3 + depthFactor * 0.7);
 
-                  {/* Quick Action Buttons (shown on double-tap) - Always accessible */}
-                  {activeQuickActionCardId === profile.id && (
-                    <View style={{
-                      flexDirection: 'row',
-                      gap: 8,
-                      paddingHorizontal: 10,
-                      paddingTop: 4,
-                      paddingBottom: 10,
-                      backgroundColor: theme.colors.white,
-                      borderBottomLeftRadius: 12,
-                      borderBottomRightRadius: 12,
-                      width: 150,
-                    }}>
-                      <Pressable
-                        onPress={() => profile.id && handleQuickActionPress('unpin', profile.id, profile.name)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: '#FFB89D',
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <MaterialCommunityIcons name="pin-off" size={14} color="#fff" />
-                        <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
-                          Unpin
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => profile.id && handleQuickActionPress('delete', profile.id, profile.name)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: '#FF6B4A',
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <MaterialCommunityIcons name="delete" size={14} color="#fff" />
-                        <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
-                          Delete
-                        </Text>
-                  </Pressable>
-                </View>
-                  )}
-                </Animated.View>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-          );
-        })()}
-          </View>
-      </ScrollView>
+                  return (
+                    <Path
+                      key={`h-${i}`}
+                      d={pathData}
+                      stroke="#00D4FF"
+                      strokeWidth={1}
+                      opacity={opacity}
+                      fill="none"
+                    />
+                  );
+                })}
+              </Svg>
+            );
+          }, [screenWidth, viewableHeight, nucleusX, nucleusY])}
 
-      {/* View Transform Controls - Top Right Corner - Always Visible */}
-      <View 
-        style={{
-          position: 'absolute',
-          top: insets.top + 8,
-          right: 8,
-          zIndex: 999,
-          flexDirection: 'row',
-            alignItems: 'center',
-          gap: 8,
-        }}
-        pointerEvents="box-none"
-      >
-        {/* DEBUG: Test Send Drop Button - TEMPORARY */}
-        <View pointerEvents="auto">
-          <Pressable
-            onPress={async () => {
-              try {
-                const senderProfile = {
-                  name: profile?.name || 'Test User',
-                  username: username || undefined,
-                  email: profile?.email || undefined,
-                  phone: profile?.phone || undefined,
-                  bio: profile?.bio || undefined,
-                  profilePhoto: profile?.profilePhoto || undefined,
-                  socialMedia: profile?.socialMedia || undefined,
-                };
-                
-                await sendDrop(
-                  '744df100-0ea0-4614-a7fe-18f04dc579a6', // Kaytea's user_id
-                  senderProfile,
-                  12.5 // hardcoded distance
-                );
-                
-                showToast({
-                  message: 'Test drop sent to Kaytea',
-                  type: 'success',
-                  duration: 3000,
-                });
-              } catch (error: any) {
-                console.error('[DROP-SEND-TEST] Failed to send drop:', error);
-                showToast({
-                  message: error.message || 'Failed to send test drop',
-                  type: 'error',
-                  duration: 4000,
-                });
-              }
-            }}
-            style={{
-              backgroundColor: '#FF6B4A',
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-            }}
-          >
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}>
-              Test Send
-            </Text>
-          </Pressable>
-        </View>
 
-        {/* Reset View Button */}
-        <View pointerEvents="auto">
-          <Pressable
-            onPress={() => {
-              setViewScale(1);
-              setViewRotation(0);
-              scaleAnimValue.setValue(1);
-              rotationAnimValue.setValue(0);
-            }}
-            style={{
-              borderWidth: 1,
-              borderColor: theme.colors.green,
-              borderRadius: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-            }}
-          >
-            <Text style={{ color: theme.colors.green, fontSize: 11, fontWeight: '600' }}>
-              Reset View
-            </Text>
-          </Pressable>
-          </View>
+        </Animated.View>  {/* ← Close transformed grid container */}
 
-        {/* Zoom & Rotation Indicators (visual feedback only) */}
-        <View 
-          style={{
-            flexDirection: 'row',
-            gap: 8,
-          }}
-          pointerEvents="none"
-        >
-          {/* Zoom Indicator - illuminates when zoom is NOT 1x */}
-          <View 
-            style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
-            }}
-          >
-            <Text style={{ 
-              color: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
-              fontSize: 11, 
-              fontWeight: '600' 
-            }}>
-              Zoom
-                </Text>
-              </View>
-
-          {/* Rotate Indicator - illuminates when rotation is NOT 0° */}
-          <View 
-            style={{
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
-            }}
-          >
-            <Text style={{ 
-              color: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)', 
-              fontSize: 11, 
-              fontWeight: '600' 
-            }}>
-              Rotate
-              </Text>
-            </View>
-          </View>
-        </View>
-
-      {/* Discoverability Toggle - Top Left Corner - Always Visible */}
-      <View 
-              style={{
-                position: 'absolute',
-          top: insets.top + 8,
-          left: 20,
-          zIndex: 999,
-        }}
-        pointerEvents="box-none"
-      >
-        <View style={{ position: 'relative' }} pointerEvents="auto">
-              <Pressable onPress={handleTogglePress}>
-                <View style={{
-              width: 40,
-              height: 22,
-              borderRadius: 11,
-                  backgroundColor: isDiscoverable ? theme.colors.greenLight : '#F0F0F0',
-                  padding: 2,
-                  justifyContent: 'center',
-                }}>
-                  <View style={{
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                    backgroundColor: isDiscoverable ? theme.colors.green : '#FFFFFF',
-                transform: [{ translateX: isDiscoverable ? 18 : 0 }],
-                  }} />
-                </View>
-              </Pressable>
-              <View style={{ 
-                position: 'absolute', 
-            top: 24, 
-            left: isDiscoverable ? 18 : 0,
-                alignItems: 'center',
-            width: 18,
-              }}>
-                {isDiscoverable ? (
-              <MaterialCommunityIcons name="flash-outline" size={14} color={theme.colors.green} />
-                ) : (
-              <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
-                )}
-          </View>
-        </View>
-      </View>
-
-      {/* Link Popup Animation */}
-      {showLinkPopup && (
-        <Animated.View
-          key={popupKey}
+        {/* Blips Layer - Completely separate from gesture handlers for reliable touch detection */}
+        <View
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 1000,
+            zIndex: 2000,
+            pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
           }}
         >
-          <Animated.View
-            style={{
-              transform: [
-                {
-                  scale: linkPopupAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.5, 1.2],
-                  }),
-                },
-              ],
-              opacity: linkPopupAnim,
-            }}
-          >
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 20,
-            padding: 16,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-            borderWidth: 2,
-            borderColor: '#FF6B4A',
-          }}>
-            <LinkIcon size={32} />
-            <Text style={[theme.type.h2, { marginTop: 8, color: '#FF6B4A' }]}>
-              Link Created!
-            </Text>
-          </View>
-          </Animated.View>
-        </Animated.View>
-      )}
+          {filteredDevices.map((device) => {
+            const position = getGridPosition(device);
 
-      {/* Drops Modal */}
-      <Modal
-        visible={showDrops}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDrops(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          padding: 20 
-        }}>
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 16,
-            padding: 20,
-            width: '95%',
-            maxWidth: 500,
-            maxHeight: '80%',
-          }}>
-            <Text style={[theme.type.h1, { marginBottom: 16, textAlign: 'center' }]}>
-              Your Drops
-            </Text>
-            
-            <ScrollView style={{ maxHeight: 500 }}>
-              <>
-              {/* Link Notifications Section (from context) */}
-              {unviewedLinksFromContext.length > 0 && (
-                <View style={{ marginBottom: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                    <LinkIcon size={16} />
-                    <Text style={[theme.type.h2, { marginLeft: 6, fontSize: 14, color: '#FF6B4A' }]}>
-                      Links
-              </Text>
-                  </View>
-                  {unviewedLinksFromContext.map((linkNotif) => (
-                    <View
-                      key={linkNotif.id}
-                      style={{
-                        backgroundColor: theme.colors.blueLight,
-                        borderRadius: 12,
-                        padding: 14,
-                        marginBottom: 10,
-                        borderLeftWidth: 4,
-                        borderLeftColor: theme.colors.blue,
-                      }}
-                    >
-                      {/* Close button */}
-                      <Pressable
-                        onPress={() => dismissNotification(linkNotif.id)}
-                        style={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                          padding: 4,
-                        }}
-                      >
-                        <MaterialCommunityIcons name="close" size={16} color="#666" />
-                      </Pressable>
-
-                      {/* Content */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                        <MaterialCommunityIcons 
-                          name="link-variant" 
-                          size={20} 
-                          color={theme.colors.blue} 
-                          style={{ marginRight: 10 }}
-                        />
-                        <View style={{ flex: 1, paddingRight: 20 }}>
-                          <Text style={[theme.type.h2, { fontSize: 14, color: '#FF6B4A' }]}>
-                            You linked with {linkNotif.name}!
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Action buttons */}
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Pressable
-                          onPress={() => {
-                            setSelectedContactCard(linkNotif);
-                          }}
-                          style={({ pressed }) => ({
-                            flex: 1,
-                            backgroundColor: '#FF6B4A',
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 20,
-                            alignItems: 'center',
-                            opacity: pressed ? 0.9 : 1,
-                          })}
-                        >
-                          <Text style={[theme.type.button, { fontSize: 12, color: '#000000' }]}>
-                            View Contact Card
-                          </Text>
-                        </Pressable>
-                        
-                        <Pressable
-                          onPress={() => dismissNotification(linkNotif.id)}
-                          style={({ pressed }) => ({
-                            flex: 1,
-                            backgroundColor: theme.colors.border,
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 20,
-                            alignItems: 'center',
-                            opacity: pressed ? 0.9 : 1,
-                          })}
-                        >
-                          <Text style={[theme.type.button, { fontSize: 12, color: theme.colors.text }]}>
-                            Dismiss
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Incoming Drops Section */}
-              {incomingDrops.length > 0 && (
-                <View style={{ marginBottom: 10 }}>
-                  <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
-                    💧 Incoming Drops
-                  </Text>
-                </View>
-              )}
-            
-              {incomingDrops.length === 0 && unviewedLinksFromContext.length === 0 && unviewedLinksFromDb.length === 0 ? (
-              <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
-                <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
-                <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
-                  All caught up!
-                </Text>
-                <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 13, lineHeight: 18 }]}>
-                  No new drops right now. Head to the Drop page to connect with people nearby!
-                </Text>
-              </View>
-            ) : (
-              incomingDrops.map((drop) => (
-                <View key={drop.id} style={{
-                  backgroundColor: theme.colors.white,
-                  borderRadius: 16,
-                  marginBottom: 16,
-                  overflow: 'hidden',
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 4,
-                  elevation: 3,
-                }}>
-                  {/* Header with name */}
-                  <View style={{
-                    backgroundColor: '#FF6B4A',
-                    paddingVertical: 12,
-                    paddingHorizontal: 16,
-                    alignItems: 'center',
-                  }}>
-                    <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                      {drop.senderName || drop.senderUsername || 'Someone'} sent you a drop
-                    </Text>
-                    {/* Distance and username */}
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      alignItems: 'center',
-                      marginTop: 4,
-                    }}>
-                      {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
-                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
-                          {drop.distanceFeet.toFixed(1)} ft away
-                        </Text>
-                      )}
-                      {drop.distanceFeet !== undefined && drop.senderUsername && (
-                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginHorizontal: 6 }}>•</Text>
-                      )}
-                      {drop.senderUsername && (
-                        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
-                          @{drop.senderUsername}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Contact Card Content */}
-                  <View style={{ padding: 16 }}>
-                    {/* Profile Picture */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                      <View style={{
-                        width: 70,
-                        height: 70,
-                        borderRadius: 35,
-                        backgroundColor: '#FFE5DC',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                      }}>
-                        {drop.senderProfilePhoto ? (
-                          <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 70, height: 70 }} />
-                        ) : (
-                          <Text style={{ color: '#FF6B4A', fontSize: 28, fontWeight: '600' }}>
-                            {(drop.senderName || drop.senderUsername || 'U').substring(0, 2).toUpperCase()}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Contact Information */}
-                    <View style={{ marginBottom: 12 }}>
-                      {/* Phone */}
-                      {drop.senderPhone && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                          <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                            {drop.senderPhone}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Email */}
-                      {drop.senderEmail && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                          <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
-                          <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                            {drop.senderEmail}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Social Media */}
-                      {drop.senderSocialMedia && drop.senderSocialMedia.map((social, index) => (
-                        social.platform && social.handle ? (
-                          <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                            <MaterialCommunityIcons
-                              name={social.platform.toLowerCase() as any}
-                              size={16}
-                              color={theme.colors.muted}
-                            />
-                            <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                              {social.handle}
-                            </Text>
-                          </View>
-                        ) : null
-                      ))}
-                    </View>
-
-                    {/* Bio Section */}
-                    {drop.senderBio && (
-                      <View style={{
-                        backgroundColor: theme.colors.bg,
-                        padding: 12,
-                        borderRadius: 8,
-                        marginBottom: 16,
-                      }}>
-                        <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
-                          BIO
-                        </Text>
-                        <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
-                          "{drop.senderBio}"
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* No contact info message */}
-                    {!drop.senderPhone && !drop.senderEmail && !drop.senderBio && (!drop.senderSocialMedia || drop.senderSocialMedia.length === 0) && (
-                      <View style={{
-                        backgroundColor: theme.colors.bg,
-                        padding: 12,
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        alignItems: 'center',
-                      }}>
-                        <Text style={[theme.type.muted, { fontSize: 13, textAlign: 'center' }]}>
-                          No additional contact info shared
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Action Buttons */}
-                    <View style={{ 
-                      flexDirection: 'row', 
-                      gap: 8, 
-                    }}>
-                      <Pressable
-                        onPress={() => handleDropAction('accepted', drop)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: theme.colors.blue,
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
-                          Accept
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleDropAction('returned', drop)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: '#FF6B4A',
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
-                          Return Drop
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleDropAction('declined', drop)}
-                        style={{
-                          flex: 1,
-                          backgroundColor: theme.colors.bg,
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: theme.colors.border,
-                        }}
-                      >
-                        <Text style={[theme.type.body, { fontSize: 13, textAlign: 'center', color: theme.colors.muted }]}>
-                          Decline
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-              </>
-            </ScrollView>
-            
-            <Pressable
-              onPress={() => setShowDrops(false)}
-              style={{
-                backgroundColor: theme.colors.bg,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                marginTop: 16,
-                borderWidth: 1,
-                borderColor: theme.colors.border,
-              }}
-            >
-              <Text style={[theme.type.body, { textAlign: 'center', color: theme.colors.muted }]}>
-                Close
-              </Text>
-            </Pressable>
-      </View>
-    </View>
-      </Modal>
-
-      {/* New Link Notification Modal */}
-      <Modal
-        visible={showNewLinkModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={handleDismissNewLink}
-      >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.6)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 20,
-        }}>
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 20,
-            padding: 24,
-            width: '90%',
-            maxWidth: 320,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.25,
-            shadowRadius: 16,
-            elevation: 12,
-          }}>
-            {/* Link Icon */}
-            <View style={{
-              width: 80,
-              height: 80,
-              borderRadius: 40,
-              backgroundColor: 'rgba(0, 200, 130, 0.15)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 16,
-            }}>
-              <LinkIcon size={40} />
-            </View>
-
-            {/* Title */}
-            <Text style={[theme.type.h1, { 
-              fontSize: 24, 
-              color: theme.colors.green,
-              marginBottom: 8,
-              textAlign: 'center',
-            }]}>
-              New Link!
-            </Text>
-
-            {/* Subtitle */}
-            <Text style={[theme.type.body, { 
-              fontSize: 16, 
-              color: theme.colors.text,
-              marginBottom: 4,
-              textAlign: 'center',
-            }]}>
-              You're now linked with
-            </Text>
-
-            {/* Contact Name */}
-            <Text style={[theme.type.h2, { 
-              fontSize: 20, 
-              color: theme.colors.text,
-              marginBottom: 4,
-              textAlign: 'center',
-            }]}>
-              {currentNewLink?.senderName || 'User'}
-            </Text>
-
-            {/* Username */}
-            {currentNewLink?.senderUsername && (
-              <Text style={[theme.type.body, { 
-                fontSize: 14, 
-                color: theme.colors.muted,
-                marginBottom: 20,
-                textAlign: 'center',
-              }]}>
-                @{currentNewLink.senderUsername}
-              </Text>
-            )}
-
-            {/* Info Text */}
-            <Text style={[theme.type.body, { 
-              fontSize: 13, 
-              color: theme.colors.muted,
-              marginBottom: 24,
-              textAlign: 'center',
-              paddingHorizontal: 10,
-            }]}>
-              View their contact info on the Links page
-            </Text>
-
-            {/* OK Button */}
-            <Pressable
-              onPress={handleDismissNewLink}
-              style={{
-                backgroundColor: theme.colors.green,
-                paddingVertical: 14,
-                paddingHorizontal: 40,
-                borderRadius: 12,
-                width: '100%',
-              }}
-            >
-              <Text style={[theme.type.body, { 
-                color: '#fff', 
-                textAlign: 'center',
-                fontWeight: '600',
-                fontSize: 16,
-              }]}>
-                Got it!
-              </Text>
-            </Pressable>
-
-            {/* Badge count if more links */}
-            {unviewedLinksFromDb.length > 1 && (
-              <Text style={[theme.type.body, { 
-                fontSize: 12, 
-                color: theme.colors.muted,
-                marginTop: 12,
-                textAlign: 'center',
-              }]}>
-                +{unviewedLinksFromDb.length - 1} more new link{unviewedLinksFromDb.length > 2 ? 's' : ''}
-              </Text>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Contact Card Modal */}
-      <Modal 
-        visible={!!selectedContactCard} 
-        transparent 
-        animationType="fade" 
-        onRequestClose={() => {
-          if (selectedContactCard?.id) {
-            markAsViewed(selectedContactCard.id);
-          }
-          setSelectedContactCard(null);
-          setShowDrops(false);
-        }}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ 
-            backgroundColor: theme.colors.white,
-            borderRadius: 16,
-            padding: 20,
-            width: '100%',
-            maxWidth: 340,
-            borderWidth: 2,
-            borderColor: '#FF6B4A',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 8,
-          }}>
-            {/* Header */}
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <View style={{
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                backgroundColor: '#FFE5DC',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 10,
-              }}>
-                <MaterialCommunityIcons 
-                  name="account" 
-                  size={32} 
-                  color="#FF6B4A" 
-                />
-              </View>
-              <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 2, color: '#FF6B4A' }]}>
-                {selectedContactCard?.name}
-              </Text>
-            </View>
-
-            {/* Contact Information */}
-            <View style={{ marginBottom: 16 }}>
-              {selectedContactCard?.phoneNumber && (
-                <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
-                  <MaterialCommunityIcons name="phone" size={16} color="#FF6B4A" style={{ marginRight: 8 }} />
-                  <Text style={[theme.type.body, { fontSize: 14 }]}>
-                    {selectedContactCard.phoneNumber}
-                  </Text>
-                </View>
-              )}
-              
-              {selectedContactCard?.email && (
-                <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
-                  <MaterialCommunityIcons name="email" size={16} color="#FF6B4A" style={{ marginRight: 8 }} />
-                  <Text style={[theme.type.body, { fontSize: 14 }]}>
-                    {selectedContactCard.email}
-                  </Text>
-                </View>
-              )}
-
-              {/* Social Media */}
-              {selectedContactCard?.socialMedia && selectedContactCard.socialMedia.length > 0 && (
-                <View style={{ marginTop: 4, marginBottom: 8 }}>
-                  {selectedContactCard.socialMedia.map((social: any, index: number) => (
-                    <View key={index} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
-                      <MaterialCommunityIcons 
-                        name={
-                          social.platform.toLowerCase().includes('instagram') ? 'instagram' :
-                          social.platform.toLowerCase().includes('twitter') || social.platform.toLowerCase().includes('x') ? 'twitter' :
-                          social.platform.toLowerCase().includes('linkedin') ? 'linkedin' :
-                          social.platform.toLowerCase().includes('facebook') ? 'facebook' :
-                          'web'
-                        } 
-                        size={16} 
-                        color="#FF6B4A" 
-                        style={{ marginRight: 8 }}
-                      />
-                      <Text style={[theme.type.body, { fontSize: 14 }]}>
-                        {social.handle}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-              
-              {selectedContactCard?.bio && (
-                <View style={{ 
-                  marginTop: 8,
-                  padding: 10,
-                  backgroundColor: '#FFF5F2',
-                  borderRadius: 8,
-                }}>
-                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text, fontStyle: 'italic' }]}>
-                    "{selectedContactCard.bio}"
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={{ gap: 8 }}>
-              {/* Pin Button */}
-              <Pressable
-                onPress={async () => {
-                  const deviceId = selectedContactCard?.deviceId || selectedContactCard?.id;
-                  if (deviceId) {
-                    // Device should already be in store from link notification creation
-                    // Just toggle the pin
-                    togglePin(deviceId);
-                    markAsViewed(selectedContactCard.id);
-                  }
+            return (
+              <DeviceBlip
+                key={device.id || device.name}
+                device={device}
+                position={{ x: position.x, y: position.y }}
+                depth={position.z}
+                nucleusX={nucleusX}
+                nucleusY={nucleusY}
+                viewTransform={viewTransformTensor}
+                onPress={() => {
+                  setSelectedBlipDevice(device);
+                  setSelectedBlipDeviceId(device.id); // Store device ID to sync later
+                  setShowBlipModal(true);
                 }}
-                style={({ pressed }) => ({
-                  backgroundColor: pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FFE5DC' : '#FF6B4A',
-                  paddingVertical: 10,
-                  borderRadius: 20,
-                  alignItems: 'center',
-                  opacity: pressed ? 0.9 : 1,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 6,
-                })}
-              >
-                <MaterialCommunityIcons 
-                  name={pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? "pin-off" : "pin"} 
-                  size={16} 
-                  color={pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FF6B4A' : '#FFFFFF'}
-                />
-                <Text style={{ 
-                  fontSize: 14,
-                  fontWeight: '600',
-                  color: pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FF6B4A' : '#FFFFFF'
-                }}>
-                  {pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? 'Unpin' : 'Pin Contact'}
-                </Text>
-              </Pressable>
+              />
+            );
+          })}
 
-              {/* Close Button */}
+          {/* Link Markers - for accepted and returned links (no pulsation) */}
+          {linkedDevices.map((device) => {
+            // Use same positioning logic as blips to ensure grid snapping
+            const position = getGridPosition(device as any); // Device has distanceFeet property
+
+            return (
+              <LinkMarker
+                key={device.id || `link-${device.name}`}
+                device={device}
+                position={{ x: position.x, y: position.y }}
+                depth={position.z}
+                nucleusX={nucleusX}
+                nucleusY={nucleusY}
+                viewTransform={viewTransformTensor}
+                onPress={() => {
+                  setSelectedLink(device);
+                  setShowLinkModal(true);
+                }}
+              />
+            );
+          })}
+        </View>
+
+        {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
+        {filteredDevices.length === 0 && linkedDevices.length === 0 && (
+          <View
+            style={{
+              position: 'absolute',
+              top: '45%',
+              left: 0,
+              right: 0,
+              alignItems: 'center',
+            }}
+            pointerEvents="none"
+          >
+            <Text style={[theme.type.muted, {
+              textAlign: 'center',
+              fontSize: 15,
+            }]}>
+              No drops nearby
+            </Text>
+          </View>
+        )}
+
+        {/* Central Raindrop Logo with Ripple - THE NUCLEUS (ORIGIN POINT 0,0) - ROTATES WITH GRID */}
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: nucleusY,
+            left: nucleusX,
+            transform: [
+              { translateX: -iconOffsetX },
+              { translateY: -iconOffsetY },
+              {
+                rotate: rotationAnimValue.interpolate({
+                  inputRange: [-100, 100],
+                  outputRange: ['-100rad', '100rad']
+                })
+              }
+            ],
+            zIndex: 999,
+          }}
+          pointerEvents="box-none"
+        >
+          <View pointerEvents="auto">
+            <Pressable onPress={handleRaindropPress} style={{ alignItems: 'center', position: 'relative' }}>
+              {/* Ripple Effect */}
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  borderWidth: 2,
+                  borderColor: theme.colors.green,
+                  opacity: rippleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 0.3],
+                  }),
+                  transform: [{
+                    scale: rippleAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 1.2],
+                    }),
+                  }],
+                }}
+              />
+
+              <View style={{ position: 'relative' }}>
+                <MaterialCommunityIcons
+                  name={(incomingDrops.length > 0 || unviewedLinksFromDb.length > 0) ? "water" : "water-outline"}
+                  size={30}
+                  color={theme.colors.green}
+                />
+
+                {/* Link notification badge */}
+                {hasUnviewedLinks && (
+                  <Animated.View
+                    style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -6,
+                      opacity: flashAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.4, 1],
+                      }),
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name="link-variant"
+                      size={14}
+                      color="#FF6B4A"
+                    />
+                  </Animated.View>
+                )}
+              </View>
+            </Pressable>
+          </View>
+        </Animated.View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.colors.blue}
+              colors={[theme.colors.blue]}
+            />
+          }
+          scrollEnabled={false}
+        >
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: Dimensions.get('window').height || 800 }}>
+            {/* Background overlay to close expanded cards and quick actions when clicking outside */}
+            {(expandedCardId !== null || activeQuickActionCardId !== null) && (
               <Pressable
                 onPress={() => {
-                  if (selectedContactCard?.id) {
-                    markAsViewed(selectedContactCard.id);
-                  }
-                  setSelectedContactCard(null);
-                  setShowDrops(false);
+                  setExpandedCardId(null);
+                  setActiveQuickActionCardId(null);
                 }}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  borderRadius: 20,
-                  alignItems: 'center',
-                  backgroundColor: theme.colors.bg,
-                  borderWidth: 1,
-                  borderColor: '#FF6B4A',
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={{ fontSize: 14, fontWeight: '500', color: '#FF6B4A' }}>Close</Text>
-              </Pressable>
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  zIndex: 5,
+                }}
+              />
+            )}
+
+            {/* Pinned Profiles Stack - REMOVED */}
+            {false && pinnedProfiles.length > 0 && (() => {
+              // Calculate total height of the stack
+              const cardHeight = 280; // Approximate full card height
+              // Dynamic spacing: increase when dragging
+              const baseSpacing = 45;
+              const spacingMultiplier = isDragging ? 1.8 : 1;
+              const stackSpacing = baseSpacing * spacingMultiplier;
+              const totalStackHeight = cardHeight + ((pinnedProfiles.length - 1) * stackSpacing);
+
+              return (
+                <Animated.View
+                  style={{
+                    position: 'absolute',
+                    left: '3%',
+                    top: '50%',
+                    transform: [
+                      { translateY: -240 },
+                      { translateY: dragOffset }
+                    ],
+                    width: 150,
+                    maxHeight: 600,
+                    zIndex: 10,
+                  }}
+                  {...panResponder.panHandlers}
+                >
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{ minHeight: totalStackHeight }}
+                    scrollEnabled={!isDragging}
+                  >
+                    {pinnedProfiles.map((profile, index) => {
+                      const isExpanded = expandedCardId === profile.id;
+                      const isBottomCard = index === 0;
+                      // Reverse order: bottom card should be rendered last (highest in stack visually at bottom)
+                      const stackPosition = pinnedProfiles.length - 1 - index;
+
+                      // Parallax effect: cards deeper in stack move MORE to spread out
+                      const parallaxMultiplier = stackPosition * 0.5; // 50% more per position
+                      const parallaxOffset = dragOffset.interpolate({
+                        inputRange: [0, 200],
+                        outputRange: [0, 200 * parallaxMultiplier], // Positive to spread cards apart
+                      });
+
+                      // Get or create tap animation value for this card
+                      if (profile.id && !tapScales[profile.id]) {
+                        tapScales[profile.id] = new Animated.Value(1);
+                      }
+                      const tapScale = profile.id ? tapScales[profile.id] : new Animated.Value(1);
+
+                      const handleTap = () => {
+                        if (!profile.id) return;
+
+                        const now = Date.now();
+                        const timeSinceLastTap = now - lastTapTime.current;
+                        const isDoubleTap = timeSinceLastTap < 800 && lastTapCardId.current === profile.id;
+
+                        lastTapTime.current = now;
+                        lastTapCardId.current = profile.id;
+
+                        if (isDoubleTap) {
+                          // Double tap - toggle quick actions
+                          setActiveQuickActionCardId(activeQuickActionCardId === profile.id ? null : profile.id);
+                        } else {
+                          // Single tap - pulse animation and expand (not collapse)
+                          Animated.sequence([
+                            Animated.timing(tapScale, {
+                              toValue: 1.05,
+                              duration: 100,
+                              useNativeDriver: true,
+                            }),
+                            Animated.timing(tapScale, {
+                              toValue: 1,
+                              duration: 100,
+                              useNativeDriver: true,
+                            }),
+                          ]).start();
+
+                          // Hide quick actions when switching cards
+                          if (activeQuickActionCardId !== null && activeQuickActionCardId !== profile.id) {
+                            setActiveQuickActionCardId(null);
+                          }
+
+                          // Expand card - clicking on already expanded card keeps it expanded
+                          // Clicking on different card switches the expanded card
+                          if (!isBottomCard) {
+                            setExpandedCardId(profile.id);
+                          }
+                        }
+                      };
+
+                      return (
+                        <Animated.View
+                          key={profile.id}
+                          style={{
+                            position: 'absolute',
+                            top: stackPosition * stackSpacing,
+                            left: 0,
+                            right: 0,
+                            zIndex: activeQuickActionCardId === profile.id ? 1001 : (isExpanded ? 1000 : (pinnedProfiles.length - index)),
+                            transform: [
+                              { translateY: parallaxOffset },
+                              { scale: tapScale }
+                            ],
+                          }}
+                        >
+                          <Pressable
+                            onPress={handleTap}
+                            style={{
+                              ...theme.card,
+                              width: 150,
+                              overflow: isExpanded || activeQuickActionCardId === profile.id || isDragging ? 'visible' : 'hidden',
+                              zIndex: activeQuickActionCardId === profile.id ? 999 : 1,
+                            }}
+                          >
+                            {/* ID Header - Always visible */}
+                            <View style={{
+                              backgroundColor: '#FF6B4A',
+                              paddingVertical: 6,
+                              paddingHorizontal: 12,
+                              alignItems: 'center',
+                            }}>
+                              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
+                                {profile.name}
+                              </Text>
+                            </View>
+
+                            {/* ID Content - Show for bottom card, when expanded, or when dragging */}
+                            {(isBottomCard || isExpanded || isDragging) && (
+                              <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 4 }}>
+                                {/* Profile Picture */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                                  <View style={{
+                                    width: 32,
+                                    height: 32,
+                                    borderRadius: 16,
+                                    backgroundColor: '#FFE5DC',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                  }}>
+                                    <MaterialCommunityIcons name="account" size={18} color="#FF6B4A" />
+                                  </View>
+                                </View>
+
+                                {/* Contact Information */}
+                                <View style={{ marginBottom: 6 }}>
+                                  {/* Phone */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                    <MaterialCommunityIcons name="phone" size={10} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
+                                      +1 (555) 123-4567
+                                    </Text>
+                                  </View>
+
+                                  {/* Email */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                    <MaterialCommunityIcons name="email" size={10} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
+                                      user@example.com
+                                    </Text>
+                                  </View>
+
+                                  {/* Social Media */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                    <MaterialCommunityIcons name="instagram" size={10} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
+                                      @yourhandle
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                    <MaterialCommunityIcons name="twitter" size={10} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
+                                      @yourhandle
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
+                                    <MaterialCommunityIcons name="linkedin" size={10} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
+                                      yourname
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {/* Bio Section */}
+                                <View style={{
+                                  backgroundColor: theme.colors.bg,
+                                  padding: 6,
+                                  borderRadius: 6,
+                                }}>
+                                  <Text style={[theme.type.muted, { fontSize: 6, marginBottom: 1 }]}>
+                                    BIO
+                                  </Text>
+                                  <Text style={[theme.type.body, { fontSize: 7, color: theme.colors.text }]}>
+                                    "Bio will display here once created"
+                                  </Text>
+                                </View>
+                              </View>
+                            )}
+                          </Pressable>
+
+                          {/* Quick Action Buttons (shown on double-tap) - Always accessible */}
+                          {activeQuickActionCardId === profile.id && (
+                            <View style={{
+                              flexDirection: 'row',
+                              gap: 8,
+                              paddingHorizontal: 10,
+                              paddingTop: 4,
+                              paddingBottom: 10,
+                              backgroundColor: theme.colors.white,
+                              borderBottomLeftRadius: 12,
+                              borderBottomRightRadius: 12,
+                              width: 150,
+                            }}>
+                              <Pressable
+                                onPress={() => profile.id && handleQuickActionPress('unpin', profile.id, profile.name)}
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: '#FFB89D',
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <MaterialCommunityIcons name="pin-off" size={14} color="#fff" />
+                                <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
+                                  Unpin
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => profile.id && handleQuickActionPress('delete', profile.id, profile.name)}
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: '#FF6B4A',
+                                  paddingVertical: 8,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                <MaterialCommunityIcons name="delete" size={14} color="#fff" />
+                                <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
+                                  Delete
+                                </Text>
+                              </Pressable>
+                            </View>
+                          )}
+                        </Animated.View>
+                      );
+                    })}
+                  </ScrollView>
+                </Animated.View>
+              );
+            })()}
+          </View>
+        </ScrollView>
+
+        {/* View Transform Controls - Top Right Corner - Always Visible */}
+        <View
+          style={{
+            position: 'absolute',
+            top: insets.top + 8,
+            right: 8,
+            zIndex: 999,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}
+          pointerEvents="box-none"
+        >
+          {/* DEBUG: Test Send Drop Button - TEMPORARY */}
+          <View pointerEvents="auto">
+            <Pressable
+              onPress={async () => {
+                try {
+                  const senderProfile = {
+                    name: profile?.name || 'Test User',
+                    username: username || undefined,
+                    email: profile?.email || undefined,
+                    phone: profile?.phone || undefined,
+                    bio: profile?.bio || undefined,
+                    profilePhoto: profile?.profilePhoto || undefined,
+                    socialMedia: profile?.socialMedia || undefined,
+                  };
+
+                  await sendDrop(
+                    '744df100-0ea0-4614-a7fe-18f04dc579a6', // Kaytea's user_id
+                    senderProfile,
+                    12.5 // hardcoded distance
+                  );
+
+                  showToast({
+                    message: 'Test drop sent to Kaytea',
+                    type: 'success',
+                    duration: 3000,
+                  });
+                } catch (error: any) {
+                  console.error('[DROP-SEND-TEST] Failed to send drop:', error);
+                  showToast({
+                    message: error.message || 'Failed to send test drop',
+                    type: 'error',
+                    duration: 4000,
+                  });
+                }
+              }}
+              style={{
+                backgroundColor: '#FF6B4A',
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '600' }}>
+                Test Send
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Reset View Button */}
+          <View pointerEvents="auto">
+            <Pressable
+              onPress={() => {
+                setViewScale(1);
+                setViewRotation(0);
+                scaleAnimValue.setValue(1);
+                rotationAnimValue.setValue(0);
+              }}
+              style={{
+                borderWidth: 1,
+                borderColor: theme.colors.green,
+                borderRadius: 6,
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+              }}
+            >
+              <Text style={{ color: theme.colors.green, fontSize: 11, fontWeight: '600' }}>
+                Reset View
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Zoom & Rotation Indicators (visual feedback only) */}
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 8,
+            }}
+            pointerEvents="none"
+          >
+            {/* Zoom Indicator - illuminates when zoom is NOT 1x */}
+            <View
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
+              }}
+            >
+              <Text style={{
+                color: Math.abs(viewScale - 1) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)',
+                fontSize: 11,
+                fontWeight: '600'
+              }}>
+                Zoom
+              </Text>
+            </View>
+
+            {/* Rotate Indicator - illuminates when rotation is NOT 0° */}
+            <View
+              style={{
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.3)',
+              }}
+            >
+              <Text style={{
+                color: Math.abs(viewRotation) > 0.01 ? theme.colors.green : 'rgba(128, 128, 128, 0.5)',
+                fontSize: 11,
+                fontWeight: '600'
+              }}>
+                Rotate
+              </Text>
             </View>
           </View>
         </View>
-      </Modal>
 
-      {/* Blip Device Modal - Execute Drop */}
-      <Modal
-        visible={showBlipModal}
-        transparent={true}
-        animationType="fade"
-            onRequestClose={() => {
-              setShowBlipModal(false);
-              setDropError(null);
-            }}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.6)', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          padding: 20 
-        }}>
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 16,
-            padding: 24,
-            width: '100%',
-            maxWidth: 300,
-            borderWidth: 2,
-            borderColor: '#00FF00',
-            shadowColor: '#00FF00',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 10,
-          }}>
-            {/* Header */}
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+        {/* Discoverability Toggle - Top Left Corner - Always Visible */}
+        <View
+          style={{
+            position: 'absolute',
+            top: insets.top + 8,
+            left: 20,
+            zIndex: 999,
+          }}
+          pointerEvents="box-none"
+        >
+          <View style={{ position: 'relative' }} pointerEvents="auto">
+            <Pressable onPress={handleTogglePress}>
               <View style={{
-                width: 60,
-                height: 60,
-                borderRadius: 30,
-                backgroundColor: '#E5FFE5',
+                width: 40,
+                height: 22,
+                borderRadius: 11,
+                backgroundColor: isDiscoverable ? theme.colors.greenLight : '#F0F0F0',
+                padding: 2,
+                justifyContent: 'center',
+              }}>
+                <View style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: isDiscoverable ? theme.colors.green : '#FFFFFF',
+                  transform: [{ translateX: isDiscoverable ? 18 : 0 }],
+                }} />
+              </View>
+            </Pressable>
+            <View style={{
+              position: 'absolute',
+              top: 24,
+              left: isDiscoverable ? 18 : 0,
+              alignItems: 'center',
+              width: 18,
+            }}>
+              {isDiscoverable ? (
+                <MaterialCommunityIcons name="flash-outline" size={14} color={theme.colors.green} />
+              ) : (
+                <MaterialCommunityIcons name="ghost-outline" size={14} color="#8E8E93" />
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* Link Popup Animation */}
+        {showLinkPopup && (
+          <Animated.View
+            key={popupKey}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000,
+            }}
+          >
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    scale: linkPopupAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.5, 1.2],
+                    }),
+                  },
+                ],
+                opacity: linkPopupAnim,
+              }}
+            >
+              <View style={{
+                backgroundColor: theme.colors.white,
+                borderRadius: 20,
+                padding: 16,
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 8,
+                borderWidth: 2,
+                borderColor: '#FF6B4A',
+              }}>
+                <LinkIcon size={32} />
+                <Text style={[theme.type.h2, { marginTop: 8, color: '#FF6B4A' }]}>
+                  Link Created!
+                </Text>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        )}
+
+        {/* Drops Modal */}
+        <Modal
+          visible={showDrops}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDrops(false)}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 16,
+              padding: 20,
+              width: '95%',
+              maxWidth: 500,
+              maxHeight: '80%',
+            }}>
+              <Text style={[theme.type.h1, { marginBottom: 16, textAlign: 'center' }]}>
+                Your Drops
+              </Text>
+
+              <ScrollView style={{ maxHeight: 500 }}>
+                <>
+                  {/* Link Notifications Section (from context) */}
+                  {unviewedLinksFromContext.length > 0 && (
+                    <View style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                        <LinkIcon size={16} />
+                        <Text style={[theme.type.h2, { marginLeft: 6, fontSize: 14, color: '#FF6B4A' }]}>
+                          Links
+                        </Text>
+                      </View>
+                      {unviewedLinksFromContext.map((linkNotif) => (
+                        <View
+                          key={linkNotif.id}
+                          style={{
+                            backgroundColor: theme.colors.blueLight,
+                            borderRadius: 12,
+                            padding: 14,
+                            marginBottom: 10,
+                            borderLeftWidth: 4,
+                            borderLeftColor: theme.colors.blue,
+                          }}
+                        >
+                          {/* Close button */}
+                          <Pressable
+                            onPress={() => dismissNotification(linkNotif.id)}
+                            style={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              padding: 4,
+                            }}
+                          >
+                            <MaterialCommunityIcons name="close" size={16} color="#666" />
+                          </Pressable>
+
+                          {/* Content */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                            <MaterialCommunityIcons
+                              name="link-variant"
+                              size={20}
+                              color={theme.colors.blue}
+                              style={{ marginRight: 10 }}
+                            />
+                            <View style={{ flex: 1, paddingRight: 20 }}>
+                              <Text style={[theme.type.h2, { fontSize: 14, color: '#FF6B4A' }]}>
+                                You linked with {linkNotif.name}!
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Action buttons */}
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Pressable
+                              onPress={() => {
+                                setSelectedContactCard(linkNotif);
+                              }}
+                              style={({ pressed }) => ({
+                                flex: 1,
+                                backgroundColor: '#FF6B4A',
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 20,
+                                alignItems: 'center',
+                                opacity: pressed ? 0.9 : 1,
+                              })}
+                            >
+                              <Text style={[theme.type.button, { fontSize: 12, color: '#000000' }]}>
+                                View Contact Card
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              onPress={() => dismissNotification(linkNotif.id)}
+                              style={({ pressed }) => ({
+                                flex: 1,
+                                backgroundColor: theme.colors.border,
+                                paddingVertical: 8,
+                                paddingHorizontal: 12,
+                                borderRadius: 20,
+                                alignItems: 'center',
+                                opacity: pressed ? 0.9 : 1,
+                              })}
+                            >
+                              <Text style={[theme.type.button, { fontSize: 12, color: theme.colors.text }]}>
+                                Dismiss
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Incoming Drops Section */}
+                  {incomingDrops.length > 0 && (
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
+                        💧 Incoming Drops
+                      </Text>
+                    </View>
+                  )}
+
+                  {incomingDrops.length === 0 && unviewedLinksFromContext.length === 0 && unviewedLinksFromDb.length === 0 ? (
+                    <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
+                      <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
+                      <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
+                        All caught up!
+                      </Text>
+                      <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 13, lineHeight: 18 }]}>
+                        No new drops right now. Head to the Drop page to connect with people nearby!
+                      </Text>
+                    </View>
+                  ) : (
+                    incomingDrops.map((drop) => (
+                      <View key={drop.id} style={{
+                        backgroundColor: theme.colors.white,
+                        borderRadius: 16,
+                        marginBottom: 16,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}>
+                        {/* Header with name */}
+                        <View style={{
+                          backgroundColor: '#FF6B4A',
+                          paddingVertical: 12,
+                          paddingHorizontal: 16,
+                          alignItems: 'center',
+                        }}>
+                          <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                            {drop.senderName || drop.senderUsername || 'Someone'} sent you a drop
+                          </Text>
+                          {/* Distance and username */}
+                          <View style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            marginTop: 4,
+                          }}>
+                            {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
+                                {drop.distanceFeet.toFixed(1)} ft away
+                              </Text>
+                            )}
+                            {drop.distanceFeet !== undefined && drop.senderUsername && (
+                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginHorizontal: 6 }}>•</Text>
+                            )}
+                            {drop.senderUsername && (
+                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
+                                @{drop.senderUsername}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Contact Card Content */}
+                        <View style={{ padding: 16 }}>
+                          {/* Profile Picture */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <View style={{
+                              width: 70,
+                              height: 70,
+                              borderRadius: 35,
+                              backgroundColor: '#FFE5DC',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                            }}>
+                              {drop.senderProfilePhoto ? (
+                                <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 70, height: 70 }} />
+                              ) : (
+                                <Text style={{ color: '#FF6B4A', fontSize: 28, fontWeight: '600' }}>
+                                  {(drop.senderName || drop.senderUsername || 'U').substring(0, 2).toUpperCase()}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Contact Information */}
+                          <View style={{ marginBottom: 12 }}>
+                            {/* Phone */}
+                            {drop.senderPhone && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                                <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                  {drop.senderPhone}
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* Email */}
+                            {drop.senderEmail && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                                <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                  {drop.senderEmail}
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* Social Media */}
+                            {drop.senderSocialMedia && drop.senderSocialMedia.map((social, index) => (
+                              social.platform && social.handle ? (
+                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <MaterialCommunityIcons
+                                    name={social.platform.toLowerCase() as any}
+                                    size={16}
+                                    color={theme.colors.muted}
+                                  />
+                                  <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                    {social.handle}
+                                  </Text>
+                                </View>
+                              ) : null
+                            ))}
+                          </View>
+
+                          {/* Bio Section */}
+                          {drop.senderBio && (
+                            <View style={{
+                              backgroundColor: theme.colors.bg,
+                              padding: 12,
+                              borderRadius: 8,
+                              marginBottom: 16,
+                            }}>
+                              <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                                BIO
+                              </Text>
+                              <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                                "{drop.senderBio}"
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* No contact info message */}
+                          {!drop.senderPhone && !drop.senderEmail && !drop.senderBio && (!drop.senderSocialMedia || drop.senderSocialMedia.length === 0) && (
+                            <View style={{
+                              backgroundColor: theme.colors.bg,
+                              padding: 12,
+                              borderRadius: 8,
+                              marginBottom: 16,
+                              alignItems: 'center',
+                            }}>
+                              <Text style={[theme.type.muted, { fontSize: 13, textAlign: 'center' }]}>
+                                No additional contact info shared
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* Action Buttons */}
+                          <View style={{
+                            flexDirection: 'row',
+                            gap: 8,
+                          }}>
+                            <Pressable
+                              onPress={() => handleDropAction('accepted', drop)}
+                              style={{
+                                flex: 1,
+                                backgroundColor: theme.colors.blue,
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
+                                borderRadius: 8,
+                              }}
+                            >
+                              <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
+                                Accept
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleDropAction('returned', drop)}
+                              style={{
+                                flex: 1,
+                                backgroundColor: '#FF6B4A',
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
+                                borderRadius: 8,
+                              }}
+                            >
+                              <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
+                                Return Drop
+                              </Text>
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleDropAction('declined', drop)}
+                              style={{
+                                flex: 1,
+                                backgroundColor: theme.colors.bg,
+                                paddingVertical: 10,
+                                paddingHorizontal: 12,
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: theme.colors.border,
+                              }}
+                            >
+                              <Text style={[theme.type.body, { fontSize: 13, textAlign: 'center', color: theme.colors.muted }]}>
+                                Decline
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </>
+              </ScrollView>
+
+              <Pressable
+                onPress={() => setShowDrops(false)}
+                style={{
+                  backgroundColor: theme.colors.bg,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  marginTop: 16,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}
+              >
+                <Text style={[theme.type.body, { textAlign: 'center', color: theme.colors.muted }]}>
+                  Close
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* New Link Notification Modal */}
+        <Modal
+          visible={showNewLinkModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleDismissNewLink}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 20,
+              padding: 24,
+              width: '90%',
+              maxWidth: 320,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              elevation: 12,
+            }}>
+              {/* Link Icon */}
+              <View style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: 'rgba(0, 200, 130, 0.15)',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginBottom: 12,
-                borderWidth: 2,
-                borderColor: '#00FF00',
+                marginBottom: 16,
               }}>
-                <MaterialCommunityIcons 
-                  name="account-circle" 
-                  size={40} 
-                  color="#00FF00" 
-                />
+                <LinkIcon size={40} />
               </View>
-              {/* Device Name - Primary Identifier */}
-              <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedBlipDevice?.username || 
-                 (selectedBlipDevice?.name && selectedBlipDevice.name.startsWith(DROPLINK_DEVICE_PREFIX) 
-                   ? 'Loading user...' 
-                   : (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'))}
+
+              {/* Title */}
+              <Text style={[theme.type.h1, {
+                fontSize: 24,
+                color: theme.colors.green,
+                marginBottom: 8,
+                textAlign: 'center',
+              }]}>
+                New Link!
               </Text>
-              
-              {/* Device ID - Secondary, Smaller */}
-              {selectedBlipDevice?.id && (
-                <Text style={{ fontSize: 11, color: theme.colors.muted, marginBottom: 16, fontFamily: 'monospace' }}>
-                  {selectedBlipDevice.id.length > 30 ? selectedBlipDevice.id.substring(0, 30) + '...' : selectedBlipDevice.id}
+
+              {/* Subtitle */}
+              <Text style={[theme.type.body, {
+                fontSize: 16,
+                color: theme.colors.text,
+                marginBottom: 4,
+                textAlign: 'center',
+              }]}>
+                You're now linked with
+              </Text>
+
+              {/* Contact Name */}
+              <Text style={[theme.type.h2, {
+                fontSize: 20,
+                color: theme.colors.text,
+                marginBottom: 4,
+                textAlign: 'center',
+              }]}>
+                {currentNewLink?.senderName || 'User'}
+              </Text>
+
+              {/* Username */}
+              {currentNewLink?.senderUsername && (
+                <Text style={[theme.type.body, {
+                  fontSize: 14,
+                  color: theme.colors.muted,
+                  marginBottom: 20,
+                  textAlign: 'center',
+                }]}>
+                  @{currentNewLink.senderUsername}
                 </Text>
               )}
-              
-              {/* Device Details */}
-              <View style={{ width: '100%', marginBottom: 12 }}>
+
+              {/* Info Text */}
+              <Text style={[theme.type.body, {
+                fontSize: 13,
+                color: theme.colors.muted,
+                marginBottom: 24,
+                textAlign: 'center',
+                paddingHorizontal: 10,
+              }]}>
+                View their contact info on the Links page
+              </Text>
+
+              {/* OK Button */}
+              <Pressable
+                onPress={handleDismissNewLink}
+                style={{
+                  backgroundColor: theme.colors.green,
+                  paddingVertical: 14,
+                  paddingHorizontal: 40,
+                  borderRadius: 12,
+                  width: '100%',
+                }}
+              >
+                <Text style={[theme.type.body, {
+                  color: '#fff',
+                  textAlign: 'center',
+                  fontWeight: '600',
+                  fontSize: 16,
+                }]}>
+                  Got it!
+                </Text>
+              </Pressable>
+
+              {/* Badge count if more links */}
+              {unviewedLinksFromDb.length > 1 && (
+                <Text style={[theme.type.body, {
+                  fontSize: 12,
+                  color: theme.colors.muted,
+                  marginTop: 12,
+                  textAlign: 'center',
+                }]}>
+                  +{unviewedLinksFromDb.length - 1} more new link{unviewedLinksFromDb.length > 2 ? 's' : ''}
+                </Text>
+              )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Contact Card Modal */}
+        <Modal
+          visible={!!selectedContactCard}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            if (selectedContactCard?.id) {
+              markAsViewed(selectedContactCard.id);
+            }
+            setSelectedContactCard(null);
+            setShowDrops(false);
+          }}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 16,
+              padding: 20,
+              width: '100%',
+              maxWidth: 340,
+              borderWidth: 2,
+              borderColor: '#FF6B4A',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 8,
+            }}>
+              {/* Header */}
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <View style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  backgroundColor: '#FFE5DC',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 10,
+                }}>
+                  <MaterialCommunityIcons
+                    name="account"
+                    size={32}
+                    color="#FF6B4A"
+                  />
+                </View>
+                <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 2, color: '#FF6B4A' }]}>
+                  {selectedContactCard?.name}
+                </Text>
+              </View>
+
+              {/* Contact Information */}
+              <View style={{ marginBottom: 16 }}>
+                {selectedContactCard?.phoneNumber && (
+                  <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="phone" size={16} color="#FF6B4A" style={{ marginRight: 8 }} />
+                    <Text style={[theme.type.body, { fontSize: 14 }]}>
+                      {selectedContactCard.phoneNumber}
+                    </Text>
+                  </View>
+                )}
+
+                {selectedContactCard?.email && (
+                  <View style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="email" size={16} color="#FF6B4A" style={{ marginRight: 8 }} />
+                    <Text style={[theme.type.body, { fontSize: 14 }]}>
+                      {selectedContactCard.email}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Social Media */}
+                {selectedContactCard?.socialMedia && selectedContactCard.socialMedia.length > 0 && (
+                  <View style={{ marginTop: 4, marginBottom: 8 }}>
+                    {selectedContactCard.socialMedia.map((social: any, index: number) => (
+                      <View key={index} style={{ marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
+                        <MaterialCommunityIcons
+                          name={
+                            social.platform.toLowerCase().includes('instagram') ? 'instagram' :
+                              social.platform.toLowerCase().includes('twitter') || social.platform.toLowerCase().includes('x') ? 'twitter' :
+                                social.platform.toLowerCase().includes('linkedin') ? 'linkedin' :
+                                  social.platform.toLowerCase().includes('facebook') ? 'facebook' :
+                                    'web'
+                          }
+                          size={16}
+                          color="#FF6B4A"
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={[theme.type.body, { fontSize: 14 }]}>
+                          {social.handle}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {selectedContactCard?.bio && (
+                  <View style={{
+                    marginTop: 8,
+                    padding: 10,
+                    backgroundColor: '#FFF5F2',
+                    borderRadius: 8,
+                  }}>
+                    <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text, fontStyle: 'italic' }]}>
+                      "{selectedContactCard.bio}"
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={{ gap: 8 }}>
+                {/* Pin Button */}
+                <Pressable
+                  onPress={async () => {
+                    const deviceId = selectedContactCard?.deviceId || selectedContactCard?.id;
+                    if (deviceId) {
+                      // Device should already be in store from link notification creation
+                      // Just toggle the pin
+                      togglePin(deviceId);
+                      markAsViewed(selectedContactCard.id);
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    backgroundColor: pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FFE5DC' : '#FF6B4A',
+                    paddingVertical: 10,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    opacity: pressed ? 0.9 : 1,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  })}
+                >
+                  <MaterialCommunityIcons
+                    name={pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? "pin-off" : "pin"}
+                    size={16}
+                    color={pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FF6B4A' : '#FFFFFF'}
+                  />
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '600',
+                    color: pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? '#FF6B4A' : '#FFFFFF'
+                  }}>
+                    {pinnedIds.has(selectedContactCard?.deviceId || selectedContactCard?.id) ? 'Unpin' : 'Pin Contact'}
+                  </Text>
+                </Pressable>
+
+                {/* Close Button */}
+                <Pressable
+                  onPress={() => {
+                    if (selectedContactCard?.id) {
+                      markAsViewed(selectedContactCard.id);
+                    }
+                    setSelectedContactCard(null);
+                    setShowDrops(false);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 10,
+                    borderRadius: 20,
+                    alignItems: 'center',
+                    backgroundColor: theme.colors.bg,
+                    borderWidth: 1,
+                    borderColor: '#FF6B4A',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '500', color: '#FF6B4A' }}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Blip Device Modal - Execute Drop */}
+        <Modal
+          visible={showBlipModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => {
+            setShowBlipModal(false);
+            setDropError(null);
+          }}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 16,
+              padding: 24,
+              width: '100%',
+              maxWidth: 300,
+              borderWidth: 2,
+              borderColor: '#00FF00',
+              shadowColor: '#00FF00',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 10,
+              elevation: 10,
+            }}>
+              {/* Header */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  backgroundColor: '#E5FFE5',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                  borderWidth: 2,
+                  borderColor: '#00FF00',
+                }}>
+                  <MaterialCommunityIcons
+                    name="account-circle"
+                    size={40}
+                    color="#00FF00"
+                  />
+                </View>
+                {/* Device Name - Primary Identifier */}
+                <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
+                  {selectedBlipDevice?.username ||
+                    (selectedBlipDevice?.name && selectedBlipDevice.name.startsWith(DROPLINK_DEVICE_PREFIX)
+                      ? 'Loading user...'
+                      : (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'))}
+                </Text>
+
+                {/* Device ID - Secondary, Smaller */}
+                {selectedBlipDevice?.id && (
+                  <Text style={{ fontSize: 11, color: theme.colors.muted, marginBottom: 16, fontFamily: 'monospace' }}>
+                    {selectedBlipDevice.id.length > 30 ? selectedBlipDevice.id.substring(0, 30) + '...' : selectedBlipDevice.id}
+                  </Text>
+                )}
+
+                {/* Device Details */}
+                <View style={{ width: '100%', marginBottom: 12 }}>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#E5FFE5',
+                    paddingHorizontal: 12,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                    marginBottom: 6,
+                  }}>
+                    <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
+                      {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
+                    </Text>
+                  </View>
+
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F0F0F0',
+                    paddingHorizontal: 12,
+                    paddingVertical: 4,
+                    borderRadius: 12,
+                  }}>
+                    <MaterialCommunityIcons name="signal" size={14} color="#666" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginLeft: 4 }}>
+                      RSSI: {selectedBlipDevice?.rssi || 'N/A'} dBm
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Bio Section (if available) */}
+              {selectedBlipDevice && (selectedBlipDevice as any).bio && (
+                <View style={{
+                  backgroundColor: '#F5FFF5',
+                  padding: 12,
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#00FF00',
+                }}>
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: theme.colors.muted,
+                    marginBottom: 4,
+                    textTransform: 'uppercase',
+                  }}>
+                    Bio
+                  </Text>
+                  <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
+                    {(selectedBlipDevice as any).bio}
+                  </Text>
+                </View>
+              )}
+
+              {/* Message */}
+              <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 20, color: theme.colors.muted, fontSize: 14 }]}>
+                Would you like to send your contact card?
+              </Text>
+
+              {/* Action Buttons */}
+              <View style={{ gap: 10 }}>
+                <Pressable
+                  onPress={async () => {
+                    // Phone verification check removed for testing
+                    if (selectedBlipDevice && !isSendingDrop) {
+                      setIsSendingDrop(true);
+                      setDropError(null);
+                      try {
+                        // Use userId from device object (already fetched during scan)
+                        // If userId is not available, try to look it up now
+                        let receiverUserId = selectedBlipDevice.userId;
+
+                        if (!receiverUserId) {
+                          // Extract deviceId from device name
+                          const deviceIdMatch = selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
+                          if (deviceIdMatch && deviceIdMatch[1]) {
+                            const deviceId = deviceIdMatch[1];
+
+                            // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
+                            try {
+                              // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
+                              // CRITICAL: user_id is UUID type - PostgREST doesn't support ::text casting in LIKE
+                              // Solution: Query all user_profiles and filter in JS (UUIDs have hyphens, prefix matching is complex)
+                              let { data: allUserProfiles, error: userProfileError } = await supabase
+                                .from('user_profiles')
+                                .select('user_id, name');
+
+                              // Filter in JavaScript: find user where UUID (as string) starts with deviceId
+                              const userProfileData = allUserProfiles?.find(profile =>
+                                profile.user_id && profile.user_id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
+                              ) || null;
+
+                              let foundUserId: string | null = null;
+                              let foundDisplayName: string | null = null;
+
+                              if (!userProfileError && userProfileData) {
+                                // Found in user_profiles - use display name
+                                foundUserId = userProfileData.user_id;
+                                foundDisplayName = userProfileData.name || deviceId || 'User';
+                              }
+
+                              if (foundUserId) {
+                                receiverUserId = foundUserId;
+
+                                // Update the device object with the found userId and display name
+                                (selectedBlipDevice as any).username = foundDisplayName;
+                                (selectedBlipDevice as any).userId = foundUserId;
+                              } else {
+                                throw new Error(`No user found with device ID: ${deviceId}`);
+                              }
+                            } catch (lookupError: any) {
+                              console.error('[HomeScreen] Lookup failed:', lookupError);
+                              setDropError(`Could not find receiver: ${lookupError.message || 'User not found in database'}`);
+                              throw new Error(`Could not find receiver: ${lookupError.message || 'User not found'}`);
+                            }
+                          } else {
+                            // Device name doesn't match expected pattern - try to find user by device name directly
+                            try {
+                              // Try to find user by display name matching the device name (without DL- prefix)
+                              const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
+
+                              // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
+                              let { data: userProfileData, error: userProfileError } = await supabase
+                                .from('user_profiles')
+                                .select('user_id, name')
+                                .ilike('name', `%${cleanName}%`)
+                                .maybeSingle();
+
+                              let foundUserId: string | null = null;
+                              let foundDisplayName: string | null = null;
+
+                              if (!userProfileError && userProfileData) {
+                                // Found in user_profiles - use display name
+                                foundUserId = userProfileData.user_id;
+                                foundDisplayName = userProfileData.name || cleanName || 'User';
+                              }
+
+                              if (foundUserId) {
+                                receiverUserId = foundUserId;
+                                // Update with display name
+                                (selectedBlipDevice as any).username = foundDisplayName;
+                                (selectedBlipDevice as any).userId = foundUserId;
+                              } else {
+                                throw new Error(`Device name "${selectedBlipDevice.name}" does not match expected format and user lookup failed`);
+                              }
+                            } catch (fallbackError: any) {
+                              console.error('[HomeScreen] Fallback lookup failed:', fallbackError);
+                              setDropError(`Could not identify receiver from device name: ${selectedBlipDevice.name}`);
+                              throw new Error(`Could not extract device ID: ${fallbackError.message}`);
+                            }
+                          }
+                        }
+
+                        if (!receiverUserId) {
+                          // Final fallback: try to use the device's BLE ID as a last resort
+                          // This should never happen if deviceId extraction worked, but handle it gracefully
+                          const errorMsg = `Could not find receiver. Device name: ${selectedBlipDevice.name}, Device ID: ${selectedBlipDevice.id}`;
+                          console.error('[HomeScreen]', errorMsg);
+                          setDropError('Could not find receiver. Please try again.');
+                          throw new Error('Could not find receiver');
+                        }
+
+                        // Validate receiverUserId is not empty
+                        if (!receiverUserId || receiverUserId.trim() === '') {
+                          const errorMsg = 'Receiver user ID is empty or invalid';
+                          console.error('[HomeScreen]', errorMsg);
+                          setDropError('Invalid receiver ID. Please try again.');
+                          throw new Error(errorMsg);
+                        }
+
+                        // Send drop with current user's profile info and distance
+                        await sendDrop(receiverUserId, {
+                          name: profile?.name || 'User',
+                          username: username,
+                          email: profile?.email,
+                          phone: profile?.phone,
+                          bio: profile?.bio,
+                          profilePhoto: profile?.profilePhoto,
+                          socialMedia: profile?.socialMedia,
+                        }, selectedBlipDevice.distanceFeet);
+
+                        // Close modal after successful send
+                        setShowBlipModal(false);
+
+                        // Show success toast
+                        showToast({
+                          message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
+                          type: 'success',
+                          duration: 3000,
+                        });
+
+                        // Note: No more simulated return - real returns come from receiver's device
+                      } catch (error: any) {
+                        // Set detailed error message with actual error details
+                        const errorMsg = error instanceof Error ? error.message : String(error);
+                        setDropError(`Drop failed: ${errorMsg}`);
+                        console.error('Drop error details:', error);
+
+                        // Show error toast
+                        showToast({
+                          message: `Drop failed: ${errorMsg}`,
+                          type: 'error',
+                          duration: 3000,
+                        });
+                      } finally {
+                        setIsSendingDrop(false);
+                      }
+                    }
+                  }}
+                  disabled={isSendingDrop}
+                  style={({ pressed }) => ({
+                    backgroundColor: '#00FF00',
+                    paddingVertical: 14,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    opacity: (pressed || isSendingDrop) ? 0.6 : 1,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 8,
+                  })}
+                >
+                  {isSendingDrop ? (
+                    <>
+                      <ActivityIndicator size="small" color="#000" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                        Sending...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="water" size={18} color="#000" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                        Drop
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setShowBlipModal(false);
+                    setDropError(null);
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                    borderWidth: 1.5,
+                    borderColor: '#00FF00',
+                    backgroundColor: 'transparent',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#00AA00' }}>
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Link Contact Card Modal */}
+        <Modal
+          visible={showLinkModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowLinkModal(false)}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 16,
+              padding: 24,
+              width: '100%',
+              maxWidth: 320,
+              borderWidth: 2,
+              borderColor: '#00FF00',
+              shadowColor: '#00FF00',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 10,
+              elevation: 10,
+            }}>
+              {/* Header */}
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <View style={{
+                  width: 70,
+                  height: 70,
+                  borderRadius: 35,
+                  backgroundColor: '#E5FFE5',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: 12,
+                  borderWidth: 2,
+                  borderColor: '#00FF00',
+                }}>
+                  <MaterialCommunityIcons
+                    name="link-variant"
+                    size={40}
+                    color="#00FF00"
+                  />
+                </View>
+                <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
+                  {selectedLink?.name}
+                </Text>
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -3122,604 +3440,290 @@ export default function HomeScreen() {
                   paddingHorizontal: 12,
                   paddingVertical: 4,
                   borderRadius: 12,
-                  marginBottom: 6,
                 }}>
                   <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
-                    {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
-                  </Text>
-                </View>
-                
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: '#F0F0F0',
-                  paddingHorizontal: 12,
-                  paddingVertical: 4,
-                  borderRadius: 12,
-                }}>
-                  <MaterialCommunityIcons name="signal" size={14} color="#666" />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginLeft: 4 }}>
-                    RSSI: {selectedBlipDevice?.rssi || 'N/A'} dBm
+                    {selectedLink?.distanceFeet?.toFixed(1) || '0.0'} ft away
                   </Text>
                 </View>
               </View>
-            </View>
 
-            {/* Bio Section (if available) */}
-            {selectedBlipDevice && (selectedBlipDevice as any).bio && (
+              {/* Contact Information */}
               <View style={{
                 backgroundColor: '#F5FFF5',
-                padding: 12,
-                borderRadius: 8,
+                padding: 16,
+                borderRadius: 12,
                 marginBottom: 16,
-                borderLeftWidth: 3,
-                borderLeftColor: '#00FF00',
+                borderWidth: 1,
+                borderColor: '#E0FFE0',
               }}>
-                <Text style={{
-                  fontSize: 11,
-                  fontWeight: '600',
-                  color: theme.colors.muted,
-                  marginBottom: 4,
-                  textTransform: 'uppercase',
-                }}>
-                  Bio
-                </Text>
-                <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
-                  {(selectedBlipDevice as any).bio}
-                </Text>
-              </View>
-            )}
-
-            {/* Message */}
-            <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 20, color: theme.colors.muted, fontSize: 14 }]}>
-              Would you like to send your contact card?
-            </Text>
-
-            {/* Action Buttons */}
-            <View style={{ gap: 10 }}>
-              <Pressable
-                onPress={async () => {
-                  // Phone verification check removed for testing
-                  if (selectedBlipDevice && !isSendingDrop) {
-                    setIsSendingDrop(true);
-                    setDropError(null);
-                    try {
-                      // Use userId from device object (already fetched during scan)
-                      // If userId is not available, try to look it up now
-                      let receiverUserId = selectedBlipDevice.userId;
-                      
-                      if (!receiverUserId) {
-                        // Extract deviceId from device name
-                        const deviceIdMatch = selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
-                        if (deviceIdMatch && deviceIdMatch[1]) {
-                          const deviceId = deviceIdMatch[1];
-                          
-                          // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
-                          try {
-                            // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
-                            // CRITICAL: user_id is UUID type - PostgREST doesn't support ::text casting in LIKE
-                            // Solution: Query all user_profiles and filter in JS (UUIDs have hyphens, prefix matching is complex)
-                            let { data: allUserProfiles, error: userProfileError } = await supabase
-                              .from('user_profiles')
-                              .select('user_id, name');
-                            
-                            // Filter in JavaScript: find user where UUID (as string) starts with deviceId
-                            const userProfileData = allUserProfiles?.find(profile => 
-                              profile.user_id && profile.user_id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
-                            ) || null;
-                            
-                            let foundUserId: string | null = null;
-                            let foundDisplayName: string | null = null;
-                            
-                            if (!userProfileError && userProfileData) {
-                              // Found in user_profiles - use display name
-                              foundUserId = userProfileData.user_id;
-                              foundDisplayName = userProfileData.name || deviceId || 'User';
-                            }
-                            
-                            if (foundUserId) {
-                              receiverUserId = foundUserId;
-                              
-                              // Update the device object with the found userId and display name
-                              (selectedBlipDevice as any).username = foundDisplayName;
-                              (selectedBlipDevice as any).userId = foundUserId;
-                            } else {
-                              throw new Error(`No user found with device ID: ${deviceId}`);
-                            }
-                          } catch (lookupError: any) {
-                            console.error('[HomeScreen] Lookup failed:', lookupError);
-                            setDropError(`Could not find receiver: ${lookupError.message || 'User not found in database'}`);
-                            throw new Error(`Could not find receiver: ${lookupError.message || 'User not found'}`);
-                          }
-                        } else {
-                          // Device name doesn't match expected pattern - try to find user by device name directly
-                          try {
-                            // Try to find user by display name matching the device name (without DL- prefix)
-                            const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
-                            
-                            // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
-                            let { data: userProfileData, error: userProfileError } = await supabase
-                              .from('user_profiles')
-                              .select('user_id, name')
-                              .ilike('name', `%${cleanName}%`)
-                              .maybeSingle();
-                            
-                            let foundUserId: string | null = null;
-                            let foundDisplayName: string | null = null;
-                            
-                            if (!userProfileError && userProfileData) {
-                              // Found in user_profiles - use display name
-                              foundUserId = userProfileData.user_id;
-                              foundDisplayName = userProfileData.name || cleanName || 'User';
-                            }
-                            
-                            if (foundUserId) {
-                              receiverUserId = foundUserId;
-                              // Update with display name
-                              (selectedBlipDevice as any).username = foundDisplayName;
-                              (selectedBlipDevice as any).userId = foundUserId;
-                            } else {
-                              throw new Error(`Device name "${selectedBlipDevice.name}" does not match expected format and user lookup failed`);
-                            }
-                          } catch (fallbackError: any) {
-                            console.error('[HomeScreen] Fallback lookup failed:', fallbackError);
-                            setDropError(`Could not identify receiver from device name: ${selectedBlipDevice.name}`);
-                            throw new Error(`Could not extract device ID: ${fallbackError.message}`);
-                          }
-                        }
-                      }
-                      
-                      if (!receiverUserId) {
-                        // Final fallback: try to use the device's BLE ID as a last resort
-                        // This should never happen if deviceId extraction worked, but handle it gracefully
-                        const errorMsg = `Could not find receiver. Device name: ${selectedBlipDevice.name}, Device ID: ${selectedBlipDevice.id}`;
-                        console.error('[HomeScreen]', errorMsg);
-                        setDropError('Could not find receiver. Please try again.');
-                        throw new Error('Could not find receiver');
-                      }
-                      
-                      // Validate receiverUserId is not empty
-                      if (!receiverUserId || receiverUserId.trim() === '') {
-                        const errorMsg = 'Receiver user ID is empty or invalid';
-                        console.error('[HomeScreen]', errorMsg);
-                        setDropError('Invalid receiver ID. Please try again.');
-                        throw new Error(errorMsg);
-                      }
-                      
-                      // Send drop with current user's profile info and distance
-                      await sendDrop(receiverUserId, {
-                        name: profile?.name || 'User',
-                        username: username,
-                        email: profile?.email,
-                        phone: profile?.phone,
-                        bio: profile?.bio,
-                        profilePhoto: profile?.profilePhoto,
-                        socialMedia: profile?.socialMedia,
-                      }, selectedBlipDevice.distanceFeet);
-                      
-                      // Close modal after successful send
-                      setShowBlipModal(false);
-                      
-                      // Show success toast
-                      showToast({
-                        message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
-                        type: 'success',
-                        duration: 3000,
-                      });
-                    
-                      // Note: No more simulated return - real returns come from receiver's device
-                    } catch (error: any) {
-                      // Set detailed error message with actual error details
-                      const errorMsg = error instanceof Error ? error.message : String(error);
-                      setDropError(`Drop failed: ${errorMsg}`);
-                      console.error('Drop error details:', error);
-                      
-                      // Show error toast
-                      showToast({
-                        message: `Drop failed: ${errorMsg}`,
-                        type: 'error',
-                        duration: 3000,
-                      });
-                    } finally {
-                      setIsSendingDrop(false);
-                    }
-                  }
-                }}
-                disabled={isSendingDrop}
-                style={({ pressed }) => ({
-                  backgroundColor: '#00FF00',
-                  paddingVertical: 14,
-                  borderRadius: 10,
-                  alignItems: 'center',
-                  opacity: (pressed || isSendingDrop) ? 0.6 : 1,
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  gap: 8,
-                })}
-              >
-                {isSendingDrop ? (
-                  <>
-                    <ActivityIndicator size="small" color="#000" />
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
-                      Sending...
+                {selectedLink?.phoneNumber && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <MaterialCommunityIcons name="phone" size={18} color="#00AA00" />
+                    <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
+                      {selectedLink.phoneNumber}
                     </Text>
-                  </>
-                ) : (
-                  <>
-                    <MaterialCommunityIcons name="water" size={18} color="#000" />
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
-                      Drop
-                    </Text>
-                  </>
+                  </View>
                 )}
-              </Pressable>
+                {selectedLink?.email && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                    <MaterialCommunityIcons name="email" size={18} color="#00AA00" />
+                    <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
+                      {selectedLink.email}
+                    </Text>
+                  </View>
+                )}
+                {selectedLink?.bio && (
+                  <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 6, textTransform: 'uppercase' }}>
+                      Bio
+                    </Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
+                      {selectedLink.bio}
+                    </Text>
+                  </View>
+                )}
+                {selectedLink?.socialMedia && selectedLink.socialMedia.length > 0 && (
+                  <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 8, textTransform: 'uppercase' }}>
+                      Social Media
+                    </Text>
+                    {selectedLink.socialMedia.map((social, index) => {
+                      const iconName =
+                        social.platform.toLowerCase() === 'instagram' ? 'instagram' :
+                          social.platform.toLowerCase() === 'twitter' ? 'twitter' :
+                            social.platform.toLowerCase() === 'linkedin' ? 'linkedin' :
+                              'link-variant';
 
+                      return (
+                        <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                          <MaterialCommunityIcons name={iconName as any} size={16} color="#00AA00" />
+                          <Text style={{ marginLeft: 8, fontSize: 13, color: theme.colors.text }}>
+                            {social.handle}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* Close Button */}
               <Pressable
-                onPress={() => {
-                  setShowBlipModal(false);
-                  setDropError(null);
-                }}
+                onPress={() => setShowLinkModal(false)}
                 style={({ pressed }) => ({
                   paddingVertical: 14,
                   borderRadius: 10,
                   alignItems: 'center',
-                  borderWidth: 1.5,
-                  borderColor: '#00FF00',
-                  backgroundColor: 'transparent',
-                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor: '#00FF00',
+                  opacity: pressed ? 0.8 : 1,
                 })}
               >
-                <Text style={{ fontSize: 15, fontWeight: '600', color: '#00AA00' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#000' }}>
                   Close
                 </Text>
               </Pressable>
             </View>
-      </View>
-    </View>
-      </Modal>
+          </View>
+        </Modal>
 
-      {/* Link Contact Card Modal */}
-      <Modal
-        visible={showLinkModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowLinkModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.6)', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
-          padding: 20 
-        }}>
+        {/* Confirmation Modal */}
+        <Modal
+          visible={showConfirmModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowConfirmModal(false)}
+        >
           <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 16,
-            padding: 24,
-            width: '100%',
-            maxWidth: 320,
-            borderWidth: 2,
-            borderColor: '#00FF00',
-            shadowColor: '#00FF00',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 10,
-            elevation: 10,
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+            zIndex: 9999,
           }}>
-            {/* Header */}
-            <View style={{ alignItems: 'center', marginBottom: 16 }}>
-              <View style={{
-                width: 70,
-                height: 70,
-                borderRadius: 35,
-                backgroundColor: '#E5FFE5',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 12,
-                borderWidth: 2,
-                borderColor: '#00FF00',
-              }}>
-                <MaterialCommunityIcons 
-                  name="link-variant" 
-                  size={40} 
-                  color="#00FF00" 
-                />
-              </View>
-              <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
-                {selectedLink?.name}
-              </Text>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#E5FFE5',
-                paddingHorizontal: 12,
-                paddingVertical: 4,
-                borderRadius: 12,
-              }}>
-                <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
-                  {selectedLink?.distanceFeet?.toFixed(1) || '0.0'} ft away
-                </Text>
-              </View>
-            </View>
-
-            {/* Contact Information */}
-            <View style={{ 
-              backgroundColor: '#F5FFF5', 
-              padding: 16, 
-              borderRadius: 12, 
-              marginBottom: 16,
-              borderWidth: 1,
-              borderColor: '#E0FFE0',
+            <View style={{
+              backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
+              borderRadius: 10,
+              padding: 14,
+              width: '100%',
+              maxWidth: 220,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 12,
             }}>
-              {selectedLink?.phoneNumber && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <MaterialCommunityIcons name="phone" size={18} color="#00AA00" />
-                  <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
-                    {selectedLink.phoneNumber}
-                  </Text>
-                </View>
-              )}
-              {selectedLink?.email && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <MaterialCommunityIcons name="email" size={18} color="#00AA00" />
-                  <Text style={{ marginLeft: 10, fontSize: 14, color: theme.colors.text, fontWeight: '500' }}>
-                    {selectedLink.email}
-                  </Text>
-                </View>
-              )}
-              {selectedLink?.bio && (
-                <View style={{ marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 6, textTransform: 'uppercase' }}>
-                    Bio
-                  </Text>
-                  <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
-                    {selectedLink.bio}
-                  </Text>
-                </View>
-              )}
-              {selectedLink?.socialMedia && selectedLink.socialMedia.length > 0 && (
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#E0FFE0' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.muted, marginBottom: 8, textTransform: 'uppercase' }}>
-                    Social Media
-                  </Text>
-                  {selectedLink.socialMedia.map((social, index) => {
-                    const iconName = 
-                      social.platform.toLowerCase() === 'instagram' ? 'instagram' :
-                      social.platform.toLowerCase() === 'twitter' ? 'twitter' :
-                      social.platform.toLowerCase() === 'linkedin' ? 'linkedin' :
-                      'link-variant';
-                    
-                    return (
-                      <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-                        <MaterialCommunityIcons name={iconName as any} size={16} color="#00AA00" />
-                        <Text style={{ marginLeft: 8, fontSize: 13, color: theme.colors.text }}>
-                          {social.handle}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {/* Close Button */}
-            <Pressable
-              onPress={() => setShowLinkModal(false)}
-              style={({ pressed }) => ({
-                paddingVertical: 14,
-                borderRadius: 10,
-                alignItems: 'center',
-                backgroundColor: '#00FF00',
-                opacity: pressed ? 0.8 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 15, fontWeight: '700', color: '#000' }}>
-                Close
+              <MaterialCommunityIcons
+                name={confirmAction === 'unpin' ? 'pin-off' : 'delete'}
+                size={28}
+                color="#FF6B4A"
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
+                {confirmAction === 'unpin' ? 'Unpin Contact?' : 'Delete Contact?'}
               </Text>
-            </Pressable>
-      </View>
-    </View>
-      </Modal>
+              <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.text }]}>
+                Are you sure you want to {confirmAction} "{confirmCardName}"?
+              </Text>
 
-      {/* Confirmation Modal */}
-      <Modal
-        visible={showConfirmModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.6)', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          padding: 20,
-          zIndex: 9999,
-        }}>
-          <View style={{
-            backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
-            borderRadius: 10,
-            padding: 14,
-            width: '100%',
-            maxWidth: 220,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 12,
-          }}>
-            <MaterialCommunityIcons 
-              name={confirmAction === 'unpin' ? 'pin-off' : 'delete'} 
-              size={28} 
-              color="#FF6B4A" 
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
-              {confirmAction === 'unpin' ? 'Unpin Contact?' : 'Delete Contact?'}
-            </Text>
-            <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.text }]}>
-              Are you sure you want to {confirmAction} "{confirmCardName}"?
-            </Text>
-            
-            <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
-              <Pressable
-                onPress={() => {
-                  setShowConfirmModal(false);
-                }}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.bg,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                  borderWidth: 1.5,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.text, fontWeight: '600' }]}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  handleConfirmAction();
-                }}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#FF6B4A',
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center', color: '#FFFFFF', fontWeight: '600' }]}>
-                  Confirm
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                <Pressable
+                  onPress={() => {
+                    setShowConfirmModal(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.bg,
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                    borderWidth: 1.5,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.text, fontWeight: '600' }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    handleConfirmAction();
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#FF6B4A',
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center', color: '#FFFFFF', fontWeight: '600' }]}>
+                    Confirm
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* SUCCESS MODAL - Separate from confirmation */}
-      <Modal
-        visible={showSuccessModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowSuccessModal(false)}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.6)', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          padding: 20,
-        }}>
+        {/* SUCCESS MODAL - Separate from confirmation */}
+        <Modal
+          visible={showSuccessModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowSuccessModal(false)}
+        >
           <View style={{
-            backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
-            borderRadius: 10,
-            padding: 16,
-            width: '100%',
-            maxWidth: 220,
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
             alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 12,
+            padding: 20,
           }}>
-            <MaterialCommunityIcons 
-              name="check-circle" 
-              size={36} 
-              color="#4CAF50" 
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
-              Success!
-            </Text>
-            <Text style={[theme.type.body, { textAlign: 'center', color: theme.colors.text, fontSize: 12 }]}>
-              {successMessage}
-            </Text>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Toggle Confirmation Modal */}
-      <Modal
-        visible={showToggleConfirmModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelToggleChange}
-      >
-        <View style={{ 
-          flex: 1, 
-          backgroundColor: 'rgba(0,0,0,0.6)', 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          padding: 20,
-        }}>
-          <View style={{
-            backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
-            borderRadius: 10,
-            padding: 14,
-            width: '100%',
-            maxWidth: 240,
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 12,
-          }}>
-            <MaterialCommunityIcons 
-              name={pendingDiscoverableState ? 'flash' : 'ghost'} 
-              size={28} 
-              color={pendingDiscoverableState ? theme.colors.green : '#8E8E93'} 
-              style={{ marginBottom: 8 }}
-            />
-            <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
-              {pendingDiscoverableState ? 'Go Active?' : 'Go Ghost Mode?'}
-            </Text>
-            <Text style={[theme.type.body, { fontSize: 11, textAlign: 'center', marginBottom: 14, color: theme.colors.text }]}>
-              {pendingDiscoverableState 
-                ? 'Other users will be able to discover and drop their contact with you.' 
-                : 'You will not appear to other users. You will not be able to receive drops.'}
-            </Text>
-            
-            <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
-              <Pressable
-                onPress={cancelToggleChange}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.bg,
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                  borderWidth: 1.5,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.text, fontWeight: '600' }]}>
-                  Cancel
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={confirmToggleChange}
-                style={{
-                  flex: 1,
-                  backgroundColor: pendingDiscoverableState ? theme.colors.green : '#8E8E93',
-                  paddingVertical: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <Text style={[theme.type.button, { fontSize: 11, textAlign: 'center', color: '#FFFFFF', fontWeight: '600' }]}>
-                  {pendingDiscoverableState ? 'Go Active' : 'Go Ghost'}
-                </Text>
-              </Pressable>
+            <View style={{
+              backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
+              borderRadius: 10,
+              padding: 16,
+              width: '100%',
+              maxWidth: 220,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 12,
+            }}>
+              <MaterialCommunityIcons
+                name="check-circle"
+                size={36}
+                color="#4CAF50"
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
+                Success!
+              </Text>
+              <Text style={[theme.type.body, { textAlign: 'center', color: theme.colors.text, fontSize: 12 }]}>
+                {successMessage}
+              </Text>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+
+        {/* Toggle Confirmation Modal */}
+        <Modal
+          visible={showToggleConfirmModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={cancelToggleChange}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}>
+            <View style={{
+              backgroundColor: isDarkMode ? '#2C2C2E' : '#FFFFFF',
+              borderRadius: 10,
+              padding: 14,
+              width: '100%',
+              maxWidth: 240,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 12,
+            }}>
+              <MaterialCommunityIcons
+                name={pendingDiscoverableState ? 'flash' : 'ghost'}
+                size={28}
+                color={pendingDiscoverableState ? theme.colors.green : '#8E8E93'}
+                style={{ marginBottom: 8 }}
+              />
+              <Text style={[theme.type.h2, { fontSize: 15, marginBottom: 5, textAlign: 'center', color: theme.colors.text }]}>
+                {pendingDiscoverableState ? 'Go Active?' : 'Go Ghost Mode?'}
+              </Text>
+              <Text style={[theme.type.body, { fontSize: 11, textAlign: 'center', marginBottom: 14, color: theme.colors.text }]}>
+                {pendingDiscoverableState
+                  ? 'Other users will be able to discover and drop their contact with you.'
+                  : 'You will not appear to other users. You will not be able to receive drops.'}
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                <Pressable
+                  onPress={cancelToggleChange}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.bg,
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                    borderWidth: 1.5,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.text, fontWeight: '600' }]}>
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={confirmToggleChange}
+                  style={{
+                    flex: 1,
+                    backgroundColor: pendingDiscoverableState ? theme.colors.green : '#8E8E93',
+                    paddingVertical: 8,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={[theme.type.button, { fontSize: 11, textAlign: 'center', color: '#FFFFFF', fontWeight: '600' }]}>
+                    {pendingDiscoverableState ? 'Go Active' : 'Go Ghost'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
       </View>
 
