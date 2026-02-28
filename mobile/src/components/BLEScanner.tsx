@@ -18,7 +18,6 @@ import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConf
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
 import { startBackgroundScan } from '../native/BLEScannerModule';
-import { getMessaging, getToken } from '@react-native-firebase/messaging';
 export interface BleDevice {
   id: string;
   name: string;
@@ -124,15 +123,15 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
           if (status === 'granted') {
             console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
-            const token = await getToken(getMessaging());
-            console.log('[PUSH-DEBUG] FCM token received:', token ? 'YES' : 'NO');
-            if (token) {
-              await AsyncStorage.setItem('pendingPushToken', token);
-              console.log('[PUSH-DEBUG] Token stored in AsyncStorage');
-              await savePushToken(token);
+            const tokenData = await Notifications.getExpoPushTokenAsync({
+              projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
+            });
+            console.log('[PUSH-DEBUG] Expo push token received:', tokenData.data ? 'YES' : 'NO');
+            if (tokenData.data) {
+              await savePushToken(tokenData.data);
               console.log('[PUSH-DEBUG] Token saved to Supabase');
             } else {
-              console.error('[PUSH-DEBUG] No FCM token returned from messaging()');
+              console.error('[PUSH-DEBUG] No Expo push token returned');
             }
           } else {
             console.log('[PUSH-DEBUG] Push permission NOT granted, status:', status);
