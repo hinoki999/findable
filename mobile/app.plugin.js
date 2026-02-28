@@ -1,16 +1,30 @@
-/**
- * Custom Expo Config Plugin
- * 
- * This plugin ensures permissions are set correctly for BLE functionality.
- * react-native-ble-peripheral uses React Native's autolinking, so no
- * additional native module configuration is needed here.
- */
+const { withAppBuildGradle, withProjectBuildGradle } = require('@expo/config-plugins');
 
-const withBluetoothPermissions = (config) => {
-  // Permissions are already set in app.json
-  // react-native-ble-peripheral uses autolinking
+const withGoogleServices = (config) => {
+  // Add google-services classpath to project-level build.gradle
+  config = withProjectBuildGradle(config, (config) => {
+    if (!config.modResults.contents.includes('com.google.gms:google-services')) {
+      config.modResults.contents = config.modResults.contents.replace(
+        /dependencies\s*\{/,
+        `dependencies {\n        classpath('com.google.gms:google-services:4.4.2')`
+      );
+    }
+    return config;
+  });
+
+  // Add apply plugin to app-level build.gradle
+  config = withAppBuildGradle(config, (config) => {
+    if (!config.modResults.contents.includes('com.google.gms.google-services')) {
+      config.modResults.contents = config.modResults.contents.replace(
+        /apply plugin: "com\.facebook\.react"/,
+        `apply plugin: "com.facebook.react"\napply plugin: "com.google.gms.google-services"`
+      );
+    }
+    return config;
+  });
+
   return config;
 };
 
-module.exports = withBluetoothPermissions;
+module.exports = withGoogleServices;
 

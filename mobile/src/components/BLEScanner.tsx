@@ -18,7 +18,7 @@ import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConf
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
 import { startBackgroundScan } from '../native/BLEScannerModule';
-import messaging from '@react-native-firebase/messaging';
+import { getMessaging, getToken } from '@react-native-firebase/messaging';
 export interface BleDevice {
   id: string;
   name: string;
@@ -124,7 +124,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
           if (status === 'granted') {
             console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
-            const token = await messaging().getToken();
+            const token = await getToken(getMessaging());
             console.log('[PUSH-DEBUG] FCM token received:', token ? 'YES' : 'NO');
             if (token) {
               await AsyncStorage.setItem('pendingPushToken', token);
