@@ -403,30 +403,29 @@ function MainApp() {
 
   // Save pending push token after auth resolves
   useEffect(() => {
-    console.log('[PUSH-DEBUG] Pending token useEffect fired - isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
-    if (!isAuthenticated || !userId) {
-      console.log('[PUSH-DEBUG] Pending token useEffect early return - not authenticated or no userId');
-      return;
-    }
-    const savePendingToken = async () => {
+    console.log('[PUSH-DEBUG] Push registration useEffect fired - isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
+    if (!isAuthenticated || !userId) return;
+    const registerPushToken = async () => {
       try {
-        console.log('[PUSH-DEBUG] Checking AsyncStorage for pendingPushToken...');
-        const token = await AsyncStorage.getItem('pendingPushToken');
-        console.log('[PUSH-DEBUG] Pending token found in AsyncStorage:', token ? 'YES (' + token.substring(0, 20) + '...)' : 'NO');
-        if (token) {
-          console.log('[PUSH-DEBUG] Calling savePushToken with pending token...');
-          await savePushToken(token);
-          console.log('[PUSH-DEBUG] savePushToken completed, removing from AsyncStorage...');
-          await AsyncStorage.removeItem('pendingPushToken');
-          console.log('[PUSH-DEBUG] Pending token saved after auth and removed from AsyncStorage');
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('[PUSH-DEBUG] Push permission not granted');
+          return;
         }
-      } catch (error) {
-        console.error('[PUSH-DEBUG] Failed to save pending token:', error);
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
+        });
+        if (tokenData.data) {
+          console.log('[PUSH-DEBUG] Expo push token received, saving to Supabase...');
+          await savePushToken(tokenData.data);
+          console.log('[PUSH-DEBUG] Token saved to Supabase');
+        }
+      } catch (error: any) {
+        console.error('[PUSH-DEBUG] Push registration error:', error.message);
       }
     };
-    savePendingToken();
+    registerPushToken();
   }, [isAuthenticated, userId]);
-
   // Check for OTA updates on app launch
   useEffect(() => {
     async function checkForUpdates() {

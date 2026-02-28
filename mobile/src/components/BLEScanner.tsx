@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
-import { savePushToken } from '../services/api';
 
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
@@ -112,29 +110,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         }
 
         // Request push notification permissions
-        try {
-          console.log('[PUSH-DEBUG] Starting push notification registration...');
-          console.log('[PUSH-DEBUG] Before Notifications.requestPermissionsAsync...');
-          const { status } = await Notifications.requestPermissionsAsync();
-          console.log('[PUSH-DEBUG] After Notifications.requestPermissionsAsync');
-          if (status === 'granted') {
-            console.log('[PUSH-DEBUG] Permission granted, getting FCM token...');
-            const tokenData = await Notifications.getExpoPushTokenAsync({
-              projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
-            });
-            console.log('[PUSH-DEBUG] Expo push token received:', tokenData.data ? 'YES' : 'NO');
-            if (tokenData.data) {
-              await savePushToken(tokenData.data);
-              console.log('[PUSH-DEBUG] Token saved to Supabase');
-            } else {
-              console.error('[PUSH-DEBUG] No Expo push token returned');
-            }
-          } else {
-            console.log('[PUSH-DEBUG] Push permission NOT granted, status:', status);
-          }
-        } catch (error: any) {
-          console.error('[PUSH-DEBUG] Error in push registration:', error.message);
-        }
       } catch (err) {
         console.warn('Permission request error:', err);
         setError('Failed to request permissions');
