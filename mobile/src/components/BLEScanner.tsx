@@ -87,6 +87,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   // Request necessary permissions for Android
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[PERMS-DEBUG] requestPermissions called, Platform.OS:', Platform.OS);
+    if (permissionsGranted) {
+      return true;
+    }
     if (Platform.OS === 'android') {
       try {
         console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');

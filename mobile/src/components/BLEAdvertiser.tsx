@@ -9,6 +9,7 @@ import { supabase } from '../services/supabase';
 
 // Feature flag - can disable advertising if needed
 const ADVERTISING_ENABLED = true;
+let permissionsGranted = false;
 
 // Use shared BleManager instance from bleManager.ts
 // This prevents multiple instances and conflicting state listeners
@@ -47,7 +48,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [broadcastName, setBroadcastName] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string>('0000');
   const isAvailable = Platform.OS === 'android' && ADVERTISING_ENABLED && isBLEAdvertiserAvailable;
-  
+
   // Wait for auth to finish loading before proceeding
   // This ensures userId is ready before we try to use it
   if (loading) {
@@ -56,8 +57,8 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-USERID-TRACE] userId (while loading):', userId);
     return {
       isAdvertising: false,
-      startAdvertising: async () => {},
-      stopAdvertising: async () => {},
+      startAdvertising: async () => { },
+      stopAdvertising: async () => { },
       error: null,
       isAvailable: false,
       localName: `${DROPLINK_DEVICE_PREFIX}0000`,
@@ -65,14 +66,14 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       deviceId: '0000',
     };
   }
-  
+
   console.log('[BLE-ADV-USERID-TRACE] ✅ Auth loading complete');
   console.log('[BLE-ADV-USERID-TRACE] loading:', loading);
   console.log('[BLE-ADV-USERID-TRACE] userId (after loading):', userId);
-  
+
   // Generate localName: "DropLink-" + deviceId (deviceId is stored in Supabase)
   const localName = `${DROPLINK_DEVICE_PREFIX}${deviceId}`;
-  
+
   // ========== USER ID TRACING ==========
   // Log userId immediately when component mounts/updates
   useEffect(() => {
@@ -86,7 +87,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-USERID-TRACE] username:', username);
     console.log('[BLE-ADV-USERID-TRACE] ====================================');
   }, [userId, username]);
-  
+
   // Generate device ID from userId on mount and when userId changes
   useEffect(() => {
     console.log('[BLE-ADV-DEVICEID] ========== DEVICE ID GENERATION ==========');
@@ -95,18 +96,18 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DEVICEID] userId is null?', userId === null);
     console.log('[BLE-ADV-DEVICEID] userId is undefined?', userId === undefined);
     console.log('[BLE-ADV-DEVICEID] userId truthy?', !!userId);
-    
+
     if (userId) {
       console.log('[BLE-ADV-DEVICEID] ✅ userId exists, generating deviceId');
       console.log('[BLE-ADV-DEVICEID] userId string:', userId);
       console.log('[BLE-ADV-DEVICEID] userId length:', userId.length);
-      
+
       // Use first 8 characters of userId as deviceId
       const newDeviceId = userId.substring(0, 8);
       console.log('[BLE-ADV-DEVICEID] Generated deviceId:', newDeviceId);
       console.log('[BLE-ADV-DEVICEID] deviceId length:', newDeviceId.length);
       console.log('[BLE-ADV-DEVICEID] Current deviceId state:', deviceId);
-      
+
       // Only update if different (prevents unnecessary re-renders)
       setDeviceId(prevDeviceId => {
         if (prevDeviceId !== newDeviceId) {
@@ -122,7 +123,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     }
     console.log('[BLE-ADV-DEVICEID] ===========================================');
   }, [userId]); // Only depend on userId - HomeScreen handles advertising start
-  
+
   // Log availability on mount
   useEffect(() => {
     console.log('[BLE-ADV-DIAG] ========== ADVERTISER MOUNT ==========');
@@ -136,7 +137,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
     console.log('[BLE-ADV-DIAG] =======================================');
   }, [localName, username, userId, isAvailable]);
-  
+
   // Ref to track advertising state for AppState listener (prevents stale closures)
   const isAdvertisingRef = useRef(isAdvertising);
   useEffect(() => {
@@ -146,7 +147,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   // Request BLE advertising permissions
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[BLE-ADV-DIAG] requestPermissions called, Platform:', Platform.OS);
-    
+    if (permissionsGranted) {
+      return true;
+    }
     if (Platform.OS === 'web') {
       console.log('[BLE-ADV-DIAG] Web platform - no permissions needed');
       return false;
@@ -157,7 +160,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         // Android 12+ (API 31+) requires BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN
         // Android 6-11 (API 23-30) requires ACCESS_FINE_LOCATION
         const androidVersion = Platform.Version;
-        
+
         if (androidVersion >= 31) {
           // Android 12+
           console.log('[BLE-ADV-DIAG] Requesting Android 12+ permissions: BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT, BLUETOOTH_SCAN');
@@ -166,20 +169,21 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
             PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           ]);
-          
+
           console.log('[BLE-ADV-DIAG] Permission results:', JSON.stringify(granted, null, 2));
-          
+
           const allGranted = Object.values(granted).every(
             permission => permission === PermissionsAndroid.RESULTS.GRANTED
           );
-          
+
           if (!allGranted) {
             console.error('[BLE-ADV-DIAG] ❌ Not all permissions granted:', granted);
             setError('Bluetooth advertising permissions not granted');
             return false;
           }
-          
+
           console.log('[BLE-ADV-DIAG] ✅ All permissions granted');
+          permissionsGranted = true;
           return true;
         } else if (androidVersion >= 23) {
           // Android 6-11
@@ -187,20 +191,22 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
           const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
           );
-          
+
           console.log('[BLE-ADV-DIAG] Permission result:', granted);
-          
+
           if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
             console.error('[BLE-ADV-DIAG] ❌ Permission not granted:', granted);
             setError('Location permission required for Bluetooth advertising');
             return false;
           }
-          
+
           console.log('[BLE-ADV-DIAG] ✅ Permission granted');
+          permissionsGranted = true;
           return true;
         } else {
           // Android 5 and below - no runtime permissions needed
           console.log('[BLE-ADV-DIAG] Android 5 or below - no runtime permissions needed');
+          permissionsGranted = true;
           return true;
         }
       } catch (err) {
@@ -209,8 +215,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         return false;
       }
     }
-    
+
     console.log('[BLE-ADV-DIAG] ✅ Permissions OK (non-Android platform)');
+    permissionsGranted = true;
     return true;
   }, []);
 
@@ -221,7 +228,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
     console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
     console.log('[GHOST-MODE] UserId:', userId ? userId.substring(0, 8) + '...' : 'null');
-    
+
     if (!isAvailable) {
       console.error('[BLE-ADV-DIAG] ❌ Advertising not available (not Android or disabled)');
       console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
@@ -258,23 +265,23 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       // Use first 8 characters of userId as deviceId
       const calculatedDeviceId = userId.substring(0, 8);
       const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${calculatedDeviceId}`;
-      
+
       console.log('[BLE-ADV-DIAG] Step 2: Starting native BLE advertising...');
       console.log('[BLE-ADV-DIAG] UserId:', userId);
       console.log('[BLE-ADV-DIAG] Calculated Device ID:', calculatedDeviceId);
       console.log('[BLE-ADV-DIAG] Device ID from state:', deviceId);
       console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
       console.log('[BLE-ADV-DIAG] Device name will be set to:', currentLocalName);
-      
+
       // Validate deviceId is not the fallback value
       if (calculatedDeviceId === '0000' || calculatedDeviceId.length === 0) {
         throw new Error('Invalid deviceId: userId not properly loaded');
       }
-      
+
       // Start advertising with Service UUID and deviceId using native module
       // The native module handles setting the device name and advertising the UUID
       const result = await BLEAdvertiserNative.startAdvertising(DROPLINK_SERVICE_UUID, calculatedDeviceId);
-      
+
       if (result.success) {
         // Store the actual name being broadcast for verification
         setBroadcastName(currentLocalName);
@@ -286,7 +293,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         setBroadcastName(null);
         return; // Exit gracefully without crashing
       }
-      
+
       console.log('[GHOST-MODE] ✅ SUCCESS: Native module returned success');
       setIsAdvertising(true);
       setError(null);
@@ -312,7 +319,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[GHOST-MODE] ========== stopAdvertising() CALLED ==========');
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
     console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
-    
+
     if (!isAvailable || !isAdvertisingRef.current) {
       console.log('[GHOST-MODE] Skip: Not available or not currently advertising');
       console.log('[GHOST-MODE] ============================================');
