@@ -6,6 +6,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { getMessaging, getToken } from '@react-native-firebase/messaging';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -408,18 +409,23 @@ function MainApp() {
     if (!isAuthenticated || !userId) return;
     const registerPushToken = async () => {
       try {
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
         if (status !== 'granted') {
-          console.log('[PUSH-DEBUG] Push permission not granted');
+          if (!canAskAgain) {
+            console.log('[PUSH-DEBUG] Push permission permanently denied - user must enable in Settings');
+          } else {
+            console.log('[PUSH-DEBUG] Push permission not granted, status:', status);
+          }
           return;
         }
-        const tokenData = await Notifications.getExpoPushTokenAsync({
-          projectId: '1e0cee35-fd46-4e78-bea2-7941f776922b'
-        });
-        if (tokenData.data) {
-          console.log('[PUSH-DEBUG] Expo push token received, saving to Supabase...');
-          await savePushToken(tokenData.data);
-          console.log('[PUSH-DEBUG] Token saved to Supabase');
+        const messaging = getMessaging();
+        const fcmToken = await getToken(messaging);
+        if (fcmToken) {
+          console.log('[PUSH-DEBUG] FCM token received, saving to Supabase...');
+          await savePushToken(fcmToken);
+          console.log('[PUSH-DEBUG] FCM token saved to Supabase');
+        } else {
+          console.error('[PUSH-DEBUG] No FCM token returned');
         }
       } catch (error: any) {
         console.error('[PUSH-DEBUG] Push registration error:', error.message);
