@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
-
+let permissionsGranted = false;
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
