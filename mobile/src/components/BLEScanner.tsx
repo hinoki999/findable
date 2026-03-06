@@ -98,6 +98,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     // Check persistent cache
     try {
       const stored = await AsyncStorage.getItem(BLE_PERMISSIONS_KEY);
+      console.log('[PERMS-DEBUG] AsyncStorage cached value:', stored);
       if (stored === 'true') {
         permissionsGranted = true;
         return true;
