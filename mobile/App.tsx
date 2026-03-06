@@ -409,15 +409,6 @@ function MainApp() {
     if (!isAuthenticated || !userId) return;
     const registerPushToken = async () => {
       try {
-        const { status, canAskAgain } = await Notifications.requestPermissionsAsync();
-        if (status !== 'granted') {
-          if (!canAskAgain) {
-            console.log('[PUSH-DEBUG] Push permission permanently denied - user must enable in Settings');
-          } else {
-            console.log('[PUSH-DEBUG] Push permission not granted, status:', status);
-          }
-          return;
-        }
         const messaging = getMessaging();
         const fcmToken = await getToken(messaging);
         if (fcmToken) {
