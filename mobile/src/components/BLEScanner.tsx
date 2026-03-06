@@ -117,11 +117,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         return false;
       }
     }
-    try {
-      await Notifications.requestPermissionsAsync();
-    } catch (error) {
-      console.warn('[PERMS-DEBUG] Notification permission request error:', error);
-    }
+    setTimeout(async () => {
+      try {
+        await Notifications.requestPermissionsAsync();
+      } catch (error) {
+        console.warn('[PERMS-DEBUG] Notification permission request error:', error);
+      }
+    }, 500);
     permissionsGranted = true;
     return true;
   }, []);
