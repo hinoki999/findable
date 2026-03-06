@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 let permissionsGranted = false;
+const BLE_PERMISSIONS_KEY = '@droplink_ble_permissions_granted';
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -87,9 +89,23 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   // Request necessary permissions for Android
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[PERMS-DEBUG] requestPermissions called, Platform.OS:', Platform.OS);
+    
+    // Check in-session cache first
     if (permissionsGranted) {
       return true;
     }
+
+    // Check persistent cache
+    try {
+      const stored = await AsyncStorage.getItem(BLE_PERMISSIONS_KEY);
+      if (stored === 'true') {
+        permissionsGranted = true;
+        return true;
+      }
+    } catch (err) {
+      console.warn('[PERMS-DEBUG] AsyncStorage read error:', err);
+    }
+
     if (Platform.OS === 'android') {
       try {
         console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
@@ -117,6 +133,14 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         return false;
       }
     }
+
+    // Persist granted state
+    try {
+      await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
+    } catch (err) {
+      console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
+    }
+
     setTimeout(async () => {
       try {
         await Notifications.requestPermissionsAsync();
@@ -124,6 +148,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         console.warn('[PERMS-DEBUG] Notification permission request error:', error);
       }
     }, 500);
+
     permissionsGranted = true;
     return true;
   }, []);
