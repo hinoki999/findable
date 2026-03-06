@@ -403,6 +403,18 @@ function MainApp() {
     checkAndStart();
   }, [isAuthenticated, userId, authLoading]);
 
+  // Prompt for notification permission on app mount (before auth)
+  useEffect(() => {
+    const promptNotificationPermission = async () => {
+      try {
+        await Notifications.requestPermissionsAsync();
+      } catch (error: any) {
+        console.error('[PUSH-DEBUG] Notification permission prompt error:', error.message);
+      }
+    };
+    promptNotificationPermission();
+  }, []);
+
   // Save pending push token after auth resolves
   useEffect(() => {
     console.log('[PUSH-DEBUG] Push registration useEffect fired - isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
