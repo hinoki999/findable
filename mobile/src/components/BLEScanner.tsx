@@ -111,14 +111,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           setError('Bluetooth permissions not granted');
           return false;
         }
-
-        // Request push notification permissions
       } catch (err) {
         console.warn('Permission request error:', err);
         setError('Failed to request permissions');
         return false;
       }
     }
+    try {
+      await Notifications.requestPermissionsAsync();
+    } catch (error) {
+      console.warn('[PERMS-DEBUG] Notification permission request error:', error);
+    }
+    permissionsGranted = true;
     return true;
   }, []);
 
