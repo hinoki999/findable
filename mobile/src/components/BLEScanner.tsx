@@ -109,24 +109,37 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     if (Platform.OS === 'android') {
       try {
-        console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
-        const granted = await PermissionsAndroid.requestMultiple([
+        const permissions = [
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-        console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
-        console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
+        ];
 
-        const allGranted = Object.values(granted).every(
-          permission => permission === PermissionsAndroid.RESULTS.GRANTED
+        // Check current status first before requesting
+        const checkResults = await Promise.all(
+          permissions.map(p => PermissionsAndroid.check(p))
         );
-        console.log('[PERMS-DEBUG] allGranted:', allGranted);
+        const alreadyGranted = checkResults.every(result => result === true);
+        console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted);
 
-        if (!allGranted) {
-          console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
-          setError('Bluetooth permissions not granted');
-          return false;
+        if (!alreadyGranted) {
+          console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
+          const granted = await PermissionsAndroid.requestMultiple(permissions);
+          console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
+          console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
+
+          const allGranted = Object.values(granted).every(
+            permission =>
+              permission === PermissionsAndroid.RESULTS.GRANTED ||
+              permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+          );
+          console.log('[PERMS-DEBUG] allGranted:', allGranted);
+
+          if (!allGranted) {
+            console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
+            setError('Bluetooth permissions not granted');
+            return false;
+          }
         }
       } catch (err) {
         console.warn('Permission request error:', err);
