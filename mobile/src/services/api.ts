@@ -1314,22 +1314,16 @@ export async function verifyOtpCode(
 }
 
 // ==================== PHONE VERIFICATION ====================
-// Send OTP code to phone number for verification
 export async function sendPhoneVerificationCode(phoneNumber: string, userId: string): Promise<void> {
   try {
-    // Supabase phone OTP requires phone in E.164 format (+1234567890)
-    // Format phone number to E.164 if not already
-    let formattedPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+    let formattedPhone = phoneNumber.replace(/\D/g, '');
     if (!formattedPhone.startsWith('1')) {
-      formattedPhone = '1' + formattedPhone; // Add US country code
+      formattedPhone = '1' + formattedPhone;
     }
     formattedPhone = '+' + formattedPhone;
 
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: formattedPhone,
-      options: {
-        shouldCreateUser: false, // Don't create new auth user, just send verification
-      },
+    const { error } = await supabase.auth.updateUser({
+      phone: formattedPhone
     });
 
     if (error) {
@@ -1344,10 +1338,8 @@ export async function sendPhoneVerificationCode(phoneNumber: string, userId: str
   }
 }
 
-// Verify phone OTP code and mark phone as verified
 export async function verifyPhoneCode(phoneNumber: string, code: string, userId: string): Promise<void> {
   try {
-    // Format phone number to E.164
     let formattedPhone = phoneNumber.replace(/\D/g, '');
     if (!formattedPhone.startsWith('1')) {
       formattedPhone = '1' + formattedPhone;
@@ -1357,7 +1349,7 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
     const { data, error } = await supabase.auth.verifyOtp({
       phone: formattedPhone,
       token: code,
-      type: 'sms'
+      type: 'phone_change'
     });
 
     if (error) {
@@ -1369,12 +1361,11 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
       throw new Error('Verification failed. Please try again.');
     }
 
-    // Update user_profiles to mark phone as verified
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update({ 
+      .update({
         phone_verified: true,
-        phone_verification_code: null, // Clear verification code
+        phone_verification_code: null,
         verification_code_expires: null
       })
       .eq('user_id', userId);
