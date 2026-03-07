@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, TextInput, Modal, Alert, ScrollView, Image, Dimensions, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
@@ -363,7 +363,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
     try {
       // DISABLED: Twilio account suspended - using non-Twilio verification
-      await sendPhoneVerificationCode(phone);
+      await sendPhoneVerificationCode(phone, userId);
       setCodeSentSuccessfully(true);
       setPhoneVerificationStep('enter-code');
       // Clear error on successful send
