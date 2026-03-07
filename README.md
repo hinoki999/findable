@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (Push Notifications + Foreground Service Fixes + Permissions Consolidation)
+**Last Updated:** February 20, 2026 (Firebase FCM V1 Migration + BLE Permissions Caching + GitHub Actions Fixes)
 
 ---
 
@@ -4318,35 +4318,129 @@ interface BleDevice {
 
 ## Recent Changes (February 20, 2026)
 
-### Push Notifications Implementation
+### Push Notification System — Firebase FCM V1 Migration
 
-**Status:** Implemented with known issues (see below)
+**Status:** ✅ COMPLETED — End-to-end notification delivery confirmed working
 
-**Files Modified:**
-- `mobile/src/components/BLEScanner.tsx` - Added push notification registration in `requestPermissions()`
-- `mobile/src/services/api.ts` - Added `savePushToken()` function
-- `mobile/App.tsx` - Added pending token useEffect for post-auth token saving
-- `mobile/app.json` - Added `googleServicesFile` configuration
+**Migration Summary:**
+Complete migration from Expo push service to Firebase FCM V1 direct integration. Expo push tokens (`ExponentPushToken[...]`) have been fully replaced by raw FCM tokens across the entire pipeline.
 
-**Implementation Details:**
-1. Push notification permissions are requested alongside BLE permissions in `BLEScanner.tsx`
-2. Token registration flow:
-   - `Notifications.requestPermissionsAsync()` requests permission
-   - `Notifications.getExpoPushTokenAsync({ projectId: '...' })` gets Expo push token
-   - Token is saved to AsyncStorage as `pendingPushToken` (fallback)
-   - Token is saved to Supabase `user_profiles.push_token` via `savePushToken()`
-3. Backup mechanism: `App.tsx` has a useEffect that checks for pending tokens after auth resolves
-
-**Configuration:**
-```json
-// app.json android block
-"googleServicesFile": "./android/app/google-services.json"
+**Architecture Change:**
+```
+BEFORE: App → Expo Push Service → Firebase FCM → Device
+AFTER:  App → Firebase FCM V1 API → Device (direct)
 ```
 
-**Known Issues:**
-- Firebase/FCM not initializing properly on app startup (google-services.json may be missing or misconfigured)
-- Token registration may fail silently if user is not authenticated when permissions are requested
-- `getExpoPushTokenAsync` requires valid `projectId` from Expo dashboard
+**Files Modified:**
+- `mobile/src/components/BLEScanner.tsx` - Notification permission request in `requestPermissions()`
+- `mobile/src/services/api.ts` - `savePushToken()` saves raw FCM token to Supabase
+- `mobile/App.tsx` - `registerPushToken()` uses `@react-native-firebase/messaging` directly
+- `mobile/app.json` - Firebase plugins configured
+- `supabase/functions/send-drop-notification/index.ts` - Completely rewritten for FCM V1 API
+
+**Token Generation Flow (App.tsx):**
+```typescript
+import { getMessaging, getToken } from '@react-native-firebase/messaging';
+
+const messaging = getMessaging();
+const fcmToken = await getToken(messaging);  // Raw FCM token
+await savePushToken(fcmToken);               // Saved to user_profiles.push_token
+```
+
+**Edge Function Architecture:**
+1. Receives webhook from Supabase `drops` table (INSERT or UPDATE)
+2. Queries `user_profiles` for recipient's `push_token` (raw FCM token)
+3. Loads `FIREBASE_SERVICE_ACCOUNT` JSON from Supabase secrets
+4. Signs JWT with service account private key (RS256)
+5. Exchanges JWT for Google OAuth2 access token via `https://oauth2.googleapis.com/token`
+6. Calls FCM V1 API: `https://fcm.googleapis.com/v1/projects/droplink-5700c/messages:send`
+7. Sends notification with bearer token authentication
+
+**Notification Events:**
+- `INSERT` with `status='sent'` → Notifies receiver: "New Drop from [sender_name]"
+- `UPDATE` with `status='linked'` → Notifies both sender and receiver: "New Link with [name]!"
+
+**Configuration (app.json):**
+```json
+"plugins": [
+  "react-native-ble-plx",
+  "expo-font",
+  "expo-secure-store",
+  "./app.plugin.js",
+  "@react-native-firebase/app",
+  "expo-notifications"
+]
+```
+
+**Environment:**
+- `FIREBASE_SERVICE_ACCOUNT` — Supabase Edge Function secret containing service account JSON
+- `google-services.json` — Required in `mobile/android/app/` for FCM client initialization
+
+### Notification Permission Flow
+
+**Change:** Permission prompt restructured to sequence cleanly with BLE permissions.
+
+**Flow:**
+1. `startScan()` called → `requestPermissions()` invoked
+2. BLE permissions requested via `PermissionsAndroid.requestMultiple()`
+3. After BLE permissions resolve, `setTimeout(..., 500)` triggers notification permission
+4. 500ms delay prevents Android dialog collision between BLE and notification prompts
+
+**Permission Ownership:**
+- `BLEScanner.tsx` owns notification permission prompt (via `Notifications.requestPermissionsAsync()`)
+- `App.tsx` `registerPushToken()` goes directly to `getToken()` — no permission check (assumes already granted)
+
+### BLE Permissions Caching
+
+**Status:** ✅ COMPLETED — Two-layer persistent cache implemented
+
+**Implementation (BLEScanner.tsx):**
+```typescript
+let permissionsGranted = false;  // In-session cache
+const BLE_PERMISSIONS_KEY = '@droplink_ble_permissions_granted';  // AsyncStorage key
+```
+
+**Cache Check Order:**
+1. Check in-session cache (`permissionsGranted` module variable)
+2. Check persistent cache (`AsyncStorage.getItem(BLE_PERMISSIONS_KEY)`)
+3. If neither cached, check Android system via `PermissionsAndroid.check()`
+4. If not granted, request via `PermissionsAndroid.requestMultiple()`
+
+**Samsung Race Condition Fix:**
+Added `PermissionsAndroid.check()` pre-check before `requestMultiple()` to handle Samsung-specific issue where first `requestMultiple()` call returns `NEVER_ASK_AGAIN` despite permissions being granted in Settings.
+
+```typescript
+const checkResults = await Promise.all(
+  permissions.map(p => PermissionsAndroid.check(p))
+);
+const alreadyGranted = checkResults.every(result => result === true);
+if (!alreadyGranted) {
+  // Only request if check confirms not granted
+  const granted = await PermissionsAndroid.requestMultiple(permissions);
+}
+```
+
+**NEVER_ASK_AGAIN Handling:**
+`requestMultiple()` result now treats both `GRANTED` and `NEVER_ASK_AGAIN` as success:
+```typescript
+const allGranted = Object.values(granted).every(
+  permission =>
+    permission === PermissionsAndroid.RESULTS.GRANTED ||
+    permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
+);
+```
+
+### GitHub Actions Workflows Fixed
+
+**Status:** ✅ COMPLETED — OTA and EAS update workflows restored
+
+**Changes:**
+- `ota-update.yml`: Replaced deprecated `expo-version` with `eas-version: latest`
+- `ota-update.yml`: Upgraded `node-version` from 18 to 20
+- `eas-update.yml`: Upgraded `node-version` from 18 to 20
+- Both workflows now correctly install `eas-cli` before running `eas update` commands
+
+**Result:** Automated OTA deployments on push to `develop` branch restored
 
 ### Foreground Service Fixes (ForegroundServiceDidNotStartInTimeException)
 
@@ -4438,41 +4532,37 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 
 ## Current Known Issues (As of February 20, 2026)
 
-### 1. Push Notification Token Not Saving to Expo/Supabase
+### 1. Railway Backend hash_password Undefined on Startup
 
-**Symptoms:**
-- `[PUSH-DEBUG]` logs show token received but Supabase update may fail silently
-- Token may not appear in `user_profiles.push_token` column
+**Status:** Deferred — Fix attempted, caused deployment crash, reverted.
 
-**Potential Causes:**
-- User not authenticated when `savePushToken()` is called
-- Supabase RLS policy blocking update
-- Network error during token save
+**Problem:** `hash_password` function is defined at line 880 but called at line 394 during startup, causing undefined reference.
 
-**Debugging:**
-```
-[PUSH-DEBUG] savePushToken called with token: ExponentPushToken[...]
-[PUSH-DEBUG] getUser result - user: EXISTS/NULL
-[PUSH-DEBUG] Supabase update result - error: none/message
-```
+**Impact:** Railway backend deployment fails. Backend is deprecated and being phased out, so this is low priority.
 
-**Workaround:** Pending token is saved to AsyncStorage and retried after auth resolves in App.tsx useEffect.
+**Resolution:** Requires careful isolated fix in future session. Function definition must be moved above first usage.
 
-### 2. Firebase/Google Services Not Initializing
+### 2. Integration Test Suite Signup Returning 422
 
-**Symptoms:**
-- Push notifications not working on physical devices
-- No FCM token generated
-- Google Services plugin warnings during build
+**Status:** Deferred — Test infrastructure issue.
 
-**Configuration Required:**
-1. Download `google-services.json` from Firebase Console
-2. Place in `mobile/android/app/google-services.json`
-3. Ensure `app.json` has `googleServicesFile` configured
+**Problem:** Test creates user with timestamp-based email via production Railway backend. Cleanup between runs is incomplete, causing conflicts.
 
-**Note:** The manual `build.gradle` changes for Google Services plugin were reverted. Expo handles this automatically via `app.json` configuration.
+**Impact:** Automated test suite partially broken.
 
-### 3. Foreground Service Timing Issues (Android 14+)
+**Resolution:** Requires test infrastructure overhaul or migration to Supabase-only testing.
+
+### 3. BLE Permissions Cache on Samsung Fresh Install
+
+**Status:** Acceptable — Edge case affects only fresh installs.
+
+**Problem:** On Samsung S25, module-level `permissionsGranted` variable resets on every JS bundle load. First `PermissionsAndroid.check()` call after fresh install may report incorrect state intermittently.
+
+**Mitigation:** AsyncStorage cache is the persistent solution. Samsung-specific permission state reporting inconsistency on first check after fresh install continues to surface intermittently.
+
+**Impact:** Real users only experience fresh install once, so acceptable UX trade-off.
+
+### 4. Foreground Service Timing Issues (Android 14+)
 
 **Status:** Mostly resolved, but edge cases may exist.
 
@@ -4481,20 +4571,23 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - Verify `startForeground()` is first call in START action branch
 - Ensure `FOREGROUND_SERVICE_CONNECTED_DEVICE` permission is in AndroidManifest.xml
 
-### 4. BLE Permissions Flow
-
-**Current State:** Working, but permissions are requested every time `startScan()` is called.
-
-**Potential Improvement:** Cache permission state and only request if not already granted.
-
 ### 5. Advertising useEffect Double-Firing
 
-**Status:** Resolved via refs pattern.
+**Status:** ✅ Resolved via refs pattern.
 
 **Solution Applied:**
 - Added `startAdvertisingRef` and `stopAdvertisingRef` 
 - Removed cleanup function from advertising useEffect
 - Changed dependency array to exclude function references
+
+### 6. BLE Permissions Caching
+
+**Status:** ✅ Resolved — Two-layer cache implemented.
+
+**Solution Applied:**
+- In-session cache via module-level `permissionsGranted` variable
+- Persistent cache via AsyncStorage with key `@droplink_ble_permissions_granted`
+- Pre-check via `PermissionsAndroid.check()` before `requestMultiple()`
 
 ---
 
@@ -4605,14 +4698,23 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 5. **Track service start state with refs** - Use `scanStartedRef` to prevent stopping services that were never started
 6. **onStartCommand restructure pattern** - when block with START -> startForeground + work, STOP -> cleanup + stopSelf, else -> startForeground only
 
-### Lessons Learned (Push Notifications with Expo)
-1. **projectId is required for getExpoPushTokenAsync** - Must match Expo project ID from dashboard
-2. **Token registration requires authentication** - savePushToken needs authenticated user to update database
-3. **AsyncStorage as fallback** - Store pending token locally, retry after auth resolves
-4. **Notifications.setNotificationHandler at module level** - Must be outside component to prevent re-registration
-5. **Permission timing matters** - Request push permissions after BLE permissions for logical UX flow
-6. **google-services.json required for FCM** - Physical device push notifications require Firebase configuration
-7. **Expo handles Google Services plugin** - Don't manually add build.gradle changes, use app.json googleServicesFile
+### Lessons Learned (Push Notifications with Firebase FCM V1)
+1. **Expo push service eliminated** - Direct FCM V1 integration is simpler and more reliable than Expo middleman
+2. **Raw FCM tokens via @react-native-firebase/messaging** - `getToken(getMessaging())` returns raw FCM token, not Expo format
+3. **Service account JWT signing required** - FCM V1 API requires OAuth2 bearer token obtained via JWT exchange
+4. **google-services.json required for FCM client** - Must be in `mobile/android/app/` for `@react-native-firebase/messaging` to initialize
+5. **Permission timing matters** - Request notification permissions 500ms after BLE permissions to prevent Android dialog collision
+6. **Notifications.setNotificationHandler at module level** - Must be outside component to prevent re-registration
+7. **Edge Function secrets for service account** - Store `FIREBASE_SERVICE_ACCOUNT` JSON in Supabase Edge Function secrets
+8. **FCM V1 endpoint format** - `https://fcm.googleapis.com/v1/projects/{project-id}/messages:send`
+9. **Token registration requires authentication** - savePushToken needs authenticated user to update database
+
+### Lessons Learned (BLE Permissions Caching)
+1. **Two-layer cache pattern** - Module-level variable for in-session, AsyncStorage for persistence across app restarts
+2. **PermissionsAndroid.check() before requestMultiple()** - Pre-check prevents unnecessary permission dialogs
+3. **Samsung race condition** - First `requestMultiple()` after fresh install may return `NEVER_ASK_AGAIN` incorrectly; use `check()` first
+4. **Treat NEVER_ASK_AGAIN as granted** - User made a decision; don't block functionality
+5. **AsyncStorage key naming** - Use `@` prefix convention for app-specific keys
 
 ### Lessons Learned (React Performance)
 1. **SVG paths beat View components** - Converting ~2800 Views to SVG Paths dramatically improves render performance
@@ -4620,6 +4722,11 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 3. **overflow: visible on containers** - Required for SVG content that extends beyond its positioned container
 4. **Console.log statements have cost** - Remove debug logging from hot code paths in production
 5. **useEffect dependencies matter** - Function references in deps cause re-runs; use refs for stable references
+
+### Lessons Learned (GitHub Actions)
+1. **expo-version deprecated** - Use `eas-version: latest` instead in expo/expo-github-action
+2. **Node 20 required** - Upgrade from Node 18 for compatibility with latest Expo/EAS tooling
+3. **eas-cli must be installed** - Workflow must install eas-cli before running eas commands
 
 ### Lessons Learned (Drops System)
 1. **Dual records for bidirectional tracking** - Create both sender and receiver rows simultaneously
@@ -4644,6 +4751,11 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [x] ~~Add ghost mode logging~~ (RESOLVED Feb 19, 2026 - Comprehensive [GHOST-MODE] prefixed logs)
 - [x] ~~Remove Force Update button~~ (RESOLVED Feb 19, 2026 - Cleaned up SecuritySettingsScreen)
 - [x] ~~Investigate radar blip visibility~~ (RESOLVED - BLE scanning overhaul December 2024)
+- [x] ~~Fix Firebase/FCM initialization for push notifications~~ (RESOLVED Feb 20, 2026 - Migrated to @react-native-firebase/messaging)
+- [x] ~~Implement Supabase Edge Function for drop notifications~~ (RESOLVED Feb 20, 2026 - send-drop-notification with FCM V1 API)
+- [x] ~~Cache BLE permission state to avoid repeated requests~~ (RESOLVED Feb 20, 2026 - Two-layer cache with AsyncStorage)
+- [x] ~~Implement push notification handlers for incoming drops and links~~ (RESOLVED Feb 20, 2026 - Edge Function handles INSERT and UPDATE events)
+- [x] ~~Test push notifications on physical devices with Firebase configured~~ (RESOLVED Feb 20, 2026 - End-to-end delivery confirmed)
 - [ ] Complete phone verification feature (HomeScreen banner + drop blocking logic)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
@@ -4654,10 +4766,6 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [ ] Deprecate old `devices` table (drops now use `drops` table)
 - [ ] Integrate background scanner with HomeScreen radar (merge foreground + background devices)
 - [ ] iOS background scanning implementation (when iOS native module needed)
-- [ ] Fix Firebase/FCM initialization for push notifications
-- [ ] Add google-services.json to repository (or document setup process)
-- [ ] Implement Supabase Edge Function for drop notifications (send-drop-notification)
-- [ ] Cache BLE permission state to avoid repeated requests
-- [ ] Add proper error handling for push token registration failures
-- [ ] Implement push notification handlers for incoming drops and links
-- [ ] Test push notifications on physical devices with Firebase configured
+- [ ] Add google-services.json setup documentation
+- [ ] Fix Railway backend hash_password startup issue (deferred)
+- [ ] Fix integration test suite 422 errors (deferred)
