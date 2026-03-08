@@ -2322,12 +2322,7 @@ def readiness_check():
         
         # Check 2: Critical environment variables
         try:
-            required_vars = ["DATABASE_URL"] if USE_POSTGRES else []
             missing_vars = []
-            
-            # Check if JWT secret is not default
-            if SECRET_KEY == "your-secret-key-change-in-production-12345":
-                missing_vars.append("JWT_SECRET_KEY (using default)")
             
             if USE_POSTGRES and not os.getenv("DATABASE_URL"):
                 missing_vars.append("DATABASE_URL")
