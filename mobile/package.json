@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "canvas": "^3.2.1",
     "dotenv": "^17.2.3",
     "patch-package": "^8.0.1",
     "postinstall-postinstall": "^2.1.0",
