@@ -15,8 +15,6 @@ import shutil
 from pathlib import Path
 import jwt
 import bcrypt
-import cloudinary
-import cloudinary.uploader
 import random
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
@@ -79,7 +77,9 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 # JWT Configuration from environment variables
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("JWT_SECRET_KEY environment variable is required")
 PREVIOUS_SECRET_KEY = os.getenv("PREVIOUS_JWT_SECRET_KEY", None)  # For key rotation grace period
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_DAYS = int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "30"))
@@ -92,19 +92,8 @@ CURRENT_KEY_VERSION = int(os.getenv("JWT_KEY_VERSION", "1"))
 ACTIVITY_TIMEOUT_MINUTES = int(os.getenv("ACTIVITY_TIMEOUT_MINUTES", "30"))  # Standard timeout
 REMEMBER_ME_TIMEOUT_DAYS = int(os.getenv("REMEMBER_ME_TIMEOUT_DAYS", "30"))  # "Remember Me" extended timeout
 
-# Warn if using default JWT secret (security risk)
-if SECRET_KEY == "your-secret-key-change-in-production-12345":
-    print("⚠️  WARNING: Using default JWT_SECRET_KEY! Set JWT_SECRET_KEY environment variable in production.")
-
 print(f"✓ JWT Key Version: {CURRENT_KEY_VERSION}")
 
-
-# Cloudinary Configuration
-cloudinary.config(
-    cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME", "ddxxjia44"),
-    api_key=os.environ.get("CLOUDINARY_API_KEY", "213846241467723"),
-    api_secret=os.environ.get("CLOUDINARY_API_SECRET", "3ICj-oLAW4HZm8EVCQuImb53R5Y")
-)
 
 # SendGrid Configuration
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
@@ -2847,15 +2836,6 @@ async def delete_user_account(request: Request, user_id: int = Depends(get_curre
         user_row = cursor.fetchone()
         user_email = user_row[0] if user_row else None
 
-        # Try to delete profile photo from Cloudinary
-        try:
-            execute_query(cursor, 'SELECT profile_photo FROM user_profiles WHERE user_id = ?', (user_id,))
-            photo_row = cursor.fetchone()
-            if photo_row and photo_row[0]:
-                cloudinary.uploader.destroy(f"droplink/profile_photos/user_{user_id}")
-        except:
-            pass  # Continue even if Cloudinary delete fails
-
         # Log the deletion action before deleting
         execute_query(cursor, '''
             INSERT INTO audit_logs (user_id, action, details, ip_address, user_agent)
@@ -3129,7 +3109,7 @@ async def get_admin_stats(secret: str = Header(None)):
     Requires secret header for security
     """
     # Simple security check
-    if secret != "delete-all-profiles-2024":
+    if secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:
@@ -3191,7 +3171,7 @@ async def get_audit_logs(
     - offset: Number of records to skip for pagination (default: 0)
     """
     # Simple security check
-    if secret != "delete-all-profiles-2024":
+    if secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     # Limit validation
@@ -3330,7 +3310,7 @@ async def cleanup_audit_logs_endpoint(
     - days: Number of days to retain logs (default: 90)
     """
     # Simple security check
-    if secret != "delete-all-profiles-2024":
+    if secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     if days < 1:
@@ -3723,7 +3703,7 @@ async def clear_all_data(secret: str = Header(None)):
     Requires secret header for security
     """
     # Simple security check
-    if secret != "delete-all-profiles-2024":
+    if secret != os.getenv("ADMIN_SECRET"):
         raise HTTPException(status_code=403, detail="Forbidden")
     
     try:

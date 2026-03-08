@@ -7,7 +7,9 @@ import os
 logger = logging.getLogger(__name__)
 
 # Get SECRET_KEY from environment
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("JWT_SECRET_KEY environment variable is required")
 
 class JWTBearer(HTTPBearer):
     def __init__(self, auto_error: bool = True):
