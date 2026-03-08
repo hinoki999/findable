@@ -6,10 +6,10 @@ const path = require('path');
 const SIZE = 1024;
 const PADDING_RATIO = 0.15;
 
-// Icon colors (swapped for visual design)
+// Icon colors
 const BG_COLOR = '#000000';        // darkColors.bg (theme.ts line 15)
-const DROP_COLOR = '#007AFF';      // blue for raindrop fill
-const LINK_COLOR = '#FF6B4A';      // orange for link glyph
+const DROP_COLOR = '#FF6B4A';      // orange for raindrop fill
+const LINK_COLOR = '#007AFF';      // blue for link glyph
 
 // Font and glyph configuration
 const TTF_PATH = path.join(__dirname, 'node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf');
@@ -127,8 +127,8 @@ function generateIcon(filename, withPadding = false) {
   const centerX = offsetX + effectiveSize / 2;
   const centerY = offsetY + effectiveSize / 2;
   
-  // Drop takes ~55% of effective size
-  const dropHeight = effectiveSize * 0.55;
+  // Drop takes ~41% of effective size (reduced 25% from 55%)
+  const dropHeight = effectiveSize * 0.41;
   
   // Draw the water drop filled and get its bounds
   const dropBounds = drawWaterDropFilled(ctx, centerX, centerY, dropHeight, DROP_COLOR);
