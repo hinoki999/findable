@@ -1844,8 +1844,7 @@ export default function HomeScreen() {
                 />
 
                 {/* Link notification badge */}
-                {/* ORIGINAL: {hasUnviewedLinks && ( */}
-                {true && (
+                {hasUnviewedLinks && (
                   <Animated.View
                     style={{
                       position: 'absolute',
@@ -1860,7 +1859,7 @@ export default function HomeScreen() {
                     <MaterialCommunityIcons
                       name="link-variant"
                       size={14}
-                      color="#FF6B4A"
+                      color="#007AFF"
                     />
                   </Animated.View>
                 )}

@@ -1,107 +1,114 @@
 const { createCanvas } = require('canvas');
+const opentype = require('opentype.js');
 const fs = require('fs');
 const path = require('path');
 
 const SIZE = 1024;
-const PADDING_RATIO = 0.15; // 15% padding for adaptive icon
+const PADDING_RATIO = 0.15;
 
-// Colors
-const BG_COLOR = '#000000';
-const DROP_COLOR = '#FF6B4A';
-const WHITE = '#FFFFFF';
+// Icon colors (swapped for visual design)
+const BG_COLOR = '#000000';        // darkColors.bg (theme.ts line 15)
+const DROP_COLOR = '#007AFF';      // blue for raindrop fill
+const LINK_COLOR = '#FF6B4A';      // orange for link glyph
 
-function drawWaterDrop(ctx, centerX, centerY, height, fillColor) {
-  // Water drop shape - teardrop/raindrop
-  const width = height * 0.65;
+// Font and glyph configuration
+const TTF_PATH = path.join(__dirname, 'node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf');
+const LINK_VARIANT_CODEPOINT = 983865; // From glyphmaps/MaterialCommunityIcons.json line 4306
+
+// UI measurements from HomeScreen.tsx
+const UI_RAINDROP_SIZE = 30;
+const UI_LINK_SIZE = 14;
+const UI_LINK_TOP = -2;
+const UI_LINK_RIGHT = -6;
+
+// Load font using opentype.js
+console.log('Loading font from:', TTF_PATH);
+if (!fs.existsSync(TTF_PATH)) {
+  console.error('ERROR: TTF file not found at', TTF_PATH);
+  process.exit(1);
+}
+const font = opentype.loadSync(TTF_PATH);
+console.log('Font loaded:', font.names.fontFamily.en);
+
+function drawWaterDropFilled(ctx, centerX, centerY, height, fillColor) {
+  // Proper teardrop: perfect semicircle bottom, pointed top
+  const radius = height * 0.32;  // Bottom semicircle radius
+  const width = radius * 2;
   
   ctx.beginPath();
   
-  // Start at the top point of the drop
   const topY = centerY - height / 2;
   const bottomY = centerY + height / 2;
+  const circleCenterY = bottomY - radius;  // Y center of the bottom semicircle
   
+  // Start at the sharp point at top
   ctx.moveTo(centerX, topY);
   
-  // Right curve - bezier curve from top to bottom right
+  // Right side: smooth curve from point down to right edge of semicircle
+  // The curve should meet the circle tangentially (vertically) at the join point
   ctx.bezierCurveTo(
-    centerX + width * 0.1, topY + height * 0.2,  // control point 1
-    centerX + width / 2, topY + height * 0.4,     // control point 2
-    centerX + width / 2, centerY + height * 0.1   // end point
+    centerX + radius * 0.12, topY + height * 0.12,   // Control 1: slight outward near top
+    centerX + radius, circleCenterY - radius * 0.8,  // Control 2: vertical tangent approach
+    centerX + radius, circleCenterY                   // End at right edge of semicircle
   );
   
-  // Bottom right curve to bottom center
-  ctx.bezierCurveTo(
-    centerX + width / 2, bottomY - height * 0.15,  // control point 1
-    centerX + width * 0.3, bottomY,                 // control point 2
-    centerX, bottomY                                // end point (bottom center)
-  );
+  // Bottom: perfect semicircle using arc (from 0 to PI, clockwise in canvas coords)
+  // Arc goes from right (0) around bottom to left (PI)
+  ctx.arc(centerX, circleCenterY, radius, 0, Math.PI, false);
   
-  // Bottom left curve
+  // Left side: smooth curve from left edge of semicircle back up to point
+  // Starts at (centerX - radius, circleCenterY) after the arc
   ctx.bezierCurveTo(
-    centerX - width * 0.3, bottomY,                 // control point 1
-    centerX - width / 2, bottomY - height * 0.15,  // control point 2
-    centerX - width / 2, centerY + height * 0.1   // end point
-  );
-  
-  // Left curve back to top
-  ctx.bezierCurveTo(
-    centerX - width / 2, topY + height * 0.4,     // control point 1
-    centerX - width * 0.1, topY + height * 0.2,  // control point 2
-    centerX, topY                                  // end point (top)
+    centerX - radius, circleCenterY - radius * 0.8,  // Control 1: vertical tangent departure
+    centerX - radius * 0.12, topY + height * 0.12,   // Control 2: slight outward near top
+    centerX, topY                                     // Back to sharp point
   );
   
   ctx.closePath();
   ctx.fillStyle = fillColor;
   ctx.fill();
+  
+  // Return bounds for link positioning
+  return {
+    top: topY,
+    right: centerX + radius,
+    centerX: centerX,
+    width: width,
+    height: height
+  };
 }
 
-function drawLinkIcon(ctx, centerX, centerY, size, color) {
-  // Draw a chain link icon (two interlocking ovals)
-  const linkWidth = size * 0.35;
-  const linkHeight = size * 0.6;
-  const gap = size * 0.08;
-  const lineWidth = size * 0.12;
+function drawLinkVariantGlyph(ctx, centerX, centerY, size, color) {
+  // Get the glyph for link-variant codepoint
+  const glyph = font.charToGlyph(String.fromCodePoint(LINK_VARIANT_CODEPOINT));
   
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = 'round';
+  if (!glyph || glyph.index === 0) {
+    console.error('ERROR: Could not find glyph for codepoint', LINK_VARIANT_CODEPOINT);
+    return;
+  }
   
-  // Rotate 45 degrees for diagonal chain links
-  ctx.save();
-  ctx.translate(centerX, centerY);
-  ctx.rotate(-Math.PI / 4);
+  // Calculate font size to match desired pixel size
+  const unitsPerEm = font.unitsPerEm;
+  const fontSize = size;
+  const scale = fontSize / unitsPerEm;
   
-  // Left link (oval shape)
-  ctx.beginPath();
-  const leftX = -gap - linkWidth / 2;
-  // Draw rounded rectangle/pill shape
-  const radius = linkWidth / 2;
-  ctx.moveTo(leftX - linkWidth/2 + radius, -linkHeight/2);
-  ctx.lineTo(leftX + linkWidth/2 - radius, -linkHeight/2);
-  ctx.arc(leftX + linkWidth/2 - radius, -linkHeight/2 + radius, radius, -Math.PI/2, 0);
-  ctx.lineTo(leftX + linkWidth/2, linkHeight/2 - radius);
-  ctx.arc(leftX + linkWidth/2 - radius, linkHeight/2 - radius, radius, 0, Math.PI/2);
-  ctx.lineTo(leftX - linkWidth/2 + radius, linkHeight/2);
-  ctx.arc(leftX - linkWidth/2 + radius, linkHeight/2 - radius, radius, Math.PI/2, Math.PI);
-  ctx.lineTo(leftX - linkWidth/2, -linkHeight/2 + radius);
-  ctx.arc(leftX - linkWidth/2 + radius, -linkHeight/2 + radius, radius, Math.PI, Math.PI * 1.5);
-  ctx.stroke();
+  // Get glyph path and calculate bounds
+  const glyphPath = glyph.getPath(0, 0, fontSize);
+  const bbox = glyphPath.getBoundingBox();
   
-  // Right link (oval shape)
-  ctx.beginPath();
-  const rightX = gap + linkWidth / 2;
-  ctx.moveTo(rightX - linkWidth/2 + radius, -linkHeight/2);
-  ctx.lineTo(rightX + linkWidth/2 - radius, -linkHeight/2);
-  ctx.arc(rightX + linkWidth/2 - radius, -linkHeight/2 + radius, radius, -Math.PI/2, 0);
-  ctx.lineTo(rightX + linkWidth/2, linkHeight/2 - radius);
-  ctx.arc(rightX + linkWidth/2 - radius, linkHeight/2 - radius, radius, 0, Math.PI/2);
-  ctx.lineTo(rightX - linkWidth/2 + radius, linkHeight/2);
-  ctx.arc(rightX - linkWidth/2 + radius, linkHeight/2 - radius, radius, Math.PI/2, Math.PI);
-  ctx.lineTo(rightX - linkWidth/2, -linkHeight/2 + radius);
-  ctx.arc(rightX - linkWidth/2 + radius, -linkHeight/2 + radius, radius, Math.PI, Math.PI * 1.5);
-  ctx.stroke();
+  // Calculate offset to center the glyph
+  const glyphWidth = bbox.x2 - bbox.x1;
+  const glyphHeight = bbox.y2 - bbox.y1;
+  const offsetX = centerX - bbox.x1 - glyphWidth / 2;
+  const offsetY = centerY - bbox.y1 - glyphHeight / 2;
   
-  ctx.restore();
+  // Get path at correct position
+  const path = glyph.getPath(offsetX, offsetY + glyphHeight, fontSize);
+  
+  // Draw the path
+  ctx.fillStyle = color;
+  path.fill = color;
+  path.draw(ctx);
 }
 
 function generateIcon(filename, withPadding = false) {
@@ -112,35 +119,31 @@ function generateIcon(filename, withPadding = false) {
   ctx.fillStyle = BG_COLOR;
   ctx.fillRect(0, 0, SIZE, SIZE);
   
-  // Calculate dimensions based on padding
+  // Calculate effective area
   const effectiveSize = withPadding ? SIZE * (1 - PADDING_RATIO * 2) : SIZE;
   const offsetX = withPadding ? SIZE * PADDING_RATIO : 0;
   const offsetY = withPadding ? SIZE * PADDING_RATIO : 0;
   
   const centerX = offsetX + effectiveSize / 2;
+  const centerY = offsetY + effectiveSize / 2;
   
-  // Drop takes 55% of effective height, positioned in upper portion to leave room for text
-  const dropHeight = effectiveSize * 0.55;
-  const dropCenterY = offsetY + effectiveSize * 0.38; // Shifted up to make room for text
+  // Drop takes ~70% of effective size
+  const dropHeight = effectiveSize * 0.7;
   
-  // Draw the water drop
-  drawWaterDrop(ctx, centerX, dropCenterY, dropHeight, DROP_COLOR);
+  // Draw the water drop filled and get its bounds
+  const dropBounds = drawWaterDropFilled(ctx, centerX, centerY, dropHeight, DROP_COLOR);
   
-  // Draw link icon in upper right area of drop
-  const linkSize = dropHeight * 0.28;
-  const linkX = centerX + dropHeight * 0.08;
-  const linkY = dropCenterY - dropHeight * 0.12;
-  drawLinkIcon(ctx, linkX, linkY, linkSize, WHITE);
+  // Link icon: 30% of drop size, positioned at 2 o'clock (upper-right edge)
+  const linkSize = dropHeight * 0.30;
   
-  // Draw "DropLink" text below the drop
-  const fontSize = effectiveSize * 0.11;
-  ctx.fillStyle = WHITE;
-  ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
+  // Position: upper-right edge of raindrop, badge-style at 2 o'clock
+  // X: drop center + 38% of drop width (pushes right toward edge)
+  // Y: drop top + 12% of drop height (higher up on edge)
+  const linkCenterX = dropBounds.centerX + dropBounds.width * 0.38;
+  const linkCenterY = dropBounds.top + dropHeight * 0.12;
   
-  const textY = dropCenterY + dropHeight / 2 + effectiveSize * 0.06;
-  ctx.fillText('DropLink', centerX, textY);
+  // Draw link-variant glyph using opentype.js path rendering
+  drawLinkVariantGlyph(ctx, linkCenterX, linkCenterY, linkSize, LINK_COLOR);
   
   // Save to file
   const buffer = canvas.toBuffer('image/png');
@@ -149,13 +152,19 @@ function generateIcon(filename, withPadding = false) {
   console.log(`✓ Generated: ${filepath}`);
 }
 
-// Generate all three icons
-console.log('Generating DropLink app icons...\n');
+console.log('');
+console.log('Generating DropLink app icons...');
+console.log('');
+console.log('Configuration:');
+console.log(`  Background: ${BG_COLOR}`);
+console.log(`  Drop fill: ${DROP_COLOR}`);
+console.log(`  Link color: ${LINK_COLOR}`);
+console.log(`  Link glyph: U+${LINK_VARIANT_CODEPOINT.toString(16).toUpperCase()} (codepoint ${LINK_VARIANT_CODEPOINT})`);
+console.log('');
 
 try {
   generateIcon('icon.png', false);
   generateIcon('adaptive-icon.png', true);
-  generateIcon('splash-icon.png', false);
   console.log('\n✓ All icons generated successfully!');
 } catch (error) {
   console.error('Error generating icons:', error);
