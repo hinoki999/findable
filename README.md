@@ -461,7 +461,7 @@ created_at TIMESTAMP DEFAULT NOW()
 
 ### Admin
 - `DELETE /admin/clear-all-data` - Wipe entire database
-  **Header Required:** `secret: delete-all-profiles-2024`
+  **Header Required:** `secret: [YOUR_ADMIN_SECRET]`
 
 ---
 
@@ -495,7 +495,7 @@ created_at TIMESTAMP
 **Wipe all data:**
 ```bash
 curl -X DELETE https://findable-production.up.railway.app/admin/clear-all-data \
-  -H "secret: delete-all-profiles-2024"
+  -H "secret: [YOUR_ADMIN_SECRET]"
 ```
 
 ---

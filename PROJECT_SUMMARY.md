@@ -348,7 +348,7 @@ LoginScreen → POST /auth/login → JWT token
 - `POST /user/settings` - Update settings
 
 **Admin:**
-- `DELETE /admin/clear-all-data` - Wipe database (header: `secret: delete-all-profiles-2024`)
+- `DELETE /admin/clear-all-data` - Wipe database (header: `secret: [YOUR_ADMIN_SECRET]`)
 
 ---
 

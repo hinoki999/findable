@@ -79,15 +79,12 @@ postgresql://user:password@host:port/database
 
 **Without SendGrid:** Verification codes are logged to console for testing
 
-### Cloud Storage (Cloudinary)
+### Cloud Storage (REMOVED)
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `CLOUDINARY_CLOUD_NAME` | No | (default test account) | Cloudinary cloud name |
-| `CLOUDINARY_API_KEY` | No | (default test account) | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | No | (default test account) | Cloudinary API secret |
-
-**Without Cloudinary:** Profile photos work with default test account (not recommended for production)
+> **Note:** Cloudinary integration has been removed from the project. Profile photos are now handled through Supabase Storage. The following variables are no longer used:
+> - `CLOUDINARY_CLOUD_NAME`
+> - `CLOUDINARY_API_KEY`
+> - `CLOUDINARY_API_SECRET`
 
 ---
 
@@ -116,10 +113,8 @@ postgresql://user:password@host:port/database
    SENDGRID_API_KEY=your-sendgrid-api-key
    FROM_EMAIL=noreply@yourdomain.com
 
-   # Optional - for profile photos
-   CLOUDINARY_CLOUD_NAME=your-cloud-name
-   CLOUDINARY_API_KEY=your-api-key
-   CLOUDINARY_API_SECRET=your-api-secret
+   # Admin endpoints
+   ADMIN_SECRET=your-admin-secret
    ```
 
 4. **Never commit .env file** (already in .gitignore)
@@ -138,9 +133,7 @@ postgresql://user:password@host:port/database
    ACCESS_TOKEN_EXPIRE_DAYS = 30
    SENDGRID_API_KEY = <your SendGrid API key>
    FROM_EMAIL = noreply@yourdomain.com
-   CLOUDINARY_CLOUD_NAME = <your cloud name>
-   CLOUDINARY_API_KEY = <your API key>
-   CLOUDINARY_API_SECRET = <your API secret>
+   ADMIN_SECRET = <your admin secret>
    ```
 
 4. **DATABASE_URL** is automatically set by Railway when you connect PostgreSQL
@@ -158,7 +151,7 @@ postgresql://user:password@host:port/database
 - **Store .env file locally** - never commit to Git
 - **Use Railway environment variables** for production
 - **Rotate secrets periodically** (every 90 days recommended)
-- **Use different Cloudinary/SendGrid accounts** for dev and production
+- **Use different SendGrid accounts** for dev and production
 
 ### ❌ DON'T
 
@@ -287,9 +280,7 @@ ACCESS_TOKEN_EXPIRE_DAYS=30
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxx
 FROM_EMAIL=dev@droplinkconnect.com
 
-CLOUDINARY_CLOUD_NAME=my-dev-cloud
-CLOUDINARY_API_KEY=123456789012345
-CLOUDINARY_API_SECRET=abcdefghijklmnopqrstuvwxyz
+ADMIN_SECRET=dev-admin-secret-change-this
 ```
 
 ### Production (Railway)
@@ -305,9 +296,7 @@ DATABASE_URL=postgresql://... (auto-set by Railway)
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxx
 FROM_EMAIL=noreply@droplinkconnect.com
 
-CLOUDINARY_CLOUD_NAME=my-prod-cloud
-CLOUDINARY_API_KEY=987654321098765
-CLOUDINARY_API_SECRET=zyxwvutsrqponmlkjihgfedcba
+ADMIN_SECRET=prod-admin-secret-unique-value
 ```
 
 ---
@@ -316,12 +305,14 @@ CLOUDINARY_API_SECRET=zyxwvutsrqponmlkjihgfedcba
 
 **Before (insecure):**
 ```python
-SECRET_KEY = "your-secret-key-change-in-production-12345"
+SECRET_KEY = "hardcoded-secret-value"
 ```
 
-**After (secure):**
+**After (secure - required):**
 ```python
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-12345")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("JWT_SECRET_KEY environment variable is required")
 ```
 
 **Changes Required:**

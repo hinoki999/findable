@@ -66,7 +66,7 @@ CREATE TABLE audit_logs (
 
 **Headers:**
 ```
-secret: delete-all-profiles-2024
+secret: [YOUR_ADMIN_SECRET]
 ```
 
 **Query Parameters:**
@@ -79,19 +79,19 @@ secret: delete-all-profiles-2024
 **Example Request:**
 ```bash
 # Get all logs
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   https://findable-production.up.railway.app/admin/audit-logs
 
 # Get login attempts for specific user
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?user_id=123&action=login_failed"
 
 # Get all actions from specific IP
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?ip_address=192.168.1.100"
 
 # Pagination
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?limit=50&offset=100"
 ```
 
@@ -136,7 +136,7 @@ curl -H "secret: delete-all-profiles-2024" \
 
 **Headers:**
 ```
-secret: delete-all-profiles-2024
+secret: [YOUR_ADMIN_SECRET]
 ```
 
 **Query Parameters:**
@@ -146,12 +146,12 @@ secret: delete-all-profiles-2024
 ```bash
 # Delete logs older than 90 days (default)
 curl -X POST \
-  -H "secret: delete-all-profiles-2024" \
+  -H "secret: [YOUR_ADMIN_SECRET]" \
   https://findable-production.up.railway.app/admin/cleanup-audit-logs
 
 # Delete logs older than 30 days
 curl -X POST \
-  -H "secret: delete-all-profiles-2024" \
+  -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/cleanup-audit-logs?days=30"
 ```
 
@@ -192,7 +192,7 @@ If audit logging fails (e.g., database error), the operation continues successfu
 Track suspicious activity:
 ```bash
 # Find all failed login attempts from an IP
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?action=login_failed&ip_address=203.0.113.42"
 ```
 
@@ -201,7 +201,7 @@ curl -H "secret: delete-all-profiles-2024" \
 Review user profile changes:
 ```bash
 # Get all profile updates for a specific user
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?user_id=123&action=profile_update"
 ```
 
@@ -210,7 +210,7 @@ curl -H "secret: delete-all-profiles-2024" \
 Investigate account lockouts:
 ```bash
 # Find all account lockout events
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?action=account_locked"
 ```
 
@@ -219,7 +219,7 @@ curl -H "secret: delete-all-profiles-2024" \
 Track a user's complete activity:
 ```bash
 # Get all actions by user ID
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?user_id=123&limit=1000"
 ```
 
@@ -232,7 +232,7 @@ Run the cleanup endpoint periodically to remove old logs:
 ```bash
 # Schedule this as a cron job or Railway service
 curl -X POST \
-  -H "secret: delete-all-profiles-2024" \
+  -H "secret: [YOUR_ADMIN_SECRET]" \
   https://findable-production.up.railway.app/admin/cleanup-audit-logs
 ```
 
@@ -250,18 +250,18 @@ For Windows users:
 # View recent logs
 Invoke-RestMethod `
   -Uri "https://findable-production.up.railway.app/admin/audit-logs?limit=20" `
-  -Headers @{"secret"="delete-all-profiles-2024"} | ConvertTo-Json -Depth 5
+  -Headers @{"secret"="[YOUR_ADMIN_SECRET]"} | ConvertTo-Json -Depth 5
 
 # Filter by action
 Invoke-RestMethod `
   -Uri "https://findable-production.up.railway.app/admin/audit-logs?action=login_success" `
-  -Headers @{"secret"="delete-all-profiles-2024"} | ConvertTo-Json -Depth 5
+  -Headers @{"secret"="[YOUR_ADMIN_SECRET]"} | ConvertTo-Json -Depth 5
 
 # Cleanup old logs
 Invoke-RestMethod `
   -Method POST `
   -Uri "https://findable-production.up.railway.app/admin/cleanup-audit-logs" `
-  -Headers @{"secret"="delete-all-profiles-2024"}
+  -Headers @{"secret"="[YOUR_ADMIN_SECRET]"}
 ```
 
 ## Integration with Existing Security Features
@@ -294,7 +294,7 @@ curl -X POST https://findable-production.up.railway.app/auth/register \
   -d '{"username":"audittest","password":"Test1234!","email":"audit@test.com"}'
 
 # 2. View the logged event
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?action=user_registration&limit=1"
 
 # 3. Try a failed login (should log 'login_failed')
@@ -303,7 +303,7 @@ curl -X POST https://findable-production.up.railway.app/auth/login \
   -d '{"username":"audittest","password":"WrongPassword123!"}'
 
 # 4. View failed login attempts
-curl -H "secret: delete-all-profiles-2024" \
+curl -H "secret: [YOUR_ADMIN_SECRET]" \
   "https://findable-production.up.railway.app/admin/audit-logs?action=login_failed"
 ```
 

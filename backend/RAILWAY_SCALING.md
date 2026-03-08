@@ -184,7 +184,7 @@ $counts = @()
 
 for ($i = 1; $i -le 10; $i++) {
     try {
-        $response = Invoke-RestMethod -Uri "$baseUrl/admin/stats" -Headers @{"secret"="delete-all-profiles-2024"}
+        $response = Invoke-RestMethod -Uri "$baseUrl/admin/stats" -Headers @{"secret"="[YOUR_ADMIN_SECRET]"}
         $counts += $response.total_users
         Write-Host "Request $i : Users=$($response.total_users)" -ForegroundColor Green
         Start-Sleep -Milliseconds 300

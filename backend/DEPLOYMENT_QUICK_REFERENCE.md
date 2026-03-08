@@ -247,10 +247,10 @@ Before deploying to production:
 JWT_SECRET_KEY=<256-bit-secret>
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 SENDGRID_API_KEY=<your-key>
-CLOUDINARY_CLOUD_NAME=<your-name>
-CLOUDINARY_API_KEY=<your-key>
-CLOUDINARY_API_SECRET=<your-secret>
+ADMIN_SECRET=<your-admin-secret>
 ```
+
+> **Note:** Cloudinary has been removed. Profile photos are now handled through Supabase Storage.
 
 ### Staging
 

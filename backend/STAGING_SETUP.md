@@ -445,7 +445,7 @@ console.log(`📱 Environment: ${ENV.NAME} (${ENV.BASE_URL})`);
 ```bash
 # Call admin endpoint (staging)
 curl -X DELETE https://droplink-staging.up.railway.app/admin/clear-all-data \
-  -H "secret: delete-all-profiles-2024"
+  -H "secret: [YOUR_ADMIN_SECRET]"
 ```
 
 ### 7.2 Database Migrations
