@@ -1844,7 +1844,8 @@ export default function HomeScreen() {
                 />
 
                 {/* Link notification badge */}
-                {hasUnviewedLinks && (
+                {/* ORIGINAL: {hasUnviewedLinks && ( */}
+                {true && (
                   <Animated.View
                     style={{
                       position: 'absolute',
