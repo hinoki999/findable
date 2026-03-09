@@ -170,7 +170,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setTempValue(name || '');
       } else if (field === 'bio') {
         // If bio is the placeholder text, start with empty string
-        setTempValue(bio === 'Add bio' ? '' : (bio || ''));
+        setTempValue(bio || '');
       } else if (field === 'social-media' && socialIndex !== undefined) {
         setTempSocialIndex(socialIndex);
         if (socialMedia && socialMedia[socialIndex]) {
@@ -460,7 +460,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             </Pressable>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ ...theme.type.muted, flex: 1 }}>{bio || 'Add bio'}</Text>
+            <Text style={{ ...theme.type.muted, flex: 1 }}>{bio || ''}</Text>
             <Pressable onPress={() => handleEdit('bio')} style={{ padding: 4 }}>
               <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
             </Pressable>

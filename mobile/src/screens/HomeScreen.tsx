@@ -2085,20 +2085,6 @@ export default function HomeScreen() {
                                     </Text>
                                   </View>
                                 </View>
-
-                                {/* Bio Section */}
-                                <View style={{
-                                  backgroundColor: theme.colors.bg,
-                                  padding: 6,
-                                  borderRadius: 6,
-                                }}>
-                                  <Text style={[theme.type.muted, { fontSize: 6, marginBottom: 1 }]}>
-                                    BIO
-                                  </Text>
-                                  <Text style={[theme.type.body, { fontSize: 7, color: theme.colors.text }]}>
-                                    "Bio will display here once created"
-                                  </Text>
-                                </View>
                               </View>
                             )}
                           </Pressable>
