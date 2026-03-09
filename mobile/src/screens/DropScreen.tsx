@@ -14,6 +14,12 @@ import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 
+// Verification whitelist - these users bypass all verification gates
+const VERIFICATION_WHITELIST = {
+  emails: ['caitie690@gmail.com'],
+  phones: ['7344317582', '+17344317582', '17344317582'],
+};
+
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ');
@@ -56,6 +62,8 @@ export default function DropScreen() {
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const theme = getTheme(isDarkMode);
   const phoneVerified = profile?.phoneVerified || false;
+  const phone = profile?.phone || '';
+  const email = profile?.email || '';
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
   const screenWidth = Dimensions.get('window').width;
@@ -305,8 +313,8 @@ export default function DropScreen() {
     <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
       <TopBar logoMode={true} logoIcon="water-outline" />
       
-      {/* Phone Verification Banner - DISABLED (verification not required) */}
-      {false && !phoneVerified ? (
+      {/* Phone Verification Banner with whitelist bypass */}
+      {!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email) ? (
         <View style={{
           flex: 1,
           justifyContent: 'center',

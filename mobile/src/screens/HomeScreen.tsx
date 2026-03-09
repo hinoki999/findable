@@ -16,6 +16,12 @@ import { useBLEAdvertiser } from '../components/BLEAdvertiser';
 import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
 import { supabase } from '../services/supabase';
 
+// Verification whitelist - these users bypass all verification gates
+const VERIFICATION_WHITELIST = {
+  emails: ['caitie690@gmail.com'],
+  phones: ['7344317582', '+17344317582', '17344317582'],
+};
+
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
 //
@@ -640,6 +646,8 @@ export default function HomeScreen() {
   const { showToast } = useToast();
   const { navigateToTab } = useTabNavigation();
   const phoneVerified = profile?.phoneVerified || false;
+  const phone = profile?.phone || '';
+  const email = profile?.email || '';
   const { userId, username, loading } = useAuth();
   const { linkNotifications, dismissNotification, markAsViewed, addLinkNotification } = useLinkNotifications();
   const { maxDistance } = useSettings();
@@ -1326,7 +1334,12 @@ export default function HomeScreen() {
   };
 
   const handleRaindropPress = () => {
-    // Phone verification check removed for testing
+    // Phone verification gate with whitelist bypass
+    if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
+      showToast({ message: 'Verify your phone number to see your drops', type: 'info', duration: 3000 });
+      navigateToTab('Account');
+      return;
+    }
 
     // Trigger ripple animation
     Animated.sequence([
@@ -3122,7 +3135,12 @@ export default function HomeScreen() {
               <View style={{ gap: 10 }}>
                 <Pressable
                   onPress={async () => {
-                    // Phone verification check removed for testing
+                    // Phone verification gate with whitelist bypass
+                    if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
+                      showToast({ message: 'Verify your phone number to send drops', type: 'info', duration: 3000 });
+                      navigateToTab('Account');
+                      return;
+                    }
                     if (selectedBlipDevice && !isSendingDrop) {
                       setIsSendingDrop(true);
                       setDropError(null);
