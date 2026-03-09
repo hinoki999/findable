@@ -1315,52 +1315,79 @@ export async function verifyOtpCode(
 
 // ==================== PHONE VERIFICATION ====================
 export async function sendPhoneVerificationCode(phoneNumber: string, userId: string): Promise<void> {
+  console.log('[PHONE-VERIFY] sendPhoneVerificationCode called');
+  console.log('[PHONE-VERIFY] Raw phone input:', phoneNumber);
+  console.log('[PHONE-VERIFY] userId:', userId);
   try {
     let formattedPhone = phoneNumber.replace(/\D/g, '');
+    console.log('[PHONE-VERIFY] After removing non-digits:', formattedPhone);
     if (!formattedPhone.startsWith('1')) {
       formattedPhone = '1' + formattedPhone;
+      console.log('[PHONE-VERIFY] After prepending country code 1:', formattedPhone);
     }
     formattedPhone = '+' + formattedPhone;
+    console.log('[PHONE-VERIFY] Final formatted phone:', formattedPhone);
 
+    console.log('[PHONE-VERIFY] Calling supabase.auth.updateUser with phone:', formattedPhone);
     const { error } = await supabase.auth.updateUser({
       phone: formattedPhone
     });
 
     if (error) {
+      console.error('[PHONE-VERIFY] supabase.auth.updateUser error:', error);
+      console.error('[PHONE-VERIFY] Error details:', JSON.stringify(error, null, 2));
       console.error('Failed to send phone OTP:', error);
       throw new Error(`Failed to send code: ${error.message}`);
     }
 
+    console.log('[PHONE-VERIFY] supabase.auth.updateUser SUCCESS');
     console.log(`SUCCESS: Phone OTP sent to ${formattedPhone}`);
   } catch (error: any) {
+    console.error('[PHONE-VERIFY] Caught exception:', error);
+    console.error('[PHONE-VERIFY] Exception details:', JSON.stringify(error, null, 2));
     console.error('ERROR: Send phone OTP error:', error);
     throw new Error(error.message || 'Failed to send verification code. Please try again.');
   }
 }
 
 export async function verifyPhoneCode(phoneNumber: string, code: string, userId: string): Promise<void> {
+  console.log('[PHONE-VERIFY] verifyPhoneCode called');
+  console.log('[PHONE-VERIFY] Raw phone input:', phoneNumber);
+  console.log('[PHONE-VERIFY] Code input:', code);
+  console.log('[PHONE-VERIFY] userId:', userId);
   try {
     let formattedPhone = phoneNumber.replace(/\D/g, '');
+    console.log('[PHONE-VERIFY] After removing non-digits:', formattedPhone);
     if (!formattedPhone.startsWith('1')) {
       formattedPhone = '1' + formattedPhone;
+      console.log('[PHONE-VERIFY] After prepending country code 1:', formattedPhone);
     }
     formattedPhone = '+' + formattedPhone;
+    console.log('[PHONE-VERIFY] Final formatted phone:', formattedPhone);
 
+    console.log('[PHONE-VERIFY] Calling supabase.auth.verifyOtp with phone:', formattedPhone, 'token:', code, 'type: phone_change');
     const { data, error } = await supabase.auth.verifyOtp({
       phone: formattedPhone,
       token: code,
       type: 'phone_change'
     });
 
+    console.log('[PHONE-VERIFY] verifyOtp response - data:', JSON.stringify(data, null, 2));
+    console.log('[PHONE-VERIFY] verifyOtp response - error:', error ? JSON.stringify(error, null, 2) : 'null');
+
     if (error) {
+      console.error('[PHONE-VERIFY] verifyOtp error:', error);
       console.error('Failed to verify phone OTP:', error);
       throw new Error('Invalid or expired code. Please try again.');
     }
 
     if (!data.user) {
+      console.error('[PHONE-VERIFY] verifyOtp returned no user in data');
       throw new Error('Verification failed. Please try again.');
     }
 
+    console.log('[PHONE-VERIFY] verifyOtp SUCCESS, user id:', data.user.id);
+    console.log('[PHONE-VERIFY] Calling supabase user_profiles update for user_id:', userId);
     const { error: updateError } = await supabase
       .from('user_profiles')
       .update({
@@ -1371,12 +1398,17 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
       .eq('user_id', userId);
 
     if (updateError) {
+      console.error('[PHONE-VERIFY] user_profiles update error:', updateError);
+      console.error('[PHONE-VERIFY] Update error details:', JSON.stringify(updateError, null, 2));
       console.error('Failed to update phone verification status:', updateError);
       throw new Error('Verification succeeded but failed to save status. Please contact support.');
     }
 
+    console.log('[PHONE-VERIFY] user_profiles update SUCCESS');
     console.log('SUCCESS: Phone verified and status updated');
   } catch (error: any) {
+    console.error('[PHONE-VERIFY] Caught exception:', error);
+    console.error('[PHONE-VERIFY] Exception details:', JSON.stringify(error, null, 2));
     console.error('ERROR: Verify phone code error:', error);
     throw new Error(error.message || 'Invalid or expired code. Please try again.');
   }

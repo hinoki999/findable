@@ -352,7 +352,11 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
 
   // Phone verification handlers
   const handleSendPhoneCode = async () => {
+    console.log('[PHONE-VERIFY] handleSendPhoneCode entered');
+    console.log('[PHONE-VERIFY] phone value:', phone);
+    console.log('[PHONE-VERIFY] userId value:', userId);
     if (!phone || !userId) {
+      console.log('[PHONE-VERIFY] Early return - missing phone or userId');
       setPhoneVerificationError('Phone number is required');
       return;
     }
@@ -362,13 +366,17 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setCodeSentSuccessfully(false);
 
     try {
+      console.log('[PHONE-VERIFY] Calling sendPhoneVerificationCode with phone:', phone, 'userId:', userId);
       // DISABLED: Twilio account suspended - using non-Twilio verification
       await sendPhoneVerificationCode(phone, userId);
+      console.log('[PHONE-VERIFY] sendPhoneVerificationCode SUCCESS');
       setCodeSentSuccessfully(true);
       setPhoneVerificationStep('enter-code');
       // Clear error on successful send
       setPhoneVerificationError('');
     } catch (err: any) {
+      console.error('[PHONE-VERIFY] handleSendPhoneCode caught error:', err);
+      console.error('[PHONE-VERIFY] Error details:', JSON.stringify(err, null, 2));
       setPhoneVerificationError(err.message || 'Failed to send verification code. Please try again.');
       setCodeSentSuccessfully(false);
     } finally {
@@ -377,12 +385,18 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   };
 
   const handleVerifyPhoneCode = async () => {
+    console.log('[PHONE-VERIFY] handleVerifyPhoneCode entered');
+    console.log('[PHONE-VERIFY] phone value:', phone);
+    console.log('[PHONE-VERIFY] phoneVerificationCode value:', phoneVerificationCode);
+    console.log('[PHONE-VERIFY] userId value:', userId);
     if (!phone || !userId) {
+      console.log('[PHONE-VERIFY] Early return - missing phone or userId');
       setPhoneVerificationError('Phone number is required');
       return;
     }
 
     if (phoneVerificationCode.length !== 6) {
+      console.log('[PHONE-VERIFY] Early return - code length is not 6:', phoneVerificationCode.length);
       setPhoneVerificationError('Please enter a 6-digit code');
       return;
     }
@@ -391,11 +405,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
     setPhoneVerificationError('');
 
     try {
+      console.log('[PHONE-VERIFY] Calling verifyPhoneCode with phone:', phone, 'code:', phoneVerificationCode, 'userId:', userId);
       // DISABLED: Twilio account suspended - using non-Twilio verification
       await verifyPhoneCode(phone, phoneVerificationCode, userId);
       
+      console.log('[PHONE-VERIFY] verifyPhoneCode SUCCESS');
       // Update local profile state
       updateProfile({ phoneVerified: true });
+      console.log('[PHONE-VERIFY] Local profile state updated');
       
       // Show success step before closing
       setPhoneVerificationStep('success');
@@ -415,6 +432,8 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         });
       }, 2000);
     } catch (err: any) {
+      console.error('[PHONE-VERIFY] handleVerifyPhoneCode caught error:', err);
+      console.error('[PHONE-VERIFY] Error details:', JSON.stringify(err, null, 2));
       setPhoneVerificationError(err.message || 'Invalid or expired code. Please try again.');
     } finally {
       setSendingPhoneCode(false);
