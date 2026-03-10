@@ -35,12 +35,22 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   
   // Session tracking - which screens shown this session
   const shownScreens = useRef<Set<ScreenName>>(new Set());
+  
+  // Guard to prevent multiple initializations per session
+  const hasInitialized = useRef(false);
 
   /**
    * Initialize tutorials by checking Supabase per-screen completion status
    * Called once on app startup
    */
   const initializeTutorials = async () => {
+    // Ref-based guard: only run once per session
+    if (hasInitialized.current) {
+      console.log('[TUTORIAL] Already initialized this session, skipping');
+      return;
+    }
+    hasInitialized.current = true;
+    
     try {
       console.log('[TUTORIAL] Initializing per-screen tutorials...');
       
