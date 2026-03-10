@@ -1,8 +1,11 @@
 name: EAS Update on Push
-on:
-  push:
-    branches: 
-      - develop
+# on:
+#   push:
+#     branches: 
+#       - develop
+
+on: workflow_dispatch
+
 jobs:
   update:
     name: Publish EAS Update

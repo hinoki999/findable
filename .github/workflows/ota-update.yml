@@ -1,11 +1,13 @@
 name: OTA Update on Push
 
-on:
-  push:
-    branches:
-      - develop
-    paths:
-      - 'mobile/**'
+# on:
+#   push:
+#     branches:
+#       - develop
+#     paths:
+#       - 'mobile/**'
+
+on: workflow_dispatch
 
 jobs:
   update:
