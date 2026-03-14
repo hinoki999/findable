@@ -48,6 +48,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [verificationCode, setVerificationCode] = useState('');
   const [sendingCode, setSendingCode] = useState(false);
 
+  // Terms and Conditions
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsError, setTermsError] = useState('');
+  const [showTermsModal, setShowTermsModal] = useState(false);
+
   const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
       const available = await checkUsernameAvailability(username);
@@ -176,6 +181,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   };
 
   const handleSignup = () => {
+    // Terms and Conditions check
+    if (!termsAccepted) {
+      setTermsError('Please agree to the terms and conditions to continue.');
+      return;
+    }
+    setTermsError('');
+
     // Final validation
     if (!name || name.trim().length < 1) {
       setNameError('Full name is required');
@@ -643,6 +655,46 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             </View>
           ) : null}
 
+          {/* Terms and Conditions Checkbox */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+            <Pressable
+              onPress={() => {
+                setTermsAccepted(!termsAccepted);
+                setTermsError('');
+              }}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 4,
+                borderWidth: 1.5,
+                borderColor: '#007AFF',
+                backgroundColor: termsAccepted ? '#007AFF' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 8,
+              }}
+            >
+              {termsAccepted && (
+                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+              )}
+            </Pressable>
+            <Text style={{ color: theme.colors.text, fontSize: 14, fontFamily: 'Inter_400Regular' }}>
+              By checking this box, I agree to the{' '}
+            </Text>
+            <Pressable onPress={() => setShowTermsModal(true)}>
+              <Text style={{ color: '#007AFF', fontSize: 14, fontFamily: 'Inter_400Regular', textDecorationLine: 'underline' }}>
+                Terms and Conditions
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Terms Error */}
+          {termsError ? (
+            <Text style={{ fontSize: 12, color: '#FF3B30', marginBottom: 12, fontFamily: 'Inter_400Regular' }}>
+              {termsError}
+            </Text>
+          ) : null}
+
           {/* Create Account Button */}
           <Pressable
             style={({ pressed }) => [
@@ -822,6 +874,177 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               </>
             )}
           </View>
+        </View>
+      </Modal>
+
+      {/* Terms and Conditions Modal */}
+      <Modal
+        visible={showTermsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTermsModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+          {/* Header */}
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingVertical: 16,
+            paddingHorizontal: 20,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.border,
+          }}>
+            <Text style={{
+              fontSize: 18,
+              fontWeight: '600',
+              fontFamily: 'Inter_500Medium',
+              color: theme.colors.text,
+              textAlign: 'center',
+              flex: 1,
+            }}>
+              Terms and Conditions
+            </Text>
+            <Pressable
+              onPress={() => setShowTermsModal(false)}
+              style={{ position: 'absolute', right: 16, padding: 4 }}
+            >
+              <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
+            </Pressable>
+          </View>
+
+          {/* Terms Content */}
+          <ScrollView style={{ flex: 1, padding: 20 }} showsVerticalScrollIndicator={true}>
+            <Text style={{ fontSize: 14, color: theme.colors.muted, marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
+              DropLink, a product of HiRule Labs
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.muted, marginBottom: 24, fontFamily: 'Inter_400Regular' }}>
+              Last Updated: March 2026
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              1. Agreement to Terms
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropLink ("we," "us," or "our") governing your access to and use of the DropLink mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropLink, you represent and warrant that you are at least 13 years of age. If you are under 13, you are not permitted to create an account or use the Application.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              2. License to Use
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              Subject to your compliance with this Agreement, DropLink grants you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to download and use the Application solely for your personal, non-commercial use. This license does not constitute a transfer of title or ownership in the Application or any component thereof. DropLink reserves all rights not expressly granted herein.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              3. Account Registration & Security
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              To access certain features of the Application, you must register for an account. You agree to provide accurate, current, and complete information during the registration process and to update such information as necessary to maintain its accuracy. You are solely responsible for safeguarding your account credentials and for all activity that occurs under your account. You agree to notify DropLink immediately of any unauthorized use of your account. DropLink shall not be liable for any loss or damage arising from your failure to maintain the security of your account credentials. One account per individual is permitted.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              4. SMS Communications & Phone Verification
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              By submitting your phone number for verification within the Application, you expressly consent to receive SMS messages from DropLink for the purpose of identity and account verification. You acknowledge that message frequency will not exceed one (1) verification code per verification request, and that standard message and data rates may apply depending on your carrier and service plan.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              5. Location Data & GPS
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              By using the Application, you expressly consent to DropLink's collection, use, and transmission of location data, including GPS-derived location information, for the purpose of enabling proximity-based features within the Application. DropLink may use your location data to detect nearby users, facilitate drops, and improve Application functionality. Your location data will not be sold to third parties. You may withdraw consent to location access at any time through your device settings, with the understanding that doing so may limit or disable core features of the Application.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              6. Bluetooth & Proximity Technology
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              The Application utilizes Bluetooth Low Energy (BLE) technology to detect the proximity of other users' devices. BLE functionality is used solely for proximity-based interactions between users who have the Application open and active. You are responsible for enabling or disabling Bluetooth permissions on your device at any time.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              7. Prohibited Conduct
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 8, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              You agree that you will not, under any circumstances:
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 4, lineHeight: 22, fontFamily: 'Inter_400Regular', paddingLeft: 12 }}>
+              • Create multiple accounts or impersonate any person or entity;
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 4, lineHeight: 22, fontFamily: 'Inter_400Regular', paddingLeft: 12 }}>
+              • Transmit unsolicited, harassing, or threatening content to other users through the Application;
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 4, lineHeight: 22, fontFamily: 'Inter_400Regular', paddingLeft: 12 }}>
+              • Attempt to gain unauthorized access to any portion of the Application or its related systems;
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 4, lineHeight: 22, fontFamily: 'Inter_400Regular', paddingLeft: 12 }}>
+              • Reverse engineer, decompile, or disassemble the Application;
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 12, lineHeight: 22, fontFamily: 'Inter_400Regular', paddingLeft: 12 }}>
+              • Use the Application in any manner that could damage, disable, or impair the Application or interfere with any other user's access to or use of the Application.
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              DropLink reserves the right to suspend or permanently terminate any account found to be in violation of this section without prior notice.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              8. User-Generated Content & Contact Information Sharing
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              When initiating a drop, you retain full control over which personal contact information you elect to share. By transmitting a drop, you grant the recipient a limited right to retain and use the contact information you have chosen to share. DropLink is not a party to any interaction between users and assumes no responsibility or liability for the manner in which users utilize shared contact information following the acceptance of a drop. You agree not to include false, misleading, or third-party contact information in any drop without authorization.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              9. Intellectual Property
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              The Application, including its software, design, graphics, user interface, and all associated branding and trademarks, is the exclusive property of DropLink and is protected by applicable intellectual property laws. Nothing in this Agreement shall be construed as granting you any right, title, or interest in any DropLink intellectual property. Unauthorized reproduction, modification, distribution, or commercial exploitation of the Application is strictly prohibited without the prior written consent of DropLink.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              10. Disclaimer of Warranties
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              The Application is provided on an "as is" and "as available" basis without warranties of any kind, either express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement. DropLink does not warrant that the Application will be uninterrupted, error-free, or free of harmful components, or that any defects will be corrected.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              11. Limitation of Liability
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              To the maximum extent permitted by applicable law, DropLink and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your access to or use of, or inability to access or use, the Application, including but not limited to loss of data, unauthorized access to your account, or interactions with other users, regardless of whether such damages were foreseeable or whether DropLink was advised of the possibility of such damages.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              12. Indemnification
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              You agree to indemnify, defend, and hold harmless DropLink and its officers, directors, employees, and agents from and against any and all claims, liabilities, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Application, your violation of this Agreement, or your violation of any rights of another user.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              13. Termination
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              DropLink reserves the right to suspend or terminate your access to the Application at any time, with or without cause, and with or without notice, without liability to you. Upon termination, all licenses granted under this Agreement shall immediately cease. Provisions of this Agreement that by their nature should survive termination shall survive, including ownership provisions, warranty disclaimers, indemnification, and limitations of liability.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              14. Modifications to This Agreement
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              DropLink reserves the right to modify or update this Agreement at any time. When changes are made, DropLink will notify you through the Application and the "Last Updated" date at the top of this Agreement will be updated. You will be required to review and accept the revised Agreement before continuing to use the Application. If you do not agree to the revised terms, you must discontinue use of the Application.
+            </Text>
+
+            <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
+              15. Contact Information
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 40, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+              For legal inquiries, support requests, or questions regarding this Agreement, please contact DropLink at: link@hirulelabs.com
+            </Text>
+          </ScrollView>
         </View>
       </Modal>
     </KeyboardAvoidingView>
