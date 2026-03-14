@@ -656,33 +656,33 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
           ) : null}
 
           {/* Terms and Conditions Checkbox */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
             <Pressable
               onPress={() => {
                 setTermsAccepted(!termsAccepted);
                 setTermsError('');
               }}
               style={{
-                width: 20,
-                height: 20,
+                width: 16,
+                height: 16,
                 borderRadius: 4,
                 borderWidth: 1.5,
                 borderColor: '#007AFF',
                 backgroundColor: termsAccepted ? '#007AFF' : 'transparent',
                 alignItems: 'center',
                 justifyContent: 'center',
-                marginRight: 8,
+                marginRight: 6,
               }}
             >
               {termsAccepted && (
-                <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>✓</Text>
               )}
             </Pressable>
-            <Text style={{ color: theme.colors.text, fontSize: 14, fontFamily: 'Inter_400Regular' }}>
+            <Text style={{ color: theme.colors.text, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
               By checking this box, I agree to the{' '}
             </Text>
             <Pressable onPress={() => setShowTermsModal(true)}>
-              <Text style={{ color: '#007AFF', fontSize: 14, fontFamily: 'Inter_400Regular', textDecorationLine: 'underline' }}>
+              <Text style={{ color: '#007AFF', fontSize: 12, fontFamily: 'Inter_400Regular', textDecorationLine: 'underline' }}>
                 Terms and Conditions
               </Text>
             </Pressable>
@@ -915,18 +915,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
           {/* Terms Content */}
           <ScrollView style={{ flex: 1, padding: 20 }} showsVerticalScrollIndicator={true}>
-            <Text style={{ fontSize: 14, color: theme.colors.muted, marginBottom: 8, fontFamily: 'Inter_400Regular' }}>
-              DropLink, a product of HiRule Labs
-            </Text>
-            <Text style={{ fontSize: 14, color: theme.colors.muted, marginBottom: 24, fontFamily: 'Inter_400Regular' }}>
-              Last Updated: March 2026
-            </Text>
-
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               1. Agreement to Terms
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropLink ("we," "us," or "our") governing your access to and use of the DropLink mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropLink, you represent and warrant that you are at least 13 years of age. If you are under 13, you are not permitted to create an account or use the Application.
+              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropLink, a product of HiRule Labs ("we," "us," or "our"), governing your access to and use of the DropLink mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropLink, you represent and warrant that you are at least 13 years of age. If you are under 13, you are not permitted to create an account or use the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
@@ -947,7 +940,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               4. SMS Communications & Phone Verification
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              By submitting your phone number for verification within the Application, you expressly consent to receive SMS messages from DropLink for the purpose of identity and account verification. You acknowledge that message frequency will not exceed one (1) verification code per verification request, and that standard message and data rates may apply depending on your carrier and service plan.
+              By submitting your phone number for verification within the Application, you expressly consent to receive SMS messages from DropLink for the purpose of identity and account verification. You acknowledge that message frequency will not exceed one (1) verification code per verification request, and that standard message and data rates may apply depending on your carrier and service plan. By providing your email address during registration, you expressly consent to receive a one-time verification code via email for the purpose of confirming your identity and activating your account.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
@@ -1041,8 +1034,12 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               15. Contact Information
             </Text>
-            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 40, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
+            <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 24, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
               For legal inquiries, support requests, or questions regarding this Agreement, please contact DropLink at: link@hirulelabs.com
+            </Text>
+
+            <Text style={{ fontSize: 12, color: theme.colors.muted, textAlign: 'center', marginBottom: 40, fontFamily: 'Inter_400Regular' }}>
+              Last Updated: March 2026
             </Text>
           </ScrollView>
         </View>
