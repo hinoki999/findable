@@ -678,11 +678,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>✓</Text>
               )}
             </Pressable>
-            <Text style={{ color: theme.colors.text, fontSize: 12, fontFamily: 'Inter_400Regular' }}>
+            <Text style={{ color: theme.colors.text, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
               By checking this box, I agree to the{' '}
             </Text>
             <Pressable onPress={() => setShowTermsModal(true)}>
-              <Text style={{ color: '#007AFF', fontSize: 12, fontFamily: 'Inter_400Regular', textDecorationLine: 'underline' }}>
+              <Text style={{ color: '#007AFF', fontSize: 11, fontFamily: 'Inter_400Regular', textDecorationLine: 'underline' }}>
                 Terms and Conditions
               </Text>
             </Pressable>
