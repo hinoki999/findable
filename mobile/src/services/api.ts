@@ -1257,7 +1257,11 @@ export async function changePassword(currentPassword: string, newPassword: strin
 // ==================== OTP VERIFICATION ====================
 // Send OTP code to email (works for all verification types)
 export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): Promise<void> {
+  console.log('[EMAIL-VERIFY] sendOtpCode called');
+  console.log('[EMAIL-VERIFY] email:', email);
+  console.log('[EMAIL-VERIFY] type:', type);
   try {
+    console.log('[EMAIL-VERIFY] Calling supabase.auth.signInWithOtp...');
     const { error} = await supabase.auth.signInWithOtp({
       email: email.toLowerCase(),
       options: {
@@ -1266,12 +1270,17 @@ export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): P
     });
 
     if (error) {
+      console.error('[EMAIL-VERIFY] signInWithOtp error:', error);
+      console.error('[EMAIL-VERIFY] signInWithOtp error details:', JSON.stringify(error, null, 2));
       console.error('Failed to send OTP:', error);
-      throw new Error('Failed to send verification code. Please try again.');
+      throw new Error(error.message || 'Failed to send verification code. Please try again.');
     }
 
+    console.log('[EMAIL-VERIFY] signInWithOtp succeeded');
     console.log(`SUCCESS: OTP code sent to ${email}`);
   } catch (error: any) {
+    console.error('[EMAIL-VERIFY] sendOtpCode caught exception:', error);
+    console.error('[EMAIL-VERIFY] Exception details:', JSON.stringify(error, null, 2));
     console.error('ERROR: Send OTP error:', error);
     throw new Error(error.message || 'Failed to send verification code. Please try again.');
   }
@@ -1283,10 +1292,15 @@ export async function verifyOtpCode(
   code: string, 
   verificationType: 'email' | 'signup' = 'email'
 ): Promise<{ userId: string }> {
+  console.log('[EMAIL-VERIFY] verifyOtpCode called');
+  console.log('[EMAIL-VERIFY] email:', email);
+  console.log('[EMAIL-VERIFY] code length:', code?.length);
+  console.log('[EMAIL-VERIFY] verificationType:', verificationType);
   try {
     // Supabase only supports 'email', 'sms', 'phone_change'
     // For signup OTPs, we still use 'email' type
     const supabaseType = 'email';
+    console.log(`[EMAIL-VERIFY] Calling supabase.auth.verifyOtp with type: ${supabaseType}`);
     console.log(`DEBUG: Verifying OTP with type: ${supabaseType} (requested: ${verificationType})`);
     
     const { data, error } = await supabase.auth.verifyOtp({
@@ -1295,19 +1309,28 @@ export async function verifyOtpCode(
       type: supabaseType
     });
 
+    console.log('[EMAIL-VERIFY] verifyOtp response - data:', data ? 'present' : 'null');
+    console.log('[EMAIL-VERIFY] verifyOtp response - error:', error ? JSON.stringify(error, null, 2) : 'null');
+
     if (error) {
+      console.error('[EMAIL-VERIFY] verifyOtp error:', error);
+      console.error('[EMAIL-VERIFY] verifyOtp error details:', JSON.stringify(error, null, 2));
       console.error('Failed to verify OTP:', error);
       console.error('Error details:', { code: error.code, message: error.message, status: error.status });
-      throw new Error('Invalid or expired code. Please try again.');
+      throw new Error(error.message || 'Invalid or expired code. Please try again.');
     }
 
     if (!data.user) {
+      console.error('[EMAIL-VERIFY] verifyOtp returned no user in data');
       throw new Error('Verification failed. Please try again.');
     }
 
+    console.log('[EMAIL-VERIFY] verifyOtp succeeded, userId:', data.user.id);
     console.log('SUCCESS: OTP verified successfully');
     return { userId: data.user.id };
   } catch (error: any) {
+    console.error('[EMAIL-VERIFY] verifyOtpCode caught exception:', error);
+    console.error('[EMAIL-VERIFY] Exception details:', JSON.stringify(error, null, 2));
     console.error('ERROR: Verify OTP error:', error);
     throw new Error(error.message || 'Invalid or expired code. Please try again.');
   }

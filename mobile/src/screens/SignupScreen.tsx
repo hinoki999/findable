@@ -232,11 +232,14 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     
     // Check if email is whitelisted - skip verification for whitelisted users
     if (VERIFICATION_WHITELIST.emails.includes(email.toLowerCase().trim())) {
+      console.log('[EMAIL-VERIFY] Email is whitelisted, skipping verification:', email);
       handleDirectSignup();
     } else {
       // Show email verification modal for non-whitelisted users
+      console.log('[EMAIL-VERIFY] Triggering verification modal for email:', email);
       setShowVerificationModal(true);
       setVerificationStep('confirm');
+      console.log('[EMAIL-VERIFY] verificationStep set to: confirm');
     }
   };
 
@@ -341,23 +344,34 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   };
 
   const handleSendCode = async () => {
+    console.log('[EMAIL-VERIFY] handleSendCode entered');
+    console.log('[EMAIL-VERIFY] email:', email);
     setSendingCode(true);
     setError('');
 
     try {
+      console.log('[EMAIL-VERIFY] Calling sendOtpCode...');
       await sendOtpCode(email, 'signup');
+      console.log('[EMAIL-VERIFY] sendOtpCode succeeded');
       // Move to code entry step
       setVerificationStep('enter-code');
+      console.log('[EMAIL-VERIFY] verificationStep set to: enter-code');
     } catch (err: any) {
+      console.error('[EMAIL-VERIFY] handleSendCode caught error:', err);
+      console.error('[EMAIL-VERIFY] Error details:', JSON.stringify(err, null, 2));
       setError(err.message || 'Failed to send verification code. Please try again.');
-      setShowVerificationModal(false);
+      // Keep modal open so user can see the error
     } finally {
       setSendingCode(false);
     }
   };
 
   const handleVerifyAndSignup = async () => {
+    console.log('[EMAIL-VERIFY] handleVerifyAndSignup entered');
+    console.log('[EMAIL-VERIFY] email:', email);
+    console.log('[EMAIL-VERIFY] verificationCode length:', verificationCode?.length);
     if (!verificationCode || verificationCode.length !== 6) {
+      console.log('[EMAIL-VERIFY] Invalid code length, returning early');
       setError('Please enter a 6-digit code');
       return;
     }
@@ -368,22 +382,29 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     try {
       // Verify the OTP code (this logs user in)
       // Use 'signup' type for signup OTP verification
+      console.log('[EMAIL-VERIFY] Calling verifyOtpCode...');
       await verifyOtpCode(email, verificationCode, 'signup');
+      console.log('[EMAIL-VERIFY] verifyOtpCode succeeded');
       console.log('SUCCESS: OTP verified successfully');
 
       // User already created by OTP - now set password
+      console.log('[EMAIL-VERIFY] Calling supabase.auth.updateUser to set password...');
       const { error: passwordError } = await supabase.auth.updateUser({
         password: password,
         data: { username: username }
       });
 
       if (passwordError) {
+        console.error('[EMAIL-VERIFY] updateUser error:', passwordError);
+        console.error('[EMAIL-VERIFY] updateUser error details:', JSON.stringify(passwordError, null, 2));
         throw new Error(passwordError.message || 'Failed to set password');
       }
+      console.log('[EMAIL-VERIFY] updateUser succeeded');
 
       // Get user ID from current session
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
+      console.log('[EMAIL-VERIFY] Got session, userId:', userId);
 
       if (!userId) {
         throw new Error('Failed to get user session');
@@ -392,6 +413,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log(`SUCCESS: Password set successfully, userId: ${userId}`);
 
       // Create user_profiles record in Supabase
+      console.log('[EMAIL-VERIFY] Calling user_profiles insert...');
       console.log('[SIGNUP-VERIFY-DEBUG] Creating profile after verification, name:', name, 'email:', email);
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
@@ -409,9 +431,12 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (profileError) {
+        console.error('[EMAIL-VERIFY] user_profiles insert error:', profileError);
+        console.error('[EMAIL-VERIFY] user_profiles insert error details:', JSON.stringify(profileError, null, 2));
         console.error(`ERROR: Failed to create user_profiles: ${profileError.message}`);
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
+      console.log('[EMAIL-VERIFY] user_profiles insert succeeded');
       console.log('SUCCESS: user_profiles record created');
       console.log('[SIGNUP-VERIFY-DEBUG] Profile created successfully after verification');
 
