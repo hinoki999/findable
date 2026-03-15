@@ -53,6 +53,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const [termsError, setTermsError] = useState('');
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  // Birthday
+  const [birthday, setBirthday] = useState('');
+  const [birthdayError, setBirthdayError] = useState('');
+
   const checkUsernameAvailabilityLocal = async (username: string) => {
     try {
       const available = await checkUsernameAvailability(username);
@@ -180,6 +184,81 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
+  // Birthday formatting: auto-add slashes as user types MM/DD/YYYY
+  const formatBirthday = (text: string) => {
+    // Remove all non-digits
+    let digits = text.replace(/\D/g, '');
+    
+    // Limit to 8 digits (MMDDYYYY)
+    digits = digits.slice(0, 8);
+    
+    // Format with slashes
+    let formatted = '';
+    if (digits.length > 0) {
+      formatted = digits.slice(0, 2);
+    }
+    if (digits.length > 2) {
+      formatted += '/' + digits.slice(2, 4);
+    }
+    if (digits.length > 4) {
+      formatted += '/' + digits.slice(4, 8);
+    }
+    
+    setBirthday(formatted);
+    setBirthdayError(''); // Clear error on typing
+    
+    // Validate age only when full date is entered
+    if (digits.length === 8) {
+      const month = parseInt(digits.slice(0, 2), 10);
+      const day = parseInt(digits.slice(2, 4), 10);
+      const year = parseInt(digits.slice(4, 8), 10);
+      
+      // Basic date validation
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+        setBirthdayError('Please enter a valid date');
+        return;
+      }
+      
+      // Check if user is at least 13 years old
+      const birthDate = new Date(year, month - 1, day);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      // Adjust age if birthday hasn't occurred this year yet
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      
+      if (age < 13) {
+        setBirthdayError('You must be 13 or older to use DropLink');
+      }
+    }
+  };
+
+  // Check if birthday is valid and user is 13+
+  const isBirthdayValid = () => {
+    const digits = birthday.replace(/\D/g, '');
+    if (digits.length !== 8) return false;
+    
+    const month = parseInt(digits.slice(0, 2), 10);
+    const day = parseInt(digits.slice(2, 4), 10);
+    const year = parseInt(digits.slice(4, 8), 10);
+    
+    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+    
+    const birthDate = new Date(year, month - 1, day);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age >= 13;
+  };
+
   const handleSignup = () => {
     // Terms and Conditions check
     if (!termsAccepted) {
@@ -227,8 +306,20 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
 
+    // Birthday validation
+    if (!birthday || birthday.length !== 10) {
+      setBirthdayError('Please enter your date of birth (MM/DD/YYYY)');
+      return;
+    }
+
+    if (!isBirthdayValid()) {
+      setBirthdayError('You must be 13 or older to use DropLink');
+      return;
+    }
+
     // All validation passed
     setError('');
+    setBirthdayError('');
     
     // Check if email is whitelisted - skip verification for whitelisted users
     if (VERIFICATION_WHITELIST.emails.includes(email.toLowerCase().trim())) {
@@ -481,7 +572,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  const canSubmit = name.length >= 1 && username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && !nameError && !usernameError && !passwordError && !confirmPasswordError && !emailError;
+  const canSubmit = name.length >= 1 && username.length >= 3 && password.length >= 8 && confirmPassword.length >= 8 && password === confirmPassword && email.length > 0 && birthday.length === 10 && !nameError && !usernameError && !passwordError && !confirmPasswordError && !emailError && !birthdayError;
 
   return (
     <KeyboardAvoidingView
@@ -669,6 +760,34 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             </View>
             {emailError ? (
               <Text style={styles.errorText}>{emailError}</Text>
+            ) : null}
+          </View>
+
+          {/* Date of Birth */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
+              Date of Birth
+            </Text>
+            <View style={[
+              styles.inputContainer,
+              {
+                backgroundColor: theme.colors.white,
+                borderColor: birthdayError ? '#FF3B30' : theme.colors.border,
+              }
+            ]}>
+              <TextInput
+                style={[styles.input, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}
+                value={birthday}
+                onChangeText={formatBirthday}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={theme.colors.muted}
+                keyboardType="number-pad"
+                maxLength={10}
+                editable={!loading}
+              />
+            </View>
+            {birthdayError ? (
+              <Text style={styles.errorText}>{birthdayError}</Text>
             ) : null}
           </View>
 
