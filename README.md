@@ -4306,6 +4306,9 @@ interface BleDevice {
 - `[PERMS-DEBUG]` - Permission request flow tracing
 - `[PUSH-DEBUG]` - Push notification token registration
 - `[SIGNUP-DEBUG]` - Signup flow state changes
+- `[PHONE-VERIFY]` - Phone verification flow (send code, verify code, profile update)
+- `[EMAIL-VERIFY]` - Email verification flow (OTP send, verify, signup completion)
+- `[TUTORIAL]` - Tutorial initialization and per-screen tracking
 
 ### Known Issues & Solutions
 
@@ -4313,6 +4316,226 @@ interface BleDevice {
 - **Device name too long:** Shortened to "DL-XXXX"
 - **Scanner couldn't find users:** Query by userId prefix
 - **Drop sending failed silently:** Added error banner with actual messages
+
+---
+
+## Recent Changes (February 20, 2026 - Session 2)
+
+### Email Verification — Root Cause Identified and Resolution In Progress
+
+**Status:** 🔄 IN PROGRESS — SMTP provider migration underway
+
+**Root Cause Identified:**
+- SendGrid free trial expired December 24, 2025
+- All OTP email sends were failing with: `451 Authentication failed: Maximum credits exceeded`
+- This explains why email verification stopped working despite code being correct
+
+**Resolution Plan:**
+1. Migrating SMTP provider from SendGrid to Resend
+2. Resend domain verification for `droplinkconnect.com` in progress via Namecheap DNS records
+3. Supabase SMTP Settings will be updated with Resend credentials once domain is verified
+4. Magic Link email template confirmed correctly configured with `{{ .Token }}` for 6-digit OTP delivery
+
+**Email Verification Code Status:**
+- All code is fully active and functional (not commented out)
+- `sendOtpCode()` correctly calls `supabase.auth.signInWithOtp()` with `shouldCreateUser: true`
+- `verifyOtpCode()` correctly calls `supabase.auth.verifyOtp()` with type `'email'`
+- Detailed `[EMAIL-VERIFY]` diagnostic logging added throughout the flow
+
+### Phone Verification — Twilio to Vonage Migration
+
+**Status:** 🔄 PENDING — Twilio account compromised, migration required
+
+**Background:**
+- Twilio account was breached and suspended
+- Phone verification was disabled for testing during this period
+- Migration to Vonage (via Supabase Phone Auth settings) is planned
+
+**Current State:**
+- Phone verification gates have been re-enabled with whitelist bypass
+- Detailed `[PHONE-VERIFY]` diagnostic logging added throughout the flow
+- API functions (`sendPhoneVerificationCode`, `verifyPhoneCode`) use Supabase Auth
+
+### Verification System Re-enablement
+
+**Status:** ✅ COMPLETED — All verification gates active with whitelist bypass
+
+**Changes Made:**
+
+1. **Whitelist Implementation:**
+   ```typescript
+   const VERIFICATION_WHITELIST = {
+     emails: ['caitie690@gmail.com'],
+     phones: ['7344317582', '+17344317582', '17344317582'],
+   };
+   ```
+   - Added to `HomeScreen.tsx`, `DropScreen.tsx`, `SignupScreen.tsx`
+   - Whitelisted users bypass all verification gates silently
+
+2. **HomeScreen.tsx Phone Verification Gates:**
+   - `handleRaindropPress()` — Blocks viewing drops if not verified
+   - Send drop button `onPress` — Blocks sending drops if not verified
+   - Both show toast: "Verify your phone number to [see/send] drops"
+   - Both navigate to Account tab for verification
+
+3. **DropScreen.tsx Phone Verification Banner:**
+   - Re-enabled verification banner (removed `false &&` from condition)
+   - Shows full-screen verification prompt with "Verify Now" button
+
+4. **SignupScreen.tsx Email Verification:**
+   - Non-whitelisted users see email verification modal
+   - Whitelisted users skip directly to `handleDirectSignup()`
+
+### Diagnostic Logging Added
+
+**Phone Verification (`[PHONE-VERIFY]` prefix):**
+- `api.ts`: `sendPhoneVerificationCode()` — logs input, formatted phone, Supabase calls, errors
+- `api.ts`: `verifyPhoneCode()` — logs input, OTP verification, profile update
+- `AccountScreen.tsx`: `handleSendPhoneCode()` — logs entry, API calls, success/error
+- `AccountScreen.tsx`: `handleVerifyPhoneCode()` — logs entry, code validation, success/error
+
+**Email Verification (`[EMAIL-VERIFY]` prefix):**
+- `api.ts`: `sendOtpCode()` — logs input, `signInWithOtp` call, full error objects
+- `api.ts`: `verifyOtpCode()` — logs input, `verifyOtp` call, response data/errors
+- `SignupScreen.tsx`: Modal trigger — logs email and step changes
+- `SignupScreen.tsx`: `handleSendCode()` — logs entry, API calls, errors (modal stays open on error)
+- `SignupScreen.tsx`: `handleVerifyAndSignup()` — logs all steps through profile creation
+
+**ADB Filter Commands:**
+```powershell
+adb logcat | findstr "PHONE-VERIFY"
+adb logcat | findstr "EMAIL-VERIFY"
+```
+
+### Tutorial System Loop Fix
+
+**Status:** ✅ COMPLETED — Initialization no longer fires repeatedly
+
+**Problem:** `initializeTutorials()` was being called on every render due to function reference in useEffect dependency array.
+
+**Solution:** Added ref-based guard in `TutorialContext.tsx`:
+```typescript
+const hasInitialized = useRef(false);
+
+const initializeTutorials = async () => {
+  if (hasInitialized.current) {
+    console.log('[TUTORIAL] Already initialized this session, skipping');
+    return;
+  }
+  hasInitialized.current = true;
+  // ... rest of initialization
+};
+```
+
+### GitHub Actions Workflows Disabled
+
+**Status:** ✅ COMPLETED — Automatic triggers disabled
+
+**Changes:**
+- `.github/workflows/ota-update.yml` — Commented out `on: push` trigger, added `on: workflow_dispatch`
+- `.github/workflows/eas-update.yml` — Commented out `on: push` trigger, added `on: workflow_dispatch`
+
+**Reason:** Prevent automatic deployments during active development/debugging session.
+
+**Manual Trigger:** Workflows can still be run manually from GitHub Actions UI.
+
+### Terms and Conditions Added to Signup
+
+**Status:** ✅ COMPLETED — Legal compliance checkbox implemented
+
+**Features:**
+- Checkbox with "By checking this box, I agree to the Terms and Conditions" text
+- Tappable "Terms and Conditions" link opens full-screen modal
+- Modal contains complete 15-section legal agreement:
+  1. Agreement to Terms
+  2. License to Use
+  3. Account Registration & Security
+  4. SMS Communications & Phone Verification (includes email consent)
+  5. Location Data & GPS
+  6. Bluetooth & Proximity Technology
+  7. Prohibited Conduct
+  8. User-Generated Content & Contact Information Sharing
+  9. Intellectual Property
+  10. Disclaimer of Warranties
+  11. Limitation of Liability
+  12. Indemnification
+  13. Termination
+  14. Modifications to This Agreement
+  15. Contact Information (link@hirulelabs.com)
+
+**Validation:**
+- Checkbox must be checked before "Create Account" button works
+- Error message: "Please agree to the terms and conditions to continue."
+
+**Branding:**
+- "DropLink, a product of HiRule Labs" mentioned in Section 1
+- Last Updated: March 2026 (displayed at bottom of modal)
+
+### Birthday/Age Verification Added to Signup
+
+**Status:** ✅ COMPLETED — Users must be 13+ to create account
+
+**Features:**
+- New "Date of Birth" field with MM/DD/YYYY format
+- Auto-formatting: Slashes added automatically as user types
+- Real-time age validation on complete date entry
+
+**Validation Logic:**
+```typescript
+// Calculate age
+const birthDate = new Date(year, month - 1, day);
+const today = new Date();
+let age = today.getFullYear() - birthDate.getFullYear();
+const monthDiff = today.getMonth() - birthDate.getMonth();
+if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+  age--;
+}
+// Must be 13+
+if (age < 13) {
+  setBirthdayError('You must be 13 or older to use DropLink');
+}
+```
+
+**Error Messages:**
+- Invalid date: "Please enter a valid date"
+- Under 13: "You must be 13 or older to use DropLink"
+- Missing birthday: "Please enter your date of birth (MM/DD/YYYY)"
+
+### Backend Cleanup Completed (Previous Session)
+
+**Files Deleted:**
+- `backend/backup-postgres.py`
+- `backend/backup-sqlite.py`
+- `backend/cleanup-old-backups.py`
+- `backend/restore-postgres.py`
+
+**Security Improvements:**
+- Removed Cloudinary imports and configuration from `backend/main.py`
+- Replaced hardcoded `"delete-all-profiles-2024"` with `os.getenv("ADMIN_SECRET")` (4 occurrences)
+- Replaced JWT secret fallback with required `JWT_SECRET_KEY` environment variable
+- Removed `cloudinary==1.36.0` from `backend/requirements.txt`
+- Updated documentation to reference `[YOUR_ADMIN_SECRET]` instead of hardcoded value
+
+### App Icon and Branding Updates (Previous Session)
+
+**Icon Generation (`mobile/generate-icons.js`):**
+- Blue raindrop (`#007AFF`) with orange link glyph (`#FF6B4A`)
+- Link-variant icon rendered via `opentype.js` from MaterialCommunityIcons TTF
+- Black background (`#000000`)
+- Outputs `icon.png` and `adaptive-icon.png` at 1024x1024
+
+**Android Native Icons (`mobile/generate-android-icons.js`):**
+- Generates WebP icons for all mipmap densities (mdpi through xxxhdpi)
+- Creates `ic_launcher.xml` and `ic_launcher_round.xml` for adaptive icons
+- Sets `ic_launcher_background` color in `colors.xml`
+
+**App Name Changes:**
+- `app.json`: `"name": "DropLink"` (was "mobile")
+- `strings.xml`: `<string name="app_name">DropLink</string>` (was "mobile")
+- `app.json`: `"slug": "mobile"` (kept for EAS compatibility)
+
+**Splash Screen:**
+- Background color changed from `#ffffff` to `#000000`
 
 ---
 
@@ -4589,6 +4812,30 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - Persistent cache via AsyncStorage with key `@droplink_ble_permissions_granted`
 - Pre-check via `PermissionsAndroid.check()` before `requestMultiple()`
 
+### 7. Email Verification OTP Not Sending
+
+**Status:** 🔄 IN PROGRESS — Root cause identified, resolution underway
+
+**Root Cause:** SendGrid free trial expired December 24, 2025. All `supabase.auth.signInWithOtp()` calls fail with `451 Authentication failed: Maximum credits exceeded`.
+
+**Resolution:**
+1. Migrating SMTP from SendGrid to Resend
+2. Domain verification for `droplinkconnect.com` in progress via Namecheap DNS
+3. Once DNS propagates, Supabase SMTP settings will be updated with Resend credentials
+4. Email verification flow code is confirmed working — only SMTP provider is broken
+
+**Workaround:** Whitelisted email `caitie690@gmail.com` bypasses email verification entirely.
+
+### 8. Phone Verification Provider Migration
+
+**Status:** 🔄 PENDING — Twilio to Vonage migration required
+
+**Background:** Twilio account was breached and suspended. Phone verification is currently non-functional for non-whitelisted users.
+
+**Resolution:** Migrate from Twilio to Vonage via Supabase Phone Auth settings panel.
+
+**Workaround:** Whitelisted phone numbers bypass phone verification entirely.
+
 ---
 
 ## Android Manifest Permissions (Complete List)
@@ -4735,6 +4982,18 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 4. **Polling for notifications** - Simple and reliable for non-critical real-time features
 5. **Modal queuing** - Process notification modals one at a time to avoid UI conflicts
 
+### Lessons Learned (Verification Systems)
+1. **SMTP provider expiration breaks OTP silently** - SendGrid free trial expired with no warning, causing all email OTPs to fail
+2. **Preserve original error messages** - Don't mask Supabase errors with generic strings; surface actual error for debugging
+3. **Keep modal open on send errors** - Closing modal on error hides the error from user; let them retry
+4. **Whitelist bypass is essential for development** - Hardcode test accounts to bypass verification during active development
+5. **Diagnostic logging with consistent prefixes** - `[PHONE-VERIFY]` and `[EMAIL-VERIFY]` prefixes enable easy ADB filtering
+6. **Check SMTP provider status when OTPs fail** - Email delivery issues often trace to expired credentials, not code bugs
+7. **Third-party account security matters** - Twilio account breach required complete provider migration
+8. **Age validation requires date arithmetic** - Calculate age accounting for whether birthday has occurred this year
+9. **Auto-format user input** - Adding slashes to MM/DD/YYYY as user types improves UX significantly
+10. **Legal compliance requires explicit consent** - Terms checkbox must be checked before account creation
+
 ### Feature Requests / TODOs
 - [x] ~~Fix gray screen crash after signup/login~~ (RESOLVED Feb 14, 2026 - BLEAdvertiserNative stub + DB cleanup)
 - [x] ~~Fix profile photo RLS error~~ (RESOLVED - Commits a28815d, f73422b, 1520a6d, 2531d08)
@@ -4756,7 +5015,15 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [x] ~~Cache BLE permission state to avoid repeated requests~~ (RESOLVED Feb 20, 2026 - Two-layer cache with AsyncStorage)
 - [x] ~~Implement push notification handlers for incoming drops and links~~ (RESOLVED Feb 20, 2026 - Edge Function handles INSERT and UPDATE events)
 - [x] ~~Test push notifications on physical devices with Firebase configured~~ (RESOLVED Feb 20, 2026 - End-to-end delivery confirmed)
-- [ ] Complete phone verification feature (HomeScreen banner + drop blocking logic)
+- [x] ~~Re-enable phone verification gates~~ (RESOLVED Feb 20, 2026 - HomeScreen + DropScreen gates with whitelist bypass)
+- [x] ~~Re-enable email verification for signup~~ (RESOLVED Feb 20, 2026 - Modal triggers for non-whitelisted emails)
+- [x] ~~Add Terms and Conditions to signup~~ (RESOLVED Feb 20, 2026 - Full 15-section legal agreement with checkbox)
+- [x] ~~Add age verification to signup~~ (RESOLVED Feb 20, 2026 - Birthday field with 13+ requirement)
+- [x] ~~Fix tutorial initialization loop~~ (RESOLVED Feb 20, 2026 - Ref-based guard in TutorialContext)
+- [x] ~~Add verification diagnostic logging~~ (RESOLVED Feb 20, 2026 - [PHONE-VERIFY] and [EMAIL-VERIFY] prefixes)
+- [x] ~~Backend security cleanup~~ (RESOLVED Feb 20, 2026 - Removed hardcoded secrets, Cloudinary references)
+- [ ] Complete SendGrid to Resend SMTP migration (domain verification in progress)
+- [ ] Complete Twilio to Vonage phone auth migration
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
 - [ ] Update all tests for Supabase endpoints
