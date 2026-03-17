@@ -9,6 +9,7 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import * as api from '../services/api';
 import { sendPhoneVerificationCode, verifyPhoneCode } from '../services/api';
+import { supabase } from '../services/supabase';
 // DISABLED: Twilio account suspended
 // import { sendPhoneVerificationCodeTwilio, verifyPhoneCodeTwilio } from '../services/api';
 import { logAction, logStateChange } from '../services/activityMonitor';
@@ -98,6 +99,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // Email change verification states
+  const [emailChangeStep, setEmailChangeStep] = useState<'password' | 'otp' | null>(null);
+  const [emailChangePassword, setEmailChangePassword] = useState('');
+  const [emailChangeOtp, setEmailChangeOtp] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState('');
+  const [emailChangePending, setEmailChangePending] = useState(false);
+  const [pendingNewEmail, setPendingNewEmail] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const theme = getTheme(isDarkMode);
@@ -218,9 +227,12 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
         setValidationError(error);
         return;
       }
-      logStateChange('profile.email', email, tempValue);
-      logAction('Profile email updated', { oldEmail: email, newEmail: tempValue });
-      updateProfile({ email: tempValue });
+      // Start email change verification flow
+      setPendingNewEmail(tempValue);
+      setEmailChangeStep('password');
+      setEditModalVisible(false);
+      setValidationError('');
+      return;
     } else if (editingField === 'name') {
       error = validateName(tempValue);
       if (error) {
@@ -581,8 +593,14 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
           {/* Email Row */}
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8 }}>
             <Text style={[theme.type.muted, { flex: 1 }]}>Email</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, justifyContent: 'flex-end' }}>
-              <Text style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}>{email || 'user@example.com'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, justifyContent: 'flex-end' }}>
+              <Text 
+                style={[theme.type.body, { color: theme.colors.blue, marginRight: 8 }]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {email || 'user@example.com'}
+              </Text>
               <Pressable style={{ padding: 4 }} onPress={() => handleEdit('email')}>
                 <MaterialCommunityIcons name="pencil" size={16} color={theme.colors.muted} />
               </Pressable>
@@ -1451,6 +1469,395 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   </Pressable>
                 </>
               )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Email Change Verification Modal */}
+      <Modal
+        visible={emailChangeStep !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!emailChangePending) {
+            setEmailChangeStep(null);
+            setEmailChangePassword('');
+            setEmailChangeOtp('');
+            setEmailChangeError('');
+            setPendingNewEmail('');
+          }
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 24,
+          }}>
+            <View style={{
+              width: '100%',
+              maxWidth: 400,
+              borderRadius: 16,
+              padding: 24,
+              alignItems: 'center',
+              backgroundColor: theme.colors.white,
+            }}>
+              {/* Close Button */}
+              <Pressable
+                style={{
+                  position: 'absolute',
+                  top: 16,
+                  right: 16,
+                  padding: 4,
+                  zIndex: 1,
+                }}
+                onPress={() => {
+                  if (!emailChangePending) {
+                    setEmailChangeStep(null);
+                    setEmailChangePassword('');
+                    setEmailChangeOtp('');
+                    setEmailChangeError('');
+                    setPendingNewEmail('');
+                  }
+                }}
+                disabled={emailChangePending}
+              >
+                {({ pressed }) => (
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={theme.colors.muted}
+                    style={{ opacity: pressed ? 0.6 : 1 }}
+                  />
+                )}
+              </Pressable>
+
+              {emailChangeStep === 'password' ? (
+                <>
+                  <MaterialCommunityIcons name="lock-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '600',
+                    fontFamily: 'Inter_500Medium',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                    color: theme.colors.text,
+                  }}>
+                    Confirm Your Password
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontFamily: 'Inter_400Regular',
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    lineHeight: 22,
+                    color: theme.colors.muted,
+                  }}>
+                    Enter your current password to continue
+                  </Text>
+
+                  <View style={{ width: '100%', position: 'relative' }}>
+                    <TextInput
+                      style={{
+                        width: '100%',
+                        borderWidth: 1,
+                        borderColor: emailChangeError ? '#FF6B6B' : theme.colors.border,
+                        borderRadius: 8,
+                        padding: 12,
+                        paddingRight: 48,
+                        fontSize: 16,
+                        fontFamily: 'Inter_400Regular',
+                        color: theme.colors.text,
+                        backgroundColor: theme.colors.bg,
+                        minHeight: 48,
+                      }}
+                      value={emailChangePassword}
+                      onChangeText={(text) => {
+                        setEmailChangePassword(text);
+                        if (emailChangeError) setEmailChangeError('');
+                      }}
+                      placeholder="Enter password"
+                      placeholderTextColor={theme.colors.muted}
+                      secureTextEntry={true}
+                      autoFocus={true}
+                      editable={!emailChangePending}
+                    />
+                  </View>
+
+                  {emailChangeError ? (
+                    <View style={{ width: '100%', marginTop: 12 }}>
+                      <Text style={{ 
+                        color: '#FF3B30', 
+                        textAlign: 'center',
+                        fontSize: 14,
+                        fontFamily: 'Inter_400Regular',
+                      }}>
+                        {emailChangeError}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={{ flexDirection: 'row', gap: 12, width: '100%', marginTop: 24 }}>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderColor: theme.colors.blue,
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                      onPress={() => {
+                        setEmailChangeStep(null);
+                        setEmailChangePassword('');
+                        setEmailChangeOtp('');
+                        setEmailChangeError('');
+                        setPendingNewEmail('');
+                      }}
+                      disabled={emailChangePending}
+                    >
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '600',
+                        fontFamily: 'Inter_500Medium',
+                        color: theme.colors.blue,
+                      }}>
+                        Cancel
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: theme.colors.blue,
+                        opacity: pressed || emailChangePending || !emailChangePassword ? 0.6 : 1,
+                        minHeight: 48,
+                      })}
+                      onPress={async () => {
+                        if (!emailChangePassword) {
+                          setEmailChangeError('Please enter your password');
+                          return;
+                        }
+                        setEmailChangePending(true);
+                        setEmailChangeError('');
+                        try {
+                          const { error: signInError } = await supabase.auth.signInWithPassword({
+                            email: email || '',
+                            password: emailChangePassword,
+                          });
+                          if (signInError) {
+                            setEmailChangeError(signInError.message || 'Invalid password');
+                            setEmailChangePending(false);
+                            return;
+                          }
+                          const { error: updateError } = await supabase.auth.updateUser({
+                            email: pendingNewEmail,
+                          });
+                          if (updateError) {
+                            setEmailChangeError(updateError.message || 'Failed to initiate email change');
+                            setEmailChangePending(false);
+                            return;
+                          }
+                          setEmailChangeStep('otp');
+                          setEmailChangePassword('');
+                        } catch (err: any) {
+                          setEmailChangeError(err.message || 'An unexpected error occurred');
+                        } finally {
+                          setEmailChangePending(false);
+                        }
+                      }}
+                      disabled={emailChangePending || !emailChangePassword}
+                    >
+                      {emailChangePending ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={{
+                          color: '#FFFFFF',
+                          fontSize: 16,
+                          fontWeight: '600',
+                          fontFamily: 'Inter_500Medium',
+                        }}>
+                          Confirm
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              ) : emailChangeStep === 'otp' ? (
+                <>
+                  <MaterialCommunityIcons name="email-check-outline" size={48} color={theme.colors.blue} style={{ marginBottom: 16 }} />
+                  <Text style={{
+                    fontSize: 20,
+                    fontWeight: '600',
+                    fontFamily: 'Inter_500Medium',
+                    marginBottom: 8,
+                    textAlign: 'center',
+                    color: theme.colors.text,
+                  }}>
+                    Verify New Email
+                  </Text>
+                  <Text style={{
+                    fontSize: 15,
+                    fontFamily: 'Inter_400Regular',
+                    textAlign: 'center',
+                    marginBottom: 24,
+                    lineHeight: 22,
+                    color: theme.colors.muted,
+                  }}>
+                    A verification code has been sent to {pendingNewEmail}
+                  </Text>
+
+                  <TextInput
+                    style={{
+                      width: '100%',
+                      fontSize: 24,
+                      fontWeight: '600',
+                      fontFamily: 'Inter_500Medium',
+                      textAlign: 'center',
+                      paddingVertical: 16,
+                      paddingHorizontal: 24,
+                      borderWidth: 2,
+                      borderRadius: 12,
+                      marginBottom: 8,
+                      letterSpacing: 8,
+                      color: theme.colors.text,
+                      borderColor: emailChangeError ? '#FF6B6B' : theme.colors.border,
+                    }}
+                    value={emailChangeOtp}
+                    onChangeText={(text) => {
+                      setEmailChangeOtp(text.replace(/[^0-9]/g, '').slice(0, 6));
+                      if (emailChangeError) setEmailChangeError('');
+                    }}
+                    placeholder="000000"
+                    placeholderTextColor={theme.colors.muted}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                    editable={!emailChangePending}
+                  />
+
+                  {emailChangeError ? (
+                    <View style={{ width: '100%', marginTop: 12 }}>
+                      <Text style={{ 
+                        color: '#FF3B30', 
+                        textAlign: 'center',
+                        fontSize: 14,
+                        fontFamily: 'Inter_400Regular',
+                      }}>
+                        {emailChangeError}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={{ flexDirection: 'row', gap: 12, width: '100%', marginTop: 24 }}>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderColor: theme.colors.blue,
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                      onPress={() => {
+                        setEmailChangeStep(null);
+                        setEmailChangePassword('');
+                        setEmailChangeOtp('');
+                        setEmailChangeError('');
+                        setPendingNewEmail('');
+                      }}
+                      disabled={emailChangePending}
+                    >
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '600',
+                        fontFamily: 'Inter_500Medium',
+                        color: theme.colors.blue,
+                      }}>
+                        Cancel
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: emailChangeOtp.length === 6 && !emailChangePending ? theme.colors.blue : theme.colors.muted,
+                        opacity: pressed && emailChangeOtp.length === 6 ? 0.6 : 1,
+                        minHeight: 48,
+                      })}
+                      onPress={async () => {
+                        if (emailChangeOtp.length !== 6) {
+                          setEmailChangeError('Please enter a 6-digit code');
+                          return;
+                        }
+                        setEmailChangePending(true);
+                        setEmailChangeError('');
+                        try {
+                          const { error: verifyError } = await supabase.auth.verifyOtp({
+                            email: pendingNewEmail,
+                            token: emailChangeOtp,
+                            type: 'email_change',
+                          });
+                          if (verifyError) {
+                            setEmailChangeError(verifyError.message || 'Invalid or expired code');
+                            setEmailChangePending(false);
+                            return;
+                          }
+                          logStateChange('profile.email', email, pendingNewEmail);
+                          logAction('Profile email updated', { oldEmail: email, newEmail: pendingNewEmail });
+                          updateProfile({ email: pendingNewEmail });
+                          showToast({
+                            message: 'Email updated successfully',
+                            type: 'success',
+                            duration: 3000,
+                          });
+                          setEmailChangeStep(null);
+                          setEmailChangePassword('');
+                          setEmailChangeOtp('');
+                          setEmailChangeError('');
+                          setPendingNewEmail('');
+                        } catch (err: any) {
+                          setEmailChangeError(err.message || 'An unexpected error occurred');
+                        } finally {
+                          setEmailChangePending(false);
+                        }
+                      }}
+                      disabled={emailChangeOtp.length !== 6 || emailChangePending}
+                    >
+                      {emailChangePending ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <Text style={{
+                          color: '#FFFFFF',
+                          fontSize: 16,
+                          fontWeight: '600',
+                          fontFamily: 'Inter_500Medium',
+                        }}>
+                          Verify
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              ) : null}
             </View>
           </View>
         </KeyboardAvoidingView>
