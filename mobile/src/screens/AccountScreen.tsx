@@ -107,6 +107,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const [emailChangeError, setEmailChangeError] = useState('');
   const [emailChangePending, setEmailChangePending] = useState(false);
   const [pendingNewEmail, setPendingNewEmail] = useState('');
+  const [codeResent, setCodeResent] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const theme = getTheme(isDarkMode);
@@ -1486,6 +1487,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
             setEmailChangeOtp('');
             setEmailChangeError('');
             setPendingNewEmail('');
+            setCodeResent(false);
           }
         }}
       >
@@ -1524,6 +1526,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     setEmailChangeOtp('');
                     setEmailChangeError('');
                     setPendingNewEmail('');
+                    setCodeResent(false);
                   }
                 }}
                 disabled={emailChangePending}
@@ -1622,6 +1625,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                         setEmailChangeOtp('');
                         setEmailChangeError('');
                         setPendingNewEmail('');
+                        setCodeResent(false);
                       }}
                       disabled={emailChangePending}
                     >
@@ -1748,6 +1752,39 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                     editable={!emailChangePending}
                   />
 
+                  <Pressable
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 16,
+                      marginTop: 8,
+                      opacity: pressed || emailChangePending ? 0.6 : 1,
+                    })}
+                    onPress={async () => {
+                      if (emailChangePending || codeResent) return;
+                      setEmailChangePending(true);
+                      setEmailChangeError('');
+                      try {
+                        await supabase.auth.updateUser({ email: pendingNewEmail });
+                        setCodeResent(true);
+                        setTimeout(() => setCodeResent(false), 3000);
+                      } catch (err: any) {
+                        setEmailChangeError(err.message || 'Failed to resend code');
+                      } finally {
+                        setEmailChangePending(false);
+                      }
+                    }}
+                    disabled={emailChangePending || codeResent}
+                  >
+                    <Text style={{
+                      fontSize: 13,
+                      fontFamily: 'Inter_400Regular',
+                      textAlign: 'center',
+                      color: codeResent ? '#4CAF50' : theme.colors.blue,
+                    }}>
+                      {codeResent ? 'Code resent' : 'Resend code'}
+                    </Text>
+                  </Pressable>
+
                   {emailChangeError ? (
                     <View style={{ width: '100%', marginTop: 12 }}>
                       <Text style={{ 
@@ -1780,6 +1817,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                         setEmailChangeOtp('');
                         setEmailChangeError('');
                         setPendingNewEmail('');
+                        setCodeResent(false);
                       }}
                       disabled={emailChangePending}
                     >
@@ -1834,6 +1872,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                           setEmailChangeOtp('');
                           setEmailChangeError('');
                           setPendingNewEmail('');
+                          setCodeResent(false);
                         } catch (err: any) {
                           setEmailChangeError(err.message || 'An unexpected error occurred');
                         } finally {

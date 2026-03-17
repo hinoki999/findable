@@ -1546,13 +1546,7 @@ export async function deleteAccount(userId: string): Promise<void> {
     }
     console.log('SUCCESS: Profile deleted');
 
-    // Step 4: Sign out user
-    await supabase.auth.signOut();
-    console.log('SUCCESS: User signed out');
-
-    // Step 5: Delete from Supabase Auth
-    // Note: User is already signed out
-    // Auth account deletion may require service role or will cascade from profile deletion
+    // Step 4: Delete from Supabase Auth (must be done while user is still authenticated)
     const { error: authError } = await supabase.rpc('delete_user');
 
     if (authError) {
@@ -1562,6 +1556,10 @@ export async function deleteAccount(userId: string): Promise<void> {
     } else {
       console.log('SUCCESS: Auth account deleted');
     }
+
+    // Step 5: Sign out user
+    await supabase.auth.signOut();
+    console.log('SUCCESS: User signed out');
 
     console.log('SUCCESS: Account deletion complete');
   } catch (error: any) {
