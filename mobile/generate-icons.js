@@ -127,8 +127,8 @@ function generateIcon(filename, withPadding = false) {
   const centerX = offsetX + effectiveSize / 2;
   const centerY = offsetY + effectiveSize / 2;
   
-  // Drop takes ~41% of effective size (reduced 25% from 55%)
-  const dropHeight = effectiveSize * 0.41;
+  // Drop takes ~25% of effective size (reduced 40% from 41%)
+  const dropHeight = effectiveSize * 0.25;
   
   // Draw the water drop filled and get its bounds
   const dropBounds = drawWaterDropFilled(ctx, centerX, centerY, dropHeight, DROP_COLOR);

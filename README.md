@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (Firebase FCM V1 Migration + BLE Permissions Caching + GitHub Actions Fixes)
+**Last Updated:** February 20, 2026 (Email Verification Resolved + Account Email Change Flow + Phone Verification Vonage Migration)
 
 ---
 
@@ -4319,42 +4319,112 @@ interface BleDevice {
 
 ---
 
-## Recent Changes (February 20, 2026 - Session 2)
+## Recent Changes (February 20, 2026 - Session 3)
 
-### Email Verification — Root Cause Identified and Resolution In Progress
+### Email Verification — RESOLVED
 
-**Status:** 🔄 IN PROGRESS — SMTP provider migration underway
+**Status:** ✅ COMPLETED — End-to-end email verification confirmed working
 
-**Root Cause Identified:**
+**Root Cause:**
 - SendGrid free trial expired December 24, 2025
 - All OTP email sends were failing with: `451 Authentication failed: Maximum credits exceeded`
-- This explains why email verification stopped working despite code being correct
 
-**Resolution Plan:**
-1. Migrating SMTP provider from SendGrid to Resend
-2. Resend domain verification for `droplinkconnect.com` in progress via Namecheap DNS records
-3. Supabase SMTP Settings will be updated with Resend credentials once domain is verified
-4. Magic Link email template confirmed correctly configured with `{{ .Token }}` for 6-digit OTP delivery
+**Resolution:**
+1. Migrated SMTP provider from SendGrid to **Brevo** (smtp-relay.brevo.com, port 587)
+2. Domain `droplinkconnect.com` authenticated in Brevo
+3. Supabase SMTP Settings updated with Brevo credentials
+4. Magic Link email template confirmed using `{{ .Token }}` for 6-digit OTP delivery
+5. Email verification end-to-end confirmed working
 
 **Email Verification Code Status:**
-- All code is fully active and functional (not commented out)
+- All code is fully active and functional
 - `sendOtpCode()` correctly calls `supabase.auth.signInWithOtp()` with `shouldCreateUser: true`
 - `verifyOtpCode()` correctly calls `supabase.auth.verifyOtp()` with type `'email'`
-- Detailed `[EMAIL-VERIFY]` diagnostic logging added throughout the flow
+- Detailed `[EMAIL-VERIFY]` diagnostic logging in place
 
-### Phone Verification — Twilio to Vonage Migration
+### Account Screen — Email Change Verification Flow
 
-**Status:** 🔄 PENDING — Twilio account compromised, migration required
+**Status:** ✅ COMPLETED — Password confirmation + OTP verification required
 
-**Background:**
-- Twilio account was breached and suspended
-- Phone verification was disabled for testing during this period
-- Migration to Vonage (via Supabase Phone Auth settings) is planned
+**New Flow:**
+1. User taps edit on email field, enters new email
+2. Modal appears: "Confirm Your Password" — user enters current password
+3. Password verified via `supabase.auth.signInWithPassword()`
+4. If successful, `supabase.auth.updateUser({ email: newEmail })` sends OTP to new address
+5. Modal transitions to OTP entry: "Verify New Email"
+6. User enters 6-digit code, verified via `supabase.auth.verifyOtp({ type: 'email_change' })`
+7. Profile updated, success toast shown
+
+**UI Improvements:**
+- Email row fixed to display on single line with ellipsis truncation (`numberOfLines={1}`, `ellipsizeMode="tail"`)
+- Email change modal styled consistent with existing phone verification modal
+
+**New State Variables Added:**
+```typescript
+const [emailChangeStep, setEmailChangeStep] = useState<'password' | 'otp' | null>(null);
+const [emailChangePassword, setEmailChangePassword] = useState('');
+const [emailChangeOtp, setEmailChangeOtp] = useState('');
+const [emailChangeError, setEmailChangeError] = useState('');
+const [emailChangePending, setEmailChangePending] = useState(false);
+const [pendingNewEmail, setPendingNewEmail] = useState('');
+```
+
+### Phone Verification — Vonage 10DLC Migration In Progress
+
+**Status:** 🔄 IN PROGRESS — Campaign registration pending approval
+
+**Completed Steps:**
+1. Vonage 10DLC brand registered and verified under **HiRule Labs LLC**
+2. Campaign number assigned: **(956) 452-3369**
+3. Supabase phone provider configured for Vonage
+
+**Pending:**
+- Low Volume Mixed campaign registration blocked on Vonage daily spending limit
+- Support ticket submitted to Vonage to increase limit
+- Phone verification will work once campaign is approved
 
 **Current State:**
-- Phone verification gates have been re-enabled with whitelist bypass
-- Detailed `[PHONE-VERIFY]` diagnostic logging added throughout the flow
-- API functions (`sendPhoneVerificationCode`, `verifyPhoneCode`) use Supabase Auth
+- Phone verification gates are active with whitelist bypass
+- Detailed `[PHONE-VERIFY]` diagnostic logging in place
+- API functions (`sendPhoneVerificationCode`, `verifyPhoneCode`) ready to use Supabase Auth with Vonage
+
+### Privacy Policy and Terms — Hosted on Notion
+
+**Status:** ✅ COMPLETED — Public URLs available for Vonage campaign submission
+
+**Documents:**
+- Privacy Policy: Hosted on Notion as public URL (required for 10DLC campaign)
+- Terms and Conditions: Hosted on Notion as public URL (required for 10DLC campaign)
+
+**Note:** These Notion pages were required for Vonage 10DLC campaign registration compliance.
+
+---
+
+## Recent Changes (February 20, 2026 - Session 2)
+
+### Signup Flow Enhancements
+
+**Status:** ✅ COMPLETED — All verification gates active with whitelist bypass
+
+**Birthday/Age Verification:**
+- New "Date of Birth" field with MM/DD/YYYY format
+- Auto-formatting: Slashes added automatically as user types
+- Real-time age validation: Users must be 13+ to create account
+
+**Terms and Conditions:**
+- Checkbox required before "Create Account" button works
+- Full-screen modal with 15-section legal agreement
+- Contact email: link@hirulelabs.com
+
+**Developer Whitelist:**
+```typescript
+const VERIFICATION_WHITELIST = {
+  emails: ['caitie690@gmail.com'],
+  phones: ['7344317582', '+17344317582', '17344317582'],
+};
+```
+- Whitelisted users bypass all verification gates silently
+- Added to `HomeScreen.tsx`, `DropScreen.tsx`, `SignupScreen.tsx`
 
 ### Verification System Re-enablement
 
@@ -4993,6 +5063,10 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 8. **Age validation requires date arithmetic** - Calculate age accounting for whether birthday has occurred this year
 9. **Auto-format user input** - Adding slashes to MM/DD/YYYY as user types improves UX significantly
 10. **Legal compliance requires explicit consent** - Terms checkbox must be checked before account creation
+11. **Brevo is a reliable SendGrid alternative** - smtp-relay.brevo.com works well with Supabase SMTP settings
+12. **Email change requires password confirmation** - Use `signInWithPassword` to verify identity before `updateUser({ email })`
+13. **Supabase email_change OTP type** - Use `verifyOtp({ type: 'email_change' })` specifically for email change verification
+14. **10DLC campaign registration has daily limits** - Vonage caps spending during initial registration; contact support to increase
 
 ### Feature Requests / TODOs
 - [x] ~~Fix gray screen crash after signup/login~~ (RESOLVED Feb 14, 2026 - BLEAdvertiserNative stub + DB cleanup)
@@ -5022,8 +5096,9 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [x] ~~Fix tutorial initialization loop~~ (RESOLVED Feb 20, 2026 - Ref-based guard in TutorialContext)
 - [x] ~~Add verification diagnostic logging~~ (RESOLVED Feb 20, 2026 - [PHONE-VERIFY] and [EMAIL-VERIFY] prefixes)
 - [x] ~~Backend security cleanup~~ (RESOLVED Feb 20, 2026 - Removed hardcoded secrets, Cloudinary references)
-- [ ] Complete SendGrid to Resend SMTP migration (domain verification in progress)
-- [ ] Complete Twilio to Vonage phone auth migration
+- [x] ~~Complete SendGrid to Brevo SMTP migration~~ (RESOLVED Feb 20, 2026 - droplinkconnect.com authenticated)
+- [x] ~~Add email change verification flow to AccountScreen~~ (RESOLVED Feb 20, 2026 - Password + OTP required)
+- [ ] Complete Twilio to Vonage phone auth migration (10DLC campaign registration pending)
 - [ ] Support more image formats (HEIC, WebP, HEIF)
 - [ ] Create Supabase RPC delete_user function
 - [ ] Update all tests for Supabase endpoints
