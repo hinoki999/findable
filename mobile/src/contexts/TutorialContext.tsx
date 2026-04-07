@@ -40,7 +40,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   const hasInitialized = useRef(false);
 
   /**
-   * Initialize tutorials by checking Supabase per-screen completion status
+   * Initialize tutorials by checking user_profiles.has_completed_onboarding
    * Called once on app startup
    */
   const initializeTutorials = async () => {
@@ -52,7 +52,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     hasInitialized.current = true;
     
     try {
-      console.log('[TUTORIAL] Initializing per-screen tutorials...');
+      console.log('[TUTORIAL] Initializing tutorials...');
       
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
@@ -68,51 +68,13 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
       
       const { data, error } = await supabase
-        .from('tutorial_completions')
-        .select('home_completed, drop_completed, history_completed, account_completed')
+        .from('user_profiles')
+        .select('has_completed_onboarding')
         .eq('user_id', session.user.id)
         .single();
       
       if (error) {
-        // If row doesn't exist, create it
-        if (error.code === 'PGRST116') {
-          console.log('[TUTORIAL] No tutorial_completions row found, creating new row...');
-          const { error: insertError } = await supabase
-            .from('tutorial_completions')
-            .insert({
-              user_id: session.user.id,
-              home_completed: false,
-              drop_completed: false,
-              history_completed: false,
-              account_completed: false,
-            });
-          
-          if (insertError) {
-            console.error('[TUTORIAL] Error creating tutorial_completions row:', insertError);
-            // Fail safe: mark all as completed (don't show on error)
-            setCompletedTutorials({
-              Home: true,
-              Drop: true,
-              History: true,
-              Account: true,
-            });
-            setIsLoaded(true);
-            return;
-          }
-          
-          // Row created, set all to false (show all tutorials)
-          console.log('[TUTORIAL] Created new tutorial_completions row, all tutorials will show');
-          setCompletedTutorials({
-            Home: false,
-            Drop: false,
-            History: false,
-            Account: false,
-          });
-          setIsLoaded(true);
-          return;
-        }
-        
-        console.error('[TUTORIAL] Error checking tutorial status:', error);
+        console.error('[TUTORIAL] Error checking onboarding status:', error);
         // Fail safe: mark all as completed (don't show on error)
         setCompletedTutorials({
           Home: true,
@@ -124,16 +86,25 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
       }
       
-      // Treat NULL as FALSE (show tutorial if not explicitly completed)
-      const completed = {
-        Home: data?.home_completed ?? false,
-        Drop: data?.drop_completed ?? false,
-        History: data?.history_completed ?? false,
-        Account: data?.account_completed ?? false,
-      };
+      const hasCompleted = data?.has_completed_onboarding ?? false;
       
-      console.log('[TUTORIAL] Per-screen status loaded:', completed);
-      setCompletedTutorials(completed);
+      if (hasCompleted) {
+        console.log('[TUTORIAL] Onboarding already completed, skipping all tutorials');
+        setCompletedTutorials({
+          Home: true,
+          Drop: true,
+          History: true,
+          Account: true,
+        });
+      } else {
+        console.log('[TUTORIAL] Onboarding not completed, showing all tutorials');
+        setCompletedTutorials({
+          Home: false,
+          Drop: false,
+          History: false,
+          Account: false,
+        });
+      }
       setIsLoaded(true);
       
     } catch (error) {
@@ -209,8 +180,9 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   /**
-   * Mark specific screen tutorial as complete in Supabase
+   * Mark specific screen tutorial as complete
    * Called by nextStep (on last step) OR skipTutorial
+   * When all four screens are complete, updates user_profiles.has_completed_onboarding
    */
   const completeTutorial = async () => {
     if (!currentScreen) return;
@@ -223,42 +195,50 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
     const screenToComplete = currentScreen;
     setCurrentScreen(null);
     
-    // Update local state
-    setCompletedTutorials(prev => ({
-      ...prev,
-      [screenToComplete]: true,
-    }));
-    
+    // Update local state and check if all are now complete
+    setCompletedTutorials(prev => {
+      const updated = {
+        ...prev,
+        [screenToComplete]: true,
+      };
+      
+      // Check if all four screens are now complete
+      const allComplete = updated.Home && updated.Drop && updated.History && updated.Account;
+      
+      if (allComplete) {
+        console.log('[TUTORIAL] All four tutorials complete, updating has_completed_onboarding');
+        // Fire async update to Supabase (don't await in setState)
+        markOnboardingComplete();
+      }
+      
+      return updated;
+    });
+  };
+  
+  /**
+   * Mark onboarding as complete in user_profiles
+   * Called when all four screen tutorials are finished
+   */
+  const markOnboardingComplete = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        console.error('[TUTORIAL] No session, cannot mark complete');
+        console.error('[TUTORIAL] No session, cannot mark onboarding complete');
         return;
       }
       
-      // Map screen name to database column
-      const columnMap: Record<ScreenName, string> = {
-        Home: 'home_completed',
-        Drop: 'drop_completed',
-        History: 'history_completed',
-        Account: 'account_completed',
-      };
-      
-      const columnName = columnMap[screenToComplete];
-      
       const { error } = await supabase
-        .from('tutorial_completions')
-        .update({ [columnName]: true })
+        .from('user_profiles')
+        .update({ has_completed_onboarding: true })
         .eq('user_id', session.user.id);
       
       if (error) {
-        console.error(`[TUTORIAL] Error marking "${screenToComplete}" complete:`, error);
-        // Don't revert UI state - fail gracefully
+        console.error('[TUTORIAL] Error marking onboarding complete:', error);
       } else {
-        console.log(`[TUTORIAL] Successfully marked "${screenToComplete}" tutorial complete in Supabase`);
+        console.log('[TUTORIAL] Successfully marked has_completed_onboarding = true in user_profiles');
       }
     } catch (error) {
-      console.error('[TUTORIAL] completeTutorial error:', error);
+      console.error('[TUTORIAL] markOnboardingComplete error:', error);
     }
   };
 
