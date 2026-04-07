@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (Email Verification Resolved + Account Email Change Flow + Phone Verification Vonage Migration)
+**Last Updated:** February 20, 2026 (Tutorial System Simplified + Email Verification Resolved + Account Email Change Flow)
 
 ---
 
@@ -4398,6 +4398,34 @@ const [pendingNewEmail, setPendingNewEmail] = useState('');
 
 **Note:** These Notion pages were required for Vonage 10DLC campaign registration compliance.
 
+### Tutorial System — Simplified and Fixed
+
+**Status:** ✅ COMPLETED — Single-field persistence replaces broken multi-table system
+
+**Root Cause:**
+- `TutorialContext.tsx` was querying a non-existent `tutorial_completions` table
+- Every session hit `PGRST116` error (row not found), defaulting to show all tutorials
+- Tutorials were appearing repeatedly for existing users instead of being remembered
+
+**Resolution:**
+1. Simplified to use single `has_completed_onboarding` boolean in `user_profiles` table
+2. `initializeTutorials()` now reads `user_profiles.has_completed_onboarding`:
+   - If `true`: All tutorials skipped (returning user)
+   - If `false`/`null`: All tutorials shown (new user)
+3. `completeTutorial()` tracks per-screen completion in memory
+4. When all four screens (Home, Drop, History, Account) are complete, writes `has_completed_onboarding: true` to `user_profiles`
+
+**Code Changes:**
+- `TutorialContext.tsx`: Replaced `tutorial_completions` queries with `user_profiles.has_completed_onboarding`
+- `SignupScreen.tsx`: Removed four dead `tutorial_*_completed` fields from both `handleDirectSignup` and `handleVerifyAndSignup` insert calls
+
+**Dead Schema (can be dropped):**
+- `tutorial_completions` table (entire table unused)
+- `user_profiles.tutorial_home_completed` column
+- `user_profiles.tutorial_drop_completed` column
+- `user_profiles.tutorial_history_completed` column
+- `user_profiles.tutorial_account_completed` column
+
 ---
 
 ## Recent Changes (February 20, 2026 - Session 2)
@@ -5067,6 +5095,8 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 12. **Email change requires password confirmation** - Use `signInWithPassword` to verify identity before `updateUser({ email })`
 13. **Supabase email_change OTP type** - Use `verifyOtp({ type: 'email_change' })` specifically for email change verification
 14. **10DLC campaign registration has daily limits** - Vonage caps spending during initial registration; contact support to increase
+15. **Query non-existent tables fail silently** - TutorialContext queried `tutorial_completions` table that didn't exist, hit PGRST116 every time
+16. **Simplify persistence over per-field tracking** - Single `has_completed_onboarding` boolean is cleaner than four separate tutorial columns
 
 ### Feature Requests / TODOs
 - [x] ~~Fix gray screen crash after signup/login~~ (RESOLVED Feb 14, 2026 - BLEAdvertiserNative stub + DB cleanup)
@@ -5094,6 +5124,7 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [x] ~~Add Terms and Conditions to signup~~ (RESOLVED Feb 20, 2026 - Full 15-section legal agreement with checkbox)
 - [x] ~~Add age verification to signup~~ (RESOLVED Feb 20, 2026 - Birthday field with 13+ requirement)
 - [x] ~~Fix tutorial initialization loop~~ (RESOLVED Feb 20, 2026 - Ref-based guard in TutorialContext)
+- [x] ~~Fix tutorial persistence~~ (RESOLVED Feb 20, 2026 - Simplified to single has_completed_onboarding field)
 - [x] ~~Add verification diagnostic logging~~ (RESOLVED Feb 20, 2026 - [PHONE-VERIFY] and [EMAIL-VERIFY] prefixes)
 - [x] ~~Backend security cleanup~~ (RESOLVED Feb 20, 2026 - Removed hardcoded secrets, Cloudinary references)
 - [x] ~~Complete SendGrid to Brevo SMTP migration~~ (RESOLVED Feb 20, 2026 - droplinkconnect.com authenticated)
