@@ -314,7 +314,8 @@ export default function DropScreen() {
       <TopBar logoMode={true} logoIcon="water-outline" />
       
       {/* Phone Verification Banner with whitelist bypass */}
-      {!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email) ? (
+      {/* TEMP DISABLED - RE-ENABLE AFTER DROP TESTING */}
+      {false && !phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email) ? (
         <View style={{
           flex: 1,
           justifyContent: 'center',

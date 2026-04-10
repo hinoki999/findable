@@ -1334,12 +1334,13 @@ export default function HomeScreen() {
   };
 
   const handleRaindropPress = () => {
+    // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
     // Phone verification gate with whitelist bypass
-    if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
-      showToast({ message: 'Verify your phone number to see your drops', type: 'info', duration: 3000 });
-      navigateToTab('Account');
-      return;
-    }
+    // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
+    //   showToast({ message: 'Verify your phone number to see your drops', type: 'info', duration: 3000 });
+    //   navigateToTab('Account');
+    //   return;
+    // }
 
     // Trigger ripple animation
     Animated.sequence([
@@ -3135,12 +3136,13 @@ export default function HomeScreen() {
               <View style={{ gap: 10 }}>
                 <Pressable
                   onPress={async () => {
+                    // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
                     // Phone verification gate with whitelist bypass
-                    if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
-                      showToast({ message: 'Verify your phone number to send drops', type: 'info', duration: 3000 });
-                      navigateToTab('Account');
-                      return;
-                    }
+                    // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
+                    //   showToast({ message: 'Verify your phone number to send drops', type: 'info', duration: 3000 });
+                    //   navigateToTab('Account');
+                    //   return;
+                    // }
                     if (selectedBlipDevice && !isSendingDrop) {
                       setIsSendingDrop(true);
                       setDropError(null);
