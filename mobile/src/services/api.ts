@@ -444,21 +444,37 @@ export async function sendDrop(
   },
   distanceFeet?: number
 ): Promise<Drop> {
+  const callTimestamp = Date.now();
+  console.log('[DROP-DUPE] sendDrop ENTRY - timestamp:', callTimestamp, 'receiverId:', receiverId);
+  console.log('[DROP-CRASH] sendDrop called with receiverId:', receiverId, 'distanceFeet:', distanceFeet);
+  console.log('[DROP-CRASH] senderProfile:', JSON.stringify(senderProfile, null, 2));
+  
   try {
+    console.log('[DROP-CRASH] Step 1: Getting session...');
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError || !session) {
+    if (sessionError) {
+      console.error('[DROP-CRASH] Session error:', JSON.stringify(sessionError, null, 2));
+      throw new Error('User not authenticated');
+    }
+    
+    if (!session) {
+      console.error('[DROP-CRASH] No session found');
       throw new Error('User not authenticated');
     }
 
     const senderId = session.user.id;
+    console.log('[DROP-CRASH] Step 2: Session obtained, senderId:', senderId);
+    console.log('[DROP-DUPE] senderId:', senderId, 'receiverId:', receiverId, 'timestamp:', callTimestamp);
 
     // Validate receiverId
     if (!receiverId || receiverId.trim() === '') {
+      console.error('[DROP-CRASH] Invalid receiverId:', receiverId);
       throw new Error('Invalid receiver ID');
     }
 
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
+    console.log('[DROP-CRASH] Step 3: Building drop data...');
 
     // Common drop data
     const dropData = {
@@ -473,8 +489,12 @@ export async function sendDrop(
       sender_profile_photo: senderProfile.profilePhoto || null,
       sender_social_media: senderProfile.socialMedia || null,
     };
+    
+    console.log('[DROP-CRASH] Step 4: Drop data built:', JSON.stringify(dropData, null, 2));
+    console.log('[DROP-DUPE] About to insert drop pair, timestamp:', callTimestamp);
 
     // Insert TWO rows: sender's outgoing record and receiver's incoming record
+    console.log('[DROP-CRASH] Step 5: Inserting to Supabase...');
     const { data, error } = await supabase
       .from('drops')
       .insert([
@@ -485,16 +505,26 @@ export async function sendDrop(
 
     if (error) {
       console.error('[DROPS] Supabase drop insert error:', error);
+      console.error('[DROP-CRASH] Step 5 FAILED - Supabase error:', JSON.stringify(error, null, 2));
       throw new Error('Failed to send drop. Please try again.');
     }
 
+    console.log('[DROP-CRASH] Step 6: Insert successful');
     console.log('[DROPS] SUCCESS: Drop pair created - sent:', data[0]?.id, 'received:', data[1]?.id);
+    console.log('[DROP-DUPE] Insert completed - sent ID:', data[0]?.id, 'received ID:', data[1]?.id, 'timestamp:', callTimestamp);
+    console.log('[DROP-DUPE] Full insert response:', JSON.stringify(data, null, 2));
     
     // Return the receiver's record (received) as the primary drop
     const receiverDrop = data.find(d => d.status === 'received') || data[0];
+    console.log('[DROP-CRASH] Step 7: Returning receiverDrop:', receiverDrop?.id);
+    console.log('[DROP-DUPE] sendDrop EXIT - timestamp:', callTimestamp, 'returning drop ID:', receiverDrop?.id);
     return mapDropFromDb(receiverDrop);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Send drop error:', error);
+    console.error('[DROP-CRASH] EXCEPTION in sendDrop:', error?.message);
+    console.error('[DROP-CRASH] Full error object:', JSON.stringify(error, null, 2));
+    console.error('[DROP-CRASH] Stack trace:', error?.stack);
+    console.log('[DROP-DUPE] sendDrop FAILED - timestamp:', callTimestamp, 'error:', error?.message);
     throw new Error(error.message || 'Failed to send drop. Please try again.');
   }
 }
@@ -503,31 +533,42 @@ export async function sendDrop(
  * Get incoming drops for the current user (received drops sent TO them)
  */
 export async function getIncomingDrops(): Promise<Drop[]> {
+  const callTimestamp = Date.now();
+  console.log('[DROP-SCREEN] getIncomingDrops ENTRY - timestamp:', callTimestamp);
+  
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
+      console.error('[DROP-SCREEN] No session for getIncomingDrops');
       throw new Error('User not authenticated');
     }
 
-    console.log('[DROPS] Fetching incoming drops for user:', session.user.id);
+    const userId = session.user.id;
+    console.log('[DROPS] Fetching incoming drops for user:', userId);
+    console.log('[DROP-SCREEN] Query params - receiver_id:', userId, 'status: received');
 
     const { data, error } = await supabase
       .from('drops')
       .select('*')
-      .eq('receiver_id', session.user.id)
+      .eq('receiver_id', userId)
       .eq('status', 'received')
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('[DROPS] Supabase incoming drops query error:', error);
+      console.error('[DROP-SCREEN] Query FAILED:', JSON.stringify(error, null, 2));
       throw new Error('Failed to load incoming drops. Please try again.');
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} incoming drops`);
+    console.log('[DROP-SCREEN] Query returned', data?.length || 0, 'results');
+    console.log('[DROP-SCREEN] Full result set:', JSON.stringify(data, null, 2));
+    console.log('[DROP-SCREEN] getIncomingDrops EXIT - timestamp:', callTimestamp);
     return (data || []).map(mapDropFromDb);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get incoming drops error:', error);
+    console.error('[DROP-SCREEN] getIncomingDrops EXCEPTION:', error?.message);
     throw new Error(error.message || 'Failed to load incoming drops. Please try again.');
   }
 }
@@ -571,15 +612,20 @@ export async function getSentDrops(): Promise<Drop[]> {
  * These appear on the Drops page, separate from nearby BLE users
  */
 export async function getAcceptedDrops(): Promise<Drop[]> {
+  const callTimestamp = Date.now();
+  console.log('[DROP-SCREEN] getAcceptedDrops ENTRY - timestamp:', callTimestamp);
+  
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
     if (sessionError || !session) {
+      console.error('[DROP-SCREEN] getAcceptedDrops - no session');
       throw new Error('User not authenticated');
     }
 
     const userId = session.user.id;
     console.log('[DROPS] Fetching accepted drops for user:', userId);
+    console.log('[DROP-SCREEN] Query params - receiver_id:', userId, 'status: accepted');
 
     // Get drops where user is the receiver AND status is 'accepted'
     // Note: 'deleted' drops are excluded because we filter for 'accepted' status only
@@ -592,13 +638,18 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
 
     if (error) {
       console.error('[DROPS] Supabase accepted drops query error:', error);
+      console.error('[DROP-SCREEN] getAcceptedDrops query FAILED:', JSON.stringify(error, null, 2));
       throw new Error('Failed to load accepted drops. Please try again.');
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} accepted drops`);
+    console.log('[DROP-SCREEN] Query returned', data?.length || 0, 'accepted drops');
+    console.log('[DROP-SCREEN] Full result set:', JSON.stringify(data, null, 2));
+    console.log('[DROP-SCREEN] getAcceptedDrops EXIT - timestamp:', callTimestamp);
     return (data || []).map(mapDropFromDb);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get accepted drops error:', error);
+    console.error('[DROP-SCREEN] getAcceptedDrops EXCEPTION:', error?.message);
     throw new Error(error.message || 'Failed to load accepted drops. Please try again.');
   }
 }

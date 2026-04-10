@@ -819,40 +819,61 @@ export default function HomeScreen() {
 
   // Fetch incoming drops from drops table on mount and periodically
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('[DROP-STATE] HomeScreen useEffect skip - no userId');
+      return;
+    }
 
     const fetchIncomingDropsFromTable = async () => {
+      console.log('[DROP-STATE] HomeScreen fetchIncomingDropsFromTable called - userId:', userId);
+      console.log('[DROP-SCREEN] HomeScreen fetching incoming drops...');
       try {
         const drops = await getIncomingDrops();
+        console.log('[DROP-STATE] HomeScreen setIncomingDrops - count:', drops.length);
+        console.log('[DROP-SCREEN] HomeScreen received drops:', JSON.stringify(drops.map(d => ({ id: d.id, senderName: d.senderName })), null, 2));
         setIncomingDrops(drops);
-      } catch (error) {
+      } catch (error: any) {
+        console.error('[DROP-STATE] HomeScreen fetchIncomingDropsFromTable error:', error?.message);
         // Silent fail - drops will refresh on next mount
       }
     };
 
+    console.log('[DROP-STATE] HomeScreen drop fetch useEffect mounted - userId:', userId);
     fetchIncomingDropsFromTable();
     const interval = setInterval(fetchIncomingDropsFromTable, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      console.log('[DROP-STATE] HomeScreen drop fetch useEffect cleanup');
+      clearInterval(interval);
+    };
   }, [userId]);
 
   // Fetch unviewed links from database on mount and periodically
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('[DROP-MODAL] HomeScreen unviewed links useEffect skip - no userId');
+      return;
+    }
 
     const fetchUnviewedLinksFromDb = async () => {
+      console.log('[DROP-MODAL] Fetching unviewed links...');
       try {
         const links = await getUnviewedLinks();
+        console.log('[DROP-STATE] HomeScreen setUnviewedLinksFromDb - count:', links.length);
         setUnviewedLinksFromDb(links);
 
+        console.log('[DROP-MODAL] Checking link modal trigger - links.length:', links.length, 'showNewLinkModal:', showNewLinkModal, 'currentNewLink:', !!currentNewLink);
         if (links.length > 0 && !showNewLinkModal && !currentNewLink) {
+          console.log('[DROP-MODAL] AUTO-TRIGGERING link modal - NOT user initiated! Link:', JSON.stringify(links[0], null, 2));
           setCurrentNewLink(links[0]);
           setShowNewLinkModal(true);
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.error('[DROP-MODAL] fetchUnviewedLinksFromDb error:', error?.message);
         // Silent fail - links will refresh on next mount
       }
     };
 
+    console.log('[DROP-MODAL] Unviewed links useEffect mounted - userId:', userId);
     fetchUnviewedLinksFromDb();
     const interval = setInterval(fetchUnviewedLinksFromDb, 5000);
     return () => clearInterval(interval);
@@ -939,6 +960,12 @@ export default function HomeScreen() {
   });
 
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
+
+  // Log device counts for BLE debugging
+  useEffect(() => {
+    console.log('[BLE-DUPE] HomeScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length);
+    console.log('[BLE-ID] HomeScreen filteredDevices for UI render:', JSON.stringify(filteredDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
+  }, [devices, dropLinkDevices.length, filteredDevices.length]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -1334,6 +1361,9 @@ export default function HomeScreen() {
   };
 
   const handleRaindropPress = () => {
+    console.log('[DROP-MODAL] handleRaindropPress called - USER TAPPED RAINDROP');
+    console.log('[DROP-MODAL] Current state - incomingDrops.length:', incomingDrops.length, 'showDrops:', showDrops);
+    
     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
     // Phone verification gate with whitelist bypass
     // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
@@ -1357,10 +1387,14 @@ export default function HomeScreen() {
     ]).start();
 
     // Show drops modal
+    console.log('[DROP-MODAL] Setting showDrops to TRUE (user initiated)');
+    console.log('[DROP-STATE] HomeScreen setShowDrops(true) - triggered by raindrop press');
     setShowDrops(true);
   };
 
   const handleDropAction = async (action: 'accepted' | 'returned' | 'declined', drop: Drop) => {
+    console.log('[DROP-STATE] handleDropAction called - action:', action, 'drop.id:', drop.id);
+    
     // Show link popup for returned drops IMMEDIATELY
     if (action === 'returned') {
       showLinkPopupAnimation();
@@ -1378,13 +1412,18 @@ export default function HomeScreen() {
     } : undefined;
 
     try {
+      console.log('[DROP-STATE] Calling updateDropStatus - drop.id:', drop.id, 'action:', action);
       await updateDropStatus(drop.id, action, responseProfile);
 
       // Remove the drop from the list
+      console.log('[DROP-STATE] HomeScreen setIncomingDrops - removing drop.id:', drop.id, 'current count:', incomingDrops.length);
       setIncomingDrops(prev => prev.filter(d => d.id !== drop.id));
 
       // Close modal if no more drops
+      console.log('[DROP-MODAL] Checking if should close modal - incomingDrops.length:', incomingDrops.length);
       if (incomingDrops.length <= 1) {
+        console.log('[DROP-MODAL] Closing drops modal - no more drops');
+        console.log('[DROP-STATE] HomeScreen setShowDrops(false) - after last drop action');
         setShowDrops(false);
       }
 
@@ -1402,8 +1441,9 @@ export default function HomeScreen() {
           duration: 3000,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DROPS] Failed to update drop status:', error);
+      console.error('[DROP-STATE] handleDropAction EXCEPTION:', error?.message);
       showToast({
         message: 'Failed to respond to drop. Please try again.',
         type: 'error',
@@ -3136,6 +3176,11 @@ export default function HomeScreen() {
               <View style={{ gap: 10 }}>
                 <Pressable
                   onPress={async () => {
+                    const sendTimestamp = Date.now();
+                    console.log('[DROP-CRASH] Send button pressed - timestamp:', sendTimestamp);
+                    console.log('[DROP-DUPE] HomeScreen send button onPress - timestamp:', sendTimestamp);
+                    console.log('[DROP-DUPE] Guard check - selectedBlipDevice:', !!selectedBlipDevice, 'isSendingDrop:', isSendingDrop);
+                    
                     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
                     // Phone verification gate with whitelist bypass
                     // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
@@ -3144,12 +3189,17 @@ export default function HomeScreen() {
                     //   return;
                     // }
                     if (selectedBlipDevice && !isSendingDrop) {
+                      console.log('[DROP-DUPE] Guard passed - proceeding with send, timestamp:', sendTimestamp);
+                      console.log('[DROP-CRASH] Setting isSendingDrop to true');
+                      console.log('[DROP-STATE] HomeScreen setIsSendingDrop(true)');
                       setIsSendingDrop(true);
                       setDropError(null);
                       try {
+                        console.log('[DROP-CRASH] selectedBlipDevice:', JSON.stringify(selectedBlipDevice, null, 2));
                         // Use userId from device object (already fetched during scan)
                         // If userId is not available, try to look it up now
                         let receiverUserId = selectedBlipDevice.userId;
+                        console.log('[DROP-CRASH] Initial receiverUserId from device:', receiverUserId);
 
                         if (!receiverUserId) {
                           // Extract deviceId from device name
@@ -3250,6 +3300,8 @@ export default function HomeScreen() {
                         }
 
                         // Send drop with current user's profile info and distance
+                        console.log('[DROP-CRASH] About to call sendDrop - receiverUserId:', receiverUserId, 'distanceFeet:', selectedBlipDevice.distanceFeet);
+                        console.log('[DROP-DUPE] Calling sendDrop from HomeScreen - receiverUserId:', receiverUserId, 'timestamp:', Date.now());
                         await sendDrop(receiverUserId, {
                           name: profile?.name || 'User',
                           username: username,
@@ -3260,6 +3312,10 @@ export default function HomeScreen() {
                           socialMedia: profile?.socialMedia,
                         }, selectedBlipDevice.distanceFeet);
 
+                        console.log('[DROP-CRASH] sendDrop returned successfully');
+                        console.log('[DROP-DUPE] sendDrop completed in HomeScreen - timestamp:', Date.now());
+                        console.log('[DROP-STATE] HomeScreen setShowBlipModal(false) - after successful send');
+                        
                         // Close modal after successful send
                         setShowBlipModal(false);
 
@@ -3274,6 +3330,9 @@ export default function HomeScreen() {
                       } catch (error: any) {
                         // Set detailed error message with actual error details
                         const errorMsg = error instanceof Error ? error.message : String(error);
+                        console.error('[DROP-CRASH] EXCEPTION in HomeScreen send flow:', errorMsg);
+                        console.error('[DROP-CRASH] Full error:', JSON.stringify(error, null, 2));
+                        console.error('[DROP-CRASH] Stack:', error?.stack);
                         setDropError(`Drop failed: ${errorMsg}`);
                         console.error('Drop error details:', error);
 
@@ -3284,8 +3343,11 @@ export default function HomeScreen() {
                           duration: 3000,
                         });
                       } finally {
+                        console.log('[DROP-STATE] HomeScreen setIsSendingDrop(false) - in finally block');
                         setIsSendingDrop(false);
                       }
+                    } else {
+                      console.log('[DROP-DUPE] Guard FAILED - selectedBlipDevice:', !!selectedBlipDevice, 'isSendingDrop:', isSendingDrop);
                     }
                   }}
                   disabled={isSendingDrop}

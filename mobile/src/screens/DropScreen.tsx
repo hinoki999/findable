@@ -76,15 +76,22 @@ export default function DropScreen() {
 
   // Fetch accepted drops on mount
   useEffect(() => {
+    console.log('[DROP-SCREEN] DropScreen mounted - fetching accepted drops');
     fetchAcceptedDrops();
   }, []);
 
   const fetchAcceptedDrops = async () => {
+    console.log('[DROP-SCREEN] fetchAcceptedDrops ENTRY');
     try {
+      console.log('[DROP-SCREEN] Calling getAcceptedDrops API...');
       const drops = await getAcceptedDrops();
+      console.log('[DROP-SCREEN] getAcceptedDrops returned', drops.length, 'drops');
+      console.log('[DROP-SCREEN] Full result set:', JSON.stringify(drops.map(d => ({ id: d.id, senderName: d.senderName, status: d.status })), null, 2));
+      console.log('[DROP-STATE] DropScreen setAcceptedDrops - count:', drops.length);
       setAcceptedDrops(drops);
-    } catch (error) {
+    } catch (error: any) {
       console.error('[DROPS] Failed to fetch accepted drops:', error);
+      console.error('[DROP-SCREEN] fetchAcceptedDrops EXCEPTION:', error?.message);
     }
   };
 
@@ -145,17 +152,23 @@ export default function DropScreen() {
   });
 
   const confirmDeleteDrop = async () => {
+    console.log('[DROP-STATE] confirmDeleteDrop called - dropToDelete:', dropToDelete?.id);
     if (dropToDelete) {
       try {
         await deleteDrop(dropToDelete.id);
-        setAcceptedDrops(prev => prev.filter(d => d.id !== dropToDelete.id));
+        console.log('[DROP-STATE] DropScreen setAcceptedDrops - removing drop:', dropToDelete.id);
+        setAcceptedDrops(prev => {
+          console.log('[DROP-STATE] confirmDeleteDrop filter - prev.length:', prev.length);
+          return prev.filter(d => d.id !== dropToDelete.id);
+        });
         showToast({
           message: `Removed ${dropToDelete.senderName || 'drop'}`,
           type: 'success',
           duration: 2000,
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('[DROPS] Failed to delete drop:', error);
+        console.error('[DROP-STATE] confirmDeleteDrop EXCEPTION:', error?.message);
         showToast({
           message: 'Failed to delete drop',
           type: 'error',
@@ -198,6 +211,12 @@ export default function DropScreen() {
     .filter(device => device.distanceFeet <= maxDistance)
     .sort((a, b) => a.distanceFeet - b.distanceFeet);
 
+  // Log device counts for BLE debugging
+  useEffect(() => {
+    console.log('[BLE-DUPE] DropScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length);
+    console.log('[BLE-ID] DropScreen filteredDevices for UI render:', JSON.stringify(filteredDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
+  }, [devices, dropLinkDevices.length, filteredDevices.length]);
+
   // Auto-start scanning when Drop page loads
   useEffect(() => {
     startScan();
@@ -205,10 +224,15 @@ export default function DropScreen() {
   }, []);
 
   const handleDrop = async (device: BleDevice) => {
+    const sendTimestamp = Date.now();
+    console.log('[DROP-CRASH] DropScreen handleDrop called - timestamp:', sendTimestamp);
+    console.log('[DROP-DUPE] DropScreen handleDrop - device:', JSON.stringify(device, null, 2), 'timestamp:', sendTimestamp);
+    
     // Phone verification check disabled - users can drop without phone verification
     
     // Validate device has userId for sending drop
     if (!device.userId) {
+      console.error('[DROP-CRASH] Cannot send drop - device has no userId');
       console.error('[DROPS] Cannot send drop - device has no userId');
       showToast({
         message: 'Cannot send drop - user not found',
@@ -221,6 +245,8 @@ export default function DropScreen() {
     
     try {
       console.log('[DROPS] Sending drop to:', device.userId, device.username || device.name, 'distance:', device.distanceFeet);
+      console.log('[DROP-CRASH] DropScreen about to call sendDrop - receiverId:', device.userId);
+      console.log('[DROP-DUPE] Calling sendDrop from DropScreen - receiverId:', device.userId, 'timestamp:', sendTimestamp);
       
       // Send drop with current user's profile info and distance
       await sendDrop(device.userId, {
@@ -232,6 +258,9 @@ export default function DropScreen() {
         socialMedia: profile?.socialMedia,
       }, device.distanceFeet);
       
+      console.log('[DROP-CRASH] DropScreen sendDrop returned successfully');
+      console.log('[DROP-DUPE] DropScreen sendDrop completed - timestamp:', Date.now());
+      console.log('[DROP-STATE] DropScreen setActive(null) after successful send');
       setActive(null);
       showToast({
         message: `Drop sent to ${device.username || device.name}!`,
@@ -240,7 +269,10 @@ export default function DropScreen() {
       });
       
       // Note: No more simulated return - real returns come from receiver's device
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[DROP-CRASH] DropScreen handleDrop EXCEPTION:', error?.message);
+      console.error('[DROP-CRASH] Full error:', JSON.stringify(error, null, 2));
+      console.error('[DROP-CRASH] Stack:', error?.stack);
       console.error('[DROPS] Failed to send drop:', error);
       showToast({
         message: error instanceof Error ? error.message : 'Failed to send drop',
@@ -287,13 +319,19 @@ export default function DropScreen() {
   };
 
   const onRefresh = async () => {
+    console.log('[DROP-SCREEN] onRefresh called - refreshing drops and BLE scan');
+    console.log('[DROP-STATE] DropScreen setRefreshing(true)');
     setRefreshing(true);
     // Refresh accepted drops
+    console.log('[DROP-SCREEN] Calling fetchAcceptedDrops from onRefresh...');
     await fetchAcceptedDrops();
     // Stop current scan and start a new one
+    console.log('[BLE-SCAN] onRefresh stopping scan...');
     stopScan();
     await new Promise(resolve => setTimeout(resolve, 300)); // Brief pause
+    console.log('[BLE-SCAN] onRefresh starting new scan...');
     startScan();
+    console.log('[DROP-STATE] DropScreen setRefreshing(false)');
     setRefreshing(false);
   };
 
