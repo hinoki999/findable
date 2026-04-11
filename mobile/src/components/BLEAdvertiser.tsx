@@ -144,6 +144,11 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     isAdvertisingRef.current = isAdvertising;
   }, [isAdvertising]);
 
+  // Synchronous ref to prevent multiple concurrent startAdvertising calls
+  // This is set immediately when startAdvertising begins and cleared when it completes
+  // Unlike isAdvertisingRef (which syncs via useEffect), this is updated synchronously
+  const isStartingRef = useRef(false);
+
   // Request BLE advertising permissions
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[BLE-ADV-DIAG] requestPermissions called, Platform:', Platform.OS);
@@ -227,7 +232,16 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[GHOST-MODE] Platform:', Platform.OS);
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
     console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
+    console.log('[GHOST-MODE] isStartingRef.current:', isStartingRef.current);
     console.log('[GHOST-MODE] UserId:', userId ? userId.substring(0, 8) + '...' : 'null');
+
+    // SYNCHRONOUS GUARD: Prevent multiple concurrent start attempts
+    // This catches rapid-fire calls before any async operations begin
+    if (isStartingRef.current) {
+      console.log('[BLE-ADV-DIAG] ⏳ startAdvertising already in progress, skipping duplicate call');
+      console.log('[GHOST-MODE] ============================================');
+      return;
+    }
 
     if (!isAvailable) {
       console.error('[BLE-ADV-DIAG] ❌ Advertising not available (not Android or disabled)');
@@ -251,6 +265,10 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       console.log('[BLE-ADV-DIAG] ⏳ Waiting for userId, skipping start');
       return;
     }
+
+    // SET SYNCHRONOUS GUARD immediately before any async operations
+    isStartingRef.current = true;
+    console.log('[BLE-ADV-DIAG] 🔒 Set isStartingRef = true (preventing concurrent calls)');
 
     try {
       console.log('[BLE-ADV-DIAG] Step 1: Requesting permissions...');
@@ -285,23 +303,20 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       if (result.success) {
         // Store the actual name being broadcast for verification
         setBroadcastName(currentLocalName);
+        console.log('[GHOST-MODE] ✅ SUCCESS: Native module returned success');
+        setIsAdvertising(true);
+        setError(null);
+        console.log('[GHOST-MODE] ✅ Broadcasting as:', currentLocalName);
+        console.log('[GHOST-MODE] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
+        console.log('[GHOST-MODE] ✅ RESULT: Advertising is NOW ACTIVE');
+        console.log('[GHOST-MODE] ✅ You are now VISIBLE to nearby devices');
       } else {
         // Native module not available, advertising disabled
         console.log('[BLE-ADV-DIAG] Native module unavailable, advertising disabled');
         setError('Advertising not available on this device');
         setIsAdvertising(false);
         setBroadcastName(null);
-        return; // Exit gracefully without crashing
       }
-
-      console.log('[GHOST-MODE] ✅ SUCCESS: Native module returned success');
-      setIsAdvertising(true);
-      setError(null);
-      console.log('[GHOST-MODE] ✅ Broadcasting as:', currentLocalName);
-      console.log('[GHOST-MODE] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
-      console.log('[GHOST-MODE] ✅ RESULT: Advertising is NOW ACTIVE');
-      console.log('[GHOST-MODE] ✅ You are now VISIBLE to nearby devices');
-      console.log('[GHOST-MODE] ============================================');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start advertising';
       console.error('[GHOST-MODE] ❌ FAILED: startAdvertising error:', errorMessage);
@@ -310,6 +325,10 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setError(errorMessage);
       setIsAdvertising(false);
       setBroadcastName(null);
+    } finally {
+      // ALWAYS clear the synchronous guard when operation completes (success or failure)
+      isStartingRef.current = false;
+      console.log('[BLE-ADV-DIAG] 🔓 Set isStartingRef = false (allowing future calls)');
       console.log('[GHOST-MODE] ============================================');
     }
   }, [isAvailable, requestPermissions, userId]); // Removed isAdvertising - use ref to prevent useEffect re-triggers

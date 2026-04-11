@@ -758,6 +758,10 @@ export default function HomeScreen() {
     stopAdvertisingRef.current = stopAdvertising;
   }, [stopAdvertising]);
 
+  // Synchronous ref to prevent multiple startAdvertising calls during rapid re-renders
+  // This is checked/set synchronously in the useEffect before calling startAdvertisingRef.current()
+  const hasRequestedAdvertisingRef = useRef(false);
+
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
     startScanRef.current();
@@ -778,24 +782,34 @@ export default function HomeScreen() {
 
   // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
   useEffect(() => {
+    console.log('[BLE-ADV-EFFECT] useEffect fired - isDiscoverable:', isDiscoverable, 'isAvailable:', isAvailable, 'loading:', loading, 'userId:', userId ? 'present' : 'null');
 
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!isAvailable || loading || !userId) {
+      console.log('[BLE-ADV-EFFECT] Early return - prerequisites not met');
       return;
     }
 
     // Start advertising when isDiscoverable is true (ACTIVE mode)
     if (isDiscoverable) {
-      if (!isAdvertising) {
+      // Use synchronous ref guard instead of isAdvertising state
+      // This prevents multiple calls when useEffect fires rapidly due to multiple dependency changes
+      if (!hasRequestedAdvertisingRef.current && !isAdvertising) {
+        console.log('[BLE-ADV-EFFECT] 🔒 Setting hasRequestedAdvertisingRef = true, calling startAdvertising');
+        hasRequestedAdvertisingRef.current = true;
         startAdvertisingRef.current();
+      } else {
+        console.log('[BLE-ADV-EFFECT] Skipping start - hasRequestedAdvertisingRef:', hasRequestedAdvertisingRef.current, 'isAdvertising:', isAdvertising);
       }
     } else {
       // Stop advertising when isDiscoverable is false (GHOST mode)
+      console.log('[BLE-ADV-EFFECT] 🔓 isDiscoverable=false, resetting hasRequestedAdvertisingRef and stopping');
+      hasRequestedAdvertisingRef.current = false;
       stopAdvertisingRef.current();
     }
     // No cleanup needed here - stop is handled in effect body when isDiscoverable=false
     // Native BLEAdvertiserService handles cleanup on app termination via onDestroy()
-  }, [isDiscoverable, isAvailable, loading, userId]);
+  }, [isDiscoverable, isAvailable, loading, userId, isAdvertising]);
 
   // Fetch linked devices (accepted and returned links) on mount and periodically
   // Note: HomeScreen unmounts/remounts on tab change, so this fires on each "focus"
