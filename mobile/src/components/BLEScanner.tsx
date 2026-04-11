@@ -284,27 +284,25 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 let userId: string | null = null;
                 let displayName: string | null = null;
 
-                // Query user_profiles with server-side prefix matching
+                // Query user_profiles via RPC function (handles uuid::text cast server-side)
                 // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
-                // Use filter with text cast because user_id is uuid type (ilike doesn't work on uuid)
-                console.log('[BLE-ID] Querying user_profiles with filter:', `${normalizedDeviceId}%`);
+                console.log('[BLE-ID] Calling RPC get_profile_by_user_id_prefix with:', normalizedDeviceId);
                 const { data: userProfileData, error: userProfileError } = await supabase
-                  .from('user_profiles')
-                  .select('user_id, name, username')
-                  .filter('user_id::text', 'ilike', `${normalizedDeviceId}%`)
-                  .limit(1)
-                  .maybeSingle();
+                  .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
 
                 if (userProfileError) {
-                  console.error('[BLE-ID] Supabase lookup error:', JSON.stringify(userProfileError, null, 2));
+                  console.error('[BLE-ID] Supabase RPC lookup error:', JSON.stringify(userProfileError, null, 2));
                 }
 
-                if (!userProfileError && userProfileData) {
-                  userId = userProfileData.user_id;
+                // RPC returns an array, get first result
+                const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
+
+                if (!userProfileError && profile) {
+                  userId = profile.user_id;
                   // Use name for display, fall back to username, then deviceId
-                  displayName = userProfileData.name || userProfileData.username || deviceId || 'User';
+                  displayName = profile.name || profile.username || deviceId || 'User';
                   console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
-                  console.log('[BLE-ID] Full profile data:', JSON.stringify(userProfileData, null, 2));
+                  console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
                 } else {
                   console.log('[BLE-ID] No profile found for deviceId:', deviceId);
                 }
