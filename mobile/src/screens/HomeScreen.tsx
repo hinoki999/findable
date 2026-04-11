@@ -590,6 +590,7 @@ export default function HomeScreen() {
   const [isSendingDrop, setIsSendingDrop] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
+  const [blipProfilePhoto, setBlipProfilePhoto] = useState<string | null>(null);
 
   // Auto-dismiss drop error after 5 seconds
   useEffect(() => {
@@ -1000,6 +1001,35 @@ export default function HomeScreen() {
       }
     }
   }, [devices, selectedBlipDeviceId, selectedBlipDevice]);
+
+  // Fetch profile photo when blip modal opens with a userId
+  useEffect(() => {
+    const fetchBlipProfilePhoto = async () => {
+      if (showBlipModal && selectedBlipDevice?.userId) {
+        try {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('profile_photo')
+            .eq('user_id', selectedBlipDevice.userId)
+            .single();
+
+          if (!error && data?.profile_photo) {
+            setBlipProfilePhoto(data.profile_photo);
+          } else {
+            setBlipProfilePhoto(null);
+          }
+        } catch (err) {
+          console.error('[BLIP-MODAL] Error fetching profile photo:', err);
+          setBlipProfilePhoto(null);
+        }
+      } else if (!showBlipModal) {
+        // Clear photo when modal closes
+        setBlipProfilePhoto(null);
+      }
+    };
+
+    fetchBlipProfilePhoto();
+  }, [showBlipModal, selectedBlipDevice?.userId]);
 
   // ========== TENSOR-BASED SPATIAL SYSTEM ==========
 
@@ -3094,25 +3124,55 @@ export default function HomeScreen() {
               shadowOpacity: 0.3,
               shadowRadius: 10,
               elevation: 10,
+              position: 'relative',
             }}>
+              {/* Close X Button - Upper Right */}
+              <Pressable
+                onPress={() => {
+                  setShowBlipModal(false);
+                  setDropError(null);
+                }}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#F0F0F0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <MaterialCommunityIcons name="close" size={18} color="#888" />
+              </Pressable>
+
               {/* Header */}
               <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                {/* Profile Photo */}
                 <View style={{
                   width: 60,
                   height: 60,
                   borderRadius: 30,
-                  backgroundColor: '#E5FFE5',
+                  backgroundColor: blipProfilePhoto ? 'transparent' : '#E5FFE5',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 12,
                   borderWidth: 2,
                   borderColor: '#00FF00',
+                  overflow: 'hidden',
                 }}>
-                  <MaterialCommunityIcons
-                    name="account-circle"
-                    size={40}
-                    color="#00FF00"
-                  />
+                  {blipProfilePhoto ? (
+                    <Image source={{ uri: blipProfilePhoto }} style={{ width: 60, height: 60 }} />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="account-circle"
+                      size={40}
+                      color="#00FF00"
+                    />
+                  )}
                 </View>
                 {/* Device Name - Primary Identifier */}
                 <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
@@ -3122,41 +3182,20 @@ export default function HomeScreen() {
                       : (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'))}
                 </Text>
 
-                {/* Device ID - Secondary, Smaller */}
-                {selectedBlipDevice?.id && (
-                  <Text style={{ fontSize: 11, color: theme.colors.muted, marginBottom: 16, fontFamily: 'monospace' }}>
-                    {selectedBlipDevice.id.length > 30 ? selectedBlipDevice.id.substring(0, 30) + '...' : selectedBlipDevice.id}
-                  </Text>
-                )}
-
-                {/* Device Details */}
-                <View style={{ width: '100%', marginBottom: 12 }}>
+                {/* Device Details - Distance Only */}
+                <View style={{ width: '100%', marginBottom: 12, marginTop: 8 }}>
                   <View style={{
                     flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     backgroundColor: '#E5FFE5',
                     paddingHorizontal: 12,
                     paddingVertical: 4,
                     borderRadius: 12,
-                    marginBottom: 6,
                   }}>
                     <MaterialCommunityIcons name="map-marker-radius" size={14} color="#00FF00" />
                     <Text style={{ fontSize: 13, fontWeight: '600', color: '#00AA00', marginLeft: 4 }}>
                       {selectedBlipDevice?.distanceFeet.toFixed(1)} ft away
-                    </Text>
-                  </View>
-
-                  <View style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: '#F0F0F0',
-                    paddingHorizontal: 12,
-                    paddingVertical: 4,
-                    borderRadius: 12,
-                  }}>
-                    <MaterialCommunityIcons name="signal" size={14} color="#666" />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginLeft: 4 }}>
-                      RSSI: {selectedBlipDevice?.rssi || 'N/A'} dBm
                     </Text>
                   </View>
                 </View>
@@ -3397,26 +3436,6 @@ export default function HomeScreen() {
                       </Text>
                     </>
                   )}
-                </Pressable>
-
-                <Pressable
-                  onPress={() => {
-                    setShowBlipModal(false);
-                    setDropError(null);
-                  }}
-                  style={({ pressed }) => ({
-                    paddingVertical: 14,
-                    borderRadius: 10,
-                    alignItems: 'center',
-                    borderWidth: 1.5,
-                    borderColor: '#00FF00',
-                    backgroundColor: 'transparent',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: '#00AA00' }}>
-                    Close
-                  </Text>
                 </Pressable>
               </View>
             </View>
