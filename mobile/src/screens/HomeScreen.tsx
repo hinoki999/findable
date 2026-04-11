@@ -969,11 +969,23 @@ export default function HomeScreen() {
 
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
+  // Deduplicate by device name (DL-XXXXXXXX) - keep the one with strongest RSSI
+  // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
+  const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
+    const existingIndex = acc.findIndex(d => d.name === device.name);
+    if (existingIndex === -1) {
+      acc.push(device);
+    } else if ((device.rssi || -100) > (acc[existingIndex].rssi || -100)) {
+      acc[existingIndex] = device;
+    }
+    return acc;
+  }, [] as typeof filteredDevices);
+
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length);
-    console.log('[BLE-ID] HomeScreen filteredDevices for UI render:', JSON.stringify(filteredDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices.length, filteredDevices.length]);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length, 'deduplicated:', deduplicatedDevices.length);
+    console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify(deduplicatedDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
+  }, [devices, dropLinkDevices.length, filteredDevices.length, deduplicatedDevices.length]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -1112,7 +1124,7 @@ export default function HomeScreen() {
 
   // Calculate spatial density field (heat map) using tensor operations
   const calculateSpatialDensity = useMemo(() => {
-    const devicePositions: Vector2D[] = filteredDevices.map(device => {
+    const devicePositions: Vector2D[] = deduplicatedDevices.map(device => {
       const pos = getGridPosition(device);
       return { x: pos.x, y: pos.y }; // Extract 2D position
     });
@@ -1121,7 +1133,7 @@ export default function HomeScreen() {
     return (testPoint: Vector2D): number => {
       return TensorMath.distanceField(testPoint, devicePositions, spatialTensors.maxRadiusPixels);
     };
-  }, [filteredDevices, spatialTensors.maxRadiusPixels]);
+  }, [deduplicatedDevices, spatialTensors.maxRadiusPixels]);
 
   // Calculate interaction tensor between two devices
   const calculateInteractionStrength = (device1: BleDevice, device2: BleDevice): number => {
@@ -1789,7 +1801,7 @@ export default function HomeScreen() {
             pointerEvents: 'box-none', // Container doesn't capture, but children (blips) can
           }}
         >
-          {filteredDevices.map((device) => {
+          {deduplicatedDevices.map((device) => {
             const position = getGridPosition(device);
 
             return (
@@ -1834,7 +1846,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
-        {filteredDevices.length === 0 && linkedDevices.length === 0 && (
+        {deduplicatedDevices.length === 0 && linkedDevices.length === 0 && (
           <View
             style={{
               position: 'absolute',
