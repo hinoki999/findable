@@ -286,11 +286,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
                 // Query user_profiles with server-side prefix matching
                 // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
-                console.log('[BLE-ID] Querying user_profiles with ilike:', `${normalizedDeviceId}%`);
+                // Use filter with text cast because user_id is uuid type (ilike doesn't work on uuid)
+                console.log('[BLE-ID] Querying user_profiles with filter:', `${normalizedDeviceId}%`);
                 const { data: userProfileData, error: userProfileError } = await supabase
                   .from('user_profiles')
                   .select('user_id, name, username')
-                  .ilike('user_id', `${normalizedDeviceId}%`)
+                  .filter('user_id::text', 'ilike', `${normalizedDeviceId}%`)
                   .limit(1)
                   .maybeSingle();
 
