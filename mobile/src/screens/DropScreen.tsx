@@ -542,9 +542,16 @@ export default function DropScreen() {
                           @{drop.senderUsername}
                         </Text>
                       )}
-                      <Text style={[theme.type.muted, { fontSize: 11, marginTop: 2 }]}>
-                        Accepted {formatTimeAgo(drop.respondedAt || drop.createdAt)}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 }}>
+                        <Text style={[theme.type.muted, { fontSize: 11 }]}>
+                          Accepted {formatTimeAgo(drop.respondedAt || drop.createdAt)}
+                        </Text>
+                        {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                          <Text style={[theme.type.muted, { fontSize: 11 }]}>
+                            • {drop.distanceFeet.toFixed(1)} ft
+                          </Text>
+                        )}
+                      </View>
                     </View>
                     
                     {/* Action Icons */}
@@ -610,7 +617,7 @@ export default function DropScreen() {
           >
             <DeviceCard
               id={item.id}
-              name={item.name}
+              name={item.username || item.name}
               distanceFeet={item.distanceFeet}
               rssi={item.rssi}
               isDarkMode={isDarkMode}
@@ -666,7 +673,7 @@ export default function DropScreen() {
 
             {/* Confirmation text */}
             <Text style={{ ...theme.type.h1, textAlign:'center', marginBottom:12, fontSize: 22 }}>
-              Send drop to {active?.name}?
+              Send drop to {active?.username || active?.name}?
             </Text>
             <Text style={{ ...theme.type.body, textAlign:'center', marginBottom:8, color: theme.colors.muted }}>
               This will share your contact card with them

@@ -625,15 +625,15 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
 
     const userId = session.user.id;
     console.log('[DROPS] Fetching accepted drops for user:', userId);
-    console.log('[DROP-SCREEN] Query params - receiver_id:', userId, 'status: accepted');
+    console.log('[DROP-SCREEN] Query params - userId:', userId, 'status: accepted (sender or receiver)');
 
-    // Get drops where user is the receiver AND status is 'accepted'
-    // Note: 'deleted' drops are excluded because we filter for 'accepted' status only
+    // Get drops where user is either sender OR receiver AND status is 'accepted'
+    // This shows all accepted drops the user is involved in
     const { data, error } = await supabase
       .from('drops')
       .select('*')
-      .eq('receiver_id', userId)
       .eq('status', 'accepted')
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order('responded_at', { ascending: false });
 
     if (error) {
