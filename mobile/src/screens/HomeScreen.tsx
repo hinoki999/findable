@@ -860,13 +860,7 @@ export default function HomeScreen() {
         const links = await getUnviewedLinks();
         console.log('[DROP-STATE] HomeScreen setUnviewedLinksFromDb - count:', links.length);
         setUnviewedLinksFromDb(links);
-
-        console.log('[DROP-MODAL] Checking link modal trigger - links.length:', links.length, 'showNewLinkModal:', showNewLinkModal, 'currentNewLink:', !!currentNewLink);
-        if (links.length > 0 && !showNewLinkModal && !currentNewLink) {
-          console.log('[DROP-MODAL] AUTO-TRIGGERING link modal - NOT user initiated! Link:', JSON.stringify(links[0], null, 2));
-          setCurrentNewLink(links[0]);
-          setShowNewLinkModal(true);
-        }
+        // Modal auto-trigger removed - modal only opens via handleRaindropPress
       } catch (error: any) {
         console.error('[DROP-MODAL] fetchUnviewedLinksFromDb error:', error?.message);
         // Silent fail - links will refresh on next mount
@@ -877,7 +871,7 @@ export default function HomeScreen() {
     fetchUnviewedLinksFromDb();
     const interval = setInterval(fetchUnviewedLinksFromDb, 5000);
     return () => clearInterval(interval);
-  }, [userId, showNewLinkModal, currentNewLink]);
+  }, [userId]);
 
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
