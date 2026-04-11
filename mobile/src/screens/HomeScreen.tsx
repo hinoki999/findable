@@ -691,6 +691,9 @@ export default function HomeScreen() {
   const DROP_ICON_SIZE = 30; // Size of water drop icon (pixels)
   const MAX_RADIUS_FEET = 33; // Maximum radius in feet
   const UI_PADDING = 16; // Padding for UI elements
+  // Minimum distance from center for blips - prevents overlap with raindrop icon
+  // Raindrop is 30px with 60px ripple effect, so 45px keeps blips just outside
+  const MIN_BLIP_RADIUS_PIXELS = 45;
 
   // Calculate radar size (square, scaled to fit available space)
   const radarAvailableHeight = availableHeight - TOP_CONTROLS_HEIGHT - BOTTOM_TABS_HEIGHT - (UI_PADDING * 2);
@@ -1093,10 +1096,28 @@ export default function HomeScreen() {
     const projectedX = normalizedX / denominator;
     const projectedY = normalizedY / denominator;
     const bulgeFactor = 1.15; // Matches grid exactly
-    const curvedPosition: Vector2D = {
+    let curvedPosition: Vector2D = {
       x: projectedX * sphereRadius * bulgeFactor,
       y: projectedY * sphereRadius * bulgeFactor,
     };
+
+    // MINIMUM DISTANCE BUFFER: Push blips outside the raindrop's hit area
+    // This prevents blips from overlapping the central raindrop icon
+    const curvedDistance = Math.sqrt(curvedPosition.x * curvedPosition.x + curvedPosition.y * curvedPosition.y);
+    if (curvedDistance < MIN_BLIP_RADIUS_PIXELS && curvedDistance > 0) {
+      // Scale the position outward to the minimum radius while preserving angle
+      const scaleFactor = MIN_BLIP_RADIUS_PIXELS / curvedDistance;
+      curvedPosition = {
+        x: curvedPosition.x * scaleFactor,
+        y: curvedPosition.y * scaleFactor,
+      };
+    } else if (curvedDistance === 0) {
+      // Device at exact center (0,0) - push to minimum radius at the device's hash angle
+      curvedPosition = {
+        x: MIN_BLIP_RADIUS_PIXELS * Math.cos(angleInRadians),
+        y: MIN_BLIP_RADIUS_PIXELS * Math.sin(angleInRadians),
+      };
+    }
 
     const z = depth; // Depth factor from sphere projection (0-1)
 
@@ -1912,7 +1933,7 @@ export default function HomeScreen() {
                 })
               }
             ],
-            zIndex: 999,
+            zIndex: 10000, // Higher than blips (9999) to ensure raindrop is always tappable
           }}
           pointerEvents="box-none"
         >
