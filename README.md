@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (Tutorial System Simplified + Email Verification Resolved + Account Email Change Flow)
+**Last Updated:** February 20, 2026 (BLE Detection Fixes + Advertiser Crash Fix + Modal Auto-Trigger Fix)
 
 ---
 
@@ -1948,6 +1948,110 @@ useEffect(() => {
    - Use two devices with app installed
    - Verify bidirectional detection
    - Verify Service UUID detection works
+
+---
+
+## BLE Detection & Advertising Fixes (February 2026)
+
+### Overview
+Critical bug fixes for BLE device detection, user display names, advertising stability, and modal behavior discovered during live device testing.
+
+### Bug Fixes
+
+#### Bug #1: Duplicate Dots on Radar (Multiple Blips for Same User)
+**Issue:** Same nearby user appeared as multiple green dots on radar (up to 4 dots within 5-10 minutes)
+**Root Cause:** Android MAC address rotation assigns new random MAC addresses when BLE advertising restarts. The scanner deduplicates by `device.id` (MAC address), so each new MAC appeared as a unique device despite having the same `DL-XXXXXXXX` device name.
+**Fix:** Added deduplication by device name (`DL-` prefix) in HomeScreen.tsx before UI render, keeping the entry with strongest RSSI signal.
+**Location:** `HomeScreen.tsx` lines 974-982
+
+```javascript
+const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
+  const existingIndex = acc.findIndex(d => d.name === device.name);
+  if (existingIndex === -1) {
+    acc.push(device);
+  } else if ((device.rssi || -100) > (acc[existingIndex].rssi || -100)) {
+    acc[existingIndex] = device;
+  }
+  return acc;
+}, [] as typeof filteredDevices);
+```
+
+#### Bug #2: User Name Not Displaying (Shows "7705e313" Instead of Name)
+**Issue:** Radar blips displayed raw device ID prefix (e.g., "7705e313") instead of the user's actual display name
+**Root Cause:** Supabase profile lookup was failing with error `"operator does not exist: uuid ~~* unknown"` because `ilike` operator cannot be used directly on a `uuid` column type.
+**Fix:** Changed query to cast `user_id` to text before pattern matching.
+**Location:** `BLEScanner.tsx` line 293
+
+**Before:**
+```javascript
+.ilike('user_id', `${normalizedDeviceId}%`)
+```
+
+**After:**
+```javascript
+.filter('user_id::text', 'ilike', `${normalizedDeviceId}%`)
+```
+
+#### Bug #3: Multiple Concurrent Advertiser Starts (Race Condition)
+**Issue:** BLE advertising could be started multiple times in quick succession due to React state timing, causing Android to assign new MAC addresses and compounding the duplicate dots issue
+**Root Cause:** The `isAdvertising` state check was unreliable across rapid re-renders because React state updates are asynchronous. Multiple `useEffect` fires could all see `isAdvertising === false` before any had completed.
+**Fix:** Added synchronous ref-based guards (`isStartingRef` in BLEAdvertiser.tsx, `hasRequestedAdvertisingRef` in HomeScreen.tsx) that are set immediately before any async operations.
+**Location:** `BLEAdvertiser.tsx` lines 147-150, 238-244, 269-271, 328-333; `HomeScreen.tsx` lines 761-763, 795-808
+
+```javascript
+// BLEAdvertiser.tsx - synchronous guard
+const isStartingRef = useRef(false);
+
+// In startAdvertising():
+if (isStartingRef.current) {
+  console.log('[BLE-ADV-DIAG] ⏳ startAdvertising already in progress, skipping duplicate call');
+  return;
+}
+isStartingRef.current = true;
+try {
+  // ... advertising logic
+} finally {
+  isStartingRef.current = false;
+}
+```
+
+#### Bug #4: BLE Advertiser Crash (ForegroundServiceDidNotStartInTimeException)
+**Issue:** App crashed on Android with `ForegroundServiceDidNotStartInTimeException: Context.startForegroundService() did not then call Service.startForeground(): BLEAdvertiserService`
+**Root Cause:** `startForeground()` was being called inside conditional branches in `onStartCommand()`, not as the absolute first operation. Android requires `startForeground()` to be called within 5 seconds of `startForegroundService()`.
+**Fix:** Moved `startForeground()` to be called unconditionally as the very first operation in `onStartCommand()`, before any permission checks, BLE initialization, or intent handling.
+**Location:** `BLEAdvertiserService.kt` line 63
+
+```kotlin
+override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    // CRITICAL: Call startForeground IMMEDIATELY - Android requires this within 5 seconds
+    startForeground(NOTIFICATION_ID, createNotification(), 
+        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+    Log.d(TAG, "startForeground called immediately in onStartCommand")
+    
+    // ... rest of intent handling
+}
+```
+
+#### Bug #5: Link Modal Auto-Triggering Without User Tap
+**Issue:** The "New Link" modal appeared automatically when unviewed links were fetched, without the user tapping the raindrop icon
+**Root Cause:** The `useEffect` that fetched unviewed links contained logic to automatically call `setShowNewLinkModal(true)` if links were found
+**Fix:** Removed auto-trigger logic from the useEffect. The modal now only opens when the user explicitly taps the raindrop icon via `handleRaindropPress()`.
+**Location:** `HomeScreen.tsx` lines 866-880 (removed auto-trigger code, kept fetch and state update)
+
+### Files Modified
+
+- `mobile/src/screens/HomeScreen.tsx` - Added deduplication, ref guards, removed modal auto-trigger
+- `mobile/src/components/BLEScanner.tsx` - Fixed Supabase query for uuid column
+- `mobile/src/components/BLEAdvertiser.tsx` - Added synchronous ref guard for concurrent starts
+- `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEAdvertiserService.kt` - Fixed startForeground timing
+
+### Testing Verification
+
+1. **Duplicate Dots:** Deploy to two devices, verify only one dot per nearby user regardless of scan duration
+2. **User Names:** Verify user's display name shows in blip modal, not device ID prefix
+3. **Advertiser Stability:** Rapid tab switching and toggle changes should not cause multiple dots
+4. **No Crashes:** Extended use should not produce ForegroundServiceDidNotStartInTimeException
+5. **Modal Behavior:** Link modal should only open on raindrop tap, never automatically
 
 ---
 
