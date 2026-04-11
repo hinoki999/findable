@@ -901,7 +901,7 @@ function MainApp() {
                   }}>
                     <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                       <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-                        <Screen />
+                        {Screen()}
                       </View>
 
                       {/* Bottom nav - Hide when sub-screen is active */}
