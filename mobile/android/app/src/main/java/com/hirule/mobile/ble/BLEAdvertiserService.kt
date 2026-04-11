@@ -57,9 +57,14 @@ class BLEAdvertiserService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // CRITICAL: Call startForeground() IMMEDIATELY and UNCONDITIONALLY
+        // Android requires this within 5 seconds of startForegroundService() call
+        // Must happen BEFORE any permission checks, BLE init, or other operations
+        startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        Log.d(TAG, "startForeground called immediately in onStartCommand")
+        
         when (intent?.action) {
             ACTION_START_ADVERTISE -> {
-                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
                 val serviceUUID = intent.getStringExtra(EXTRA_SERVICE_UUID)
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 if (serviceUUID != null && deviceId != null) {
@@ -71,9 +76,6 @@ class BLEAdvertiserService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
-            }
-            else -> {
-                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
             }
         }
         return START_STICKY

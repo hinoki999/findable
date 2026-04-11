@@ -671,13 +671,11 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     console.log('[DROPS] Fetching linked drops for user:', userId);
 
     // Get drops where user is the RECEIVER and status is 'linked' (mutual links only)
-    // We only fetch drops where user is receiver because:
-    // - The sender_* fields contain the OTHER person's contact info
-    // - When user A and B link, there are 2 drop records:
-    //   1. A→B (A's info stored as sender, status='linked')
-    //   2. B→A (B's info stored as sender, status='linked')
-    // - User A sees drop B→A (where A is receiver) → shows B's info ✓
-    // - User B sees drop A→B (where B is receiver) → shows A's info ✓
+    // NOTE: The drops table has TWO rows per interaction (both with same sender_id/receiver_id):
+    //   - One created with status='sent' (sender's record)
+    //   - One created with status='received' (receiver's record)
+    // When linked, BOTH rows get status='linked', causing duplicates in query results.
+    // We deduplicate by sender_id below to show only one entry per link.
     const { data, error } = await supabase
       .from('drops')
       .select('*')
@@ -690,8 +688,21 @@ export async function getLinkedDrops(): Promise<Drop[]> {
       throw new Error('Failed to load linked drops. Please try again.');
     }
 
-    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} linked drops`);
-    return (data || []).map(mapDropFromDb);
+    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} linked drops (before dedup)`);
+    
+    // Deduplicate by sender_id — both rows in a link interaction have the same sender_id,
+    // so we keep only the first occurrence (most recent by responded_at due to ordering)
+    const uniqueBySender = new Map<string, any>();
+    for (const drop of data || []) {
+      if (!uniqueBySender.has(drop.sender_id)) {
+        uniqueBySender.set(drop.sender_id, drop);
+      }
+    }
+    
+    const dedupedData = Array.from(uniqueBySender.values());
+    console.log(`[DROPS] After dedup: ${dedupedData.length} unique linked drops`);
+    
+    return dedupedData.map(mapDropFromDb);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get linked drops error:', error);
     throw new Error(error.message || 'Failed to load linked drops. Please try again.');
@@ -727,8 +738,20 @@ export async function getUnviewedLinks(): Promise<Drop[]> {
       throw new Error('Failed to load unviewed links.');
     }
 
-    console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
-    return (data || []).map(mapDropFromDb);
+    console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links (before dedup)`);
+    
+    // Deduplicate by sender_id — both rows in a link interaction have the same sender_id
+    const uniqueBySender = new Map<string, any>();
+    for (const drop of data || []) {
+      if (!uniqueBySender.has(drop.sender_id)) {
+        uniqueBySender.set(drop.sender_id, drop);
+      }
+    }
+    
+    const dedupedData = Array.from(uniqueBySender.values());
+    console.log(`[DROPS] After dedup: ${dedupedData.length} unique unviewed links`);
+    
+    return dedupedData.map(mapDropFromDb);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
     throw new Error(error.message || 'Failed to load unviewed links.');
