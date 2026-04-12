@@ -328,7 +328,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                     console.log('[BLE-DUPE] DeviceId fallback - prevDevices.length:', prevDevices.length);
                     return prevDevices.map(d =>
                       d.id === device.id
-                        ? { ...d, username: deviceId, userId: null }
+                        ? { ...d, username: deviceId, userId: undefined }
                         : d
                     );
                   });

@@ -189,9 +189,9 @@ export default function HistoryScreen() {
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
     
-    // Then sort by respondedAt (when link was formed), then by createdAt
-    const aTime = a.respondedAt?.getTime() || a.createdAt?.getTime() || 0;
-    const bTime = b.respondedAt?.getTime() || b.createdAt?.getTime() || 0;
+    // Then sort by createdAt (when link was formed)
+    const aTime = a.createdAt?.getTime() || 0;
+    const bTime = b.createdAt?.getTime() || 0;
     return bTime - aTime;
   });
 
