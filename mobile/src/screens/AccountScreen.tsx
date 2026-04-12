@@ -1156,17 +1156,10 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
               alignItems: 'center',
               backgroundColor: theme.colors.white,
             }}>
-              {/* Close Button */}
+              {/* Close X Button - Upper Right */}
               <Pressable
-                style={{
-                  position: 'absolute',
-                  top: 16,
-                  right: 16,
-                  padding: 4,
-                  zIndex: 1,
-                }}
                 onPress={() => {
-                  if (!sendingPhoneCode && phoneVerificationStep === 'confirm') {
+                  if (!sendingPhoneCode) {
                     setShowPhoneVerificationModal(false);
                     setPhoneVerificationStep('confirm');
                     setPhoneVerificationCode('');
@@ -1175,15 +1168,21 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
                   }
                 }}
                 disabled={sendingPhoneCode || phoneVerificationStep === 'success'}
+                style={({ pressed }) => ({
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#F0F0F0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  opacity: (pressed || sendingPhoneCode || phoneVerificationStep === 'success') ? 0.6 : 1,
+                })}
               >
-                {({ pressed }) => (
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={24}
-                    color={theme.colors.muted}
-                    style={{ opacity: pressed ? 0.6 : 1 }}
-                  />
-                )}
+                <MaterialCommunityIcons name="close" size={18} color="#888" />
               </Pressable>
 
               {phoneVerificationStep === 'confirm' ? (

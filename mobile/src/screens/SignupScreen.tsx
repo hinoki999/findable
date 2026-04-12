@@ -884,9 +884,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.colors.white }]}>
-            {/* Close Button */}
+            {/* Close X Button - Upper Right */}
             <Pressable
-              style={styles.modalCloseButton}
               onPress={() => {
                 if (!sendingCode && !loading) {
                   setShowVerificationModal(false);
@@ -895,15 +894,21 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
                 }
               }}
               disabled={sendingCode || loading}
+              style={({ pressed }) => ({
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: '#F0F0F0',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10,
+                opacity: (pressed || sendingCode || loading) ? 0.6 : 1,
+              })}
             >
-              {({ pressed }) => (
-                <MaterialCommunityIcons
-                  name="close"
-                  size={24}
-                  color={theme.colors.muted}
-                  style={{ opacity: pressed ? 0.6 : 1 }}
-                />
-              )}
+              <MaterialCommunityIcons name="close" size={18} color="#888" />
             </Pressable>
 
             {verificationStep === 'confirm' ? (
@@ -1298,13 +1303,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
-  },
-  modalCloseButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    padding: 4,
-    zIndex: 1,
   },
   modalTitle: {
     fontSize: 20,

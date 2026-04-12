@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** February 20, 2026 (BLE Detection Fixes + Advertiser Crash Fix + Modal Auto-Trigger Fix)
+**Last Updated:** February 20, 2026 (BLE Detection Stability + Profile Lookup RPC + Radar UI Fixes + Drop Flow Fixes)
 
 ---
 
@@ -1954,11 +1954,27 @@ useEffect(() => {
 ## BLE Detection & Advertising Fixes (February 2026)
 
 ### Overview
-Critical bug fixes for BLE device detection, user display names, advertising stability, and modal behavior discovered during live device testing.
+Critical bug fixes for BLE device detection, user display names, advertising stability, modal behavior, radar UI, and drop flow discovered during live device testing.
 
-### Bug Fixes
+### BLE Detection Stability
 
-#### Bug #1: Duplicate Dots on Radar (Multiple Blips for Same User)
+#### Bug #1: BLEScanner Unmounting Every 1-2 Seconds
+**Issue:** BLE detection was completely unreliable — logs showed "Cleanup on unmount - stopping scan" firing every 1-2 seconds immediately after every scan start
+**Root Cause:** The `Screen` function was defined as a `const` inside the `App.tsx` component body and rendered as `<Screen />`. React treated each render as a new component type (since the function reference changed) and remounted the entire component tree, destroying BLEScanner.
+**Fix:** Changed from JSX component syntax to direct function call.
+**Location:** `App.tsx` line 904
+
+**Before:**
+```jsx
+<Screen />
+```
+
+**After:**
+```jsx
+{Screen()}
+```
+
+#### Bug #2: Duplicate Dots on Radar (Multiple Blips for Same User)
 **Issue:** Same nearby user appeared as multiple green dots on radar (up to 4 dots within 5-10 minutes)
 **Root Cause:** Android MAC address rotation assigns new random MAC addresses when BLE advertising restarts. The scanner deduplicates by `device.id` (MAC address), so each new MAC appeared as a unique device despite having the same `DL-XXXXXXXX` device name.
 **Fix:** Added deduplication by device name (`DL-` prefix) in HomeScreen.tsx before UI render, keeping the entry with strongest RSSI signal.
@@ -1974,22 +1990,6 @@ const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
   }
   return acc;
 }, [] as typeof filteredDevices);
-```
-
-#### Bug #2: User Name Not Displaying (Shows "7705e313" Instead of Name)
-**Issue:** Radar blips displayed raw device ID prefix (e.g., "7705e313") instead of the user's actual display name
-**Root Cause:** Supabase profile lookup was failing with error `"operator does not exist: uuid ~~* unknown"` because `ilike` operator cannot be used directly on a `uuid` column type.
-**Fix:** Changed query to cast `user_id` to text before pattern matching.
-**Location:** `BLEScanner.tsx` line 293
-
-**Before:**
-```javascript
-.ilike('user_id', `${normalizedDeviceId}%`)
-```
-
-**After:**
-```javascript
-.filter('user_id::text', 'ilike', `${normalizedDeviceId}%`)
 ```
 
 #### Bug #3: Multiple Concurrent Advertiser Starts (Race Condition)
@@ -2015,7 +2015,35 @@ try {
 }
 ```
 
-#### Bug #4: BLE Advertiser Crash (ForegroundServiceDidNotStartInTimeException)
+### BLE Profile Lookup
+
+#### Bug #4: User Name Not Displaying (Shows "7705e313" Instead of Name)
+**Issue:** Radar blips displayed raw device ID prefix (e.g., "7705e313") instead of the user's actual display name
+**Root Cause:** Supabase profile lookup was failing with error `"operator does not exist: uuid ~~* unknown"` because `ilike` operator cannot be used directly on a `uuid` column type via PostgREST.
+**Fix:** Created SQL RPC function `get_profile_by_user_id_prefix(prefix text)` that handles `uuid::text` cast server-side. Updated BLEScanner.tsx to use `supabase.rpc()` instead of direct table query.
+**Location:** `BLEScanner.tsx` lines 287-308
+
+**SQL Function (run in Supabase SQL Editor):**
+```sql
+CREATE OR REPLACE FUNCTION get_profile_by_user_id_prefix(prefix text)
+RETURNS TABLE (user_id uuid, name text, username text)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT user_id, name, username
+  FROM user_profiles
+  WHERE user_id::text ILIKE prefix || '%'
+  LIMIT 1;
+$$;
+```
+
+**TypeScript Call:**
+```javascript
+const { data: userProfileData, error: userProfileError } = await supabase
+  .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
+```
+
+### Native Crash Fix
+
+#### Bug #5: BLE Advertiser Crash (ForegroundServiceDidNotStartInTimeException)
 **Issue:** App crashed on Android with `ForegroundServiceDidNotStartInTimeException: Context.startForegroundService() did not then call Service.startForeground(): BLEAdvertiserService`
 **Root Cause:** `startForeground()` was being called inside conditional branches in `onStartCommand()`, not as the absolute first operation. Android requires `startForeground()` to be called within 5 seconds of `startForegroundService()`.
 **Fix:** Moved `startForeground()` to be called unconditionally as the very first operation in `onStartCommand()`, before any permission checks, BLE initialization, or intent handling.
@@ -2032,26 +2060,98 @@ override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
 }
 ```
 
-#### Bug #5: Link Modal Auto-Triggering Without User Tap
+### Modal Fixes
+
+#### Bug #6: Link Modal Auto-Triggering Without User Tap
 **Issue:** The "New Link" modal appeared automatically when unviewed links were fetched, without the user tapping the raindrop icon
 **Root Cause:** The `useEffect` that fetched unviewed links contained logic to automatically call `setShowNewLinkModal(true)` if links were found
 **Fix:** Removed auto-trigger logic from the useEffect. The modal now only opens when the user explicitly taps the raindrop icon via `handleRaindropPress()`.
 **Location:** `HomeScreen.tsx` lines 866-880 (removed auto-trigger code, kept fetch and state update)
 
+#### Bug #7: Blip Modal Missing Profile Photo and Showing Technical Details
+**Issue:** Blip modal showed MAC address, RSSI, and placeholder icon instead of user's actual profile photo
+**Fix:** 
+- Removed MAC address display
+- Removed RSSI display
+- Added profile photo fetch via Supabase using `selectedBlipDevice.userId`
+- Replaced bottom "Close" button with small gray X in upper right corner
+- Bio displays when available from device object
+**Location:** `HomeScreen.tsx` lines 590-593 (state), 1006-1033 (useEffect), 3114-3202 (modal JSX)
+
+### Radar UI Fixes
+
+#### Bug #8: Raindrop Icon Obscured by Blips
+**Issue:** Nearby user blips could render on top of the raindrop icon, making it untappable
+**Fix:** 
+- Increased raindrop zIndex from 999 to 10000 (blips are 9999)
+- Added 45px minimum distance buffer from center nucleus point
+- Blips within the buffer are pushed outward while preserving their angle
+**Location:** `HomeScreen.tsx` lines 694-696 (constant), 1103-1118 (distance enforcement), 1936 (zIndex)
+
+```javascript
+const MIN_BLIP_RADIUS_PIXELS = 45;
+
+// In getGridPosition():
+const curvedDistance = Math.sqrt(curvedPosition.x ** 2 + curvedPosition.y ** 2);
+if (curvedDistance < MIN_BLIP_RADIUS_PIXELS && curvedDistance > 0) {
+  const scaleFactor = MIN_BLIP_RADIUS_PIXELS / curvedDistance;
+  curvedPosition = {
+    x: curvedPosition.x * scaleFactor,
+    y: curvedPosition.y * scaleFactor,
+  };
+}
+```
+
+### Drop Flow Fixes
+
+#### Bug #9: Accepted Drops Visible to Sender
+**Issue:** Both sender and receiver could see accepted drops, but sender should only see result when drop becomes a link
+**Fix:** Changed `getAcceptedDrops()` query to only return drops where `receiver_id = userId` and `status = 'accepted'`
+**Location:** `api.ts` lines 628-637
+
+#### Bug #10: Drops Screen Showing UUID Instead of Display Name
+**Issue:** Nearby users on Drops screen showed raw device name instead of username
+**Fix:** Updated DeviceCard and confirmation modal to use `device.username` with fallback to `device.name`
+**Location:** `DropScreen.tsx` lines 613, 669
+
 ### Files Modified
 
-- `mobile/src/screens/HomeScreen.tsx` - Added deduplication, ref guards, removed modal auto-trigger
-- `mobile/src/components/BLEScanner.tsx` - Fixed Supabase query for uuid column
-- `mobile/src/components/BLEAdvertiser.tsx` - Added synchronous ref guard for concurrent starts
-- `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEAdvertiserService.kt` - Fixed startForeground timing
+- `mobile/App.tsx` - Changed `<Screen />` to `{Screen()}` to prevent remounting
+- `mobile/src/screens/HomeScreen.tsx` - Deduplication, ref guards, modal fixes, raindrop zIndex, minimum blip distance
+- `mobile/src/screens/DropScreen.tsx` - Display name fixes for nearby users
+- `mobile/src/components/BLEScanner.tsx` - RPC-based profile lookup
+- `mobile/src/components/BLEAdvertiser.tsx` - Synchronous ref guard for concurrent starts
+- `mobile/src/services/api.ts` - Accepted drops query fix (receiver only)
+- `mobile/android/app/src/main/java/com/hirule/mobile/ble/BLEAdvertiserService.kt` - startForeground timing fix
+
+### Supabase Configuration Required
+
+Run this SQL in Supabase SQL Editor to create the profile lookup RPC:
+```sql
+CREATE OR REPLACE FUNCTION get_profile_by_user_id_prefix(prefix text)
+RETURNS TABLE (user_id uuid, name text, username text)
+LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
+  SELECT user_id, name, username
+  FROM user_profiles
+  WHERE user_id::text ILIKE prefix || '%'
+  LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_profile_by_user_id_prefix(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_profile_by_user_id_prefix(text) TO anon;
+```
 
 ### Testing Verification
 
-1. **Duplicate Dots:** Deploy to two devices, verify only one dot per nearby user regardless of scan duration
-2. **User Names:** Verify user's display name shows in blip modal, not device ID prefix
-3. **Advertiser Stability:** Rapid tab switching and toggle changes should not cause multiple dots
-4. **No Crashes:** Extended use should not produce ForegroundServiceDidNotStartInTimeException
-5. **Modal Behavior:** Link modal should only open on raindrop tap, never automatically
+1. **BLE Stability:** App should maintain consistent BLE scanning without "Cleanup on unmount" logs firing repeatedly
+2. **Duplicate Dots:** Only one dot per nearby user regardless of scan duration or MAC rotation
+3. **User Names:** User's display name shows in blip modal and drops screen, not device ID prefix
+4. **Advertiser Stability:** Rapid tab switching and toggle changes should not cause multiple dots
+5. **No Crashes:** Extended use should not produce ForegroundServiceDidNotStartInTimeException
+6. **Modal Behavior:** Link modal only opens on raindrop tap, never automatically
+7. **Blip Modal:** Shows profile photo, no MAC/RSSI, X close button works
+8. **Raindrop Tappable:** Raindrop always accessible even with nearby blips
+9. **Drop Visibility:** Accepted drops only visible to receiver, not sender
 
 ---
 
