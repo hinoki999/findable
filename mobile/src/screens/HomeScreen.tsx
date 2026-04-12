@@ -6,7 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, getUnviewedLinks, markLinkViewed } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -573,9 +573,9 @@ export default function HomeScreen() {
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
-  const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Drop[]>([]);
+  const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
-  const [currentNewLink, setCurrentNewLink] = useState<Drop | null>(null);
+  const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
@@ -2880,18 +2880,18 @@ export default function HomeScreen() {
                 marginBottom: 4,
                 textAlign: 'center',
               }]}>
-                {currentNewLink?.senderName || 'User'}
+                {currentNewLink?.otherUserName || 'User'}
               </Text>
 
               {/* Username */}
-              {currentNewLink?.senderUsername && (
+              {currentNewLink?.otherUserUsername && (
                 <Text style={[theme.type.body, {
                   fontSize: 14,
                   color: theme.colors.muted,
                   marginBottom: 20,
                   textAlign: 'center',
                 }]}>
-                  @{currentNewLink.senderUsername}
+                  @{currentNewLink.otherUserUsername}
                 </Text>
               )}
 

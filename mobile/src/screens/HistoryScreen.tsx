@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop } from '../services/api';
+import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop, Link } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
@@ -39,16 +39,16 @@ const getAvatarColor = (name: string): string => {
 };
 
 export default function HistoryScreen() {
-  const [data, setData] = useState<Drop[]>([]);
+  const [data, setData] = useState<Link[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContact, setSelectedContact] = useState<Drop | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Link | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<Drop | null>(null);
-  const lastDeletedItemRef = useRef<Drop | null>(null); // Using ref to avoid closure issues
+  const [itemToDelete, setItemToDelete] = useState<Link | null>(null);
+  const lastDeletedItemRef = useRef<Link | null>(null); // Using ref to avoid closure issues
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { showToast } = useToast();
@@ -84,9 +84,9 @@ export default function HistoryScreen() {
     })();
   }, []);
 
-  const handleContactPress = (item: Drop) => {
-    console.log('[DROPS] Opening contact card for:', item.senderName);
-    console.log('[DROPS] Profile photo URL:', item.senderProfilePhoto || 'NULL');
+  const handleContactPress = (item: Link) => {
+    console.log('[DROPS] Opening contact card for:', item.otherUserName);
+    console.log('[DROPS] Profile photo URL:', item.otherUserProfilePhoto || 'NULL');
     setSelectedContact(item);
     setShowContactModal(true);
   };
@@ -96,7 +96,7 @@ export default function HistoryScreen() {
     setSelectedContact(null);
   };
 
-  const handleDeleteClick = (item: Drop) => {
+  const handleDeleteClick = (item: Link) => {
     setItemToDelete(item);
     setShowDeleteModal(true);
   };
@@ -106,15 +106,17 @@ export default function HistoryScreen() {
       // Store for undo using ref (synchronous)
       lastDeletedItemRef.current = itemToDelete;
       
-      // Delete from drops table
-      await deleteDrop(itemToDelete.id);
+      // Delete the associated drop (sets status to 'deleted')
+      if (itemToDelete.dropId) {
+        await deleteDrop(itemToDelete.dropId);
+      }
       // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
-      console.log('[DROPS] Drop deleted from history');
+      console.log('[DROPS] Link deleted from history');
       
-      // Show toast with undo (note: undo not fully implemented for drops yet)
+      // Show toast with undo (note: undo not fully implemented for links yet)
       showToast({
-        message: `${itemToDelete.senderName || 'Contact'} deleted`,
+        message: `${itemToDelete.otherUserName || 'Contact'} deleted`,
         type: 'success',
         duration: 4000,
       });
@@ -134,12 +136,12 @@ export default function HistoryScreen() {
     setItemToDelete(null);
   };
 
-  const handleTogglePin = (item: Drop) => {
+  const handleTogglePin = (item: Link) => {
     if (!item.id) return;
     const isPinned = pinnedIds.has(item.id);
     togglePin(item.id);
     showToast({
-      message: isPinned ? `Unpinned ${item.senderName || 'contact'}` : `Pinned ${item.senderName || 'contact'}`,
+      message: isPinned ? `Unpinned ${item.otherUserName || 'contact'}` : `Pinned ${item.otherUserName || 'contact'}`,
       type: 'success',
       duration: 2000,
     });
@@ -166,11 +168,11 @@ export default function HistoryScreen() {
     if (!searchQuery.trim()) return true;
     
     const query = searchQuery.toLowerCase();
-    const name = item.senderName?.toLowerCase() || '';
-    const username = item.senderUsername?.toLowerCase() || '';
-    const email = item.senderEmail?.toLowerCase() || '';
-    const phone = item.senderPhone?.toLowerCase() || '';
-    const bio = item.senderBio?.toLowerCase() || '';
+    const name = item.otherUserName?.toLowerCase() || '';
+    const username = item.otherUserUsername?.toLowerCase() || '';
+    const email = item.otherUserEmail?.toLowerCase() || '';
+    const phone = item.otherUserPhone?.toLowerCase() || '';
+    const bio = item.otherUserBio?.toLowerCase() || '';
     
     return name.includes(query) || 
            username.includes(query) ||
@@ -384,31 +386,31 @@ export default function HistoryScreen() {
                     width: 44,
                     height: 44,
                     borderRadius: 22,
-                    backgroundColor: getAvatarColor(item.senderName || 'User'),
+                    backgroundColor: getAvatarColor(item.otherUserName || 'User'),
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 12,
                     overflow: 'hidden',
                   }}>
-                    {item.senderProfilePhoto ? (
-                      <Image source={{ uri: item.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
+                    {item.otherUserProfilePhoto ? (
+                      <Image source={{ uri: item.otherUserProfilePhoto }} style={{ width: 44, height: 44 }} />
                     ) : (
                       <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                        {getInitials(item.senderName || 'U')}
+                        {getInitials(item.otherUserName || 'U')}
                       </Text>
                     )}
                   </View>
                   
                   {/* Name & Status */}
                   <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.senderName || 'User'}</Text>
-                    {item.senderUsername && (
-                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>@{item.senderUsername}</Text>
+                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.otherUserName || 'User'}</Text>
+                    {item.otherUserUsername && (
+                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>@{item.otherUserUsername}</Text>
                     )}
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                      {getActionIcon(item.status)}
+                      <MaterialCommunityIcons name="link" size={12} color={theme.colors.green} />
                       <Text style={[theme.type.muted, { fontSize: 11, marginLeft: 4 }]}>
-                        {getActionText(item.status)} • {formatTimestamp(item.respondedAt || item.createdAt)}
+                        Linked • {formatTimestamp(item.createdAt)}
                       </Text>
                     </View>
                   </View>
@@ -521,7 +523,7 @@ export default function HistoryScreen() {
               alignItems: 'center',
             }}>
               <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                {selectedContact?.senderName || selectedContact?.senderUsername || 'Contact'}
+                {selectedContact?.otherUserName || selectedContact?.otherUserUsername || 'Contact'}
               </Text>
             </View>
 
@@ -538,8 +540,8 @@ export default function HistoryScreen() {
                   justifyContent: 'center',
                   overflow: 'hidden',
                 }}>
-                  {selectedContact?.senderProfilePhoto ? (
-                    <Image source={{ uri: selectedContact.senderProfilePhoto }} style={{ width: 60, height: 60 }} />
+                  {selectedContact?.otherUserProfilePhoto ? (
+                    <Image source={{ uri: selectedContact.otherUserProfilePhoto }} style={{ width: 60, height: 60 }} />
                   ) : (
                     <MaterialCommunityIcons name="account" size={30} color="#FF6B4A" />
                   )}
@@ -549,27 +551,27 @@ export default function HistoryScreen() {
               {/* Contact Information */}
               <View style={{ marginBottom: 16 }}>
                 {/* Phone */}
-                {selectedContact?.senderPhone && (
+                {selectedContact?.otherUserPhone && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
                     <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                      {selectedContact.senderPhone}
+                      {selectedContact.otherUserPhone}
                     </Text>
                   </View>
                 )}
 
                 {/* Email */}
-                {selectedContact?.senderEmail && (
+                {selectedContact?.otherUserEmail && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                     <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
                     <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                      {selectedContact.senderEmail}
+                      {selectedContact.otherUserEmail}
                     </Text>
                   </View>
                 )}
 
                 {/* Social Media - Dynamic */}
-                {selectedContact?.senderSocialMedia && selectedContact.senderSocialMedia.map((social, index) => (
+                {selectedContact?.otherUserSocialMedia && selectedContact.otherUserSocialMedia.map((social, index) => (
                   social.platform && social.handle ? (
                     <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                       <MaterialCommunityIcons
@@ -586,7 +588,7 @@ export default function HistoryScreen() {
               </View>
 
               {/* Bio Section */}
-              {selectedContact?.senderBio && (
+              {selectedContact?.otherUserBio && (
                 <View style={{
                   backgroundColor: theme.colors.bg,
                   padding: 12,
@@ -597,7 +599,7 @@ export default function HistoryScreen() {
                     BIO
                   </Text>
                   <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
-                    "{selectedContact.senderBio}"
+                    "{selectedContact.otherUserBio}"
                   </Text>
                 </View>
               )}

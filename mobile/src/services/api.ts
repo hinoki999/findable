@@ -388,11 +388,10 @@ export interface Drop {
   id: string;
   senderId: string;
   receiverId: string;
-  status: 'sent' | 'received' | 'accepted' | 'returned' | 'declined' | 'deleted' | 'linked';
+  status: 'pending' | 'accepted' | 'declined' | 'linked';
   createdAt: Date;
   respondedAt?: Date;
   distanceFeet?: number;
-  linkViewedAt?: Date;
   // Sender's contact info (shared when drop is sent)
   senderName?: string;
   senderUsername?: string;
@@ -401,6 +400,22 @@ export interface Drop {
   senderBio?: string;
   senderProfilePhoto?: string;
   senderSocialMedia?: Array<{ platform: string; handle: string }>;
+}
+
+export interface Link {
+  id: string;
+  userId1: string;
+  userId2: string;
+  dropId: string;
+  createdAt: Date;
+  // Contact info for the other user (fetched separately or joined)
+  otherUserName?: string;
+  otherUserUsername?: string;
+  otherUserEmail?: string;
+  otherUserPhone?: string;
+  otherUserBio?: string;
+  otherUserProfilePhoto?: string;
+  otherUserSocialMedia?: Array<{ platform: string; handle: string }>;
 }
 
 // Helper to map database format to frontend format
@@ -413,7 +428,6 @@ function mapDropFromDb(d: any): Drop {
     createdAt: new Date(d.created_at),
     respondedAt: d.responded_at ? new Date(d.responded_at) : undefined,
     distanceFeet: d.distance_feet,
-    linkViewedAt: d.link_viewed_at ? new Date(d.link_viewed_at) : undefined,
     senderName: d.sender_name,
     senderUsername: d.sender_username,
     senderEmail: d.sender_email,
@@ -424,9 +438,32 @@ function mapDropFromDb(d: any): Drop {
   };
 }
 
+// Helper to map link from database format to frontend format
+function mapLinkFromDb(l: any, currentUserId: string): Link {
+  // Determine which user is "the other user" from current user's perspective
+  const isUser1 = l.user_id_1 === currentUserId;
+  const otherUserId = isUser1 ? l.user_id_2 : l.user_id_1;
+  
+  return {
+    id: l.id,
+    userId1: l.user_id_1,
+    userId2: l.user_id_2,
+    dropId: l.drop_id,
+    createdAt: new Date(l.created_at),
+    // Contact info will be populated by a separate lookup if needed
+    otherUserName: l.other_user_name,
+    otherUserUsername: l.other_user_username,
+    otherUserEmail: l.other_user_email,
+    otherUserPhone: l.other_user_phone,
+    otherUserBio: l.other_user_bio,
+    otherUserProfilePhoto: l.other_user_profile_photo,
+    otherUserSocialMedia: l.other_user_social_media,
+  };
+}
+
 /**
  * Send a drop to another user
- * Creates TWO rows: one for sender (status='sent'), one for receiver (status='received')
+ * Creates ONE row with status='pending'
  * @param receiverId - UUID of the user receiving the drop
  * @param senderProfile - Sender's contact info to share
  * @param distanceFeet - Distance to receiver in feet (from BLE RSSI)
@@ -476,10 +513,11 @@ export async function sendDrop(
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
     console.log('[DROP-CRASH] Step 3: Building drop data...');
 
-    // Common drop data
+    // Drop data - single row with status 'pending'
     const dropData = {
       sender_id: senderId,
       receiver_id: receiverId,
+      status: 'pending',
       distance_feet: distanceFeet || null,
       sender_name: senderProfile.name || null,
       sender_username: senderProfile.username || null,
@@ -491,17 +529,15 @@ export async function sendDrop(
     };
     
     console.log('[DROP-CRASH] Step 4: Drop data built:', JSON.stringify(dropData, null, 2));
-    console.log('[DROP-DUPE] About to insert drop pair, timestamp:', callTimestamp);
+    console.log('[DROP-DUPE] About to insert single drop row, timestamp:', callTimestamp);
 
-    // Insert TWO rows: sender's outgoing record and receiver's incoming record
+    // Insert ONE row with status 'pending'
     console.log('[DROP-CRASH] Step 5: Inserting to Supabase...');
     const { data, error } = await supabase
       .from('drops')
-      .insert([
-        { ...dropData, status: 'sent' },      // Sender's outgoing record
-        { ...dropData, status: 'received' }, // Receiver's incoming record
-      ])
-      .select();
+      .insert(dropData)
+      .select()
+      .single();
 
     if (error) {
       console.error('[DROPS] Supabase drop insert error:', error);
@@ -510,15 +546,13 @@ export async function sendDrop(
     }
 
     console.log('[DROP-CRASH] Step 6: Insert successful');
-    console.log('[DROPS] SUCCESS: Drop pair created - sent:', data[0]?.id, 'received:', data[1]?.id);
-    console.log('[DROP-DUPE] Insert completed - sent ID:', data[0]?.id, 'received ID:', data[1]?.id, 'timestamp:', callTimestamp);
+    console.log('[DROPS] SUCCESS: Drop created with id:', data?.id);
+    console.log('[DROP-DUPE] Insert completed - drop ID:', data?.id, 'timestamp:', callTimestamp);
     console.log('[DROP-DUPE] Full insert response:', JSON.stringify(data, null, 2));
     
-    // Return the receiver's record (received) as the primary drop
-    const receiverDrop = data.find(d => d.status === 'received') || data[0];
-    console.log('[DROP-CRASH] Step 7: Returning receiverDrop:', receiverDrop?.id);
-    console.log('[DROP-DUPE] sendDrop EXIT - timestamp:', callTimestamp, 'returning drop ID:', receiverDrop?.id);
-    return mapDropFromDb(receiverDrop);
+    console.log('[DROP-CRASH] Step 7: Returning drop:', data?.id);
+    console.log('[DROP-DUPE] sendDrop EXIT - timestamp:', callTimestamp, 'returning drop ID:', data?.id);
+    return mapDropFromDb(data);
   } catch (error: any) {
     console.error('[DROPS] ERROR: Send drop error:', error);
     console.error('[DROP-CRASH] EXCEPTION in sendDrop:', error?.message);
@@ -530,7 +564,7 @@ export async function sendDrop(
 }
 
 /**
- * Get incoming drops for the current user (received drops sent TO them)
+ * Get incoming drops for the current user (pending drops sent TO them)
  */
 export async function getIncomingDrops(): Promise<Drop[]> {
   const callTimestamp = Date.now();
@@ -546,13 +580,13 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 
     const userId = session.user.id;
     console.log('[DROPS] Fetching incoming drops for user:', userId);
-    console.log('[DROP-SCREEN] Query params - receiver_id:', userId, 'status: received');
+    console.log('[DROP-SCREEN] Query params - receiver_id:', userId, 'status: pending');
 
     const { data, error } = await supabase
       .from('drops')
       .select('*')
       .eq('receiver_id', userId)
-      .eq('status', 'received')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -575,7 +609,7 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 
 /**
  * Get sent drops for the current user (drops they sent, awaiting response)
- * Returns drops where sender_id = current user and status = 'sent'
+ * Returns drops where sender_id = current user and status = 'pending'
  */
 export async function getSentDrops(): Promise<Drop[]> {
   try {
@@ -591,7 +625,7 @@ export async function getSentDrops(): Promise<Drop[]> {
       .from('drops')
       .select('*')
       .eq('sender_id', session.user.id)
-      .eq('status', 'sent')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -660,7 +694,7 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
  * These are mutual connections to show in History
  * Only 'returned' drops are shown here - 'accepted' drops stay on Drops page
  */
-export async function getLinkedDrops(): Promise<Drop[]> {
+export async function getLinkedDrops(): Promise<Link[]> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
@@ -669,42 +703,34 @@ export async function getLinkedDrops(): Promise<Drop[]> {
     }
 
     const userId = session.user.id;
-    console.log('[DROPS] Fetching linked drops for user:', userId);
+    console.log('[DROPS] Fetching links for user:', userId);
 
-    // Get drops where user is the RECEIVER and status is 'linked' (mutual links only)
-    // We only fetch drops where user is receiver because:
-    // - The sender_* fields contain the OTHER person's contact info
-    // - When user A and B link, there are 2 drop records:
-    //   1. A→B (A's info stored as sender, status='linked')
-    //   2. B→A (B's info stored as sender, status='linked')
-    // - User A sees drop B→A (where A is receiver) → shows B's info ✓
-    // - User B sees drop A→B (where B is receiver) → shows A's info ✓
+    // Query links table where user is either user_id_1 or user_id_2
     const { data, error } = await supabase
-      .from('drops')
+      .from('links')
       .select('*')
-      .eq('receiver_id', userId)
-      .eq('status', 'linked')
-      .order('responded_at', { ascending: false });
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[DROPS] Supabase linked drops query error:', error);
-      throw new Error('Failed to load linked drops. Please try again.');
+      console.error('[DROPS] Supabase links query error:', error);
+      throw new Error('Failed to load links. Please try again.');
     }
 
-    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} linked drops`);
-    return (data || []).map(mapDropFromDb);
+    console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} links`);
+    return (data || []).map(l => mapLinkFromDb(l, userId));
   } catch (error: any) {
-    console.error('[DROPS] ERROR: Get linked drops error:', error);
-    throw new Error(error.message || 'Failed to load linked drops. Please try again.');
+    console.error('[DROPS] ERROR: Get links error:', error);
+    throw new Error(error.message || 'Failed to load links. Please try again.');
   }
 }
 
 /**
  * Get unviewed link notifications
- * Returns drops where user is receiver, status is 'linked', and link_viewed_at is null
- * These are new mutual connections the user hasn't acknowledged yet
+ * Returns all links where user is user_id_1 or user_id_2
+ * TODO: Add viewed state tracking later
  */
-export async function getUnviewedLinks(): Promise<Drop[]> {
+export async function getUnviewedLinks(): Promise<Link[]> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
@@ -715,13 +741,12 @@ export async function getUnviewedLinks(): Promise<Drop[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
+    // For now, return all links for the user (viewed state logic omitted per requirements)
     const { data, error } = await supabase
-      .from('drops')
+      .from('links')
       .select('*')
-      .eq('receiver_id', userId)
-      .eq('status', 'linked')
-      .is('link_viewed_at', null)
-      .order('responded_at', { ascending: false });
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('[DROPS] Supabase unviewed links query error:', error);
@@ -729,7 +754,7 @@ export async function getUnviewedLinks(): Promise<Drop[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
-    return (data || []).map(mapDropFromDb);
+    return (data || []).map(l => mapLinkFromDb(l, userId));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
     throw new Error(error.message || 'Failed to load unviewed links.');
@@ -738,37 +763,12 @@ export async function getUnviewedLinks(): Promise<Drop[]> {
 
 /**
  * Mark a link as viewed
- * Sets link_viewed_at timestamp so it won't show as a new notification
- * @param dropId - The drop to mark as viewed
+ * TODO: Implement viewed state tracking on links table later
+ * @param linkId - The link to mark as viewed
  */
-export async function markLinkViewed(dropId: string): Promise<void> {
-  try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session) {
-      throw new Error('User not authenticated');
-    }
-
-    console.log('[DROPS] Marking link as viewed:', dropId);
-
-    const { error } = await supabase
-      .from('drops')
-      .update({
-        link_viewed_at: new Date().toISOString(),
-      })
-      .eq('id', dropId)
-      .eq('receiver_id', session.user.id);
-
-    if (error) {
-      console.error('[DROPS] Supabase mark link viewed error:', error);
-      throw new Error('Failed to mark link as viewed.');
-    }
-
-    console.log('[DROPS] SUCCESS: Link marked as viewed:', dropId);
-  } catch (error: any) {
-    console.error('[DROPS] ERROR: Mark link viewed error:', error);
-    throw new Error(error.message || 'Failed to mark link as viewed.');
-  }
+export async function markLinkViewed(linkId: string): Promise<void> {
+  // No-op for now - viewed state logic omitted per requirements
+  console.log('[DROPS] markLinkViewed called (no-op):', linkId);
 }
 
 /**
@@ -798,17 +798,18 @@ export async function updateDropStatus(
       throw new Error('User not authenticated');
     }
 
+    const userId = session.user.id;
     console.log('[DROPS] Updating drop status:', dropId, 'to', status);
 
-    // First, get the receiver's drop record (status='received')
-    const { data: receiverDrop, error: fetchError } = await supabase
+    // First, get the drop record
+    const { data: drop, error: fetchError } = await supabase
       .from('drops')
       .select('*')
       .eq('id', dropId)
-      .eq('receiver_id', session.user.id) // Security: only update drops sent to you
+      .eq('receiver_id', userId) // Security: only update drops sent to you
       .single();
 
-    if (fetchError || !receiverDrop) {
+    if (fetchError || !drop) {
       console.error('[DROPS] Could not find drop to update:', fetchError);
       throw new Error('Drop not found or you are not the receiver.');
     }
@@ -818,7 +819,7 @@ export async function updateDropStatus(
     const dbStatus = status === 'returned' ? 'linked' : status;
     const respondedAt = new Date().toISOString();
 
-    // Update the RECEIVER's drop record (the 'received' one we're responding to)
+    // Update the single drop record
     const { data, error } = await supabase
       .from('drops')
       .update({
@@ -826,7 +827,7 @@ export async function updateDropStatus(
         responded_at: respondedAt,
       })
       .eq('id', dropId)
-      .eq('receiver_id', session.user.id)
+      .eq('receiver_id', userId)
       .select()
       .single();
 
@@ -835,77 +836,28 @@ export async function updateDropStatus(
       throw new Error('Failed to update drop. Please try again.');
     }
 
-    console.log('[DROPS] SUCCESS: Receiver drop updated:', dropId, dbStatus);
-
-    // Also update the SENDER's matching drop record (status='sent')
-    // Find the sender's record with same sender_id, receiver_id, and created_at (within 1 second)
-    const { data: senderDrop, error: senderFetchError } = await supabase
-      .from('drops')
-      .select('*')
-      .eq('sender_id', receiverDrop.sender_id)
-      .eq('receiver_id', receiverDrop.receiver_id)
-      .eq('status', 'sent')
-      .single();
-
-    if (senderDrop && !senderFetchError) {
-      // Determine sender's status based on receiver's response
-      let senderStatus: string;
-      if (status === 'returned') {
-        senderStatus = 'linked';
-      } else if (status === 'accepted') {
-        senderStatus = 'accepted';
-      } else {
-        senderStatus = 'declined';
-      }
-
-      const { error: senderUpdateError } = await supabase
-        .from('drops')
-        .update({
-          status: senderStatus,
-          responded_at: respondedAt,
-        })
-        .eq('id', senderDrop.id);
-
-      if (senderUpdateError) {
-        console.error('[DROPS] Failed to update sender drop:', senderUpdateError);
-      } else {
-        console.log('[DROPS] SUCCESS: Sender drop updated:', senderDrop.id, senderStatus);
-      }
-    } else {
-      console.log('[DROPS] No sender drop found to update (may be legacy single-row drop)');
-    }
+    console.log('[DROPS] SUCCESS: Drop updated:', dropId, dbStatus);
     
-    // If status is 'returned' (mutual link), create reverse drops for the responder
-    // This shares the responder's contact info with the original sender
-    if (status === 'returned' && responseProfile) {
-      console.log('[DROPS] Creating reverse drop pair for responder:', session.user.id);
+    // If status is 'returned' (mutual link), create a link record
+    if (status === 'returned') {
+      console.log('[DROPS] Creating link for drop:', dropId);
       
-      // Create TWO reverse drops: responder's 'sent' and original sender's 'linked'
-      const reverseDropData = {
-        sender_id: session.user.id,           // Current user is now the sender
-        receiver_id: receiverDrop.sender_id,  // Original sender is now the receiver
-        responded_at: respondedAt,
-        sender_name: responseProfile.name || null,
-        sender_username: responseProfile.username || null,
-        sender_email: responseProfile.email || null,
-        sender_phone: responseProfile.phone || null,
-        sender_bio: responseProfile.bio || null,
-        sender_profile_photo: responseProfile.profilePhoto || null,
-        sender_social_media: responseProfile.socialMedia || null,
-      };
+      // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
+      const { data: linkData, error: linkError } = await supabase
+        .from('links')
+        .insert({
+          user_id_1: drop.sender_id,
+          user_id_2: userId,
+          drop_id: dropId,
+        })
+        .select()
+        .single();
 
-      const { data: reverseDrops, error: reverseError } = await supabase
-        .from('drops')
-        .insert([
-          { ...reverseDropData, status: 'linked' },  // Responder's outgoing linked record
-          { ...reverseDropData, status: 'linked' },  // Original sender's incoming linked record
-        ])
-        .select();
-
-      if (reverseError) {
-        console.error('[DROPS] Failed to create reverse drops:', reverseError);
+      if (linkError) {
+        console.error('[DROPS] Failed to create link:', linkError);
+        // Don't throw - drop status was updated successfully
       } else {
-        console.log('[DROPS] SUCCESS: Reverse drop pair created:', reverseDrops?.map(d => d.id).join(', '));
+        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
       }
     }
 
