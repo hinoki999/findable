@@ -1474,7 +1474,7 @@ export default function HomeScreen() {
     // Get current user's profile to share if returning
     const responseProfile = action === 'returned' ? {
       name: profile?.name,
-      username: username,
+      username: username ?? undefined,
       email: profile?.email,
       phone: profile?.phone,
       bio: profile?.bio,
@@ -3384,7 +3384,7 @@ export default function HomeScreen() {
                         console.log('[DROP-DUPE] Calling sendDrop from HomeScreen - receiverUserId:', receiverUserId, 'timestamp:', Date.now());
                         await sendDrop(receiverUserId, {
                           name: profile?.name || 'User',
-                          username: username,
+                          username: username ?? undefined,
                           email: profile?.email,
                           phone: profile?.phone,
                           bio: profile?.bio,
