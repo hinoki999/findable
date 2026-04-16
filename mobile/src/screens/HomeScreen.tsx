@@ -576,6 +576,8 @@ export default function HomeScreen() {
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
   const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
+  const [showReturnLinkModal, setShowReturnLinkModal] = useState(false);
+  const [returnedDropInfo, setReturnedDropInfo] = useState<{ name: string; username?: string } | null>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
@@ -1498,13 +1500,14 @@ export default function HomeScreen() {
         setShowDrops(false);
       }
 
-      // Show success toast
+      // Show success feedback
       if (action === 'returned') {
-        showToast({
-          message: `Linked with ${drop.senderName || 'User'}!`,
-          type: 'success',
-          duration: 3000,
+        // Show confirmation modal for the returner
+        setReturnedDropInfo({
+          name: drop.senderName || 'User',
+          username: drop.senderUsername,
         });
+        setShowReturnLinkModal(true);
       } else if (action === 'accepted') {
         showToast({
           message: `Accepted drop from ${drop.senderName || 'User'}`,
@@ -1548,6 +1551,22 @@ export default function HomeScreen() {
     } else {
       setShowNewLinkModal(false);
     }
+  };
+
+  // Handle dismissing a link card from the drops sheet
+  const handleDismissLinkCard = async (linkId: string) => {
+    try {
+      await markLinkViewed(linkId);
+      setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== linkId));
+    } catch (error) {
+      console.error('[LINKS] Failed to dismiss link card:', error);
+    }
+  };
+
+  // Handle dismissing the return link confirmation modal
+  const handleDismissReturnLinkModal = () => {
+    setShowReturnLinkModal(false);
+    setReturnedDropInfo(null);
   };
 
   // Handle quick action button press (unpin or delete)
@@ -2901,23 +2920,43 @@ export default function HomeScreen() {
                                 </View>
                               )}
 
-                              {/* View on Links page button */}
-                              <Pressable
-                                onPress={() => {
-                                  setShowDrops(false);
-                                  navigateToTab('History');
-                                }}
-                                style={{
-                                  backgroundColor: theme.colors.green,
-                                  paddingVertical: 12,
-                                  borderRadius: 8,
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <Text style={[theme.type.body, { color: '#fff', fontWeight: '600' }]}>
-                                  View on Links Page
-                                </Text>
-                              </Pressable>
+                              {/* Action buttons */}
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <Pressable
+                                  onPress={() => {
+                                    handleDismissLinkCard(link.id);
+                                    setShowDrops(false);
+                                    navigateToTab('History');
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: theme.colors.green,
+                                    paddingVertical: 12,
+                                    borderRadius: 8,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <Text style={[theme.type.body, { color: '#fff', fontWeight: '600' }]}>
+                                    View Link
+                                  </Text>
+                                </Pressable>
+                                <Pressable
+                                  onPress={() => handleDismissLinkCard(link.id)}
+                                  style={{
+                                    flex: 1,
+                                    backgroundColor: theme.colors.bg,
+                                    paddingVertical: 12,
+                                    borderRadius: 8,
+                                    alignItems: 'center',
+                                    borderWidth: 1,
+                                    borderColor: theme.colors.border,
+                                  }}
+                                >
+                                  <Text style={[theme.type.body, { color: theme.colors.text, fontWeight: '600' }]}>
+                                    Okay
+                                  </Text>
+                                </Pressable>
+                              </View>
                             </View>
                           </View>
                         ))}
@@ -2944,6 +2983,149 @@ export default function HomeScreen() {
                   Close
                 </Text>
               </Pressable>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Return Link Confirmation Modal - shown after user returns a drop */}
+        <Modal
+          visible={showReturnLinkModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={handleDismissReturnLinkModal}
+        >
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}>
+            <View style={{
+              backgroundColor: theme.colors.white,
+              borderRadius: 20,
+              padding: 24,
+              width: '90%',
+              maxWidth: 320,
+              alignItems: 'center',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.25,
+              shadowRadius: 16,
+              elevation: 12,
+            }}>
+              {/* Link Icon */}
+              <View style={{
+                width: 80,
+                height: 80,
+                borderRadius: 40,
+                backgroundColor: 'rgba(0, 200, 130, 0.15)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: 16,
+              }}>
+                <LinkIcon size={40} />
+              </View>
+
+              {/* Title */}
+              <Text style={[theme.type.h1, {
+                fontSize: 24,
+                color: theme.colors.green,
+                marginBottom: 8,
+                textAlign: 'center',
+              }]}>
+                Link Created!
+              </Text>
+
+              {/* Subtitle */}
+              <Text style={[theme.type.body, {
+                fontSize: 16,
+                color: theme.colors.text,
+                marginBottom: 4,
+                textAlign: 'center',
+              }]}>
+                You linked with
+              </Text>
+
+              {/* Contact Name */}
+              <Text style={[theme.type.h2, {
+                fontSize: 20,
+                color: theme.colors.text,
+                marginBottom: 4,
+                textAlign: 'center',
+              }]}>
+                {returnedDropInfo?.name || 'User'}
+              </Text>
+
+              {/* Username */}
+              {returnedDropInfo?.username && (
+                <Text style={[theme.type.body, {
+                  fontSize: 14,
+                  color: theme.colors.muted,
+                  marginBottom: 20,
+                  textAlign: 'center',
+                }]}>
+                  @{returnedDropInfo.username}
+                </Text>
+              )}
+
+              {/* Info Text */}
+              <Text style={[theme.type.body, {
+                fontSize: 13,
+                color: theme.colors.muted,
+                marginBottom: 24,
+                textAlign: 'center',
+                paddingHorizontal: 10,
+              }]}>
+                View their contact info on the Links page
+              </Text>
+
+              {/* Action buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                <Pressable
+                  onPress={() => {
+                    handleDismissReturnLinkModal();
+                    navigateToTab('History');
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.green,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Text style={[theme.type.body, {
+                    color: '#fff',
+                    textAlign: 'center',
+                    fontWeight: '600',
+                    fontSize: 16,
+                  }]}>
+                    View Link
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleDismissReturnLinkModal}
+                  style={{
+                    flex: 1,
+                    backgroundColor: theme.colors.bg,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  }}
+                >
+                  <Text style={[theme.type.body, {
+                    color: theme.colors.text,
+                    textAlign: 'center',
+                    fontWeight: '600',
+                    fontSize: 16,
+                  }]}>
+                    Okay
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           </View>
         </Modal>

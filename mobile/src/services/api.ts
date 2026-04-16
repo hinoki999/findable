@@ -736,8 +736,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
 
 /**
  * Get unviewed link notifications
- * Returns all links where user is user_id_1 or user_id_2
- * TODO: Add viewed state tracking later
+ * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
  */
 export async function getUnviewedLinks(): Promise<Link[]> {
   try {
@@ -751,10 +750,12 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
     // Query links table with join to drops table for profile data
+    // Only return links where viewed_at IS NULL
     const { data, error } = await supabase
       .from('links')
       .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .is('viewed_at', null)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -772,12 +773,36 @@ export async function getUnviewedLinks(): Promise<Link[]> {
 
 /**
  * Mark a link as viewed
- * TODO: Implement viewed state tracking on links table later
+ * Sets viewed_at timestamp so it won't show as a new notification
  * @param linkId - The link to mark as viewed
  */
 export async function markLinkViewed(linkId: string): Promise<void> {
-  // No-op for now - viewed state logic omitted per requirements
-  console.log('[DROPS] markLinkViewed called (no-op):', linkId);
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    console.log('[DROPS] Marking link as viewed:', linkId);
+
+    const { error } = await supabase
+      .from('links')
+      .update({
+        viewed_at: new Date().toISOString(),
+      })
+      .eq('id', linkId);
+
+    if (error) {
+      console.error('[DROPS] Supabase mark link viewed error:', error);
+      throw new Error('Failed to mark link as viewed.');
+    }
+
+    console.log('[DROPS] SUCCESS: Link marked as viewed:', linkId);
+  } catch (error: any) {
+    console.error('[DROPS] ERROR: Mark link viewed error:', error);
+    throw new Error(error.message || 'Failed to mark link as viewed.');
+  }
 }
 
 /**
