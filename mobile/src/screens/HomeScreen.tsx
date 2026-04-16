@@ -2596,7 +2596,9 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                   ) : (
-                    incomingDrops.map((drop) => (
+                    <>
+                    {/* Render incoming drops */}
+                    {incomingDrops.map((drop) => (
                       <View key={drop.id} style={{
                         backgroundColor: theme.colors.white,
                         borderRadius: 16,
@@ -2788,7 +2790,140 @@ export default function HomeScreen() {
                           </View>
                         </View>
                       </View>
-                    ))
+                    ))}
+
+                    {/* New Links Section */}
+                    {unviewedLinksFromDb.length > 0 && (
+                      <View style={{ marginTop: incomingDrops.length > 0 ? 20 : 0 }}>
+                        <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
+                          🔗 New Links
+                        </Text>
+                        {unviewedLinksFromDb.map((link) => (
+                          <View key={link.id} style={{
+                            backgroundColor: theme.colors.white,
+                            borderRadius: 16,
+                            marginBottom: 16,
+                            overflow: 'hidden',
+                            borderWidth: 1,
+                            borderColor: theme.colors.border,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          }}>
+                            {/* Header */}
+                            <View style={{
+                              backgroundColor: theme.colors.green,
+                              paddingVertical: 12,
+                              paddingHorizontal: 16,
+                              alignItems: 'center',
+                            }}>
+                              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                                You linked with {link.otherUserName || link.otherUserUsername || 'someone'}!
+                              </Text>
+                              {link.otherUserUsername && (
+                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 4 }}>
+                                  @{link.otherUserUsername}
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* Content */}
+                            <View style={{ padding: 16 }}>
+                              {/* Profile Picture */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                <View style={{
+                                  width: 70,
+                                  height: 70,
+                                  borderRadius: 35,
+                                  backgroundColor: '#E8F5E9',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  overflow: 'hidden',
+                                }}>
+                                  {link.otherUserProfilePhoto ? (
+                                    <Image source={{ uri: link.otherUserProfilePhoto }} style={{ width: 70, height: 70 }} />
+                                  ) : (
+                                    <MaterialCommunityIcons name="link-variant" size={32} color={theme.colors.green} />
+                                  )}
+                                </View>
+                              </View>
+
+                              {/* Contact Information */}
+                              <View style={{ marginBottom: 12 }}>
+                                {link.otherUserPhone && (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                      {link.otherUserPhone}
+                                    </Text>
+                                  </View>
+                                )}
+                                {link.otherUserEmail && (
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                      {link.otherUserEmail}
+                                    </Text>
+                                  </View>
+                                )}
+                                {link.otherUserSocialMedia && link.otherUserSocialMedia.map((social, index) => (
+                                  social.platform && social.handle ? (
+                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                      <MaterialCommunityIcons
+                                        name={social.platform.toLowerCase() as any}
+                                        size={16}
+                                        color={theme.colors.muted}
+                                      />
+                                      <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                        {social.handle}
+                                      </Text>
+                                    </View>
+                                  ) : null
+                                ))}
+                              </View>
+
+                              {/* Bio */}
+                              {link.otherUserBio && (
+                                <View style={{
+                                  backgroundColor: theme.colors.bg,
+                                  padding: 12,
+                                  borderRadius: 8,
+                                  marginBottom: 16,
+                                }}>
+                                  <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                                    BIO
+                                  </Text>
+                                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                                    "{link.otherUserBio}"
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* View on Links page button */}
+                              <Pressable
+                                onPress={() => {
+                                  setShowDrops(false);
+                                  navigateToTab('History');
+                                }}
+                                style={{
+                                  backgroundColor: theme.colors.green,
+                                  paddingVertical: 12,
+                                  borderRadius: 8,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Text style={[theme.type.body, { color: '#fff', fontWeight: '600' }]}>
+                                  View on Links Page
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    </>
                   )}
                 </>
               </ScrollView>
