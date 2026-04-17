@@ -768,6 +768,9 @@ export default function HomeScreen() {
   // This is checked/set synchronously in the useEffect before calling startAdvertisingRef.current()
   const hasRequestedAdvertisingRef = useRef(false);
 
+  // Ref to track link IDs dismissed in this session (prevents polling from re-adding them)
+  const dismissedLinkIdsRef = useRef<Set<string>>(new Set());
+
   // Start BLE scanning when component mounts and restart if it stops
   useEffect(() => {
     startScanRef.current();
@@ -878,8 +881,10 @@ export default function HomeScreen() {
       console.log('[DROP-MODAL] Fetching unviewed links...');
       try {
         const links = await getUnviewedLinks();
-        console.log('[DROP-STATE] HomeScreen setUnviewedLinksFromDb - count:', links.length);
-        setUnviewedLinksFromDb(links);
+        // Filter out any links that were dismissed this session (prevents race condition with viewed_at write)
+        const filteredLinks = links.filter(l => !dismissedLinkIdsRef.current.has(l.id));
+        console.log('[DROP-STATE] HomeScreen setUnviewedLinksFromDb - count:', filteredLinks.length, '(filtered from', links.length, ')');
+        setUnviewedLinksFromDb(filteredLinks);
         // Modal auto-trigger removed - modal only opens via handleRaindropPress
       } catch (error: any) {
         console.error('[DROP-MODAL] fetchUnviewedLinksFromDb error:', error?.message);
@@ -1555,9 +1560,12 @@ export default function HomeScreen() {
 
   // Handle dismissing a link card from the drops sheet
   const handleDismissLinkCard = async (linkId: string) => {
+    // Add to dismissed set immediately to prevent polling from re-adding it
+    dismissedLinkIdsRef.current.add(linkId);
+    // Remove from state immediately for responsive UI
+    setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== linkId));
     try {
       await markLinkViewed(linkId);
-      setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== linkId));
     } catch (error) {
       console.error('[LINKS] Failed to dismiss link card:', error);
     }
