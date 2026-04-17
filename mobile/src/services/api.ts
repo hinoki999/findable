@@ -877,12 +877,14 @@ export async function updateDropStatus(
       console.log('[DROPS] Creating link for drop:', dropId);
       
       // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
+      // Set viewed_at to now so the link initiator (user_id_1) doesn't see it as unviewed
       const { data: linkData, error: linkError } = await supabase
         .from('links')
         .insert({
           user_id_1: drop.sender_id,
           user_id_2: userId,
           drop_id: dropId,
+          viewed_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -891,7 +893,7 @@ export async function updateDropStatus(
         console.error('[DROPS] Failed to create link:', linkError);
         // Don't throw - drop status was updated successfully
       } else {
-        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
+        console.log('[DROPS] SUCCESS: Link created:', linkData?.id, '(viewed_at set for initiator)');
       }
     }
 
