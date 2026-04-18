@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
 import { State } from 'react-native-ble-plx';
-import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { useAuth } from '../contexts/AuthContext';
 import BLEAdvertiserNative, { isBLEAdvertiserAvailable } from '../native/BLEAdvertiserNative';
@@ -61,7 +61,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       stopAdvertising: async () => { },
       error: null,
       isAvailable: false,
-      localName: `${DROPLINK_DEVICE_PREFIX}0000`,
+      localName: 'DropLink',
       broadcastName: null,
       deviceId: '0000',
     };
@@ -71,8 +71,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   console.log('[BLE-ADV-USERID-TRACE] loading:', loading);
   console.log('[BLE-ADV-USERID-TRACE] userId (after loading):', userId);
 
-  // Generate localName: "DropLink-" + deviceId (deviceId is stored in Supabase)
-  const localName = `${DROPLINK_DEVICE_PREFIX}${deviceId}`;
+  // localName is no longer used for device identification (manufacturer data is used instead)
+  // Keep for display/logging purposes only
+  const localName = `DropLink-${deviceId}`;
 
   // ========== USER ID TRACING ==========
   // Log userId immediately when component mounts/updates
@@ -282,7 +283,8 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       // Calculate deviceId directly from userId (don't rely on state which might be stale)
       // Use first 8 characters of userId as deviceId
       const calculatedDeviceId = userId.substring(0, 8);
-      const currentLocalName = `${DROPLINK_DEVICE_PREFIX}${calculatedDeviceId}`;
+      // localName is no longer used for device identification (manufacturer data is used instead)
+      const currentLocalName = `DropLink-${calculatedDeviceId}`;
 
       console.log('[BLE-ADV-DIAG] Step 2: Starting native BLE advertising...');
       console.log('[BLE-ADV-DIAG] UserId:', userId);

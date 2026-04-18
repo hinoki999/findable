@@ -14,9 +14,54 @@ Notifications.setNotificationHandler({
   }),
 });
 console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top level');
-import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID, DROPLINK_MANUFACTURER_ID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
+
+/**
+ * Decode base64 manufacturer data and extract userId prefix
+ * Uses atob() which is natively available in React Native
+ * @param manufacturerData - Base64 encoded manufacturer data from BLE scan
+ * @returns userId prefix string or null if not DropLink device
+ */
+const extractUserIdFromManufacturerData = (manufacturerData: string | null): string | null => {
+  if (!manufacturerData) return null;
+  
+  try {
+    // Decode base64 using atob (available in React Native)
+    const binaryString = atob(manufacturerData);
+    
+    if (binaryString.length < 1) return null;
+    
+    // react-native-ble-plx may return manufacturer data in different formats:
+    // Format A: Raw bytes without manufacturer ID prefix (just the deviceId)
+    // Format B: [2-byte manufacturer ID (little-endian)] + [deviceId bytes]
+    
+    // Check if first 2 bytes are manufacturer ID 0xFFFF (little-endian: 0xFF, 0xFF)
+    if (binaryString.length >= 3 && 
+        binaryString.charCodeAt(0) === 0xFF && 
+        binaryString.charCodeAt(1) === 0xFF) {
+      // Format B: Skip manufacturer ID, return rest as deviceId
+      const deviceId = binaryString.slice(2).trim();
+      console.log('[BLE-ID] Extracted deviceId from manufacturer data (format B):', deviceId);
+      return deviceId || null;
+    }
+    
+    // Format A: Entire string is the deviceId
+    // Verify it looks like a valid hex prefix (8 chars, alphanumeric)
+    const deviceId = binaryString.trim();
+    if (deviceId.length === 8 && /^[a-f0-9]+$/i.test(deviceId)) {
+      console.log('[BLE-ID] Extracted deviceId from manufacturer data (format A):', deviceId);
+      return deviceId;
+    }
+    
+    console.log('[BLE-ID] Manufacturer data does not match expected format:', deviceId);
+    return null;
+  } catch (e) {
+    console.error('[BLE-ID] Failed to decode manufacturer data:', e);
+    return null;
+  }
+};
 export interface BleDevice {
   id: string;
   name: string;
@@ -262,18 +307,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             return;
           }
 
-          // Extract deviceId from device name if it matches "DL-XXXX" pattern
-          const extractDeviceId = (name: string | null): string | null => {
-            if (!name) return null;
-            const match = name.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
-            if (match && match[1]) {
-              // Trim whitespace and return the extracted deviceId
-              return match[1].trim();
-            }
-            return null;
-          };
-
-          const deviceId = extractDeviceId(device.name);
+          // Extract deviceId from manufacturer data (not device name)
+          const deviceId = extractUserIdFromManufacturerData(device.manufacturerData);
+          console.log('[BLE-ID] Device:', device.id, 'manufacturerData:', device.manufacturerData, 'extracted deviceId:', deviceId);
 
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {

@@ -13,7 +13,7 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { useBLEAdvertiser } from '../components/BLEAdvertiser';
-import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 import { supabase } from '../services/supabase';
 
 // Verification whitelist - these users bypass all verification gates
@@ -956,31 +956,24 @@ export default function HomeScreen() {
     },
   ];
 
-  // Filter devices: DropLink devices only (name starts with "DL-" OR has DropLink Service UUID)
-  // Then filter by max distance
+  // Filter devices: DropLink devices only (has DropLink Service UUID)
+  // Manufacturer data provides user identity, Service UUID identifies DropLink devices
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
 
   const dropLinkDevices = devices.filter(device => {
-    // Check if name starts with "DL-"
-    if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
-      return true;
-    }
-    // Check if has DropLink Service UUID
+    // Filter by DropLink Service UUID only
     if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-      const hasDropLinkService = device.serviceUUIDs.some(
+      return device.serviceUUIDs.some(
         uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
       );
-      if (hasDropLinkService) {
-        return true;
-      }
     }
     return false;
   });
 
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
-  // Deduplicate by device name (DL-XXXXXXXX) - keep the one with strongest RSSI
+  // Deduplicate by device name - keep the one with strongest RSSI
   // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
   const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
     const existingIndex = acc.findIndex(d => d.name === device.name);
@@ -3523,7 +3516,7 @@ export default function HomeScreen() {
                 {/* Device Name - Primary Identifier */}
                 <Text style={[theme.type.h1, { fontSize: 24, marginBottom: 4, color: theme.colors.text, fontWeight: '700' }]}>
                   {selectedBlipDevice?.username ||
-                    (selectedBlipDevice?.name && selectedBlipDevice.name.startsWith(DROPLINK_DEVICE_PREFIX)
+                    (selectedBlipDevice?.userId
                       ? 'Loading user...'
                       : (selectedBlipDevice?.name && selectedBlipDevice.name.trim() ? selectedBlipDevice.name : 'Unknown Device'))}
                 </Text>
@@ -3607,93 +3600,12 @@ export default function HomeScreen() {
                         console.log('[DROP-CRASH] Initial receiverUserId from device:', receiverUserId);
 
                         if (!receiverUserId) {
-                          // Extract deviceId from device name
-                          const deviceIdMatch = selectedBlipDevice.name?.match(new RegExp(`^${DROPLINK_DEVICE_PREFIX}(.+)$`));
-                          if (deviceIdMatch && deviceIdMatch[1]) {
-                            const deviceId = deviceIdMatch[1];
-
-                            // Try to look up userId from Supabase - ALWAYS prefer user_profiles.name (display name)
-                            try {
-                              // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
-                              // CRITICAL: user_id is UUID type - PostgREST doesn't support ::text casting in LIKE
-                              // Solution: Query all user_profiles and filter in JS (UUIDs have hyphens, prefix matching is complex)
-                              let { data: allUserProfiles, error: userProfileError } = await supabase
-                                .from('user_profiles')
-                                .select('user_id, name');
-
-                              // Filter in JavaScript: find user where UUID (as string) starts with deviceId
-                              const userProfileData = allUserProfiles?.find(profile =>
-                                profile.user_id && profile.user_id.toString().toLowerCase().replace(/-/g, '').startsWith(deviceId.toLowerCase())
-                              ) || null;
-
-                              let foundUserId: string | null = null;
-                              let foundDisplayName: string | null = null;
-
-                              if (!userProfileError && userProfileData) {
-                                // Found in user_profiles - use display name
-                                foundUserId = userProfileData.user_id;
-                                foundDisplayName = userProfileData.name || deviceId || 'User';
-                              }
-
-                              if (foundUserId) {
-                                receiverUserId = foundUserId;
-
-                                // Update the device object with the found userId and display name
-                                (selectedBlipDevice as any).username = foundDisplayName;
-                                (selectedBlipDevice as any).userId = foundUserId;
-                              } else {
-                                throw new Error(`No user found with device ID: ${deviceId}`);
-                              }
-                            } catch (lookupError: any) {
-                              console.error('[HomeScreen] Lookup failed:', lookupError);
-                              setDropError(`Could not find receiver: ${lookupError.message || 'User not found in database'}`);
-                              throw new Error(`Could not find receiver: ${lookupError.message || 'User not found'}`);
-                            }
-                          } else {
-                            // Device name doesn't match expected pattern - try to find user by device name directly
-                            try {
-                              // Try to find user by display name matching the device name (without DL- prefix)
-                              const cleanName = selectedBlipDevice.name.replace(/^DL-/, '').trim();
-
-                              // ALWAYS query user_profiles FIRST to get display name (e.g., "cheese")
-                              let { data: userProfileData, error: userProfileError } = await supabase
-                                .from('user_profiles')
-                                .select('user_id, name')
-                                .ilike('name', `%${cleanName}%`)
-                                .maybeSingle();
-
-                              let foundUserId: string | null = null;
-                              let foundDisplayName: string | null = null;
-
-                              if (!userProfileError && userProfileData) {
-                                // Found in user_profiles - use display name
-                                foundUserId = userProfileData.user_id;
-                                foundDisplayName = userProfileData.name || cleanName || 'User';
-                              }
-
-                              if (foundUserId) {
-                                receiverUserId = foundUserId;
-                                // Update with display name
-                                (selectedBlipDevice as any).username = foundDisplayName;
-                                (selectedBlipDevice as any).userId = foundUserId;
-                              } else {
-                                throw new Error(`Device name "${selectedBlipDevice.name}" does not match expected format and user lookup failed`);
-                              }
-                            } catch (fallbackError: any) {
-                              console.error('[HomeScreen] Fallback lookup failed:', fallbackError);
-                              setDropError(`Could not identify receiver from device name: ${selectedBlipDevice.name}`);
-                              throw new Error(`Could not extract device ID: ${fallbackError.message}`);
-                            }
-                          }
-                        }
-
-                        if (!receiverUserId) {
-                          // Final fallback: try to use the device's BLE ID as a last resort
-                          // This should never happen if deviceId extraction worked, but handle it gracefully
-                          const errorMsg = `Could not find receiver. Device name: ${selectedBlipDevice.name}, Device ID: ${selectedBlipDevice.id}`;
+                          // userId should already be populated from manufacturer data during BLE scan
+                          // If not available, we cannot send a drop to this device
+                          const errorMsg = `Could not find receiver. userId not available for device: ${selectedBlipDevice.name}`;
                           console.error('[HomeScreen]', errorMsg);
-                          setDropError('Could not find receiver. Please try again.');
-                          throw new Error('Could not find receiver');
+                          setDropError('Unable to identify user. Please try again.');
+                          throw new Error('Could not find receiver - userId not available from manufacturer data');
                         }
 
                         // Validate receiverUserId is not empty

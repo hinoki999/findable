@@ -29,7 +29,8 @@ class BLEAdvertiserService : Service() {
         private const val TAG = "BLEAdvertiserService"
         private const val CHANNEL_ID = "droplink_ble_advertiser"
         private const val NOTIFICATION_ID = 1002
-        private const val DROPLINK_PREFIX = "DL-"
+        // Manufacturer ID 0xFFFF is reserved for testing/prototyping per Bluetooth SIG
+        private const val DROPLINK_MANUFACTURER_ID = 0xFFFF
         
         const val ACTION_START_ADVERTISE = "com.hirule.mobile.START_BLE_ADVERTISE"
         const val ACTION_STOP_ADVERTISE = "com.hirule.mobile.STOP_BLE_ADVERTISE"
@@ -43,7 +44,6 @@ class BLEAdvertiserService : Service() {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothLeAdvertiser: BluetoothLeAdvertiser? = null
     private var isAdvertising = false
-    private var originalBluetoothName: String? = null
     private var currentDeviceId: String? = null
     private var currentServiceUUID: String? = null
     private var advertiseCallback: AdvertiseCallback? = null
@@ -160,13 +160,6 @@ class BLEAdvertiserService : Service() {
         }
 
         try {
-            originalBluetoothName = adapter.name
-            Log.d(TAG, "Original Bluetooth name: $originalBluetoothName")
-
-            val newName = "$DROPLINK_PREFIX$deviceId"
-            val nameSet = adapter.setName(newName)
-            Log.d(TAG, "Set Bluetooth name to '$newName': $nameSet")
-
             currentDeviceId = deviceId
             currentServiceUUID = serviceUUID
 
@@ -174,10 +167,13 @@ class BLEAdvertiserService : Service() {
                 UUID.fromString(serviceUUID)
             } catch (e: IllegalArgumentException) {
                 Log.e(TAG, "Invalid UUID format: $serviceUUID", e)
-                restoreOriginalBluetoothName()
                 broadcastFailure("Invalid service UUID format")
                 return
             }
+
+            // Convert deviceId to bytes for manufacturer data
+            val manufacturerData = deviceId.toByteArray(Charsets.UTF_8)
+            Log.d(TAG, "Manufacturer data: $deviceId (${manufacturerData.size} bytes)")
 
             val settings = AdvertiseSettings.Builder()
                 .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
@@ -186,25 +182,27 @@ class BLEAdvertiserService : Service() {
                 .setTimeout(0)
                 .build()
 
+            // Advertise with Service UUID and manufacturer data (not device name)
             val advertiseData = AdvertiseData.Builder()
-                .setIncludeDeviceName(true)
+                .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(uuid))
+                .addManufacturerData(DROPLINK_MANUFACTURER_ID, manufacturerData)
                 .build()
 
             val scanResponse = AdvertiseData.Builder()
-                .setIncludeDeviceName(true)
+                .setIncludeDeviceName(false)
                 .build()
 
             advertiseCallback = object : AdvertiseCallback() {
                 override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
                     Log.d(TAG, "✅ Advertising started successfully")
-                    Log.d(TAG, "Broadcasting as: $newName")
+                    Log.d(TAG, "Broadcasting with manufacturer data: $deviceId")
                     Log.d(TAG, "Service UUID: $serviceUUID")
                     
                     isAdvertising = true
                     updateNotification()
-                    broadcastSuccess(newName, serviceUUID)
+                    broadcastSuccess(deviceId, serviceUUID)
                 }
 
                 override fun onStartFailure(errorCode: Int) {
@@ -219,7 +217,6 @@ class BLEAdvertiserService : Service() {
                     Log.e(TAG, "❌ Advertising failed: $errorMessage (code: $errorCode)")
                     
                     isAdvertising = false
-                    restoreOriginalBluetoothName()
                     broadcastFailure(errorMessage)
                 }
             }
@@ -231,11 +228,9 @@ class BLEAdvertiserService : Service() {
 
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception - missing Bluetooth permissions", e)
-            restoreOriginalBluetoothName()
             broadcastFailure("Bluetooth permissions not granted")
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error starting advertising", e)
-            restoreOriginalBluetoothName()
             broadcastFailure("Failed to start advertising: ${e.message}")
         }
     }
@@ -265,26 +260,7 @@ class BLEAdvertiserService : Service() {
             advertiseCallback = null
             currentDeviceId = null
             currentServiceUUID = null
-            restoreOriginalBluetoothName()
             unregisterBluetoothStateReceiver()
-        }
-    }
-
-    private fun restoreOriginalBluetoothName() {
-        val originalName = originalBluetoothName
-        if (originalName != null) {
-            try {
-                val adapter = bluetoothAdapter
-                if (adapter != null && adapter.isEnabled) {
-                    val restored = adapter.setName(originalName)
-                    Log.d(TAG, "Restored Bluetooth name to '$originalName': $restored")
-                }
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Security exception restoring Bluetooth name", e)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error restoring Bluetooth name", e)
-            }
-            originalBluetoothName = null
         }
     }
 
@@ -303,7 +279,6 @@ class BLEAdvertiserService : Service() {
                         advertiseCallback = null
                         currentDeviceId = null
                         currentServiceUUID = null
-                        originalBluetoothName = null
                         updateNotification()
                     }
                 }
@@ -335,9 +310,9 @@ class BLEAdvertiserService : Service() {
         bluetoothStateReceiver = null
     }
 
-    private fun broadcastSuccess(deviceName: String, serviceUUID: String) {
+    private fun broadcastSuccess(deviceId: String, serviceUUID: String) {
         val intent = Intent(ACTION_ADVERTISE_STARTED).apply {
-            putExtra("deviceName", deviceName)
+            putExtra("deviceId", deviceId)
             putExtra("serviceUUID", serviceUUID)
         }
         sendBroadcast(intent)

@@ -12,7 +12,7 @@ import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
-import { DROPLINK_SERVICE_UUID, DROPLINK_DEVICE_PREFIX } from '../config/bleConfig';
+import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 
 // Verification whitelist - these users bypass all verification gates
 const VERIFICATION_WHITELIST = {
@@ -188,20 +188,13 @@ export default function DropScreen() {
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
   
-  // First filter to only DropLink devices (by name prefix or Service UUID)
+  // Filter to only DropLink devices (by Service UUID)
+  // Manufacturer data provides user identity, Service UUID identifies DropLink devices
   const dropLinkDevices = devices.filter(device => {
-    // Check if name starts with "DL-"
-    if (device.name && device.name.startsWith(DROPLINK_DEVICE_PREFIX)) {
-      return true;
-    }
-    // Check if has DropLink Service UUID
     if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-      const hasDropLinkService = device.serviceUUIDs.some(
+      return device.serviceUUIDs.some(
         uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
       );
-      if (hasDropLinkService) {
-        return true;
-      }
     }
     return false;
   });
