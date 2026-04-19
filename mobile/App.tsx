@@ -24,7 +24,12 @@ import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
-import { startBackgroundScan, stopBackgroundScan } from './src/native/BLEScannerModule';
+import { 
+  startBackgroundScan, 
+  stopBackgroundScan, 
+  onBackgroundDeviceFound,
+  BackgroundBLEDevice 
+} from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
 
 // Dark Mode Context
@@ -140,6 +145,21 @@ const LinkNotificationsContext = createContext<{
 
 export const useLinkNotifications = () => useContext(LinkNotificationsContext);
 
+// Native BLE Devices Context - devices detected by native background scanner
+export interface NativeBLEDeviceWithProfile extends BackgroundBLEDevice {
+  userId?: string;        // Full user UUID from Supabase lookup
+  username?: string;      // Display name from Supabase lookup
+  serviceUUIDs?: string[];
+}
+
+const NativeBLEDevicesContext = createContext<{
+  nativeDevices: NativeBLEDeviceWithProfile[];
+}>({
+  nativeDevices: [],
+});
+
+export const useNativeBLEDevices = () => useContext(NativeBLEDevicesContext);
+
 import {
   useFonts,
   Inter_300Light,
@@ -208,6 +228,12 @@ function MainApp() {
 
   // Track whether background scan was started (to avoid stopping when never started)
   const scanStartedRef = useRef(false);
+
+  // Native BLE devices detected by background scanner
+  const [nativeDevices, setNativeDevices] = useState<NativeBLEDeviceWithProfile[]>([]);
+  
+  // RSSI history for native scanner smoothing (same as BLEScanner.tsx)
+  const nativeRssiHistoryRef = useRef<Map<string, number[]>>(new Map());
 
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
@@ -372,7 +398,10 @@ function MainApp() {
   }, [isAuthenticated, userId, isSignupInProgress, loadUserData]);
 
   // Start/stop background BLE scanning based on auth state
+  // AND listen for device found events
   useEffect(() => {
+    let unsubscribeDeviceFound: (() => void) | null = null;
+
     const checkAndStart = async () => {
       console.log('[BG-SCAN-DEBUG] useEffect fired - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
       if (authLoading) {
@@ -389,6 +418,76 @@ function MainApp() {
           scanStartedRef.current = true;
           startBackgroundScan()
             .catch(err => console.error('[BG-SCAN] Failed to start:', err));
+
+          // Subscribe to native device found events
+          unsubscribeDeviceFound = onBackgroundDeviceFound(async (device) => {
+            console.log('[BG-SCAN-NATIVE] Device found:', device);
+            
+            const { id, deviceId, name, rssi, distanceFeet } = device;
+            
+            if (!deviceId) {
+              console.log('[BG-SCAN-NATIVE] No deviceId, skipping');
+              return;
+            }
+
+            // Profile lookup using correct RPC function
+            let foundUserId: string | null = null;
+            let displayName: string | null = null;
+
+            try {
+              const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
+              console.log('[BG-SCAN-NATIVE] Looking up profile for deviceId:', normalizedDeviceId);
+              
+              const { data: userProfileData, error: userProfileError } = await supabase
+                .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
+
+              if (!userProfileError && userProfileData) {
+                foundUserId = userProfileData.user_id;
+                displayName = userProfileData.name || userProfileData.username || deviceId;
+                console.log('[BG-SCAN-NATIVE] Profile found - userId:', foundUserId, 'displayName:', displayName);
+              }
+            } catch (err) {
+              console.error('[BG-SCAN-NATIVE] Profile lookup error:', err);
+            }
+
+            // Update RSSI history for smoothing
+            const rssiHistory = nativeRssiHistoryRef.current.get(id) || [];
+            rssiHistory.push(rssi);
+            if (rssiHistory.length > 5) {
+              rssiHistory.shift();
+            }
+            nativeRssiHistoryRef.current.set(id, rssiHistory);
+            
+            const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
+            // Recalculate distance with averaged RSSI
+            const measuredPower = -59;
+            const distanceMeters = Math.pow(10, (measuredPower - averagedRssi) / (10 * 2));
+            const smoothedDistanceFeet = distanceMeters * 3.28084;
+
+            // Update native devices state
+            setNativeDevices(prev => {
+              const exists = prev.find(d => d.id === id);
+              const updatedDevice: NativeBLEDeviceWithProfile = {
+                id,
+                deviceId,
+                name,
+                rssi,
+                distanceFeet: smoothedDistanceFeet,
+                userId: foundUserId || undefined,
+                username: displayName || undefined,
+                serviceUUIDs: ['af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d'],
+              };
+
+              if (!exists) {
+                console.log('[BG-SCAN-NATIVE] Adding new device:', id);
+                return [...prev, updatedDevice];
+              } else {
+                console.log('[BG-SCAN-NATIVE] Updating existing device:', id);
+                return prev.map(d => d.id === id ? { ...d, ...updatedDevice } : d);
+              }
+            });
+          });
+
         } else {
           console.log('[BG-SCAN-DEBUG] BLE permissions not yet granted - scan deferred');
         }
@@ -396,11 +495,23 @@ function MainApp() {
         console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
         scanStartedRef.current = false;
         stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
+        // Clear native devices when stopping
+        setNativeDevices([]);
+        nativeRssiHistoryRef.current.clear();
       } else {
         console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
       }
     };
+    
     checkAndStart();
+
+    // Cleanup: unsubscribe from events (but don't stop scan)
+    return () => {
+      if (unsubscribeDeviceFound) {
+        console.log('[BG-SCAN-NATIVE] Removing device found listener');
+        unsubscribeDeviceFound();
+      }
+    };
   }, [isAuthenticated, userId, authLoading]);
 
   // Save pending push token after auth resolves
@@ -899,8 +1010,9 @@ function MainApp() {
                     dismissNotification,
                     hasUnviewedLinks
                   }}>
-                    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-                      <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+                    <NativeBLEDevicesContext.Provider value={{ nativeDevices }}>
+                      <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
                         {Screen()}
                       </View>
 
@@ -999,7 +1111,8 @@ function MainApp() {
                           onDismiss={() => setToastConfig(null)}
                         />
                       )}
-                    </View>
+                      </View>
+                    </NativeBLEDevicesContext.Provider>
                   </LinkNotificationsContext.Provider>
                 </SettingsContext.Provider>
               </ToastContext.Provider>

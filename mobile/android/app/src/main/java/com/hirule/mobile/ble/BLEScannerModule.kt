@@ -99,6 +99,7 @@ class BLEScannerModule(reactContext: ReactApplicationContext) :
                 val json = jsonArray.getJSONObject(i)
                 val device = Arguments.createMap().apply {
                     putString("id", json.getString("id"))
+                    putString("deviceId", json.optString("deviceId", ""))
                     putString("name", json.getString("name"))
                     putInt("rssi", json.getInt("rssi"))
                     putDouble("distanceFeet", json.getDouble("distanceFeet"))
@@ -159,6 +160,7 @@ class BLEScannerModule(reactContext: ReactApplicationContext) :
                 if (intent?.action == BLEScannerService.ACTION_DEVICE_FOUND) {
                     val params = Arguments.createMap().apply {
                         putString("id", intent.getStringExtra("id"))
+                        putString("deviceId", intent.getStringExtra("deviceId"))
                         putString("name", intent.getStringExtra("name"))
                         putInt("rssi", intent.getIntExtra("rssi", 0))
                         putDouble("distanceFeet", intent.getFloatExtra("distanceFeet", 0f).toDouble())

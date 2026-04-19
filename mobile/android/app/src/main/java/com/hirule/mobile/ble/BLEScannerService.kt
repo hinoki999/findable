@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -17,11 +18,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.hirule.mobile.MainActivity
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 import kotlin.math.pow
 
 class BLEScannerService : Service() {
@@ -30,7 +33,8 @@ class BLEScannerService : Service() {
         private const val TAG = "BLEScannerService"
         private const val CHANNEL_ID = "droplink_ble_scanner"
         private const val NOTIFICATION_ID = 1001
-        private const val DROPLINK_PREFIX = "DL-"
+        private const val DROPLINK_SERVICE_UUID = "af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d"
+        private const val DROPLINK_MANUFACTURER_ID = 0xFFFF
         const val PREFS_NAME = "BLEScannerPrefs"
         const val KEY_DEVICES = "detected_devices"
         
@@ -50,7 +54,8 @@ class BLEScannerService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     
     data class DetectedDevice(
-        val id: String,
+        val id: String,           // MAC address
+        val deviceId: String,     // User's UUID prefix from manufacturer data
         val name: String,
         val rssi: Int,
         val distanceFeet: Float,
@@ -157,10 +162,16 @@ class BLEScannerService : Service() {
                 .setReportDelay(0)
                 .build()
 
-            // No filters - scan all, filter by name in callback
-            scanner.startScan(null, settings, scanCallback)
+            // Filter by DropLink Service UUID
+            val serviceUuid = ParcelUuid(UUID.fromString(DROPLINK_SERVICE_UUID))
+            val filter = ScanFilter.Builder()
+                .setServiceUuid(serviceUuid)
+                .build()
+            val filters = listOf(filter)
+
+            scanner.startScan(filters, settings, scanCallback)
             isScanning = true
-            Log.d(TAG, "✅ Background scanning started")
+            Log.d(TAG, "✅ Background scanning started with Service UUID filter")
             
             // Start cleanup timer
             startDeviceCleanupTimer()
@@ -188,28 +199,44 @@ class BLEScannerService : Service() {
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             try {
-                val deviceName = result.device.name ?: return
+                // Extract deviceId from manufacturer data (0xFFFF)
+                val manufacturerData = result.scanRecord?.getManufacturerSpecificData(DROPLINK_MANUFACTURER_ID)
+                if (manufacturerData == null) {
+                    Log.d(TAG, "No manufacturer data for device: ${result.device.address}")
+                    return
+                }
                 
-                // Only process DropLink devices
-                if (!deviceName.startsWith(DROPLINK_PREFIX)) return
+                val deviceId = try {
+                    String(manufacturerData, Charsets.UTF_8).trim()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to decode manufacturer data", e)
+                    return
+                }
                 
-                val deviceId = result.device.address
+                if (deviceId.isEmpty()) {
+                    Log.d(TAG, "Empty deviceId from manufacturer data")
+                    return
+                }
+                
+                val macAddress = result.device.address
+                val deviceName = result.device.name ?: "DropLink-$deviceId"
                 val rssi = result.rssi
                 val distanceFeet = calculateDistanceFeet(rssi)
                 
-                Log.d(TAG, "Found DropLink device: $deviceName, RSSI: $rssi, Distance: ${String.format("%.1f", distanceFeet)}ft")
+                Log.d(TAG, "Found DropLink device: deviceId=$deviceId, MAC=$macAddress, RSSI: $rssi, Distance: ${String.format("%.1f", distanceFeet)}ft")
                 
-                // Update or add device
+                // Update or add device (keyed by MAC address)
                 val device = DetectedDevice(
-                    id = deviceId,
+                    id = macAddress,
+                    deviceId = deviceId,
                     name = deviceName,
                     rssi = rssi,
                     distanceFeet = distanceFeet,
                     lastSeen = System.currentTimeMillis()
                 )
                 
-                val isNewDevice = !detectedDevices.containsKey(deviceId)
-                detectedDevices[deviceId] = device
+                val isNewDevice = !detectedDevices.containsKey(macAddress)
+                detectedDevices[macAddress] = device
                 
                 // Persist to SharedPreferences
                 persistDevices()
@@ -246,6 +273,7 @@ class BLEScannerService : Service() {
             detectedDevices.values.forEach { device ->
                 val json = JSONObject().apply {
                     put("id", device.id)
+                    put("deviceId", device.deviceId)
                     put("name", device.name)
                     put("rssi", device.rssi)
                     put("distanceFeet", device.distanceFeet.toDouble())
@@ -264,6 +292,7 @@ class BLEScannerService : Service() {
         // Send intent that can be received by BLEScannerModule
         val intent = Intent(ACTION_DEVICE_FOUND).apply {
             putExtra("id", device.id)
+            putExtra("deviceId", device.deviceId)
             putExtra("name", device.name)
             putExtra("rssi", device.rssi)
             putExtra("distanceFeet", device.distanceFeet)

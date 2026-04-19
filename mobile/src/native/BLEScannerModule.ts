@@ -3,6 +3,7 @@ import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
 // Types for background BLE devices
 export interface BackgroundBLEDevice {
   id: string;
+  deviceId?: string;
   name: string;
   rssi: number;
   distanceFeet: number;

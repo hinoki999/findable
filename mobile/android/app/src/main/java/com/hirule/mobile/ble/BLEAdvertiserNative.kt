@@ -16,7 +16,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     companion object {
         private const val TAG = "BLEAdvertiserNative"
-        private const val DROPLINK_PREFIX = "DL-"
     }
 
     private val bluetoothManager: BluetoothManager? by lazy {
@@ -29,8 +28,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     @Volatile
     private var isCurrentlyAdvertising = false
-
-    private var originalBluetoothName: String? = null
 
     override fun getName(): String = "BLEAdvertiserNative"
 
@@ -57,15 +54,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
                 stopAdvertisingInternal()
             }
 
-            // Store original Bluetooth name before changing it
-            originalBluetoothName = adapter.name
-            Log.d(TAG, "Original Bluetooth name: $originalBluetoothName")
-
-            // Set Bluetooth adapter name to "DL-{deviceId}" for broadcasting
-            val newName = "$DROPLINK_PREFIX$deviceId"
-            val nameSet = adapter.setName(newName)
-            Log.d(TAG, "Set Bluetooth name to '$newName': $nameSet")
-
             // Start the foreground service - it handles all BLE advertising
             startForegroundService(serviceUUID, deviceId)
 
@@ -74,23 +62,21 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             }
 
             Log.d(TAG, "✅ Advertising setup complete")
-            Log.d(TAG, "Broadcasting as: $newName")
+            Log.d(TAG, "Broadcasting with deviceId: $deviceId")
             Log.d(TAG, "Service UUID: $serviceUUID")
 
             val result = Arguments.createMap().apply {
                 putBoolean("success", true)
                 putString("serviceUUID", serviceUUID)
-                putString("deviceName", newName)
+                putString("deviceId", deviceId)
             }
             promise.resolve(result)
 
         } catch (e: SecurityException) {
             Log.e(TAG, "Security exception - missing Bluetooth permissions", e)
-            restoreOriginalBluetoothName()
             promise.reject("BLE_ERROR", "Bluetooth permissions not granted")
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error starting advertising", e)
-            restoreOriginalBluetoothName()
             promise.reject("BLE_ERROR", "Failed to start advertising: ${e.message}")
         }
     }
@@ -117,9 +103,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
         
         // Stop the foreground service - it handles stopping BLE advertising
         stopForegroundServiceInternal()
-        
-        // Restore original bluetooth name
-        restoreOriginalBluetoothName()
         
         synchronized(this) {
             isCurrentlyAdvertising = false
@@ -156,24 +139,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             Log.d(TAG, "✅ Foreground service stop requested")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop foreground service", e)
-        }
-    }
-
-    private fun restoreOriginalBluetoothName() {
-        val originalName = originalBluetoothName
-        if (originalName != null) {
-            try {
-                val adapter = bluetoothAdapter
-                if (adapter != null && adapter.isEnabled) {
-                    val restored = adapter.setName(originalName)
-                    Log.d(TAG, "Restored Bluetooth name to '$originalName': $restored")
-                }
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Security exception restoring Bluetooth name", e)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error restoring Bluetooth name", e)
-            }
-            originalBluetoothName = null
         }
     }
 
