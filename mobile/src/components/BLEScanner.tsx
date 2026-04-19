@@ -118,6 +118,10 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     isScanningRef.current = isScanning;
   }, [isScanning]);
 
+  // Ref to store rolling RSSI history for smoothing distance calculations
+  // Maps device.id to array of last 5 RSSI readings
+  const rssiHistoryRef = useRef<Map<string, number[]>>(new Map());
+
   // Debug logging helper
   const addDebugLog = useCallback((message: string) => {
     const timestamp = Date.now() % 100000; // Last 5 digits for readability
@@ -380,20 +384,35 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[BLE-DUPE] About to update devices array - device.id:', device.id, 'device.name:', device.name);
           setDevices(prevDevices => {
             const exists = prevDevices.find(d => d.id === device.id);
-            const distanceFeet = calculateDistanceFeet(device.rssi || -100);
+            const currentRssi = device.rssi || -100;
+            
+            // Update RSSI history for rolling average
+            const rssiHistory = rssiHistoryRef.current.get(device.id) || [];
+            rssiHistory.push(currentRssi);
+            // Keep only last 5 readings
+            if (rssiHistory.length > 5) {
+              rssiHistory.shift();
+            }
+            rssiHistoryRef.current.set(device.id, rssiHistory);
+            
+            // Calculate averaged RSSI from history
+            const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
+            const distanceFeet = calculateDistanceFeet(averagedRssi);
+            
             // Use device name or generate a fallback name
             const deviceName = device.name || `BLE-Device-${device.id.substring(0, 8)}`;
 
             console.log('[BLE-DUPE] Dedup check - exists:', !!exists, 'device.id:', device.id, 'prevDevices.length:', prevDevices.length);
+            console.log('[BLE-RSSI] Device:', device.id, 'raw:', currentRssi, 'avg:', averagedRssi.toFixed(1), 'history:', rssiHistory.length);
             
             if (!exists) {
-              // Add new device
+              // Add new device (RSSI history already initialized above)
               console.log('[BLE-DUPE] ADDING new device - id:', device.id, 'name:', deviceName, 'arrayLengthBefore:', prevDevices.length, 'arrayLengthAfter:', prevDevices.length + 1);
               console.log('[BLE-ID] New device added to array - using identifier:', deviceName);
               return [...prevDevices, {
                 id: device.id,
                 name: deviceName,
-                rssi: device.rssi || -100,
+                rssi: currentRssi,
                 distanceFeet,
                 serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
                 username: undefined, // Will be populated by async lookup if deviceId found
@@ -403,7 +422,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               console.log('[BLE-DUPE] UPDATING existing device - id:', device.id, 'keeping arrayLength:', prevDevices.length);
               return prevDevices.map(d =>
                 d.id === device.id
-                  ? { ...d, rssi: device.rssi || -100, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
+                  ? { ...d, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
                   : d
               );
             }
