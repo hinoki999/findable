@@ -973,10 +973,19 @@ export default function HomeScreen() {
 
   const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
-  // Deduplicate by device name - keep the one with strongest RSSI
+  // Deduplicate by username (or userId as fallback) - keep the one with strongest RSSI
   // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
+  // Devices without username or userId are excluded since we can't identify them as unique users
   const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
-    const existingIndex = acc.findIndex(d => d.name === device.name);
+    // Get deduplication key: prefer username, fall back to userId
+    const dedupeKey = device.username || device.userId;
+    
+    // Skip devices we can't uniquely identify
+    if (!dedupeKey) {
+      return acc;
+    }
+    
+    const existingIndex = acc.findIndex(d => (d.username || d.userId) === dedupeKey);
     if (existingIndex === -1) {
       acc.push(device);
     } else if ((device.rssi || -100) > (acc[existingIndex].rssi || -100)) {
