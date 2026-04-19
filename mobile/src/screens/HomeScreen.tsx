@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
-import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings } from '../../App';
+import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -663,6 +663,9 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
+  // Get native background scanner devices from App.tsx context
+  const { nativeDevices } = useNativeBLEDevices();
+
   // Use BLE advertiser to make device discoverable (isolated from scanning)
   const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, localName } = useBLEAdvertiser();
 
@@ -956,12 +959,50 @@ export default function HomeScreen() {
     },
   ];
 
+  // Merge native background scanner devices with react-native-ble-plx devices
+  // Native devices already have serviceUUIDs, userId, and username populated from App.tsx
+  const mergedDevices = useMemo(() => {
+    const merged = [...devices];
+    
+    for (const nativeDevice of nativeDevices) {
+      const existingIndex = merged.findIndex(d => d.id === nativeDevice.id);
+      
+      if (existingIndex === -1) {
+        // Device doesn't exist in react-native-ble-plx array, add it
+        const bleDevice: BleDevice = {
+          id: nativeDevice.id,
+          name: nativeDevice.name,
+          rssi: nativeDevice.rssi,
+          distanceFeet: nativeDevice.distanceFeet,
+          serviceUUIDs: nativeDevice.serviceUUIDs,
+          username: nativeDevice.username,
+          userId: nativeDevice.userId,
+        };
+        merged.push(bleDevice);
+        console.log('[BLE-MERGE] Added native device:', nativeDevice.id, 'username:', nativeDevice.username);
+      } else {
+        // Device exists - prefer native version if it has username populated
+        if (nativeDevice.username && !merged[existingIndex].username) {
+          merged[existingIndex] = {
+            ...merged[existingIndex],
+            username: nativeDevice.username,
+            userId: nativeDevice.userId,
+            serviceUUIDs: nativeDevice.serviceUUIDs || merged[existingIndex].serviceUUIDs,
+          };
+          console.log('[BLE-MERGE] Updated device with native data:', nativeDevice.id, 'username:', nativeDevice.username);
+        }
+      }
+    }
+    
+    return merged;
+  }, [devices, nativeDevices]);
+
   // Filter devices: DropLink devices only (has DropLink Service UUID)
   // Manufacturer data provides user identity, Service UUID identifies DropLink devices
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
 
-  const dropLinkDevices = devices.filter(device => {
+  const dropLinkDevices = mergedDevices.filter(device => {
     // Filter by DropLink Service UUID only
     if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
       return device.serviceUUIDs.some(
@@ -996,9 +1037,9 @@ export default function HomeScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length, 'deduplicated:', deduplicatedDevices.length);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', devices.length, 'native:', nativeDevices.length, 'merged:', mergedDevices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length, 'deduplicated:', deduplicatedDevices.length);
     console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify(deduplicatedDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices.length, filteredDevices.length, deduplicatedDevices.length]);
+  }, [devices, nativeDevices.length, mergedDevices.length, dropLinkDevices.length, filteredDevices.length, deduplicatedDevices.length]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
