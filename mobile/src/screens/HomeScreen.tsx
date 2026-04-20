@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
-import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices } from '../../App';
+import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices, useBLEAdvertising } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,7 +12,6 @@ import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
-import { useBLEAdvertiser } from '../components/BLEAdvertiser';
 import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 import { supabase } from '../services/supabase';
 
@@ -582,7 +581,6 @@ export default function HomeScreen() {
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isDiscoverable, setIsDiscoverable] = useState(true);
   const [pinnedProfiles, setPinnedProfiles] = useState<Device[]>([]);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -666,8 +664,8 @@ export default function HomeScreen() {
   // Get native background scanner devices from App.tsx context
   const { nativeDevices } = useNativeBLEDevices();
 
-  // Use BLE advertiser to make device discoverable (isolated from scanning)
-  const { isAdvertising, startAdvertising, stopAdvertising, error: advertisingError, isAvailable, broadcastName, localName } = useBLEAdvertiser();
+  // Get BLE advertising state from App.tsx context (persists across tab navigation)
+  const { isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable } = useBLEAdvertising();
 
   // Screen dimensions (reactive to orientation changes)
   const [screenDimensions, setScreenDimensions] = useState(() => {
@@ -757,20 +755,6 @@ export default function HomeScreen() {
     stopScanRef.current = stopScan;
   }, [startScan, stopScan]);
 
-  // Refs to stabilize startAdvertising/stopAdvertising callbacks (prevents useEffect re-runs)
-  const startAdvertisingRef = useRef(startAdvertising);
-  const stopAdvertisingRef = useRef(stopAdvertising);
-  useEffect(() => {
-    startAdvertisingRef.current = startAdvertising;
-  }, [startAdvertising]);
-  useEffect(() => {
-    stopAdvertisingRef.current = stopAdvertising;
-  }, [stopAdvertising]);
-
-  // Synchronous ref to prevent multiple startAdvertising calls during rapid re-renders
-  // This is checked/set synchronously in the useEffect before calling startAdvertisingRef.current()
-  const hasRequestedAdvertisingRef = useRef(false);
-
   // Ref to track link IDs dismissed in this session (prevents polling from re-adding them)
   const dismissedLinkIdsRef = useRef<Set<string>>(new Set());
 
@@ -791,37 +775,6 @@ export default function HomeScreen() {
       clearInterval(scanInterval);
     };
   }, []); // Empty deps - only run once on mount
-
-  // Start/stop BLE advertising based on isDiscoverable toggle (isolated from scanning)
-  useEffect(() => {
-    console.log('[BLE-ADV-EFFECT] useEffect fired - isDiscoverable:', isDiscoverable, 'isAvailable:', isAvailable, 'loading:', loading, 'userId:', userId ? 'present' : 'null');
-
-    // Wait for BLE availability, auth loading to complete, and userId to be available
-    if (!isAvailable || loading || !userId) {
-      console.log('[BLE-ADV-EFFECT] Early return - prerequisites not met');
-      return;
-    }
-
-    // Start advertising when isDiscoverable is true (ACTIVE mode)
-    if (isDiscoverable) {
-      // Use synchronous ref guard instead of isAdvertising state
-      // This prevents multiple calls when useEffect fires rapidly due to multiple dependency changes
-      if (!hasRequestedAdvertisingRef.current && !isAdvertising) {
-        console.log('[BLE-ADV-EFFECT] 🔒 Setting hasRequestedAdvertisingRef = true, calling startAdvertising');
-        hasRequestedAdvertisingRef.current = true;
-        startAdvertisingRef.current();
-      } else {
-        console.log('[BLE-ADV-EFFECT] Skipping start - hasRequestedAdvertisingRef:', hasRequestedAdvertisingRef.current, 'isAdvertising:', isAdvertising);
-      }
-    } else {
-      // Stop advertising when isDiscoverable is false (GHOST mode)
-      console.log('[BLE-ADV-EFFECT] 🔓 isDiscoverable=false, resetting hasRequestedAdvertisingRef and stopping');
-      hasRequestedAdvertisingRef.current = false;
-      stopAdvertisingRef.current();
-    }
-    // No cleanup needed here - stop is handled in effect body when isDiscoverable=false
-    // Native BLEAdvertiserService handles cleanup on app termination via onDestroy()
-  }, [isDiscoverable, isAvailable, loading, userId, isAdvertising]);
 
   // Fetch linked devices (accepted and returned links) on mount and periodically
   // Note: HomeScreen unmounts/remounts on tab change, so this fires on each "focus"

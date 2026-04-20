@@ -31,6 +31,7 @@ import {
   BackgroundBLEDevice 
 } from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
+import { useBLEAdvertiser } from './src/components/BLEAdvertiser';
 
 // Dark Mode Context
 const DarkModeContext = createContext<{
@@ -160,6 +161,22 @@ const NativeBLEDevicesContext = createContext<{
 
 export const useNativeBLEDevices = () => useContext(NativeBLEDevicesContext);
 
+// BLE Advertising Context - manages ghost mode / discoverable state at app level
+// This ensures advertising persists across tab navigation (HomeScreen unmounts on tab change)
+const BLEAdvertisingContext = createContext<{
+  isDiscoverable: boolean;
+  setIsDiscoverable: (value: boolean) => void;
+  isAdvertising: boolean;
+  isAvailable: boolean;
+}>({
+  isDiscoverable: true,
+  setIsDiscoverable: () => {},
+  isAdvertising: false,
+  isAvailable: false,
+});
+
+export const useBLEAdvertising = () => useContext(BLEAdvertisingContext);
+
 import {
   useFonts,
   Inter_300Light,
@@ -234,6 +251,23 @@ function MainApp() {
   
   // RSSI history for native scanner smoothing (same as BLEScanner.tsx)
   const nativeRssiHistoryRef = useRef<Map<string, number[]>>(new Map());
+
+  // BLE Advertising state - managed at App level so it persists across tab navigation
+  const [isDiscoverable, setIsDiscoverable] = useState(true);
+  const { isAdvertising, startAdvertising, stopAdvertising, isAvailable: advertisingAvailable } = useBLEAdvertiser();
+  
+  // Refs to stabilize advertising callbacks (prevents useEffect re-runs)
+  const startAdvertisingRef = useRef(startAdvertising);
+  const stopAdvertisingRef = useRef(stopAdvertising);
+  useEffect(() => {
+    startAdvertisingRef.current = startAdvertising;
+  }, [startAdvertising]);
+  useEffect(() => {
+    stopAdvertisingRef.current = stopAdvertising;
+  }, [stopAdvertising]);
+  
+  // Synchronous ref to prevent multiple startAdvertising calls during rapid re-renders
+  const hasRequestedAdvertisingRef = useRef(false);
 
   // 🔍 DIAGNOSTIC: Log whenever userProfile state changes
   useEffect(() => {
@@ -535,6 +569,37 @@ function MainApp() {
     };
     registerPushToken();
   }, [isAuthenticated, userId]);
+
+  // BLE Advertising control - start/stop based on isDiscoverable toggle
+  // Runs at App level so advertising persists when navigating between tabs
+  useEffect(() => {
+    console.log('[BLE-ADV-APP] useEffect fired - isDiscoverable:', isDiscoverable, 'advertisingAvailable:', advertisingAvailable, 'authLoading:', authLoading, 'userId:', userId ? 'present' : 'null', 'isAdvertising:', isAdvertising);
+
+    // Wait for BLE availability, auth loading to complete, and userId to be available
+    if (!advertisingAvailable || authLoading || !userId) {
+      console.log('[BLE-ADV-APP] Early return - prerequisites not met');
+      return;
+    }
+
+    // Start advertising when isDiscoverable is true (ACTIVE mode)
+    if (isDiscoverable) {
+      // Use synchronous ref guard instead of isAdvertising state
+      // This prevents multiple calls when useEffect fires rapidly due to multiple dependency changes
+      if (!hasRequestedAdvertisingRef.current && !isAdvertising) {
+        console.log('[BLE-ADV-APP] 🔒 Setting hasRequestedAdvertisingRef = true, calling startAdvertising');
+        hasRequestedAdvertisingRef.current = true;
+        startAdvertisingRef.current();
+      } else {
+        console.log('[BLE-ADV-APP] Skipping start - hasRequestedAdvertisingRef:', hasRequestedAdvertisingRef.current, 'isAdvertising:', isAdvertising);
+      }
+    } else {
+      // Stop advertising when isDiscoverable is false (GHOST mode)
+      console.log('[BLE-ADV-APP] 🔓 isDiscoverable=false, resetting hasRequestedAdvertisingRef and stopping');
+      hasRequestedAdvertisingRef.current = false;
+      stopAdvertisingRef.current();
+    }
+  }, [isDiscoverable, advertisingAvailable, authLoading, userId, isAdvertising]);
+
   // Check for OTA updates on app launch
   useEffect(() => {
     async function checkForUpdates() {
@@ -1011,7 +1076,8 @@ function MainApp() {
                     hasUnviewedLinks
                   }}>
                     <NativeBLEDevicesContext.Provider value={{ nativeDevices }}>
-                      <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+                      <BLEAdvertisingContext.Provider value={{ isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable: advertisingAvailable }}>
+                        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
                         {Screen()}
                       </View>
@@ -1110,8 +1176,9 @@ function MainApp() {
                           onAction={toastConfig.onAction}
                           onDismiss={() => setToastConfig(null)}
                         />
-                      )}
-                      </View>
+                        )}
+                        </View>
+                      </BLEAdvertisingContext.Provider>
                     </NativeBLEDevicesContext.Provider>
                   </LinkNotificationsContext.Provider>
                 </SettingsContext.Provider>
