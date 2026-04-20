@@ -206,9 +206,9 @@ export default function DropScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] DropScreen devices state changed - total:', devices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length);
-    console.log('[BLE-ID] DropScreen filteredDevices for UI render:', JSON.stringify(filteredDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices.length, filteredDevices.length]);
+    console.log('[BLE-DUPE] DropScreen devices state changed - total:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length);
+    console.log('[BLE-ID] DropScreen filteredDevices for UI render:', JSON.stringify((filteredDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
+  }, [devices, dropLinkDevices, filteredDevices]);
 
   // Auto-start scanning when Drop page loads
   useEffect(() => {
@@ -488,7 +488,7 @@ export default function DropScreen() {
             <NetworkBanner isDarkMode={isDarkMode} />
             
             {/* Accepted Drops Section */}
-            {sortedAcceptedDrops.length > 0 && (
+            {(sortedAcceptedDrops || []).length > 0 && (
               <View style={{ marginBottom: 20 }}>
                 <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 12, color: '#FF6B4A' }]}>
                   Your Accepted Drops
@@ -618,7 +618,7 @@ export default function DropScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          acceptedDrops.length === 0 ? (
+          (acceptedDrops || []).length === 0 ? (
             <View style={{
               flex: 1,
               alignItems: 'center',

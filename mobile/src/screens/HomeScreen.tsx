@@ -855,8 +855,8 @@ export default function HomeScreen() {
   }, [userId]);
 
   // Combine context-based and database-based unviewed links for badge
-  const unviewedLinksFromContext = linkNotifications.filter(notif => !notif.viewed && !notif.dismissed);
-  const hasUnviewedLinks = unviewedLinksFromContext.length > 0 || unviewedLinksFromDb.length > 0;
+  const unviewedLinksFromContext = (linkNotifications || []).filter(notif => !notif.viewed && !notif.dismissed);
+  const hasUnviewedLinks = (unviewedLinksFromContext || []).length > 0 || (unviewedLinksFromDb || []).length > 0;
 
   // Tutorial steps for Home screen
   const tutorialSteps = [
@@ -990,9 +990,9 @@ export default function HomeScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', devices.length, 'native:', nativeDevices.length, 'merged:', mergedDevices.length, 'dropLink:', dropLinkDevices.length, 'filtered:', filteredDevices.length, 'deduplicated:', deduplicatedDevices.length);
-    console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify(deduplicatedDevices.map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, nativeDevices.length, mergedDevices.length, dropLinkDevices.length, filteredDevices.length, deduplicatedDevices.length]);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'native:', (nativeDevices || []).length, 'merged:', (mergedDevices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
+    console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify((deduplicatedDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
+  }, [devices, nativeDevices, mergedDevices, dropLinkDevices, filteredDevices, deduplicatedDevices]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -1436,7 +1436,7 @@ export default function HomeScreen() {
 
   const handleRaindropPress = () => {
     console.log('[DROP-MODAL] handleRaindropPress called - USER TAPPED RAINDROP');
-    console.log('[DROP-MODAL] Current state - incomingDrops.length:', incomingDrops.length, 'showDrops:', showDrops);
+    console.log('[DROP-MODAL] Current state - incomingDrops.length:', (incomingDrops || []).length, 'showDrops:', showDrops);
     
     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
     // Phone verification gate with whitelist bypass
@@ -1490,12 +1490,12 @@ export default function HomeScreen() {
       await updateDropStatus(drop.id, action, responseProfile);
 
       // Remove the drop from the list
-      console.log('[DROP-STATE] HomeScreen setIncomingDrops - removing drop.id:', drop.id, 'current count:', incomingDrops.length);
+      console.log('[DROP-STATE] HomeScreen setIncomingDrops - removing drop.id:', drop.id, 'current count:', (incomingDrops || []).length);
       setIncomingDrops(prev => prev.filter(d => d.id !== drop.id));
 
       // Close modal if no more drops
-      console.log('[DROP-MODAL] Checking if should close modal - incomingDrops.length:', incomingDrops.length);
-      if (incomingDrops.length <= 1) {
+      console.log('[DROP-MODAL] Checking if should close modal - incomingDrops.length:', (incomingDrops || []).length);
+      if ((incomingDrops || []).length <= 1) {
         console.log('[DROP-MODAL] Closing drops modal - no more drops');
         console.log('[DROP-STATE] HomeScreen setShowDrops(false) - after last drop action');
         setShowDrops(false);
@@ -1920,7 +1920,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Empty State - No Nearby Users - OUTSIDE grid so it doesn't rotate */}
-        {deduplicatedDevices.length === 0 && linkedDevices.length === 0 && (
+        {(deduplicatedDevices || []).length === 0 && (linkedDevices || []).length === 0 && (
           <View
             style={{
               position: 'absolute',
@@ -1986,7 +1986,7 @@ export default function HomeScreen() {
 
               <View style={{ position: 'relative' }}>
                 <MaterialCommunityIcons
-                  name={(incomingDrops.length > 0 || unviewedLinksFromDb.length > 0) ? "water" : "water-outline"}
+                  name={((incomingDrops || []).length > 0 || (unviewedLinksFromDb || []).length > 0) ? "water" : "water-outline"}
                   size={30}
                   color={theme.colors.green}
                 />
@@ -2508,7 +2508,7 @@ export default function HomeScreen() {
               <ScrollView style={{ maxHeight: 500 }}>
                 <>
                   {/* Link Notifications Section (from context) */}
-                  {unviewedLinksFromContext.length > 0 && (
+                  {(unviewedLinksFromContext || []).length > 0 && (
                     <View style={{ marginBottom: 16 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                         <LinkIcon size={16} />
@@ -2600,7 +2600,7 @@ export default function HomeScreen() {
                   )}
 
                   {/* Incoming Drops Section */}
-                  {incomingDrops.length > 0 && (
+                  {(incomingDrops || []).length > 0 && (
                     <View style={{ marginBottom: 10 }}>
                       <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
                         💧 Incoming Drops
@@ -2608,7 +2608,7 @@ export default function HomeScreen() {
                     </View>
                   )}
 
-                  {incomingDrops.length === 0 && unviewedLinksFromContext.length === 0 && unviewedLinksFromDb.length === 0 ? (
+                  {(incomingDrops || []).length === 0 && (unviewedLinksFromContext || []).length === 0 && (unviewedLinksFromDb || []).length === 0 ? (
                     <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
                       <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
                       <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
@@ -2816,8 +2816,8 @@ export default function HomeScreen() {
                     ))}
 
                     {/* New Links Section */}
-                    {unviewedLinksFromDb.length > 0 && (
-                      <View style={{ marginTop: incomingDrops.length > 0 ? 20 : 0 }}>
+                    {(unviewedLinksFromDb || []).length > 0 && (
+                      <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
                         <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
                           🔗 New Links
                         </Text>
@@ -3249,14 +3249,14 @@ export default function HomeScreen() {
               </Pressable>
 
               {/* Badge count if more links */}
-              {unviewedLinksFromDb.length > 1 && (
+              {(unviewedLinksFromDb || []).length > 1 && (
                 <Text style={[theme.type.body, {
                   fontSize: 12,
                   color: theme.colors.muted,
                   marginTop: 12,
                   textAlign: 'center',
                 }]}>
-                  +{unviewedLinksFromDb.length - 1} more new link{unviewedLinksFromDb.length > 2 ? 's' : ''}
+                  +{(unviewedLinksFromDb || []).length - 1} more new link{(unviewedLinksFromDb || []).length > 2 ? 's' : ''}
                 </Text>
               )}
             </View>
