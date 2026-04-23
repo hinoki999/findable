@@ -5055,7 +5055,312 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 
 ---
 
-## Current Known Issues (As of February 20, 2026)
+## BLE Architecture Overhaul (February 2026)
+
+### Manufacturer Data Broadcasting
+
+**Change:** Replaced device name broadcasting with BLE manufacturer data for user identification.
+
+**Before:**
+- DropLink modified device Bluetooth name to `DL-{userId}` prefix
+- Scanner extracted userId by parsing device name
+
+**After:**
+- Device Bluetooth name is never modified by DropLink
+- UserId (first 8 characters) encoded as manufacturer data with ID `0xFFFF`
+- Scanner reads `device.manufacturerData`, decodes base64, extracts userId
+
+**Files Modified:**
+- `BLEAdvertiserService.kt` — `addManufacturerData(0xFFFF, deviceId.toByteArray())`, `setIncludeDeviceName(false)`
+- `BLEScannerService.kt` — `getManufacturerSpecificData(0xFFFF)` to extract userId
+- `BLEScanner.tsx` — `extractUserIdFromManufacturerData()` using `atob()` for base64 decoding
+- `bleConfig.ts` — Removed `DROPLINK_DEVICE_PREFIX`, added `DROPLINK_MANUFACTURER_ID = 0xFFFF`
+
+### Native Background Scanner Service
+
+**Status:** ✅ COMPLETED — Android foreground service for persistent scanning
+
+**Architecture:**
+```
+BLEScannerService.kt (Foreground Service)
+    ↓ LocalBroadcast
+BLEScannerModule.kt (React Native Bridge)
+    ↓ NativeEventEmitter
+App.tsx (Event Listener + Profile Lookup)
+    ↓ Context Provider
+HomeScreen.tsx (Merged Device Display)
+```
+
+**Files Created/Modified:**
+- `BLEScannerService.kt` — Foreground service with `ScanFilter` for DropLink UUID, manufacturer data extraction
+- `BLEScannerModule.kt` — Bridge exposing `startBackgroundScan()`, `stopBackgroundScan()`, `getDetectedDevices()`
+- `src/native/BLEScannerModule.ts` — TypeScript interface with `BackgroundBLEDevice` type
+- `App.tsx` — `NativeBLEDevicesContext`, event listener for `BLEBackgroundDeviceFound`, profile lookup via RPC
+
+**Service UUID Filter:**
+```kotlin
+val serviceUuid = ParcelUuid(UUID.fromString("af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d"))
+val filter = ScanFilter.Builder().setServiceUuid(serviceUuid).build()
+scanner.startScan(listOf(filter), settings, scanCallback)
+```
+
+### Advertising Persistence Across Tab Navigation
+
+**Problem:** BLE advertising stopped when user navigated away from HomeScreen because `useBLEAdvertiser` was called inside HomeScreen, which unmounts on tab change.
+
+**Solution:** Moved advertising management to App.tsx level.
+
+**Changes:**
+- `App.tsx` — Added `BLEAdvertisingContext`, `useBLEAdvertiser()` call, advertising control `useEffect`
+- `HomeScreen.tsx` — Replaced `useBLEAdvertiser()` with `useBLEAdvertising()` from context
+- Advertising now persists regardless of which tab is active
+
+### Rules of Hooks Violation Fix
+
+**Problem:** `useBLEAdvertiser` had an illegal early return when `loading` was true (lines 54-68), returning a plain object before all hooks were called. This violated React Rules of Hooks and caused gray screen crash when hook was moved to App.tsx.
+
+**Before (BROKEN):**
+```typescript
+export const useBLEAdvertiser = () => {
+  const { loading } = useAuth();
+  const [isAdvertising, setIsAdvertising] = useState(false);
+  // ...more state hooks...
+  
+  if (loading) {
+    return { /* early return object */ };  // ❌ ILLEGAL - hooks not called yet
+  }
+  
+  useEffect(() => { /* ... */ }, []);  // These hooks skipped when loading=true
+  // ...more useEffect/useCallback hooks...
+};
+```
+
+**After (FIXED):**
+```typescript
+export const useBLEAdvertiser = () => {
+  const { loading } = useAuth();
+  const [isAdvertising, setIsAdvertising] = useState(false);
+  // ...more state hooks...
+  
+  // Compute isAvailable - false when loading to prevent operations during auth
+  const isAvailable = !loading && Platform.OS === 'android' && ADVERTISING_ENABLED;
+  
+  useEffect(() => { /* ... */ }, []);  // ✅ Always called
+  // ...all hooks always called regardless of loading state...
+  
+  return { isAdvertising, isAvailable, /* ... */ };  // Single return at end
+};
+```
+
+### SharedPreferences Persistence for Advertising
+
+**Problem:** When app was killed, advertising state was lost. Service couldn't resume because it didn't know the deviceId or serviceUUID.
+
+**Solution:** Persist advertising state to SharedPreferences.
+
+**Implementation (BLEAdvertiserService.kt):**
+```kotlin
+companion object {
+    private const val PREFS_NAME = "BLEAdvertiserPrefs"
+    private const val KEY_DEVICE_ID = "deviceId"
+    private const val KEY_SERVICE_UUID = "serviceUUID"
+    private const val KEY_IS_DISCOVERABLE = "isDiscoverable"
+}
+
+// In onStartSuccess callback:
+saveAdvertisingState(deviceId, serviceUUID, true)
+
+// In onStartCommand with null intent (system restart):
+val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+val isDiscoverable = prefs.getBoolean(KEY_IS_DISCOVERABLE, false)
+val savedDeviceId = prefs.getString(KEY_DEVICE_ID, null)
+val savedServiceUUID = prefs.getString(KEY_SERVICE_UUID, null)
+if (isDiscoverable && savedDeviceId != null && savedServiceUUID != null) {
+    startAdvertising(savedServiceUUID, savedDeviceId)
+}
+```
+
+### Ghost Mode vs App Kill Stop Separation
+
+**Problem:** Initial SharedPreferences fix was defeated because JS cleanup called `stopAdvertising()` on app kill, which wrote `isDiscoverable=false` to SharedPreferences, preventing service restart.
+
+**Solution:** Separate intent actions for user-initiated ghost mode vs app kill cleanup.
+
+**Actions:**
+| Action | Used When | isDiscoverable Written | Service Restarts? |
+|--------|-----------|------------------------|-------------------|
+| `ACTION_GHOST_MODE_STOP` | User enables ghost mode (JS call) | `false` | ❌ No |
+| `ACTION_STOP_ADVERTISE` | App kill, cleanup, invalidate | Not written | ✅ Yes |
+
+**Implementation:**
+- `BLEAdvertiserNative.kt` sends `ACTION_GHOST_MODE_STOP` when `stopAdvertising()` called from JS
+- `BLEAdvertiserService.kt` only writes `isDiscoverable=false` for `ACTION_GHOST_MODE_STOP`
+
+### Battery Optimization Exemption
+
+**Status:** ✅ COMPLETED — Native method to request exemption
+
+**Implementation (BLEAdvertiserNative.kt):**
+```kotlin
+@ReactMethod
+fun requestBatteryOptimizationExemption(promise: Promise) {
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+    val isExempted = powerManager.isIgnoringBatteryOptimizations(packageName)
+    
+    if (!isExempted) {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        intent.data = Uri.parse("package:$packageName")
+        context.startActivity(intent)
+    }
+    promise.resolve(mapOf("alreadyExempted" to isExempted, "prompted" to !isExempted))
+}
+```
+
+**AndroidManifest.xml:**
+```xml
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+```
+
+### BLE Detection Stability Improvements
+
+**Rolling RSSI Average:**
+```typescript
+const rssiHistoryRef = useRef<Map<string, number[]>>(new Map());
+
+// In scan callback:
+const rssiHistory = rssiHistoryRef.current.get(device.id) || [];
+rssiHistory.push(device.rssi);
+if (rssiHistory.length > 5) rssiHistory.shift();
+rssiHistoryRef.current.set(device.id, rssiHistory);
+
+const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
+const distanceFeet = calculateDistanceFeet(averagedRssi);
+```
+
+**Deduplication by Username/UserId:**
+```typescript
+const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
+  const dedupeKey = device.username || device.userId;
+  if (!dedupeKey) return acc;  // Skip unidentifiable devices
+  
+  const existingIndex = acc.findIndex(d => (d.username || d.userId) === dedupeKey);
+  if (existingIndex === -1) {
+    acc.push(device);
+  } else if ((device.rssi || -100) > (acc[existingIndex].rssi || -100)) {
+    acc[existingIndex] = device;  // Keep stronger signal
+  }
+  return acc;
+}, []);
+```
+
+**Supabase RPC for Prefix Lookup:**
+```sql
+CREATE OR REPLACE FUNCTION get_profile_by_user_id_prefix(prefix text)
+RETURNS TABLE (id uuid, username text, ...) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT * FROM profiles
+  WHERE id::text ILIKE prefix || '%'
+  LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### Drop & Link Flow Restructure
+
+**Drops Table (Single Row Per Interaction):**
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| sender_id | uuid | User who sent the drop |
+| receiver_id | uuid | User who received the drop |
+| status | text | 'pending', 'accepted', 'declined', 'linked' |
+| sender_name, sender_username, etc. | text | Sender's contact info at time of send |
+
+**Links Table (Mutual Connections):**
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| user_id_1 | uuid | Original drop sender |
+| user_id_2 | uuid | Original drop receiver (who returned) |
+| drop_id | uuid | Reference to originating drop |
+| created_at | timestamp | When link was created |
+| viewed_at | timestamp | When link was acknowledged (null = unviewed) |
+
+**Flow:**
+1. User A sends drop to User B → INSERT drop with status='pending'
+2. User B accepts → UPDATE status='accepted'
+3. User B returns drop → UPDATE status='linked', INSERT into links table
+4. Link initiator (User A) has `viewed_at` set immediately on creation
+
+**Polling Race Condition Fix:**
+```typescript
+const dismissedLinkIdsRef = useRef<Set<string>>(new Set());
+
+const handleDismissLinkCard = (linkId) => {
+  dismissedLinkIdsRef.current.add(linkId);  // Add BEFORE async call
+  markLinkViewed(linkId);
+  setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== linkId));
+};
+
+// In polling useEffect:
+const links = await getUnviewedLinks();
+const filteredLinks = links.filter(l => !dismissedLinkIdsRef.current.has(l.id));
+setUnviewedLinksFromDb(filteredLinks);
+```
+
+### Modal & UI Improvements
+
+**Blip Modal:**
+- Removed MAC address and RSSI display
+- Added profile photo fetch from Supabase Storage
+- Replaced close button with gray X
+- Bio displays when available
+
+**Radar Layout:**
+- Minimum 45px distance buffer from center (blips cannot overlap raindrop)
+- Raindrop zIndex set to 10000 (always renders above blips)
+
+**Link Notification Modal:**
+- Added "Okay" button to dismiss
+- Marks link as viewed on dismiss
+- Prevents reappearing via dismissedLinkIdsRef
+
+**Return Link Confirmation:**
+- After user returns a drop, shows confirmation modal
+- Displays "You linked with [name]!" message
+
+### Mistakes & Lessons Learned (BLE Overhaul)
+
+**1. SharedPreferences Defeated by JS Cleanup:**
+- Initial SharedPreferences implementation persisted advertising state correctly
+- However, when app was killed, JS cleanup still ran and called `stopAdvertising()`
+- This wrote `isDiscoverable=false` to SharedPreferences, defeating the persistence
+- **Fix:** Separated `ACTION_GHOST_MODE_STOP` (user-initiated, writes false) from `ACTION_STOP_ADVERTISE` (cleanup, preserves state)
+
+**2. Rules of Hooks Violation Caused Gray Screen:**
+- `useBLEAdvertiser` had conditional early return (`if (loading) return {...}`) before all hooks were called
+- When hook worked in HomeScreen, it was rendered after AuthProvider was fully initialized
+- When moved to App.tsx (closer to AuthProvider), `loading` was true on first render
+- Early return caused hooks to be skipped, violating React's rule that hooks must be called in same order every render
+- **Fix:** Removed early return, moved conditions inside hook logic, ensured all hooks always called
+
+**3. Deduplication Key Became Invalid:**
+- Original deduplication keyed on `device.name` which was `DL-{userId}`
+- After manufacturer data refactor, device names became generic MAC-based identifiers
+- Multiple radar dots appeared for same user as MAC addresses rotated
+- **Fix:** Changed deduplication key to `device.username || device.userId`
+
+**4. Multiple OTA/Build Cycles Required:**
+- Each fix revealed another interconnected issue in BLE persistence architecture
+- SharedPreferences fix exposed JS cleanup issue
+- JS cleanup fix exposed Rules of Hooks issue
+- Manufacturer data fix exposed deduplication issue
+- **Lesson:** BLE persistence touches many layers (native service, JS bridge, React hooks, UI); changes cascade
+
+---
+
+## Current Known Issues (As of February 2026)
 
 ### 1. Railway Backend hash_password Undefined on Startup
 
@@ -5154,6 +5459,7 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 <uses-permission android:name="android.permission.INTERNET"/>
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 ```
 
 **Service Declarations:**
@@ -5229,6 +5535,11 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 12. **Synchronous vs async matters** - `startAdvertising()` returns `void`, not a Promise - don't use `await`
 13. **iOS background limitations** - Advertising pauses in background, must be controlled by app state, not auto-resume
 14. **Bluetooth state monitoring prevents silent failures** - Always listen for Bluetooth disabled events
+15. **Manufacturer data beats device name for identification** - Device names can be generic/MAC-based; manufacturer data is controlled
+16. **Rolling RSSI average stabilizes distance** - Raw RSSI fluctuates wildly; averaging last 5 readings smooths display
+17. **Deduplicate by user identity not device ID** - Android rotates MAC addresses; username/userId is stable identifier
+18. **Buffer zones prevent UI overlap** - Minimum distance from radar center prevents blips overlapping controls
+19. **Merge native and JS scanner results** - Background service and react-native-ble-plx may detect different devices
 
 ### Lessons Learned (Android Native Modules)
 1. **Foreground Services require START_STICKY** - Ensures service restarts if killed by system
@@ -5238,6 +5549,9 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 5. **NativeEventEmitter for real-time events** - Bridge broadcasts to JavaScript event listeners
 6. **LifecycleEventListener for cleanup** - Unregister receivers when React Native host is destroyed
 7. **Two-row database patterns simplify queries** - Sender + receiver records enable filtering by perspective
+8. **Separate user-initiated stop from cleanup stop** - Ghost mode should write isDiscoverable=false, but app kill should not
+9. **Null intent handling is critical** - When Android restarts service after kill, intent is null; must read state from SharedPreferences
+10. **Battery optimization exemption improves reliability** - REQUEST_IGNORE_BATTERY_OPTIMIZATIONS helps service survive on aggressive OEMs
 
 ### Lessons Learned (Foreground Services & Android 12+)
 1. **startForeground() must be called immediately** - Android 12+ enforces ~5-second timeout after startForegroundService()
@@ -5271,6 +5585,11 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 3. **overflow: visible on containers** - Required for SVG content that extends beyond its positioned container
 4. **Console.log statements have cost** - Remove debug logging from hot code paths in production
 5. **useEffect dependencies matter** - Function references in deps cause re-runs; use refs for stable references
+6. **Never return early before all hooks** - React Rules of Hooks require same hooks called in same order every render
+7. **Move hook logic to conditions inside hooks** - Instead of `if (loading) return;` before hooks, use `if (loading) return;` inside useEffect
+8. **Const functions inside components remount children** - `const Screen = () => ...` then `<Screen />` remounts on every render; use `{Screen()}` instead
+9. **Lift state to persist across navigation** - Hooks in child components die on unmount; move to App.tsx for persistence
+10. **Ref-based guards prevent race conditions** - dismissedLinkIdsRef pattern prevents polling from re-adding dismissed items
 
 ### Lessons Learned (GitHub Actions)
 1. **expo-version deprecated** - Use `eas-version: latest` instead in expo/expo-github-action
@@ -5341,7 +5660,23 @@ const sphereRadius = Math.max(screenWidth, viewableHeight) * 0.85;
 - [ ] Complete Railway backend deprecation
 - [ ] Add Supabase RLS policy documentation
 - [ ] Deprecate old `devices` table (drops now use `drops` table)
-- [ ] Integrate background scanner with HomeScreen radar (merge foreground + background devices)
+- [x] ~~Integrate background scanner with HomeScreen radar~~ (RESOLVED Feb 2026 - NativeBLEDevicesContext + useMemo merge)
+- [x] ~~Implement manufacturer data broadcasting~~ (RESOLVED Feb 2026 - Replaced DL- prefix with 0xFFFF manufacturer data)
+- [x] ~~Fix BLE advertising persistence across tab navigation~~ (RESOLVED Feb 2026 - Moved useBLEAdvertiser to App.tsx)
+- [x] ~~Fix useBLEAdvertiser Rules of Hooks violation~~ (RESOLVED Feb 2026 - Removed illegal early return)
+- [x] ~~Add SharedPreferences persistence for advertising state~~ (RESOLVED Feb 2026 - deviceId, serviceUUID, isDiscoverable persisted)
+- [x] ~~Implement null intent recovery in BLEAdvertiserService~~ (RESOLVED Feb 2026 - Reads saved state on system restart)
+- [x] ~~Separate ghost mode stop from app kill stop~~ (RESOLVED Feb 2026 - ACTION_GHOST_MODE_STOP vs ACTION_STOP_ADVERTISE)
+- [x] ~~Add battery optimization exemption request~~ (RESOLVED Feb 2026 - requestBatteryOptimizationExemption)
+- [x] ~~Implement rolling RSSI average for stable distance~~ (RESOLVED Feb 2026 - Last 5 readings averaged)
+- [x] ~~Fix radar deduplication after manufacturer data refactor~~ (RESOLVED Feb 2026 - Key on username/userId)
+- [x] ~~Create Supabase RPC for userId prefix lookup~~ (RESOLVED Feb 2026 - get_profile_by_user_id_prefix)
+- [x] ~~Restructure drops to single row per interaction~~ (RESOLVED Feb 2026 - Status: pending/accepted/declined/linked)
+- [x] ~~Create dedicated links table~~ (RESOLVED Feb 2026 - user_id_1, user_id_2, drop_id, viewed_at)
+- [x] ~~Fix link polling race condition~~ (RESOLVED Feb 2026 - dismissedLinkIdsRef pattern)
+- [x] ~~Add link viewed_at acknowledgement~~ (RESOLVED Feb 2026 - markLinkViewed updates viewed_at)
+- [x] ~~Fix blip modal UI~~ (RESOLVED Feb 2026 - Removed MAC/RSSI, added profile photo, gray X)
+- [x] ~~Add radar center buffer zone~~ (RESOLVED Feb 2026 - Minimum 45px distance)
 - [ ] iOS background scanning implementation (when iOS native module needed)
 - [ ] Add google-services.json setup documentation
 - [ ] Fix Railway backend hash_password startup issue (deferred)
