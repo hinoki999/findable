@@ -39,6 +39,12 @@ class BLEAdvertiserService : Service() {
         
         const val EXTRA_SERVICE_UUID = "service_uuid"
         const val EXTRA_DEVICE_ID = "device_id"
+        
+        // SharedPreferences for persisting advertising state across app kills
+        private const val PREFS_NAME = "BLEAdvertiserPrefs"
+        private const val KEY_DEVICE_ID = "deviceId"
+        private const val KEY_SERVICE_UUID = "serviceUUID"
+        private const val KEY_IS_DISCOVERABLE = "isDiscoverable"
     }
 
     private var bluetoothAdapter: BluetoothAdapter? = null
@@ -63,7 +69,30 @@ class BLEAdvertiserService : Service() {
         startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         Log.d(TAG, "startForeground called immediately in onStartCommand")
         
-        when (intent?.action) {
+        // Handle null intent (service restarted by system after being killed)
+        if (intent == null || intent.action == null) {
+            Log.d(TAG, "Service restarted with null intent, checking SharedPreferences for saved state")
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val isDiscoverable = prefs.getBoolean(KEY_IS_DISCOVERABLE, false)
+            val savedDeviceId = prefs.getString(KEY_DEVICE_ID, null)
+            val savedServiceUUID = prefs.getString(KEY_SERVICE_UUID, null)
+            
+            Log.d(TAG, "Saved state - isDiscoverable: $isDiscoverable, deviceId: $savedDeviceId, serviceUUID: $savedServiceUUID")
+            
+            if (isDiscoverable && savedDeviceId != null && savedServiceUUID != null) {
+                Log.d(TAG, "Resuming advertising from saved state")
+                startAdvertising(savedServiceUUID, savedDeviceId)
+            } else {
+                Log.d(TAG, "Not resuming advertising - isDiscoverable is false or missing saved data")
+                // Stop the service if we shouldn't be advertising
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            return START_STICKY
+        }
+        
+        when (intent.action) {
             ACTION_START_ADVERTISE -> {
                 val serviceUUID = intent.getStringExtra(EXTRA_SERVICE_UUID)
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
@@ -203,6 +232,9 @@ class BLEAdvertiserService : Service() {
                     isAdvertising = true
                     updateNotification()
                     broadcastSuccess(deviceId, serviceUUID)
+                    
+                    // Persist advertising state to SharedPreferences for recovery after app kill
+                    saveAdvertisingState(deviceId, serviceUUID, true)
                 }
 
                 override fun onStartFailure(errorCode: Int) {
@@ -238,6 +270,9 @@ class BLEAdvertiserService : Service() {
     private fun stopAdvertising() {
         Log.d(TAG, "stopAdvertising called")
         stopAdvertisingInternal()
+        
+        // Mark as not discoverable in SharedPreferences so service doesn't auto-restart
+        saveDiscoverableState(false)
     }
 
     private fun stopAdvertisingInternal() {
@@ -323,6 +358,34 @@ class BLEAdvertiserService : Service() {
             putExtra("error", errorMessage)
         }
         sendBroadcast(intent)
+    }
+
+    private fun saveAdvertisingState(deviceId: String, serviceUUID: String, isDiscoverable: Boolean) {
+        try {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putString(KEY_DEVICE_ID, deviceId)
+                putString(KEY_SERVICE_UUID, serviceUUID)
+                putBoolean(KEY_IS_DISCOVERABLE, isDiscoverable)
+                apply()
+            }
+            Log.d(TAG, "Saved advertising state - deviceId: $deviceId, serviceUUID: $serviceUUID, isDiscoverable: $isDiscoverable")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save advertising state", e)
+        }
+    }
+
+    private fun saveDiscoverableState(isDiscoverable: Boolean) {
+        try {
+            val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putBoolean(KEY_IS_DISCOVERABLE, isDiscoverable)
+                apply()
+            }
+            Log.d(TAG, "Saved discoverable state: $isDiscoverable")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save discoverable state", e)
+        }
     }
 
     override fun onDestroy() {

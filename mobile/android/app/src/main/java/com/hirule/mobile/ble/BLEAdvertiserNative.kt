@@ -4,7 +4,10 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
@@ -139,6 +142,71 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             Log.d(TAG, "✅ Foreground service stop requested")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop foreground service", e)
+        }
+    }
+
+    @ReactMethod
+    fun requestBatteryOptimizationExemption(promise: Promise) {
+        Log.d(TAG, "requestBatteryOptimizationExemption called")
+        try {
+            val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager == null) {
+                Log.e(TAG, "PowerManager is null")
+                promise.reject("POWER_ERROR", "PowerManager not available")
+                return
+            }
+
+            val packageName = reactApplicationContext.packageName
+            val isExempted = powerManager.isIgnoringBatteryOptimizations(packageName)
+            Log.d(TAG, "Battery optimization exemption status: $isExempted")
+
+            if (isExempted) {
+                Log.d(TAG, "Already exempted from battery optimization")
+                val result = Arguments.createMap().apply {
+                    putBoolean("alreadyExempted", true)
+                    putBoolean("prompted", false)
+                }
+                promise.resolve(result)
+                return
+            }
+
+            // Open system settings to request exemption
+            Log.d(TAG, "Opening battery optimization settings for package: $packageName")
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactApplicationContext.startActivity(intent)
+
+            val result = Arguments.createMap().apply {
+                putBoolean("alreadyExempted", false)
+                putBoolean("prompted", true)
+            }
+            promise.resolve(result)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting battery optimization exemption", e)
+            promise.reject("BATTERY_ERROR", "Failed to request battery optimization exemption: ${e.message}")
+        }
+    }
+
+    @ReactMethod
+    fun isBatteryOptimizationExempted(promise: Promise) {
+        Log.d(TAG, "isBatteryOptimizationExempted called")
+        try {
+            val powerManager = reactApplicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            if (powerManager == null) {
+                promise.resolve(false)
+                return
+            }
+
+            val packageName = reactApplicationContext.packageName
+            val isExempted = powerManager.isIgnoringBatteryOptimizations(packageName)
+            Log.d(TAG, "Battery optimization exemption status: $isExempted")
+            promise.resolve(isExempted)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking battery optimization status", e)
+            promise.resolve(false)
         }
     }
 
