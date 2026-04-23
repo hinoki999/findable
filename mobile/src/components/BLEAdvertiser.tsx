@@ -47,29 +47,9 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   const [error, setError] = useState<string | null>(null);
   const [broadcastName, setBroadcastName] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string>('0000');
-  const isAvailable = Platform.OS === 'android' && ADVERTISING_ENABLED && isBLEAdvertiserAvailable;
-
-  // Wait for auth to finish loading before proceeding
-  // This ensures userId is ready before we try to use it
-  if (loading) {
-    console.log('[BLE-ADV-USERID-TRACE] ⏳ Auth still loading, waiting for userId...');
-    console.log('[BLE-ADV-USERID-TRACE] loading:', loading);
-    console.log('[BLE-ADV-USERID-TRACE] userId (while loading):', userId);
-    return {
-      isAdvertising: false,
-      startAdvertising: async () => { },
-      stopAdvertising: async () => { },
-      error: null,
-      isAvailable: false,
-      localName: 'DropLink',
-      broadcastName: null,
-      deviceId: '0000',
-    };
-  }
-
-  console.log('[BLE-ADV-USERID-TRACE] ✅ Auth loading complete');
-  console.log('[BLE-ADV-USERID-TRACE] loading:', loading);
-  console.log('[BLE-ADV-USERID-TRACE] userId (after loading):', userId);
+  
+  // Compute isAvailable - false when loading to prevent operations during auth
+  const isAvailable = !loading && Platform.OS === 'android' && ADVERTISING_ENABLED && isBLEAdvertiserAvailable;
 
   // localName is no longer used for device identification (manufacturer data is used instead)
   // Keep for display/logging purposes only
@@ -79,6 +59,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
   // Log userId immediately when component mounts/updates
   useEffect(() => {
     console.log('[BLE-ADV-USERID-TRACE] ========== USER ID CHECK ==========');
+    console.log('[BLE-ADV-USERID-TRACE] loading:', loading);
     console.log('[BLE-ADV-USERID-TRACE] userId type:', typeof userId);
     console.log('[BLE-ADV-USERID-TRACE] userId value:', userId);
     console.log('[BLE-ADV-USERID-TRACE] userId === null:', userId === null);
@@ -87,7 +68,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-USERID-TRACE] userId length:', userId ? userId.length : 'N/A');
     console.log('[BLE-ADV-USERID-TRACE] username:', username);
     console.log('[BLE-ADV-USERID-TRACE] ====================================');
-  }, [userId, username]);
+  }, [loading, userId, username]);
 
   // Generate device ID from userId on mount and when userId changes
   useEffect(() => {
@@ -130,6 +111,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DIAG] ========== ADVERTISER MOUNT ==========');
     console.log('[BLE-ADV-DIAG] Library: Native Android BLE Advertiser');
     console.log('[BLE-ADV-DIAG] ADVERTISING_ENABLED:', ADVERTISING_ENABLED);
+    console.log('[BLE-ADV-DIAG] loading:', loading);
     console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
     console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
     console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
@@ -137,7 +119,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DIAG] Username:', username || 'null');
     console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
     console.log('[BLE-ADV-DIAG] =======================================');
-  }, [localName, username, userId, isAvailable]);
+  }, [loading, localName, username, userId, isAvailable]);
 
   // Ref to track advertising state for AppState listener (prevents stale closures)
   const isAdvertisingRef = useRef(isAdvertising);
