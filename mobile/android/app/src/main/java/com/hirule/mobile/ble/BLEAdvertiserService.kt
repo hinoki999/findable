@@ -34,6 +34,7 @@ class BLEAdvertiserService : Service() {
         
         const val ACTION_START_ADVERTISE = "com.hirule.mobile.START_BLE_ADVERTISE"
         const val ACTION_STOP_ADVERTISE = "com.hirule.mobile.STOP_BLE_ADVERTISE"
+        const val ACTION_GHOST_MODE_STOP = "com.hirule.mobile.GHOST_MODE_STOP_BLE_ADVERTISE"
         const val ACTION_ADVERTISE_STARTED = "com.hirule.mobile.BLE_ADVERTISE_STARTED"
         const val ACTION_ADVERTISE_FAILED = "com.hirule.mobile.BLE_ADVERTISE_FAILED"
         
@@ -101,7 +102,18 @@ class BLEAdvertiserService : Service() {
                 }
             }
             ACTION_STOP_ADVERTISE -> {
-                stopAdvertising()
+                // Stop advertising but preserve isDiscoverable state (for app kill/cleanup)
+                // Service can restart and resume advertising if isDiscoverable is still true
+                stopAdvertisingInternal()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACTION_GHOST_MODE_STOP -> {
+                // User explicitly enabled ghost mode - set isDiscoverable=false so service doesn't restart
+                Log.d(TAG, "Ghost mode enabled by user - setting isDiscoverable=false")
+                saveDiscoverableState(false)
+                stopAdvertisingInternal()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -270,9 +282,7 @@ class BLEAdvertiserService : Service() {
     private fun stopAdvertising() {
         Log.d(TAG, "stopAdvertising called")
         stopAdvertisingInternal()
-        
-        // Mark as not discoverable in SharedPreferences so service doesn't auto-restart
-        saveDiscoverableState(false)
+        // Note: Does NOT set isDiscoverable=false - use ACTION_GHOST_MODE_STOP for that
     }
 
     private fun stopAdvertisingInternal() {

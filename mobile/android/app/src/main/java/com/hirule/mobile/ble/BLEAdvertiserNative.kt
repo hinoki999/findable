@@ -135,11 +135,14 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     private fun stopForegroundServiceInternal() {
         try {
+            // Use ACTION_GHOST_MODE_STOP to set isDiscoverable=false in SharedPreferences
+            // This prevents the service from auto-restarting after app kill
+            // (User explicitly chose to stop being discoverable via ghost mode)
             val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
-                action = BLEAdvertiserService.ACTION_STOP_ADVERTISE
+                action = BLEAdvertiserService.ACTION_GHOST_MODE_STOP
             }
             reactApplicationContext.startService(intent)
-            Log.d(TAG, "✅ Foreground service stop requested")
+            Log.d(TAG, "✅ Foreground service ghost mode stop requested")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop foreground service", e)
         }
