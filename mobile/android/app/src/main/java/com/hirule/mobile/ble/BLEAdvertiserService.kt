@@ -245,7 +245,8 @@ class BLEAdvertiserService : Service() {
                     updateNotification()
                     broadcastSuccess(deviceId, serviceUUID)
                     
-                    // Persist advertising state to SharedPreferences for recovery after app kill
+                    // Confirmation write - state was already saved before startAdvertising()
+                    // This confirms advertising actually started successfully
                     saveAdvertisingState(deviceId, serviceUUID, true)
                 }
 
@@ -266,6 +267,11 @@ class BLEAdvertiserService : Service() {
             }
 
             registerBluetoothStateReceiver()
+
+            // Save advertising state BEFORE starting async advertising
+            // This ensures SharedPreferences has isDiscoverable=true even if app is killed
+            // before onStartSuccess fires. The null intent handler can then resume advertising.
+            saveAdvertisingState(deviceId, serviceUUID, true)
 
             Log.d(TAG, "Starting BLE advertising...")
             advertiser.startAdvertising(settings, advertiseData, scanResponse, advertiseCallback)

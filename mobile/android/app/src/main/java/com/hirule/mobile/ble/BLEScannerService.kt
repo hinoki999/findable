@@ -82,7 +82,10 @@ class BLEScannerService : Service() {
                 return START_NOT_STICKY
             }
             else -> {
+                // System restart via START_STICKY (null intent) - resume scanning
+                Log.d(TAG, "Service restarted by system (START_STICKY), resuming scanning")
                 startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+                startScanning()
             }
         }
         return START_STICKY

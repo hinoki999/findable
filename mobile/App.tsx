@@ -28,6 +28,7 @@ import {
   startBackgroundScan, 
   stopBackgroundScan, 
   onBackgroundDeviceFound,
+  getBackgroundDevices,
   BackgroundBLEDevice 
 } from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
@@ -451,6 +452,66 @@ function MainApp() {
           console.log('[BG-SCAN-DEBUG] BLE permissions confirmed - starting scan');
           scanStartedRef.current = true;
           startBackgroundScan()
+            .then(async (started) => {
+              if (started) {
+                // Seed nativeDevices with previously detected devices from SharedPreferences
+                // This fills the radar immediately on app open without waiting for new detections
+                console.log('[BG-SCAN-DEBUG] Scan started, seeding from SharedPreferences...');
+                try {
+                  const storedDevices = await getBackgroundDevices();
+                  console.log('[BG-SCAN-DEBUG] Retrieved', storedDevices.length, 'stored devices');
+                  
+                  if (storedDevices.length > 0) {
+                    // Process each stored device with profile lookup
+                    for (const device of storedDevices) {
+                      const { id, deviceId, name, rssi, distanceFeet } = device;
+                      
+                      if (!deviceId) continue;
+                      
+                      // Profile lookup
+                      let foundUserId: string | null = null;
+                      let displayName: string | null = null;
+                      
+                      try {
+                        const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
+                        const { data: userProfileData, error: userProfileError } = await supabase
+                          .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
+                        
+                        if (!userProfileError && userProfileData) {
+                          foundUserId = userProfileData.user_id;
+                          displayName = userProfileData.name || userProfileData.username || deviceId;
+                        }
+                      } catch (err) {
+                        console.error('[BG-SCAN-SEED] Profile lookup error:', err);
+                      }
+                      
+                      // Initialize RSSI history
+                      nativeRssiHistoryRef.current.set(id, [rssi]);
+                      
+                      // Add to state
+                      setNativeDevices(prev => {
+                        const exists = prev.find(d => d.id === id);
+                        if (exists) return prev;
+                        
+                        return [...prev, {
+                          id,
+                          deviceId,
+                          name,
+                          rssi,
+                          distanceFeet,
+                          userId: foundUserId || undefined,
+                          username: displayName || undefined,
+                          serviceUUIDs: ['af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d'],
+                        }];
+                      });
+                    }
+                    console.log('[BG-SCAN-DEBUG] Seeded nativeDevices with stored devices');
+                  }
+                } catch (err) {
+                  console.error('[BG-SCAN-DEBUG] Failed to seed from SharedPreferences:', err);
+                }
+              }
+            })
             .catch(err => console.error('[BG-SCAN] Failed to start:', err));
 
           // Subscribe to native device found events
