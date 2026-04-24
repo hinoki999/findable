@@ -86,9 +86,17 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     @ReactMethod
     fun stopAdvertising(promise: Promise) {
-        Log.d(TAG, "stopAdvertising called")
+        Log.d(TAG, "stopAdvertising called (ghost mode - user explicitly disabled discoverability)")
         try {
-            stopAdvertisingInternal()
+            // User explicitly chose ghost mode from JS - use ghost mode stop
+            // This sets isDiscoverable=false in SharedPreferences, preventing restart
+            stopForegroundServiceGhostMode()
+            
+            synchronized(this) {
+                isCurrentlyAdvertising = false
+            }
+            
+            Log.d(TAG, "✅ Advertising stopped (ghost mode)")
             promise.resolve(null)
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping advertising", e)
@@ -135,16 +143,29 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     private fun stopForegroundServiceInternal() {
         try {
-            // Use ACTION_GHOST_MODE_STOP to set isDiscoverable=false in SharedPreferences
-            // This prevents the service from auto-restarting after app kill
-            // (User explicitly chose to stop being discoverable via ghost mode)
+            // Use ACTION_STOP_ADVERTISE for cleanup/app kill scenarios
+            // This does NOT set isDiscoverable=false, allowing service to restart
+            val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
+                action = BLEAdvertiserService.ACTION_STOP_ADVERTISE
+            }
+            reactApplicationContext.startService(intent)
+            Log.d(TAG, "✅ Foreground service stop requested (preserves isDiscoverable)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop foreground service", e)
+        }
+    }
+
+    private fun stopForegroundServiceGhostMode() {
+        try {
+            // Use ACTION_GHOST_MODE_STOP when user explicitly enables ghost mode
+            // This sets isDiscoverable=false in SharedPreferences, preventing restart
             val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
                 action = BLEAdvertiserService.ACTION_GHOST_MODE_STOP
             }
             reactApplicationContext.startService(intent)
-            Log.d(TAG, "✅ Foreground service ghost mode stop requested")
+            Log.d(TAG, "✅ Foreground service ghost mode stop requested (sets isDiscoverable=false)")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop foreground service", e)
+            Log.e(TAG, "Failed to stop foreground service (ghost mode)", e)
         }
     }
 
@@ -214,8 +235,14 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
     }
 
     // Cleanup when React Native is destroyed
+    // Do NOT send stop intent - native BLEAdvertiserService handles its own lifecycle
+    // with START_STICKY and SharedPreferences. Sending stop here would incorrectly
+    // stop the service when the app is killed, preventing restart.
     override fun invalidate() {
         super.invalidate()
-        stopAdvertisingInternal()
+        synchronized(this) {
+            isCurrentlyAdvertising = false
+        }
+        Log.d(TAG, "invalidate() called - reset isCurrentlyAdvertising, service continues independently")
     }
 }
