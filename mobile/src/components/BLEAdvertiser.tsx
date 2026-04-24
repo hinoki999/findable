@@ -419,15 +419,6 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     };
   }, [isAvailable]); // Only recreate if isAvailable changes
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Use ref to avoid stale closure in cleanup
-      if (isAdvertisingRef.current) {
-        stopAdvertising();
-      }
-    };
-  }, [stopAdvertising]);
 
   return {
     isAdvertising,
