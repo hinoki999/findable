@@ -53,11 +53,15 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             }
 
             if (isCurrentlyAdvertising) {
-                Log.d(TAG, "Already advertising, stopping first...")
-                stopAdvertisingInternal()
+                Log.d(TAG, "Already advertising - service will handle restart internally")
+                // DO NOT call stopAdvertisingInternal() here!
+                // That sends ACTION_STOP_ADVERTISE which calls stopSelf() and destroys the service.
+                // The service's own startAdvertising() method handles stopping existing advertising
+                // internally WITHOUT destroying the service.
             }
 
             // Start the foreground service - it handles all BLE advertising
+            // If already advertising, the service will stop existing advertising internally
             startForegroundService(serviceUUID, deviceId)
 
             synchronized(this) {
