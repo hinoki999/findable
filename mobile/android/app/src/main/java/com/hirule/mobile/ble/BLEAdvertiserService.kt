@@ -64,6 +64,8 @@ class BLEAdvertiserService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand received - intent action: ${intent?.action ?: "NULL"}")
+        
         // CRITICAL: Call startForeground() IMMEDIATELY and UNCONDITIONALLY
         // Android requires this within 5 seconds of startForegroundService() call
         // Must happen BEFORE any permission checks, BLE init, or other operations
@@ -95,6 +97,7 @@ class BLEAdvertiserService : Service() {
         
         when (intent.action) {
             ACTION_START_ADVERTISE -> {
+                Log.d(TAG, "Handling ACTION_START_ADVERTISE")
                 val serviceUUID = intent.getStringExtra(EXTRA_SERVICE_UUID)
                 val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID)
                 if (serviceUUID != null && deviceId != null) {
@@ -102,6 +105,7 @@ class BLEAdvertiserService : Service() {
                 }
             }
             ACTION_STOP_ADVERTISE -> {
+                Log.d(TAG, "Handling ACTION_STOP_ADVERTISE")
                 // Stop advertising but preserve isDiscoverable state (for app kill/cleanup)
                 // Service can restart and resume advertising if isDiscoverable is still true
                 stopAdvertisingInternal()
@@ -110,6 +114,7 @@ class BLEAdvertiserService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_GHOST_MODE_STOP -> {
+                Log.d(TAG, "Handling ACTION_GHOST_MODE_STOP")
                 // User explicitly enabled ghost mode - set isDiscoverable=false so service doesn't restart
                 Log.d(TAG, "Ghost mode enabled by user - setting isDiscoverable=false")
                 saveDiscoverableState(false)
@@ -174,6 +179,7 @@ class BLEAdvertiserService : Service() {
 
     private fun startAdvertising(serviceUUID: String, deviceId: String) {
         Log.d(TAG, "startAdvertising called with serviceUUID: $serviceUUID, deviceId: $deviceId")
+        Log.d(TAG, "startAdvertising guard check - isAdvertising: $isAdvertising")
         
         if (isAdvertising) {
             Log.d(TAG, "Already advertising, stopping first...")
