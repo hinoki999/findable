@@ -280,12 +280,6 @@ class BLEAdvertiserService : Service() {
             // before onStartSuccess fires. The null intent handler can then resume advertising.
             saveAdvertisingState(deviceId, serviceUUID, true)
 
-            // Set isAdvertising = true BEFORE the async call to prevent race condition
-            // where a second startAdvertising() call sees isAdvertising as false during
-            // the window between advertiser.startAdvertising() and onStartSuccess callback.
-            // If advertising fails, onStartFailure will set it back to false.
-            isAdvertising = true
-
             Log.d(TAG, "Starting BLE advertising...")
             advertiser.startAdvertising(settings, advertiseData, scanResponse, advertiseCallback)
 
