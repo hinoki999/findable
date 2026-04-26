@@ -442,32 +442,49 @@ function mapDropFromDb(d: any): Drop {
 function mapLinkFromDb(l: any, currentUserId: string): Link {
   // Determine which user is "the other user" from current user's perspective
   // user_id_1 = original drop sender, user_id_2 = original drop receiver
-  const isUser1 = l.user_id_1 === currentUserId;
+  const isCurrentUserTheSender = l.user_id_1 === currentUserId;
   
-  // Get the nested drop data (from the join)
+  // Get the nested data from joins
   const drop = l.drops;
+  const receiverProfile = l.receiver_profile; // user_profiles joined via user_id_2
   
-  // The "other user" info comes from the drop's sender fields
-  // Since user_id_1 is always the original sender, the sender fields contain their info
-  // If current user is user_id_2 (receiver), other user is user_id_1 (sender) - use sender fields
-  // If current user is user_id_1 (sender), other user is user_id_2 (receiver) - use sender fields as fallback
-  // (In future, we could add receiver fields to drops table for better data)
+  // Use appropriate data source based on who the current user is:
+  // - If current user is user_id_2 (receiver), other user is user_id_1 (sender) → use drop's sender_* fields
+  // - If current user is user_id_1 (sender), other user is user_id_2 (receiver) → use receiver_profile from user_profiles
   
-  return {
-    id: l.id,
-    userId1: l.user_id_1,
-    userId2: l.user_id_2,
-    dropId: l.drop_id,
-    createdAt: new Date(l.created_at),
-    // Contact info from the joined drop
-    otherUserName: drop?.sender_name,
-    otherUserUsername: drop?.sender_username,
-    otherUserEmail: drop?.sender_email,
-    otherUserPhone: drop?.sender_phone,
-    otherUserBio: drop?.sender_bio,
-    otherUserProfilePhoto: drop?.sender_profile_photo,
-    otherUserSocialMedia: drop?.sender_social_media,
-  };
+  if (isCurrentUserTheSender) {
+    // Current user is the sender, show receiver's profile info
+    return {
+      id: l.id,
+      userId1: l.user_id_1,
+      userId2: l.user_id_2,
+      dropId: l.drop_id,
+      createdAt: new Date(l.created_at),
+      otherUserName: receiverProfile?.name || receiverProfile?.email,
+      otherUserUsername: receiverProfile?.username,
+      otherUserEmail: receiverProfile?.email,
+      otherUserPhone: receiverProfile?.phone,
+      otherUserBio: receiverProfile?.bio,
+      otherUserProfilePhoto: receiverProfile?.profile_photo,
+      otherUserSocialMedia: receiverProfile?.social_media,
+    };
+  } else {
+    // Current user is the receiver, show sender's profile info (from drop snapshot)
+    return {
+      id: l.id,
+      userId1: l.user_id_1,
+      userId2: l.user_id_2,
+      dropId: l.drop_id,
+      createdAt: new Date(l.created_at),
+      otherUserName: drop?.sender_name,
+      otherUserUsername: drop?.sender_username,
+      otherUserEmail: drop?.sender_email,
+      otherUserPhone: drop?.sender_phone,
+      otherUserBio: drop?.sender_bio,
+      otherUserProfilePhoto: drop?.sender_profile_photo,
+      otherUserSocialMedia: drop?.sender_social_media,
+    };
+  }
 }
 
 /**
@@ -714,10 +731,16 @@ export async function getLinkedDrops(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching links for user:', userId);
 
-    // Query links table with join to drops table for profile data
+    // Query links table with joins to:
+    // - drops table for sender's profile data (snapshot from when drop was sent)
+    // - user_profiles via user_id_2 for receiver's current profile data
     const { data, error } = await supabase
       .from('links')
-      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
+      .select(`
+        *,
+        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet),
+        receiver_profile:user_profiles!user_id_2(name, username, email, phone, bio, profile_photo, social_media)
+      `)
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .order('created_at', { ascending: false });
 
@@ -749,11 +772,15 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
-    // Query links table with join to drops table for profile data
+    // Query links table with joins to drops and user_profiles
     // Only return links where viewed_at IS NULL
     const { data, error } = await supabase
       .from('links')
-      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
+      .select(`
+        *,
+        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet),
+        receiver_profile:user_profiles!user_id_2(name, username, email, phone, bio, profile_photo, social_media)
+      `)
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .is('viewed_at', null)
       .order('created_at', { ascending: false });
