@@ -439,21 +439,21 @@ function mapDropFromDb(d: any): Drop {
 }
 
 // Helper to map link from database format to frontend format
-function mapLinkFromDb(l: any, currentUserId: string): Link {
+function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<string, any>): Link {
   // Determine which user is "the other user" from current user's perspective
   // user_id_1 = original drop sender, user_id_2 = original drop receiver
   const isCurrentUserTheSender = l.user_id_1 === currentUserId;
   
-  // Get the nested data from joins
+  // Get the nested drop data
   const drop = l.drops;
-  const receiverProfile = l.receiver_profile; // user_profiles joined via user_id_2
   
   // Use appropriate data source based on who the current user is:
   // - If current user is user_id_2 (receiver), other user is user_id_1 (sender) → use drop's sender_* fields
-  // - If current user is user_id_1 (sender), other user is user_id_2 (receiver) → use receiver_profile from user_profiles
+  // - If current user is user_id_1 (sender), other user is user_id_2 (receiver) → use receiverProfiles map
   
-  if (isCurrentUserTheSender) {
-    // Current user is the sender, show receiver's profile info
+  if (isCurrentUserTheSender && receiverProfiles) {
+    // Current user is the sender, show receiver's profile info from separate query
+    const receiverProfile = receiverProfiles.get(l.user_id_2);
     return {
       id: l.id,
       userId1: l.user_id_1,
@@ -731,15 +731,12 @@ export async function getLinkedDrops(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching links for user:', userId);
 
-    // Query links table with joins to:
-    // - drops table for sender's profile data (snapshot from when drop was sent)
-    // - user_profiles via user_id_2 for receiver's current profile data
+    // Query links table with join to drops table for sender's profile data
     const { data, error } = await supabase
       .from('links')
       .select(`
         *,
-        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet),
-        receiver_profile:user_profiles!user_id_2(name, username, email, phone, bio, profile_photo, social_media)
+        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)
       `)
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .order('created_at', { ascending: false });
@@ -750,7 +747,33 @@ export async function getLinkedDrops(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} links`);
-    return (data || []).map(l => mapLinkFromDb(l, userId));
+
+    // For links where current user is the sender (user_id_1), we need receiver profiles
+    // Collect all user_id_2 values where current user is user_id_1
+    const receiverUserIds = (data || [])
+      .filter(l => l.user_id_1 === userId)
+      .map(l => l.user_id_2);
+
+    // Batch fetch receiver profiles if needed
+    let receiverProfiles = new Map<string, any>();
+    if (receiverUserIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('user_id, name, username, email, phone, bio, profile_photo, social_media')
+        .in('user_id', receiverUserIds);
+
+      if (profilesError) {
+        console.error('[DROPS] Failed to fetch receiver profiles:', profilesError);
+        // Continue without profiles - will show incomplete data
+      } else if (profiles) {
+        for (const profile of profiles) {
+          receiverProfiles.set(profile.user_id, profile);
+        }
+        console.log(`[DROPS] Fetched ${profiles.length} receiver profiles`);
+      }
+    }
+
+    return (data || []).map(l => mapLinkFromDb(l, userId, receiverProfiles));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get links error:', error);
     throw new Error(error.message || 'Failed to load links. Please try again.');
@@ -772,14 +795,13 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
-    // Query links table with joins to drops and user_profiles
+    // Query links table with join to drops table for sender's profile data
     // Only return links where viewed_at IS NULL
     const { data, error } = await supabase
       .from('links')
       .select(`
         *,
-        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet),
-        receiver_profile:user_profiles!user_id_2(name, username, email, phone, bio, profile_photo, social_media)
+        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)
       `)
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .is('viewed_at', null)
@@ -791,6 +813,8 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
+    // Note: For unviewed links, we use drop's sender_* fields only (no receiver profile fetch)
+    // This is acceptable since link notifications primarily show the other user's info from the drop
     return (data || []).map(l => mapLinkFromDb(l, userId));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
