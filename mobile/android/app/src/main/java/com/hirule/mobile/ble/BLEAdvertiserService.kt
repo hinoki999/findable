@@ -244,6 +244,7 @@ class BLEAdvertiserService : Service() {
             advertiseCallback = object : AdvertiseCallback() {
                 override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
                     Log.d(TAG, "✅ Advertising started successfully")
+                    Log.d(TAG, "onStartSuccess - isAdvertising at callback time: $isAdvertising, advertiseCallback is null: ${advertiseCallback == null}")
                     Log.d(TAG, "Broadcasting with manufacturer data: $deviceId")
                     Log.d(TAG, "Service UUID: $serviceUUID")
                     
