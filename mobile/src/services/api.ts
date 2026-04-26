@@ -439,52 +439,35 @@ function mapDropFromDb(d: any): Drop {
 }
 
 // Helper to map link from database format to frontend format
-function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<string, any>): Link {
+function mapLinkFromDb(l: any, currentUserId: string): Link {
   // Determine which user is "the other user" from current user's perspective
   // user_id_1 = original drop sender, user_id_2 = original drop receiver
-  const isCurrentUserTheSender = l.user_id_1 === currentUserId;
+  const isUser1 = l.user_id_1 === currentUserId;
   
-  // Get the nested drop data
+  // Get the nested drop data (from the join)
   const drop = l.drops;
   
-  // Use appropriate data source based on who the current user is:
-  // - If current user is user_id_2 (receiver), other user is user_id_1 (sender) → use drop's sender_* fields
-  // - If current user is user_id_1 (sender), other user is user_id_2 (receiver) → use receiverProfiles map
+  // The "other user" info comes from the drop's sender fields
+  // Since user_id_1 is always the original sender, the sender fields contain their info
+  // If current user is user_id_2 (receiver), other user is user_id_1 (sender) - use sender fields
+  // If current user is user_id_1 (sender), other user is user_id_2 (receiver) - use sender fields as fallback
+  // (In future, we could add receiver fields to drops table for better data)
   
-  if (isCurrentUserTheSender && receiverProfiles) {
-    // Current user is the sender, show receiver's profile info from separate query
-    const receiverProfile = receiverProfiles.get(l.user_id_2);
-    return {
-      id: l.id,
-      userId1: l.user_id_1,
-      userId2: l.user_id_2,
-      dropId: l.drop_id,
-      createdAt: new Date(l.created_at),
-      otherUserName: receiverProfile?.name || receiverProfile?.email,
-      otherUserUsername: receiverProfile?.username,
-      otherUserEmail: receiverProfile?.email,
-      otherUserPhone: receiverProfile?.phone,
-      otherUserBio: receiverProfile?.bio,
-      otherUserProfilePhoto: receiverProfile?.profile_photo,
-      otherUserSocialMedia: receiverProfile?.social_media,
-    };
-  } else {
-    // Current user is the receiver, show sender's profile info (from drop snapshot)
-    return {
-      id: l.id,
-      userId1: l.user_id_1,
-      userId2: l.user_id_2,
-      dropId: l.drop_id,
-      createdAt: new Date(l.created_at),
-      otherUserName: drop?.sender_name,
-      otherUserUsername: drop?.sender_username,
-      otherUserEmail: drop?.sender_email,
-      otherUserPhone: drop?.sender_phone,
-      otherUserBio: drop?.sender_bio,
-      otherUserProfilePhoto: drop?.sender_profile_photo,
-      otherUserSocialMedia: drop?.sender_social_media,
-    };
-  }
+  return {
+    id: l.id,
+    userId1: l.user_id_1,
+    userId2: l.user_id_2,
+    dropId: l.drop_id,
+    createdAt: new Date(l.created_at),
+    // Contact info from the joined drop
+    otherUserName: drop?.sender_name,
+    otherUserUsername: drop?.sender_username,
+    otherUserEmail: drop?.sender_email,
+    otherUserPhone: drop?.sender_phone,
+    otherUserBio: drop?.sender_bio,
+    otherUserProfilePhoto: drop?.sender_profile_photo,
+    otherUserSocialMedia: drop?.sender_social_media,
+  };
 }
 
 /**
@@ -534,44 +517,6 @@ export async function sendDrop(
     if (!receiverId || receiverId.trim() === '') {
       console.error('[DROP-CRASH] Invalid receiverId:', receiverId);
       throw new Error('Invalid receiver ID');
-    }
-
-    // Check for existing pending or accepted drop from this sender to this receiver
-    console.log('[DROP-CRASH] Step 2.5: Checking for existing drops...');
-    const { data: existingDrops, error: existingDropsError } = await supabase
-      .from('drops')
-      .select('id, status')
-      .eq('sender_id', senderId)
-      .eq('receiver_id', receiverId)
-      .in('status', ['pending', 'accepted']);
-
-    if (existingDropsError) {
-      console.error('[DROP-CRASH] Error checking existing drops:', existingDropsError);
-    } else if (existingDrops && existingDrops.length > 0) {
-      const pendingDrop = existingDrops.find(d => d.status === 'pending');
-      const acceptedDrop = existingDrops.find(d => d.status === 'accepted');
-      if (pendingDrop) {
-        console.log('[DROP-CRASH] Found existing pending drop:', pendingDrop.id);
-        throw new Error('You already have a pending drop with this person');
-      }
-      if (acceptedDrop) {
-        console.log('[DROP-CRASH] Found existing accepted drop:', acceptedDrop.id);
-        throw new Error('You already have an accepted drop with this person');
-      }
-    }
-
-    // Check for existing link between the two users
-    console.log('[DROP-CRASH] Step 2.6: Checking for existing link...');
-    const { data: existingLinks, error: existingLinksError } = await supabase
-      .from('links')
-      .select('id')
-      .or(`and(user_id_1.eq.${senderId},user_id_2.eq.${receiverId}),and(user_id_1.eq.${receiverId},user_id_2.eq.${senderId})`);
-
-    if (existingLinksError) {
-      console.error('[DROP-CRASH] Error checking existing links:', existingLinksError);
-    } else if (existingLinks && existingLinks.length > 0) {
-      console.log('[DROP-CRASH] Found existing link:', existingLinks[0].id);
-      throw new Error('You are already linked with this person');
     }
 
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
@@ -769,13 +714,10 @@ export async function getLinkedDrops(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching links for user:', userId);
 
-    // Query links table with join to drops table for sender's profile data
+    // Query links table with join to drops table for profile data
     const { data, error } = await supabase
       .from('links')
-      .select(`
-        *,
-        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)
-      `)
+      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
       .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .order('created_at', { ascending: false });
 
@@ -785,33 +727,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} links`);
-
-    // For links where current user is the sender (user_id_1), we need receiver profiles
-    // Collect all user_id_2 values where current user is user_id_1
-    const receiverUserIds = (data || [])
-      .filter(l => l.user_id_1 === userId)
-      .map(l => l.user_id_2);
-
-    // Batch fetch receiver profiles if needed
-    let receiverProfiles = new Map<string, any>();
-    if (receiverUserIds.length > 0) {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, name, username, email, phone, bio, profile_photo, social_media')
-        .in('user_id', receiverUserIds);
-
-      if (profilesError) {
-        console.error('[DROPS] Failed to fetch receiver profiles:', profilesError);
-        // Continue without profiles - will show incomplete data
-      } else if (profiles) {
-        for (const profile of profiles) {
-          receiverProfiles.set(profile.user_id, profile);
-        }
-        console.log(`[DROPS] Fetched ${profiles.length} receiver profiles`);
-      }
-    }
-
-    return (data || []).map(l => mapLinkFromDb(l, userId, receiverProfiles));
+    return (data || []).map(l => mapLinkFromDb(l, userId));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get links error:', error);
     throw new Error(error.message || 'Failed to load links. Please try again.');
@@ -820,8 +736,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
 
 /**
  * Get unviewed link notifications
- * Returns links where user is user_id_1 (original sender) AND viewed_at IS NULL
- * user_id_2 (the returner) doesn't see notifications - they created the link
+ * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
  */
 export async function getUnviewedLinks(): Promise<Link[]> {
   try {
@@ -834,17 +749,12 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     const userId = session.user.id;
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
-    // Query links table with join to drops table for sender's profile data
-    // Only return links where current user is user_id_1 (original sender)
-    // user_id_1 receives notification when user_id_2 returns their drop
-    // viewed_at must be NULL to be considered unviewed
+    // Query links table with join to drops table for profile data
+    // Only return links where viewed_at IS NULL
     const { data, error } = await supabase
       .from('links')
-      .select(`
-        *,
-        drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)
-      `)
-      .eq('user_id_1', userId)
+      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
       .is('viewed_at', null)
       .order('created_at', { ascending: false });
 
@@ -854,8 +764,6 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
-    // Note: For unviewed links, we use drop's sender_* fields only (no receiver profile fetch)
-    // This is acceptable since link notifications primarily show the other user's info from the drop
     return (data || []).map(l => mapLinkFromDb(l, userId));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
@@ -967,17 +875,16 @@ export async function updateDropStatus(
     // If status is 'returned' (mutual link), create a link record
     if (status === 'returned') {
       console.log('[DROPS] Creating link for drop:', dropId);
-
+      
       // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
-      // viewed_at is NOT set - user_id_1 (original sender) will see the notification
-      // user_id_2 (returner) doesn't need notification since they just created the link
-      // getUnviewedLinks filters to only show links where current user is user_id_1
+      // Set viewed_at to now so the link initiator (user_id_1) doesn't see it as unviewed
       const { data: linkData, error: linkError } = await supabase
         .from('links')
         .insert({
           user_id_1: drop.sender_id,
           user_id_2: userId,
           drop_id: dropId,
+          viewed_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -986,7 +893,7 @@ export async function updateDropStatus(
         console.error('[DROPS] Failed to create link:', linkError);
         // Don't throw - drop status was updated successfully
       } else {
-        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
+        console.log('[DROPS] SUCCESS: Link created:', linkData?.id, '(viewed_at set for initiator)');
       }
     }
 

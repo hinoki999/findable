@@ -1,6 +1,6 @@
 # DropLink App - Developer Documentation
 
-**Last Updated:** April 26, 2026 (BLE Persistence Across App Kill + Stale Callback Race Fix + Scanner Restart)
+**Last Updated:** February 20, 2026 (BLE Detection Stability + Profile Lookup RPC + Radar UI Fixes + Drop Flow Fixes)
 
 ---
 
@@ -5219,86 +5219,6 @@ fun requestBatteryOptimizationExemption(promise: Promise) {
 **AndroidManifest.xml:**
 ```xml
 <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-```
-
-### BLE Persistence - Advanced Fixes (April 2026)
-
-**Summary:** Complete solution for BLE advertising and scanning persistence across app kills.
-
-**1. Advertising at App.tsx Level:**
-- `useBLEAdvertiser` moved from HomeScreen to App.tsx
-- Advertising persists across tab navigation (HomeScreen unmount no longer stops advertising)
-- `BLEAdvertisingContext` provides `isDiscoverable`, `setIsDiscoverable`, `isAdvertising` to child components
-
-**2. SharedPreferences Persistence:**
-- `deviceId`, `serviceUUID`, `isDiscoverable` saved to SharedPreferences
-- `saveAdvertisingState()` called BEFORE `advertiser.startAdvertising()` to ensure persistence even if app killed during async start
-- Confirmation write in `onStartSuccess` callback
-
-**3. Null Intent Handler (onStartCommand):**
-- When Android restarts service via `START_STICKY`, intent is null
-- Handler reads SharedPreferences: if `isDiscoverable=true` and saved IDs exist, calls `startAdvertising()`
-- Service resumes advertising automatically without JS runtime
-
-**4. Ghost Mode vs App Kill Separation:**
-| Intent Action | Trigger | SharedPreferences | Service Restarts? |
-|---------------|---------|-------------------|-------------------|
-| `ACTION_GHOST_MODE_STOP` | User enables ghost mode | writes `isDiscoverable=false` | No |
-| `ACTION_STOP_ADVERTISE` | App kill, cleanup | preserves state | Yes |
-
-**5. invalidate() No Longer Sends Stop Intent:**
-```kotlin
-// BLEAdvertiserNative.kt
-override fun invalidate() {
-    super.invalidate()
-    isCurrentlyAdvertising = false  // Local state only
-    // NO stop intent sent - native service manages own lifecycle
-}
-```
-
-**6. Guard Returns Early on Duplicate Calls:**
-```kotlin
-// BLEAdvertiserService.kt startAdvertising()
-if (isAdvertising) {
-    Log.d(TAG, "Already advertising - returning early (no stop/restart)")
-    return  // Previously called stopAdvertisingInternal() which caused stale callback race
-}
-```
-- Prevents stale `onStartSuccess` callbacks from cancelled advertising sessions
-- Second call during async start window safely ignored instead of stopping first session
-
-**7. JS Cleanup useEffect Removed:**
-- `useBLEAdvertiser` no longer calls `stopAdvertising()` on unmount
-- Prevents app kill from triggering JS cleanup that would write `isDiscoverable=false`
-- Native service manages its own lifecycle independently
-
-**8. Scanner Null Intent Handler:**
-```kotlin
-// BLEScannerService.kt onStartCommand()
-} else {
-    Log.d(TAG, "Null intent - service restarted by system via START_STICKY")
-    startForeground(NOTIFICATION_ID, notification)
-    startScanning()  // Resume scanning after app kill
-}
-```
-- `BLEScannerService` also resumes scanning when Android restarts it
-- Previously only called `startForeground()` without `startScanning()`
-
-**Architecture Flow (App Kill → Restart):**
-```
-App Killed
-    ↓
-Android Process Dies (JS runtime destroyed)
-    ↓
-START_STICKY triggers service restart (no JS involved)
-    ↓
-BLEAdvertiserService.onStartCommand(intent=null)
-    ↓
-Read SharedPreferences: isDiscoverable=true, deviceId, serviceUUID
-    ↓
-startAdvertising(serviceUUID, deviceId)
-    ↓
-Device broadcasting again ✅
 ```
 
 ### BLE Detection Stability Improvements
