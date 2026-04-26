@@ -536,6 +536,44 @@ export async function sendDrop(
       throw new Error('Invalid receiver ID');
     }
 
+    // Check for existing pending or accepted drop from this sender to this receiver
+    console.log('[DROP-CRASH] Step 2.5: Checking for existing drops...');
+    const { data: existingDrops, error: existingDropsError } = await supabase
+      .from('drops')
+      .select('id, status')
+      .eq('sender_id', senderId)
+      .eq('receiver_id', receiverId)
+      .in('status', ['pending', 'accepted']);
+
+    if (existingDropsError) {
+      console.error('[DROP-CRASH] Error checking existing drops:', existingDropsError);
+    } else if (existingDrops && existingDrops.length > 0) {
+      const pendingDrop = existingDrops.find(d => d.status === 'pending');
+      const acceptedDrop = existingDrops.find(d => d.status === 'accepted');
+      if (pendingDrop) {
+        console.log('[DROP-CRASH] Found existing pending drop:', pendingDrop.id);
+        throw new Error('You already have a pending drop with this person');
+      }
+      if (acceptedDrop) {
+        console.log('[DROP-CRASH] Found existing accepted drop:', acceptedDrop.id);
+        throw new Error('You already have an accepted drop with this person');
+      }
+    }
+
+    // Check for existing link between the two users
+    console.log('[DROP-CRASH] Step 2.6: Checking for existing link...');
+    const { data: existingLinks, error: existingLinksError } = await supabase
+      .from('links')
+      .select('id')
+      .or(`and(user_id_1.eq.${senderId},user_id_2.eq.${receiverId}),and(user_id_1.eq.${receiverId},user_id_2.eq.${senderId})`);
+
+    if (existingLinksError) {
+      console.error('[DROP-CRASH] Error checking existing links:', existingLinksError);
+    } else if (existingLinks && existingLinks.length > 0) {
+      console.log('[DROP-CRASH] Found existing link:', existingLinks[0].id);
+      throw new Error('You are already linked with this person');
+    }
+
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
     console.log('[DROP-CRASH] Step 3: Building drop data...');
 

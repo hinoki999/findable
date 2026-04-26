@@ -6,7 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices, useBLEAdvertising } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getAcceptedDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -612,10 +612,10 @@ const LinkedDeviceMarker: React.FC<{
         }}
         pointerEvents="none"
       >
-        <Ionicons
-          name="link"
+        <MaterialCommunityIcons
+          name="link-variant"
           size={LINK_ICON_SIZE}
-          color="#007AFF"
+          color="#00FF00"
         />
       </View>
     </Pressable>
@@ -629,6 +629,7 @@ export default function HomeScreen() {
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
+  const [acceptedDrops, setAcceptedDrops] = useState<Drop[]>([]);
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
@@ -882,6 +883,24 @@ export default function HomeScreen() {
       console.log('[DROP-STATE] HomeScreen drop fetch useEffect cleanup');
       clearInterval(interval);
     };
+  }, [userId]);
+
+  // Fetch accepted drops (drops user accepted but hasn't returned yet)
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchAcceptedDropsFromTable = async () => {
+      try {
+        const drops = await getAcceptedDrops();
+        setAcceptedDrops(drops);
+      } catch (error) {
+        // Silent fail - will retry on next interval
+      }
+    };
+
+    fetchAcceptedDropsFromTable();
+    const interval = setInterval(fetchAcceptedDropsFromTable, 5000);
+    return () => clearInterval(interval);
   }, [userId]);
 
   // Fetch unviewed links from database on mount and periodically
@@ -1999,6 +2018,7 @@ export default function HomeScreen() {
                         rssi: device.rssi,
                         distanceFeet: device.distanceFeet,
                         action: 'returned',
+                        timestamp: link.createdAt, // Date linked
                         phoneNumber: link.otherUserPhone,
                         email: link.otherUserEmail,
                         bio: link.otherUserBio,
@@ -2743,7 +2763,7 @@ export default function HomeScreen() {
                     </View>
                   )}
 
-                  {(incomingDrops || []).length === 0 && (unviewedLinksFromContext || []).length === 0 && (unviewedLinksFromDb || []).length === 0 ? (
+                  {(incomingDrops || []).length === 0 && (acceptedDrops || []).length === 0 && (unviewedLinksFromContext || []).length === 0 && (unviewedLinksFromDb || []).length === 0 ? (
                     <View style={{ alignItems: 'center', marginVertical: 40, paddingHorizontal: 20 }}>
                       <MaterialCommunityIcons name="water-outline" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
                       <Text style={[theme.type.h2, { textAlign: 'center', marginBottom: 8, fontSize: 16 }]}>
@@ -2950,9 +2970,91 @@ export default function HomeScreen() {
                       </View>
                     ))}
 
+                    {/* Accepted Drops Section - drops user accepted but can still return */}
+                    {(acceptedDrops || []).length > 0 && (
+                      <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
+                        <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.blue }]}>
+                          ✓ Accepted Drops
+                        </Text>
+                        {acceptedDrops.map((drop) => (
+                          <View key={drop.id} style={{
+                            backgroundColor: theme.colors.white,
+                            borderRadius: 16,
+                            marginBottom: 16,
+                            overflow: 'hidden',
+                            borderWidth: 1,
+                            borderColor: theme.colors.border,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 4,
+                            elevation: 3,
+                          }}>
+                            {/* Header */}
+                            <View style={{
+                              backgroundColor: theme.colors.blue,
+                              paddingVertical: 10,
+                              paddingHorizontal: 16,
+                            }}>
+                              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 15 }]}>
+                                {drop.senderName || drop.senderUsername || 'Someone'}
+                              </Text>
+                              {drop.senderUsername && (
+                                <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                                  @{drop.senderUsername}
+                                </Text>
+                              )}
+                            </View>
+
+                            {/* Content */}
+                            <View style={{ padding: 16 }}>
+                              {drop.senderPhone && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
+                                  <Text style={{ marginLeft: 8, fontSize: 13, color: theme.colors.text }}>
+                                    {drop.senderPhone}
+                                  </Text>
+                                </View>
+                              )}
+                              {drop.senderEmail && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                                  <Text style={{ marginLeft: 8, fontSize: 13, color: theme.colors.text }}>
+                                    {drop.senderEmail}
+                                  </Text>
+                                </View>
+                              )}
+                              {drop.senderBio && (
+                                <Text style={{ fontSize: 13, color: theme.colors.muted, marginTop: 4, fontStyle: 'italic' }}>
+                                  "{drop.senderBio}"
+                                </Text>
+                              )}
+
+                              {/* Return Button */}
+                              <Pressable
+                                onPress={() => handleDropAction('returned', drop)}
+                                style={{
+                                  backgroundColor: '#FF6B4A',
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 16,
+                                  borderRadius: 8,
+                                  marginTop: 12,
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <Text style={[theme.type.button, { fontSize: 13 }]}>
+                                  Return Drop (Create Link)
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
                     {/* New Links Section */}
                     {(unviewedLinksFromDb || []).length > 0 && (
-                      <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
+                      <View style={{ marginTop: ((incomingDrops || []).length > 0 || (acceptedDrops || []).length > 0) ? 20 : 0 }}>
                         <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
                           🔗 New Links
                         </Text>
@@ -3901,6 +4003,11 @@ export default function HomeScreen() {
                     {selectedLink?.distanceFeet?.toFixed(1) || '0.0'} ft away
                   </Text>
                 </View>
+                {selectedLink?.timestamp && (
+                  <Text style={{ fontSize: 12, color: theme.colors.muted, marginTop: 8 }}>
+                    Linked on {new Date(selectedLink.timestamp).toLocaleDateString()}
+                  </Text>
+                )}
               </View>
 
               {/* Contact Information */}
