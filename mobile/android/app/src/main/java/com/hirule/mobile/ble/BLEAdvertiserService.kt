@@ -182,8 +182,8 @@ class BLEAdvertiserService : Service() {
         Log.d(TAG, "startAdvertising guard check - isAdvertising: $isAdvertising")
         
         if (isAdvertising) {
-            Log.d(TAG, "Already advertising, stopping first...")
-            stopAdvertisingInternal()
+            Log.d(TAG, "Already advertising, ignoring duplicate start request")
+            return  // Don't stop and restart - just keep current advertising running
         }
 
         val adapter = bluetoothAdapter
