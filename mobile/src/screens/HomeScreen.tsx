@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Animated, Pressable, Modal, ScrollView, PanResponder, RefreshControl, Dimensions, Platform, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices, useBLEAdvertising } from '../../App';
@@ -565,6 +565,63 @@ const LinkMarker: React.FC<{
   );
 };
 
+// Linked Device Marker Component - for nearby BLE devices that are linked users
+const LinkedDeviceMarker: React.FC<{
+  device: BleDevice;
+  position: { x: number; y: number };
+  nucleusX: number;
+  nucleusY: number;
+  viewTransform: Tensor2x2;
+  depth?: number;
+  onPress: () => void;
+}> = ({ device, position, nucleusX, nucleusY, viewTransform, depth = 0, onPress }) => {
+  const LINK_ICON_SIZE = 18;
+
+  // Apply view transformation (rotation + zoom) to position
+  const transformedPosition = TensorMath.transformVector(viewTransform, position);
+
+  // Calculate depth-based effects
+  const depthFactor = depth !== undefined ? Math.max(0.5, 1 - Math.abs(depth) / 200) : 1;
+
+  const hitAreaSize = 30;
+
+  return (
+    <Pressable
+      onPress={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+      style={{
+        position: 'absolute',
+        left: nucleusX + transformedPosition.x - (hitAreaSize / 2),
+        top: nucleusY + transformedPosition.y - (hitAreaSize / 2),
+        width: hitAreaSize,
+        height: hitAreaSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9999,
+      }}
+    >
+      <View
+        style={{
+          width: LINK_ICON_SIZE,
+          height: LINK_ICON_SIZE,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: depthFactor,
+        }}
+        pointerEvents="none"
+      >
+        <Ionicons
+          name="link"
+          size={LINK_ICON_SIZE}
+          color="#007AFF"
+        />
+      </View>
+    </Pressable>
+  );
+};
+
 export default function HomeScreen() {
   const [fadeAnim] = useState(new Animated.Value(1));
   const [rippleAnim] = useState(new Animated.Value(0));
@@ -573,6 +630,7 @@ export default function HomeScreen() {
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
+  const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
   const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
   const [showReturnLinkModal, setShowReturnLinkModal] = useState(false);
@@ -854,6 +912,24 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // Fetch all links for radar linked user detection
+  useEffect(() => {
+    if (!userId) return;
+
+    const fetchAllLinks = async () => {
+      try {
+        const links = await getLinkedDrops();
+        setAllLinks(links);
+      } catch (error) {
+        // Silent fail - will retry on next interval
+      }
+    };
+
+    fetchAllLinks();
+    const interval = setInterval(fetchAllLinks, 10000); // Less frequent than unviewed links
+    return () => clearInterval(interval);
+  }, [userId]);
+
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = (linkNotifications || []).filter(notif => !notif.viewed && !notif.dismissed);
   const hasUnviewedLinks = (unviewedLinksFromContext || []).length > 0 || (unviewedLinksFromDb || []).length > 0;
@@ -987,6 +1063,30 @@ export default function HomeScreen() {
     }
     return acc;
   }, [] as typeof filteredDevices);
+
+  // Compute Set of linked userIds for radar detection
+  const linkedUserIds = useMemo(() => {
+    if (!userId || !allLinks.length) return new Set<string>();
+    
+    const ids = new Set<string>();
+    for (const link of allLinks) {
+      // Add the OTHER user's ID (not the current user)
+      if (link.userId1 === userId) {
+        ids.add(link.userId2);
+      } else if (link.userId2 === userId) {
+        ids.add(link.userId1);
+      }
+    }
+    return ids;
+  }, [userId, allLinks]);
+
+  // Helper to find Link object by userId
+  const findLinkByUserId = (targetUserId: string): Link | undefined => {
+    return allLinks.find(link => 
+      (link.userId1 === userId && link.userId2 === targetUserId) ||
+      (link.userId2 === userId && link.userId1 === targetUserId)
+    );
+  };
 
   // Log device counts for BLE debugging
   useEffect(() => {
@@ -1877,6 +1977,41 @@ export default function HomeScreen() {
         >
           {deduplicatedDevices.map((device) => {
             const position = getGridPosition(device);
+            const isLinkedUser = device.userId && linkedUserIds.has(device.userId);
+
+            // Render link icon for linked users, green blip for others
+            if (isLinkedUser) {
+              return (
+                <LinkedDeviceMarker
+                  key={device.id || device.name}
+                  device={device}
+                  position={{ x: position.x, y: position.y }}
+                  depth={position.z}
+                  nucleusX={nucleusX}
+                  nucleusY={nucleusY}
+                  viewTransform={viewTransformTensor}
+                  onPress={() => {
+                    const link = findLinkByUserId(device.userId!);
+                    if (link) {
+                      // Convert Link to Device format for the existing modal
+                      const linkAsDevice: Device = {
+                        name: link.otherUserName || link.otherUserUsername || 'Linked User',
+                        rssi: device.rssi,
+                        distanceFeet: device.distanceFeet,
+                        action: 'returned',
+                        phoneNumber: link.otherUserPhone,
+                        email: link.otherUserEmail,
+                        bio: link.otherUserBio,
+                        profilePhoto: link.otherUserProfilePhoto,
+                        socialMedia: link.otherUserSocialMedia,
+                      };
+                      setSelectedLink(linkAsDevice);
+                      setShowLinkModal(true);
+                    }
+                  }}
+                />
+              );
+            }
 
             return (
               <DeviceBlip
