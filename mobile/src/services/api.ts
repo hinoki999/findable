@@ -820,7 +820,8 @@ export async function getLinkedDrops(): Promise<Link[]> {
 
 /**
  * Get unviewed link notifications
- * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
+ * Returns links where user is user_id_1 (original sender) AND viewed_at IS NULL
+ * user_id_2 (the returner) doesn't see notifications - they created the link
  */
 export async function getUnviewedLinks(): Promise<Link[]> {
   try {
@@ -834,14 +835,16 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
     // Query links table with join to drops table for sender's profile data
-    // Only return links where viewed_at IS NULL
+    // Only return links where current user is user_id_1 (original sender)
+    // user_id_1 receives notification when user_id_2 returns their drop
+    // viewed_at must be NULL to be considered unviewed
     const { data, error } = await supabase
       .from('links')
       .select(`
         *,
         drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)
       `)
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .eq('user_id_1', userId)
       .is('viewed_at', null)
       .order('created_at', { ascending: false });
 
@@ -964,16 +967,17 @@ export async function updateDropStatus(
     // If status is 'returned' (mutual link), create a link record
     if (status === 'returned') {
       console.log('[DROPS] Creating link for drop:', dropId);
-      
+
       // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
-      // Set viewed_at to now so the link initiator (user_id_1) doesn't see it as unviewed
+      // viewed_at is NOT set - user_id_1 (original sender) will see the notification
+      // user_id_2 (returner) doesn't need notification since they just created the link
+      // getUnviewedLinks filters to only show links where current user is user_id_1
       const { data: linkData, error: linkError } = await supabase
         .from('links')
         .insert({
           user_id_1: drop.sender_id,
           user_id_2: userId,
           drop_id: dropId,
-          viewed_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -982,7 +986,7 @@ export async function updateDropStatus(
         console.error('[DROPS] Failed to create link:', linkError);
         // Don't throw - drop status was updated successfully
       } else {
-        console.log('[DROPS] SUCCESS: Link created:', linkData?.id, '(viewed_at set for initiator)');
+        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
       }
     }
 

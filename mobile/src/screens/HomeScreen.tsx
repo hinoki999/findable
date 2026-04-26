@@ -3980,12 +3980,20 @@ export default function HomeScreen() {
                   marginBottom: 12,
                   borderWidth: 2,
                   borderColor: '#00FF00',
+                  overflow: 'hidden',
                 }}>
-                  <MaterialCommunityIcons
-                    name="link-variant"
-                    size={40}
-                    color="#00FF00"
-                  />
+                  {selectedLink?.profilePhoto ? (
+                    <Image
+                      source={{ uri: selectedLink.profilePhoto }}
+                      style={{ width: 70, height: 70 }}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="link-variant"
+                      size={40}
+                      color="#00FF00"
+                    />
+                  )}
                 </View>
                 <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 6, color: theme.colors.text, fontWeight: '700' }]}>
                   {selectedLink?.name}
