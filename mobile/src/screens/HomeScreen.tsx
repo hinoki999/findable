@@ -612,10 +612,10 @@ const LinkedDeviceMarker: React.FC<{
         }}
         pointerEvents="none"
       >
-        <Ionicons
-          name="link"
+        <MaterialCommunityIcons
+          name="link-variant"
           size={LINK_ICON_SIZE}
-          color="#007AFF"
+          color="#00FF00"
         />
       </View>
     </Pressable>
@@ -717,7 +717,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
+  const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice, error: bleError } = useBLEScanner();
 
   // Get native background scanner devices from App.tsx context
   const { nativeDevices } = useNativeBLEDevices();
@@ -2072,6 +2072,16 @@ export default function HomeScreen() {
             }]}>
               No drops nearby
             </Text>
+            {bleError === 'Bluetooth is disabled' && (
+              <Text style={[theme.type.muted, {
+                textAlign: 'center',
+                fontSize: 13,
+                marginTop: 8,
+                color: '#FF6B4A',
+              }]}>
+                Turn on Bluetooth to detect nearby users
+              </Text>
+            )}
           </View>
         )}
 

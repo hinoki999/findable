@@ -17,7 +17,6 @@ console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top
 import { DROPLINK_SERVICE_UUID, DROPLINK_MANUFACTURER_ID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
-import { useToast } from '../../App';
 
 /**
  * Decode base64 manufacturer data and extract userId prefix
@@ -112,10 +111,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
-  const { showToast } = useToast();
-
-  // Ref to track if Bluetooth off toast has been shown (prevents duplicate toasts)
-  const bluetoothOffToastShownRef = useRef(false);
 
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
   const isScanningRef = useRef(isScanning);
@@ -526,14 +521,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             setIsScanning(false);
             addDebugLog('setIsScanning(false) - from PoweredOff (initial)');
             setError('Bluetooth is disabled');
-            // Show toast only once per PoweredOff event
-            if (!bluetoothOffToastShownRef.current) {
-              bluetoothOffToastShownRef.current = true;
-              showToast({
-                message: 'Turn on Bluetooth to find nearby users',
-                type: 'info',
-              });
-            }
           } else if (state === State.Unauthorized) {
             console.warn('[BLE-SCAN] Bluetooth Unauthorized (initial)');
             addDebugLog('stateChange: Unauthorized (initial)');
@@ -559,21 +546,11 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         setIsScanning(false);
         addDebugLog('setIsScanning(false) - from PoweredOff');
         setError('Bluetooth is disabled');
-        // Show toast only once per PoweredOff event
-        if (!bluetoothOffToastShownRef.current) {
-          bluetoothOffToastShownRef.current = true;
-          showToast({
-            message: 'Turn on Bluetooth to find nearby users',
-            type: 'info',
-          });
-        }
       } else if (state === State.PoweredOn) {
         console.log('[BLE-SCAN] Bluetooth PoweredOn - isScanningRef:', isScanningRef.current);
         addDebugLog(`stateChange: PoweredOn (isScanningRef: ${isScanningRef.current})`);
         console.log('[BLE-DEBUG] Bluetooth powered on');
         setError(null);
-        // Reset Bluetooth off toast flag so it shows again if Bluetooth is turned off later
-        bluetoothOffToastShownRef.current = false;
         // Auto-restart scanning if we were scanning before
         if (isScanningRef.current) {
           console.log('[BLE-SCAN] Auto-restarting scan after Bluetooth re-enabled');
