@@ -82,6 +82,7 @@ export interface RecentScanEntry {
 interface UseBLEScannerReturn {
   devices: BleDevice[];
   isScanning: boolean;
+  isBluetoothOff: boolean;
   startScan: () => void;
   stopScan: () => void;
   error: string | null;
@@ -106,6 +107,7 @@ const normalizeUUID = (uuid: string): string => {
 export const useBLEScanner = (): UseBLEScannerReturn => {
   const [devices, setDevices] = useState<BleDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [isBluetoothOff, setIsBluetoothOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<string | null>(null);
   const startScanCountRef = useRef(0);
@@ -529,6 +531,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             console.log('[BLE-DUPE] setDevices([]) - from PoweredOff initial');
             setDevices([]);
             setIsScanning(false);
+            setIsBluetoothOff(true);
             addDebugLog('setIsScanning(false) - from PoweredOff (initial)');
             errorRef.current = 'Bluetooth is disabled';
             setError('Bluetooth is disabled');
@@ -556,6 +559,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         console.log('[BLE-DUPE] setDevices([]) - from PoweredOff');
         setDevices([]);
         setIsScanning(false);
+        setIsBluetoothOff(true);
         addDebugLog('setIsScanning(false) - from PoweredOff');
         errorRef.current = 'Bluetooth is disabled';
         setError('Bluetooth is disabled');
@@ -563,6 +567,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         console.log('[BLE-SCAN] Bluetooth PoweredOn - isScanningRef:', isScanningRef.current);
         addDebugLog(`stateChange: PoweredOn (isScanningRef: ${isScanningRef.current})`);
         console.log('[BLE-DEBUG] Bluetooth powered on');
+        setIsBluetoothOff(false);
         errorRef.current = null;
         setError(null);
         // Auto-restart scanning if we were scanning before
@@ -624,6 +629,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   return {
     devices,
     isScanning,
+    isBluetoothOff,
     startScan,
     stopScan,
     error,

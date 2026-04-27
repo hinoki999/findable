@@ -718,7 +718,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice, error: bleError } = useBLEScanner();
+  const { devices, isScanning, isBluetoothOff, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
   // Pre-populate devices from native background scanner on mount
   useEffect(() => {
@@ -2064,7 +2064,7 @@ export default function HomeScreen() {
             }]}>
               No drops nearby
             </Text>
-            {bleError === 'Bluetooth is disabled' && (
+            {isBluetoothOff && (
               <Text style={[theme.type.muted, {
                 textAlign: 'center',
                 fontSize: 13,
