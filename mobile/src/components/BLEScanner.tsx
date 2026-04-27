@@ -107,6 +107,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [devices, setDevices] = useState<BleDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<string | null>(null);
   const startScanCountRef = useRef(0);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
@@ -186,12 +187,14 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
           if (!allGranted) {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
+            errorRef.current = 'Bluetooth permissions not granted';
             setError('Bluetooth permissions not granted');
             return false;
           }
         }
       } catch (err) {
         console.warn('Permission request error:', err);
+        errorRef.current = 'Failed to request permissions';
         setError('Failed to request permissions');
         return false;
       }
@@ -233,7 +236,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     console.log('[BLE-SCAN] Starting scan #', startScanCountRef.current);
     addDebugLog(`startScan: proceeding (count: ${startScanCountRef.current})`);
     console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
-    if (error !== 'Bluetooth is disabled') {
+    if (errorRef.current !== 'Bluetooth is disabled') {
+      errorRef.current = null;
       setError(null);
     }
     // FIX #2: Don't clear devices array - preserve existing devices and update them
@@ -250,6 +254,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     if (!bleManager) {
       console.error('[BLE-SCAN] bleManager not initialized - ABORT');
       console.error('[BLE-DEBUG] BleManager not initialized');
+      errorRef.current = 'Bluetooth manager not available';
       setError('Bluetooth manager not available');
       return;
     }
@@ -275,6 +280,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.error('[BLE-SCAN] Scan error:', error.message);
           addDebugLog(`scan error: ${error.message}`);
           console.error('[BLE-DEBUG] BLE scan error:', error);
+          errorRef.current = error.message;
           setError(error.message);
           setIsScanning(false);
           addDebugLog('setIsScanning(false) - from error');
@@ -437,7 +443,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       console.error('[BLE-SCAN] Full error:', JSON.stringify(err, null, 2));
       addDebugLog(`startScan exception: ${err instanceof Error ? err.message : 'unknown'}`);
       console.error('[BLE-DEBUG] Exception starting scan:', err);
-      setError(err instanceof Error ? err.message : 'Failed to start scanning');
+      const errMsg = err instanceof Error ? err.message : 'Failed to start scanning';
+      errorRef.current = errMsg;
+      setError(errMsg);
       setIsScanning(false);
       addDebugLog('setIsScanning(false) - from exception');
     }
@@ -522,11 +530,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             setDevices([]);
             setIsScanning(false);
             addDebugLog('setIsScanning(false) - from PoweredOff (initial)');
+            errorRef.current = 'Bluetooth is disabled';
             setError('Bluetooth is disabled');
           } else if (state === State.Unauthorized) {
             console.warn('[BLE-SCAN] Bluetooth Unauthorized (initial)');
             addDebugLog('stateChange: Unauthorized (initial)');
             console.warn('[BLE-DEBUG] Bluetooth unauthorized');
+            errorRef.current = 'Bluetooth permission denied';
             setError('Bluetooth permission denied');
             setIsScanning(false);
             addDebugLog('setIsScanning(false) - from Unauthorized (initial)');
@@ -547,11 +557,13 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         setDevices([]);
         setIsScanning(false);
         addDebugLog('setIsScanning(false) - from PoweredOff');
+        errorRef.current = 'Bluetooth is disabled';
         setError('Bluetooth is disabled');
       } else if (state === State.PoweredOn) {
         console.log('[BLE-SCAN] Bluetooth PoweredOn - isScanningRef:', isScanningRef.current);
         addDebugLog(`stateChange: PoweredOn (isScanningRef: ${isScanningRef.current})`);
         console.log('[BLE-DEBUG] Bluetooth powered on');
+        errorRef.current = null;
         setError(null);
         // Auto-restart scanning if we were scanning before
         if (isScanningRef.current) {
@@ -567,6 +579,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         console.warn('[BLE-SCAN] Bluetooth Unauthorized - STOPPING scan');
         addDebugLog('stateChange: Unauthorized -> stopping scan');
         console.warn('[BLE-DEBUG] Bluetooth unauthorized');
+        errorRef.current = 'Bluetooth permission denied';
         setError('Bluetooth permission denied');
         setIsScanning(false);
         addDebugLog('setIsScanning(false) - from Unauthorized');
