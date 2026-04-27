@@ -4,7 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { getTheme } from '../theme';
-import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useNativeBLEDevices, useBLEAdvertising } from '../../App';
+import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useBLEAdvertising } from '../../App';
+import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -719,8 +720,34 @@ export default function HomeScreen() {
   // Use BLE scanner for nearby devices
   const { devices, isScanning, startScan, stopScan, startScanCount, addDebugDevice, error: bleError } = useBLEScanner();
 
-  // Get native background scanner devices from App.tsx context
-  const { nativeDevices } = useNativeBLEDevices();
+  // Pre-populate devices from native background scanner on mount
+  useEffect(() => {
+    const seedDevicesFromBackground = async () => {
+      try {
+        console.log('[BG-SEED] Fetching background devices on mount...');
+        const backgroundDevices = await getBackgroundDevices();
+        console.log('[BG-SEED] Got', backgroundDevices.length, 'background devices');
+        
+        for (const bgDevice of backgroundDevices) {
+          // Map BackgroundBLEDevice to BleDevice format
+          const bleDevice: BleDevice = {
+            id: bgDevice.id,
+            name: bgDevice.name || 'Unknown',
+            rssi: bgDevice.rssi || -70,
+            distanceFeet: bgDevice.distanceFeet || 10,
+            serviceUUIDs: [DROPLINK_SERVICE_UUID],
+            userId: bgDevice.deviceId, // deviceId is the userId prefix
+          };
+          console.log('[BG-SEED] Seeding device:', bgDevice.id, 'deviceId:', bgDevice.deviceId);
+          addDebugDevice(bleDevice);
+        }
+      } catch (error) {
+        console.error('[BG-SEED] Failed to seed background devices:', error);
+      }
+    };
+    
+    seedDevicesFromBackground();
+  }, [addDebugDevice]);
 
   // Get BLE advertising state from App.tsx context (persists across tab navigation)
   const { isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable } = useBLEAdvertising();
@@ -988,43 +1015,8 @@ export default function HomeScreen() {
     },
   ];
 
-  // Merge native background scanner devices with react-native-ble-plx devices
-  // Native devices already have serviceUUIDs, userId, and username populated from App.tsx
-  const mergedDevices = useMemo(() => {
-    const merged = [...devices];
-    
-    for (const nativeDevice of nativeDevices) {
-      const existingIndex = merged.findIndex(d => d.id === nativeDevice.id);
-      
-      if (existingIndex === -1) {
-        // Device doesn't exist in react-native-ble-plx array, add it
-        const bleDevice: BleDevice = {
-          id: nativeDevice.id,
-          name: nativeDevice.name,
-          rssi: nativeDevice.rssi,
-          distanceFeet: nativeDevice.distanceFeet,
-          serviceUUIDs: nativeDevice.serviceUUIDs,
-          username: nativeDevice.username,
-          userId: nativeDevice.userId,
-        };
-        merged.push(bleDevice);
-        console.log('[BLE-MERGE] Added native device:', nativeDevice.id, 'username:', nativeDevice.username);
-      } else {
-        // Device exists - prefer native version if it has username populated
-        if (nativeDevice.username && !merged[existingIndex].username) {
-          merged[existingIndex] = {
-            ...merged[existingIndex],
-            username: nativeDevice.username,
-            userId: nativeDevice.userId,
-            serviceUUIDs: nativeDevice.serviceUUIDs || merged[existingIndex].serviceUUIDs,
-          };
-          console.log('[BLE-MERGE] Updated device with native data:', nativeDevice.id, 'username:', nativeDevice.username);
-        }
-      }
-    }
-    
-    return merged;
-  }, [devices, nativeDevices]);
+  // Use devices directly from react-native-ble-plx (pre-populated by background scan on mount)
+  const mergedDevices = devices;
 
   // Filter devices: DropLink devices only (has DropLink Service UUID)
   // Manufacturer data provides user identity, Service UUID identifies DropLink devices
@@ -1090,9 +1082,9 @@ export default function HomeScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'native:', (nativeDevices || []).length, 'merged:', (mergedDevices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
     console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify((deduplicatedDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, nativeDevices, mergedDevices, dropLinkDevices, filteredDevices, deduplicatedDevices]);
+  }, [devices, dropLinkDevices, filteredDevices, deduplicatedDevices]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
