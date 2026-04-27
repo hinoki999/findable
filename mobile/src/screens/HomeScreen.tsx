@@ -922,6 +922,8 @@ export default function HomeScreen() {
       console.log('[DROP-MODAL] Fetching unviewed links...');
       try {
         const links = await getUnviewedLinks();
+        // Diagnostic log: print full array with ids and viewed_at values
+        console.log('[LINK-DEBUG] getUnviewedLinks returned:', JSON.stringify(links.map(l => ({ id: l.id, userId1: l.userId1, userId2: l.userId2, createdAt: l.createdAt })), null, 2));
         // Filter out any links that were dismissed this session (prevents race condition with viewed_at write)
         const filteredLinks = links.filter(l => !dismissedLinkIdsRef.current.has(l.id));
         console.log('[DROP-STATE] HomeScreen setUnviewedLinksFromDb - count:', filteredLinks.length, '(filtered from', links.length, ')');

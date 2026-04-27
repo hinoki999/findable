@@ -52,6 +52,7 @@ export default function DropScreen() {
   const [dropToDelete, setDropToDelete] = useState<Drop | null>(null);
   const [selectedContact, setSelectedContact] = useState<Drop | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showLinkConfirmModal, setShowLinkConfirmModal] = useState(false);
   const { isDarkMode } = useDarkMode();
   const { addLinkNotification } = useLinkNotifications();
   const { showToast } = useToast();
@@ -110,6 +111,39 @@ export default function DropScreen() {
   const closeContactModal = () => {
     setShowContactModal(false);
     setSelectedContact(null);
+  };
+
+  const handleLinkWithContact = async () => {
+    if (!selectedContact) return;
+    
+    try {
+      console.log('[DROPS] Creating link with:', selectedContact.senderName);
+      await updateDropStatus(selectedContact.id, 'returned');
+      
+      // Show success notification
+      addLinkNotification({
+        name: selectedContact.senderName || selectedContact.senderUsername || 'User',
+      });
+      
+      showToast({
+        message: `You linked with ${selectedContact.senderName || 'User'}!`,
+        type: 'success',
+        duration: 3000,
+      });
+      
+      // Close modals and refresh
+      setShowLinkConfirmModal(false);
+      closeContactModal();
+      fetchAcceptedDrops();
+    } catch (error: any) {
+      console.error('[DROPS] Failed to create link:', error);
+      showToast({
+        message: error.message || 'Failed to create link',
+        type: 'error',
+        duration: 3000,
+      });
+      setShowLinkConfirmModal(false);
+    }
   };
 
   const formatTimeAgo = (timestamp?: Date): string => {
@@ -831,20 +865,94 @@ export default function DropScreen() {
                 </View>
               )}
 
-              {/* Close Button */}
+              {/* Link Button */}
               <Pressable
-                onPress={closeContactModal}
+                onPress={() => setShowLinkConfirmModal(true)}
                 style={{
-                  backgroundColor: '#FF6B4A',
+                  backgroundColor: theme.colors.green,
                   paddingVertical: 10,
                   paddingHorizontal: 20,
                   borderRadius: 8,
                   alignItems: 'center',
+                  marginBottom: 8,
                 }}
               >
                 <Text style={[theme.type.button, { fontSize: 14 }]}>
+                  Link with {selectedContact?.senderName || 'User'}
+                </Text>
+              </Pressable>
+
+              {/* Close Button */}
+              <Pressable
+                onPress={closeContactModal}
+                style={{
+                  backgroundColor: theme.colors.bg,
+                  paddingVertical: 10,
+                  paddingHorizontal: 20,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}
+              >
+                <Text style={[theme.type.body, { fontSize: 14, color: theme.colors.muted }]}>
                   Close
                 </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Link Confirmation Modal */}
+      <Modal
+        visible={showLinkConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLinkConfirmModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={[theme.card, { width: '100%', maxWidth: 280, padding: 20 }]}>
+            <Text style={[theme.type.h2, { fontSize: 16, textAlign: 'center', marginBottom: 8 }]}>
+              Link with {selectedContact?.senderName || 'User'}?
+            </Text>
+            <Text style={[theme.type.body, { fontSize: 13, textAlign: 'center', marginBottom: 16, color: theme.colors.muted }]}>
+              This will share your contact info with them and create a mutual connection.
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={() => setShowLinkConfirmModal(false)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: theme.colors.bg,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ ...theme.type.body, color: theme.colors.muted }}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleLinkWithContact}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: theme.colors.green,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text style={{ ...theme.type.button }}>Confirm</Text>
               </Pressable>
             </View>
           </View>
