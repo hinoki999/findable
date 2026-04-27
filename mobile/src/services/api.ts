@@ -439,19 +439,36 @@ function mapDropFromDb(d: any): Drop {
 }
 
 // Helper to map link from database format to frontend format
-function mapLinkFromDb(l: any, currentUserId: string): Link {
+function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<string, any>): Link {
   // Determine which user is "the other user" from current user's perspective
   // user_id_1 = original drop sender, user_id_2 = original drop receiver
-  const isUser1 = l.user_id_1 === currentUserId;
+  const isCurrentUserTheSender = l.user_id_1 === currentUserId;
   
   // Get the nested drop data (from the join)
   const drop = l.drops;
   
-  // The "other user" info comes from the drop's sender fields
-  // Since user_id_1 is always the original sender, the sender fields contain their info
-  // If current user is user_id_2 (receiver), other user is user_id_1 (sender) - use sender fields
-  // If current user is user_id_1 (sender), other user is user_id_2 (receiver) - use sender fields as fallback
-  // (In future, we could add receiver fields to drops table for better data)
+  // If current user is user_id_1 (the sender), check if we have receiver profile data
+  // Otherwise use sender fields from the drop
+  let otherUserName = drop?.sender_name;
+  let otherUserUsername = drop?.sender_username;
+  let otherUserEmail = drop?.sender_email;
+  let otherUserPhone = drop?.sender_phone;
+  let otherUserBio = drop?.sender_bio;
+  let otherUserProfilePhoto = drop?.sender_profile_photo;
+  let otherUserSocialMedia = drop?.sender_social_media;
+  
+  if (isCurrentUserTheSender && receiverProfiles) {
+    const receiverProfile = receiverProfiles.get(l.user_id_2);
+    if (receiverProfile) {
+      otherUserName = receiverProfile.name;
+      otherUserUsername = receiverProfile.username;
+      otherUserEmail = receiverProfile.email;
+      otherUserPhone = receiverProfile.phone;
+      otherUserBio = receiverProfile.bio;
+      otherUserProfilePhoto = receiverProfile.profile_photo;
+      otherUserSocialMedia = receiverProfile.social_media;
+    }
+  }
   
   return {
     id: l.id,
@@ -459,14 +476,14 @@ function mapLinkFromDb(l: any, currentUserId: string): Link {
     userId2: l.user_id_2,
     dropId: l.drop_id,
     createdAt: new Date(l.created_at),
-    // Contact info from the joined drop
-    otherUserName: drop?.sender_name,
-    otherUserUsername: drop?.sender_username,
-    otherUserEmail: drop?.sender_email,
-    otherUserPhone: drop?.sender_phone,
-    otherUserBio: drop?.sender_bio,
-    otherUserProfilePhoto: drop?.sender_profile_photo,
-    otherUserSocialMedia: drop?.sender_social_media,
+    // Contact info - from receiver profile if sender, from drop sender fields if receiver
+    otherUserName,
+    otherUserUsername,
+    otherUserEmail,
+    otherUserPhone,
+    otherUserBio,
+    otherUserProfilePhoto,
+    otherUserSocialMedia,
   };
 }
 
@@ -727,7 +744,31 @@ export async function getLinkedDrops(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} links`);
-    return (data || []).map(l => mapLinkFromDb(l, userId));
+    
+    // Collect user_id_2 values for links where current user is user_id_1 (the sender)
+    // These are the receiver profiles we need to fetch separately
+    const receiverUserIds = (data || [])
+      .filter((l: any) => l.user_id_1 === userId)
+      .map((l: any) => l.user_id_2);
+    
+    // Fetch receiver profiles if any exist
+    let receiverProfiles: Map<string, any> | undefined;
+    if (receiverUserIds.length > 0) {
+      console.log('[DROPS] Fetching receiver profiles for:', receiverUserIds);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('user_id, name, username, email, phone, bio, profile_photo, social_media')
+        .in('user_id', receiverUserIds);
+      
+      if (profilesError) {
+        console.error('[DROPS] Error fetching receiver profiles:', profilesError);
+      } else if (profilesData) {
+        receiverProfiles = new Map(profilesData.map((p: any) => [p.user_id, p]));
+        console.log('[DROPS] Loaded', receiverProfiles.size, 'receiver profiles');
+      }
+    }
+    
+    return (data || []).map(l => mapLinkFromDb(l, userId, receiverProfiles));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get links error:', error);
     throw new Error(error.message || 'Failed to load links. Please try again.');
