@@ -537,7 +537,39 @@ export async function sendDrop(
     }
 
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
-    console.log('[DROP-CRASH] Step 3: Building drop data...');
+    console.log('[DROP-CRASH] Step 3: Checking for existing drops/links...');
+
+    // Check if a pending or accepted drop already exists from current user to receiver
+    const { data: existingDrop, error: existingDropError } = await supabase
+      .from('drops')
+      .select('id, status')
+      .eq('sender_id', senderId)
+      .eq('receiver_id', receiverId)
+      .in('status', ['pending', 'accepted'])
+      .maybeSingle();
+
+    if (existingDropError) {
+      console.error('[DROPS] Error checking existing drops:', existingDropError);
+    } else if (existingDrop) {
+      console.log('[DROPS] Existing drop found:', existingDrop.id, 'status:', existingDrop.status);
+      throw new Error('You have already dropped this user');
+    }
+
+    // Check if a link already exists between the two users
+    const { data: existingLink, error: existingLinkError } = await supabase
+      .from('links')
+      .select('id')
+      .or(`and(user_id_1.eq.${senderId},user_id_2.eq.${receiverId}),and(user_id_1.eq.${receiverId},user_id_2.eq.${senderId})`)
+      .maybeSingle();
+
+    if (existingLinkError) {
+      console.error('[DROPS] Error checking existing links:', existingLinkError);
+    } else if (existingLink) {
+      console.log('[DROPS] Existing link found:', existingLink.id);
+      throw new Error('You are already linked with this person');
+    }
+
+    console.log('[DROP-CRASH] Step 4: Building drop data...');
 
     // Drop data - single row with status 'pending'
     const dropData = {
@@ -554,11 +586,11 @@ export async function sendDrop(
       sender_social_media: senderProfile.socialMedia || null,
     };
     
-    console.log('[DROP-CRASH] Step 4: Drop data built:', JSON.stringify(dropData, null, 2));
+    console.log('[DROP-CRASH] Step 5: Drop data built:', JSON.stringify(dropData, null, 2));
     console.log('[DROP-DUPE] About to insert single drop row, timestamp:', callTimestamp);
 
     // Insert ONE row with status 'pending'
-    console.log('[DROP-CRASH] Step 5: Inserting to Supabase...');
+    console.log('[DROP-CRASH] Step 6: Inserting to Supabase...');
     const { data, error } = await supabase
       .from('drops')
       .insert(dropData)
@@ -918,14 +950,13 @@ export async function updateDropStatus(
       console.log('[DROPS] Creating link for drop:', dropId);
       
       // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
-      // Set viewed_at to now so the link initiator (user_id_1) doesn't see it as unviewed
+      // viewed_at is NULL on creation so both users see it as a new link notification
       const { data: linkData, error: linkError } = await supabase
         .from('links')
         .insert({
           user_id_1: drop.sender_id,
           user_id_2: userId,
           drop_id: dropId,
-          viewed_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -934,7 +965,7 @@ export async function updateDropStatus(
         console.error('[DROPS] Failed to create link:', linkError);
         // Don't throw - drop status was updated successfully
       } else {
-        console.log('[DROPS] SUCCESS: Link created:', linkData?.id, '(viewed_at set for initiator)');
+        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
       }
     }
 
