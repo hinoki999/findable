@@ -233,7 +233,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     console.log('[BLE-SCAN] Starting scan #', startScanCountRef.current);
     addDebugLog(`startScan: proceeding (count: ${startScanCountRef.current})`);
     console.log('[BLE-DEBUG] startScan called, count:', startScanCountRef.current, 'timestamp:', Date.now());
-    setError(null);
+    if (error !== 'Bluetooth is disabled') {
+      setError(null);
+    }
     // FIX #2: Don't clear devices array - preserve existing devices and update them
     // setDevices([]); // REMOVED - this was causing devices to disappear
 
