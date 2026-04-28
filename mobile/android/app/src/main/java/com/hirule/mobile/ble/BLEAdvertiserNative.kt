@@ -238,6 +238,25 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
         }
     }
 
+    @ReactMethod
+    fun getIsDiscoverable(promise: Promise) {
+        Log.d(TAG, "getIsDiscoverable called")
+        try {
+            val prefs = reactApplicationContext.getSharedPreferences(
+                "BLEAdvertiserPrefs",
+                Context.MODE_PRIVATE
+            )
+            // Default to true if not set (user is discoverable by default)
+            val isDiscoverable = prefs.getBoolean("isDiscoverable", true)
+            Log.d(TAG, "Retrieved isDiscoverable from SharedPreferences: $isDiscoverable")
+            promise.resolve(isDiscoverable)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading isDiscoverable from SharedPreferences", e)
+            // Default to true on error
+            promise.resolve(true)
+        }
+    }
+
     // Cleanup when React Native is destroyed
     // Do NOT send stop intent - native BLEAdvertiserService handles its own lifecycle
     // with START_STICKY and SharedPreferences. Sending stop here would incorrectly

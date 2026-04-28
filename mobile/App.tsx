@@ -1,7 +1,7 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
-import { View, Pressable, Text, PanResponder, PermissionsAndroid } from 'react-native';
+import { View, Pressable, Text, PanResponder, PermissionsAndroid, NativeModules, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -255,6 +255,7 @@ function MainApp() {
 
   // BLE Advertising state - managed at App level so it persists across tab navigation
   const [isDiscoverable, setIsDiscoverable] = useState(true);
+  const [discoverableLoaded, setDiscoverableLoaded] = useState(false);
   const { isAdvertising, startAdvertising, stopAdvertising, isAvailable: advertisingAvailable } = useBLEAdvertiser();
   
   // Refs to stabilize advertising callbacks (prevents useEffect re-runs)
@@ -266,6 +267,29 @@ function MainApp() {
   useEffect(() => {
     stopAdvertisingRef.current = stopAdvertising;
   }, [stopAdvertising]);
+
+  // Load persisted ghost mode preference from native SharedPreferences on mount
+  useEffect(() => {
+    const loadDiscoverableState = async () => {
+      try {
+        if (Platform.OS === 'android' && NativeModules.BLEAdvertiserNative) {
+          console.log('[BLE-ADV-APP] Loading persisted isDiscoverable from native...');
+          const savedIsDiscoverable = await NativeModules.BLEAdvertiserNative.getIsDiscoverable();
+          console.log('[BLE-ADV-APP] Loaded isDiscoverable:', savedIsDiscoverable);
+          setIsDiscoverable(savedIsDiscoverable);
+        } else {
+          console.log('[BLE-ADV-APP] Native module not available, using default isDiscoverable=true');
+        }
+      } catch (error) {
+        console.error('[BLE-ADV-APP] Failed to load isDiscoverable:', error);
+        // Keep default true on error
+      } finally {
+        setDiscoverableLoaded(true);
+      }
+    };
+    
+    loadDiscoverableState();
+  }, []);
   
   // Synchronous ref to prevent multiple startAdvertising calls during rapid re-renders
   const hasRequestedAdvertisingRef = useRef(false);
@@ -634,7 +658,13 @@ function MainApp() {
   // BLE Advertising control - start/stop based on isDiscoverable toggle
   // Runs at App level so advertising persists when navigating between tabs
   useEffect(() => {
-    console.log('[BLE-ADV-APP] useEffect fired - isDiscoverable:', isDiscoverable, 'advertisingAvailable:', advertisingAvailable, 'authLoading:', authLoading, 'userId:', userId ? 'present' : 'null', 'isAdvertising:', isAdvertising);
+    console.log('[BLE-ADV-APP] useEffect fired - isDiscoverable:', isDiscoverable, 'discoverableLoaded:', discoverableLoaded, 'advertisingAvailable:', advertisingAvailable, 'authLoading:', authLoading, 'userId:', userId ? 'present' : 'null', 'isAdvertising:', isAdvertising);
+
+    // Wait for persisted ghost mode preference to be loaded from native
+    if (!discoverableLoaded) {
+      console.log('[BLE-ADV-APP] Early return - discoverableLoaded is false, waiting for persisted preference');
+      return;
+    }
 
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!advertisingAvailable || authLoading || !userId) {
@@ -659,7 +689,7 @@ function MainApp() {
       hasRequestedAdvertisingRef.current = false;
       stopAdvertisingRef.current();
     }
-  }, [isDiscoverable, advertisingAvailable, authLoading, userId, isAdvertising]);
+  }, [isDiscoverable, discoverableLoaded, advertisingAvailable, authLoading, userId, isAdvertising]);
 
   // Check for OTA updates on app launch
   useEffect(() => {
