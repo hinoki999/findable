@@ -116,25 +116,33 @@ export default function DropScreen() {
   const handleLinkWithContact = async () => {
     if (!selectedContact) return;
     
+    const contactName = selectedContact.senderName || selectedContact.senderUsername || 'User';
+    const contactId = selectedContact.id;
+    
     try {
-      console.log('[DROPS] Creating link with:', selectedContact.senderName);
-      await updateDropStatus(selectedContact.id, 'returned');
+      console.log('[DROPS] Creating link with:', contactName);
+      await updateDropStatus(contactId, 'returned');
+      
+      // IMMEDIATELY close modals and update UI after successful updateDropStatus
+      setShowLinkConfirmModal(false);
+      closeContactModal();
+      
+      // Remove the drop from local state immediately (optimistic update)
+      setAcceptedDrops(prev => prev.filter(d => d.id !== contactId));
       
       // Show success notification
       addLinkNotification({
-        name: selectedContact.senderName || selectedContact.senderUsername || 'User',
+        name: contactName,
       });
       
       showToast({
-        message: `You linked with ${selectedContact.senderName || 'User'}!`,
+        message: `You linked with ${contactName}!`,
         type: 'success',
         duration: 3000,
       });
       
-      // Close modals and refresh
-      setShowLinkConfirmModal(false);
-      closeContactModal();
-      fetchAcceptedDrops();
+      // Refresh data in background (non-blocking)
+      fetchAcceptedDrops().catch(err => console.error('[DROPS] Background refresh failed:', err));
     } catch (error: any) {
       console.error('[DROPS] Failed to create link:', error);
       showToast({

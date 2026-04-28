@@ -1583,19 +1583,19 @@ export default function HomeScreen() {
       console.log('[DROP-STATE] Calling updateDropStatus - drop.id:', drop.id, 'action:', action);
       await updateDropStatus(drop.id, action, responseProfile);
 
-      // Remove the drop from the list
-      console.log('[DROP-STATE] HomeScreen setIncomingDrops - removing drop.id:', drop.id, 'current count:', (incomingDrops || []).length);
-      setIncomingDrops(prev => prev.filter(d => d.id !== drop.id));
+      // IMMEDIATELY update UI after successful updateDropStatus - before any other operations
+      console.log('[DROP-STATE] HomeScreen setIncomingDrops - removing drop.id:', drop.id);
+      setIncomingDrops(prev => {
+        const newDrops = prev.filter(d => d.id !== drop.id);
+        // Close modal if this was the last drop (check against filtered list)
+        if (newDrops.length === 0) {
+          console.log('[DROP-MODAL] Closing drops modal - no more drops');
+          setShowDrops(false);
+        }
+        return newDrops;
+      });
 
-      // Close modal if no more drops
-      console.log('[DROP-MODAL] Checking if should close modal - incomingDrops.length:', (incomingDrops || []).length);
-      if ((incomingDrops || []).length <= 1) {
-        console.log('[DROP-MODAL] Closing drops modal - no more drops');
-        console.log('[DROP-STATE] HomeScreen setShowDrops(false) - after last drop action');
-        setShowDrops(false);
-      }
-
-      // Show success feedback
+      // Show success feedback (non-blocking UI updates)
       if (action === 'returned') {
         // Show confirmation modal for the returner
         setReturnedDropInfo({
