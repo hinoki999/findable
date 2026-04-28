@@ -391,10 +391,25 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           }
 
           // Add ALL devices to devices array (no filtering)
-          console.log('[BLE-DUPE] About to update devices array - device.id:', device.id, 'device.name:', device.name);
+          console.log('[BLE-DUPE] About to update devices array - device.id:', device.id, 'device.name:', device.name, 'deviceId:', deviceId);
           setDevices(prevDevices => {
-            const exists = prevDevices.find(d => d.id === device.id);
+            const existsByMac = prevDevices.find(d => d.id === device.id);
             const currentRssi = device.rssi || -100;
+            
+            // Secondary check: if deviceId is available, check if any existing device
+            // has userId that matches (starts with deviceId). This handles MAC rotation
+            // where the same physical device appears with a different MAC address.
+            let existsByUserId: BleDevice | undefined;
+            if (deviceId && !existsByMac) {
+              existsByUserId = prevDevices.find(d => 
+                d.userId && d.userId.toLowerCase().startsWith(deviceId.toLowerCase())
+              );
+              if (existsByUserId) {
+                console.log('[BLE-DUPE] Found existing device by userId match - deviceId:', deviceId, 'existing.id:', existsByUserId.id, 'existing.userId:', existsByUserId.userId);
+              }
+            }
+            
+            const exists = existsByMac || existsByUserId;
             
             // Update RSSI history for rolling average
             const rssiHistory = rssiHistoryRef.current.get(device.id) || [];
@@ -412,7 +427,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             // Use device name or generate a fallback name
             const deviceName = device.name || `BLE-Device-${device.id.substring(0, 8)}`;
 
-            console.log('[BLE-DUPE] Dedup check - exists:', !!exists, 'device.id:', device.id, 'prevDevices.length:', prevDevices.length);
+            console.log('[BLE-DUPE] Dedup check - existsByMac:', !!existsByMac, 'existsByUserId:', !!existsByUserId, 'device.id:', device.id, 'prevDevices.length:', prevDevices.length);
             console.log('[BLE-RSSI] Device:', device.id, 'raw:', currentRssi, 'avg:', averagedRssi.toFixed(1), 'history:', rssiHistory.length);
             
             if (!exists) {
@@ -427,9 +442,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
                 username: undefined, // Will be populated by async lookup if deviceId found
               }];
+            } else if (existsByUserId && !existsByMac) {
+              // Update existing device found by userId (MAC address changed due to rotation)
+              // Update the id to the new MAC and refresh RSSI/distance
+              console.log('[BLE-DUPE] UPDATING device by userId match (MAC rotated) - oldId:', existsByUserId.id, 'newId:', device.id);
+              return prevDevices.map(d =>
+                d.id === existsByUserId.id
+                  ? { ...d, id: device.id, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
+                  : d
+              );
             } else {
-              // Update existing device with new RSSI/distance (preserve username if already set)
-              console.log('[BLE-DUPE] UPDATING existing device - id:', device.id, 'keeping arrayLength:', prevDevices.length);
+              // Update existing device by MAC match - preserve username if already set
+              console.log('[BLE-DUPE] UPDATING existing device by MAC - id:', device.id, 'keeping arrayLength:', prevDevices.length);
               return prevDevices.map(d =>
                 d.id === device.id
                   ? { ...d, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
