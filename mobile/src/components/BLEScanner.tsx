@@ -26,27 +26,27 @@ import { supabase } from '../services/supabase';
  */
 const extractUserIdFromManufacturerData = (manufacturerData: string | null): string | null => {
   if (!manufacturerData) return null;
-  
+
   try {
     // Decode base64 using atob (available in React Native)
     const binaryString = atob(manufacturerData);
-    
+
     if (binaryString.length < 1) return null;
-    
+
     // react-native-ble-plx may return manufacturer data in different formats:
     // Format A: Raw bytes without manufacturer ID prefix (just the deviceId)
     // Format B: [2-byte manufacturer ID (little-endian)] + [deviceId bytes]
-    
+
     // Check if first 2 bytes are manufacturer ID 0xFFFF (little-endian: 0xFF, 0xFF)
-    if (binaryString.length >= 3 && 
-        binaryString.charCodeAt(0) === 0xFF && 
-        binaryString.charCodeAt(1) === 0xFF) {
+    if (binaryString.length >= 3 &&
+      binaryString.charCodeAt(0) === 0xFF &&
+      binaryString.charCodeAt(1) === 0xFF) {
       // Format B: Skip manufacturer ID, return rest as deviceId
       const deviceId = binaryString.slice(2).trim();
       console.log('[BLE-ID] Extracted deviceId from manufacturer data (format B):', deviceId);
       return deviceId || null;
     }
-    
+
     // Format A: Entire string is the deviceId
     // Verify it looks like a valid hex prefix (8 chars, alphanumeric)
     const deviceId = binaryString.trim();
@@ -54,7 +54,7 @@ const extractUserIdFromManufacturerData = (manufacturerData: string | null): str
       console.log('[BLE-ID] Extracted deviceId from manufacturer data (format A):', deviceId);
       return deviceId;
     }
-    
+
     console.log('[BLE-ID] Manufacturer data does not match expected format:', deviceId);
     return null;
   } catch (e) {
@@ -71,6 +71,7 @@ export interface BleDevice {
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
   username?: string; // DropLink username from Supabase lookup
   userId?: string; // User ID from Supabase lookup (for sending drops)
+  lastSeen?: number; // Timestamp (Date.now()) when device was last heard
 }
 
 export interface RecentScanEntry {
@@ -111,6 +112,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<string | null>(null);
   const startScanCountRef = useRef(0);
+  const staleCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
@@ -141,7 +143,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   // Request necessary permissions for Android
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[PERMS-DEBUG] requestPermissions called, Platform.OS:', Platform.OS);
-    
+
     // Check in-session cache first
     if (permissionsGranted) {
       return true;
@@ -395,22 +397,22 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           setDevices(prevDevices => {
             const existsByMac = prevDevices.find(d => d.id === device.id);
             const currentRssi = device.rssi || -100;
-            
+
             // Secondary check: if deviceId is available, check if any existing device
             // has userId that matches (starts with deviceId). This handles MAC rotation
             // where the same physical device appears with a different MAC address.
             let existsByUserId: BleDevice | undefined;
             if (deviceId && !existsByMac) {
-              existsByUserId = prevDevices.find(d => 
+              existsByUserId = prevDevices.find(d =>
                 d.userId && d.userId.toLowerCase().startsWith(deviceId.toLowerCase())
               );
               if (existsByUserId) {
                 console.log('[BLE-DUPE] Found existing device by userId match - deviceId:', deviceId, 'existing.id:', existsByUserId.id, 'existing.userId:', existsByUserId.userId);
               }
             }
-            
+
             const exists = existsByMac || existsByUserId;
-            
+
             // Update RSSI history for rolling average
             const rssiHistory = rssiHistoryRef.current.get(device.id) || [];
             rssiHistory.push(currentRssi);
@@ -419,17 +421,17 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               rssiHistory.shift();
             }
             rssiHistoryRef.current.set(device.id, rssiHistory);
-            
+
             // Calculate averaged RSSI from history
             const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
             const distanceFeet = calculateDistanceFeet(averagedRssi);
-            
+
             // Use device name or generate a fallback name
             const deviceName = device.name || `BLE-Device-${device.id.substring(0, 8)}`;
 
             console.log('[BLE-DUPE] Dedup check - existsByMac:', !!existsByMac, 'existsByUserId:', !!existsByUserId, 'device.id:', device.id, 'prevDevices.length:', prevDevices.length);
             console.log('[BLE-RSSI] Device:', device.id, 'raw:', currentRssi, 'avg:', averagedRssi.toFixed(1), 'history:', rssiHistory.length);
-            
+
             if (!exists) {
               // Add new device (RSSI history already initialized above)
               console.log('[BLE-DUPE] ADDING new device - id:', device.id, 'name:', deviceName, 'arrayLengthBefore:', prevDevices.length, 'arrayLengthAfter:', prevDevices.length + 1);
@@ -441,6 +443,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 distanceFeet,
                 serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
                 username: undefined, // Will be populated by async lookup if deviceId found
+                lastSeen: Date.now(), // Timestamp when last heard
               }];
             } else if (existsByUserId && !existsByMac) {
               // Update existing device found by userId (MAC address changed due to rotation)
@@ -448,7 +451,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               console.log('[BLE-DUPE] UPDATING device by userId match (MAC rotated) - oldId:', existsByUserId.id, 'newId:', device.id);
               return prevDevices.map(d =>
                 d.id === existsByUserId.id
-                  ? { ...d, id: device.id, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
+                  ? { ...d, id: device.id, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs, lastSeen: Date.now() }
                   : d
               );
             } else {
@@ -456,7 +459,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
               console.log('[BLE-DUPE] UPDATING existing device by MAC - id:', device.id, 'keeping arrayLength:', prevDevices.length);
               return prevDevices.map(d =>
                 d.id === device.id
-                  ? { ...d, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs }
+                  ? { ...d, rssi: currentRssi, distanceFeet, serviceUUIDs: device.serviceUUIDs || d.serviceUUIDs, lastSeen: Date.now() }
                   : d
               );
             }
@@ -621,10 +624,20 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     };
   }, []); // Empty deps - listener never needs to be recreated
 
-  // Cleanup on unmount
+  // Stale-device cleanup + cleanup on unmount
   useEffect(() => {
+    // Every 3s, remove devices not heard from in the last 10s
+    staleCleanupRef.current = setInterval(() => {
+      const now = Date.now();
+      setDevices(prev => prev.filter(d => !d.lastSeen || (now - d.lastSeen) < 10000));
+    }, 3000);
+
     return () => {
       console.log('[BLE-SCAN] Cleanup on unmount - stopping scan');
+      if (staleCleanupRef.current) {
+        clearInterval(staleCleanupRef.current);
+        staleCleanupRef.current = null;
+      }
       if (Platform.OS !== 'web' && bleManager) {
         // Only destroy if no other instances are using it
         // Note: bleManager is module-level, so we don't destroy it here
