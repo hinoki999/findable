@@ -811,34 +811,34 @@ export async function getLinkedDrops(): Promise<Link[]> {
  * Get unviewed link notifications
  * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
  */
-export async function getUnviewedLinks(): Promise<Link[]> {
-  try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session) {
-      throw new Error('User not authenticated');
-    }
+  export async function getUnviewedLinks(): Promise<Link[]> {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        throw new Error('User not authenticated');
+      }
 
-    const userId = session.user.id;
-    console.log('[DROPS] Fetching unviewed links for user:', userId);
+      const userId = session.user.id;
+      console.log('[DROPS] Fetching unviewed links for user:', userId);
 
-    // Query links table with join to drops table for profile data
-    // Only return links where viewed_at IS NULL
-    const { data, error } = await supabase
-      .from('links')
-      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
-      .is('viewed_at', null)
-      .order('created_at', { ascending: false });
+      // Query links table with join to drops table for profile data
+      // Only return links where viewed_at IS NULL
+      const { data, error } = await supabase
+        .from('links')
+        .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
+        .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+        .is('viewed_at', null)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('[DROPS] Supabase unviewed links query error:', error);
-      throw new Error('Failed to load unviewed links.');
-    }
+      if (error) {
+        console.error('[DROPS] Supabase unviewed links query error:', error);
+        throw new Error('Failed to load unviewed links.');
+      }
 
-    console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
-    return (data || []).map(l => mapLinkFromDb(l, userId));
-  } catch (error: any) {
+      console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
+      return (data || []).map(l => mapLinkFromDb(l, userId));
+    } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
     throw new Error(error.message || 'Failed to load unviewed links.');
   }
