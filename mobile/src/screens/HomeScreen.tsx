@@ -7,7 +7,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useBLEAdvertising } from '../../App';
 import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -727,7 +727,7 @@ export default function HomeScreen() {
         console.log('[BG-SEED] Fetching background devices on mount...');
         const backgroundDevices = await getBackgroundDevices();
         console.log('[BG-SEED] Got', backgroundDevices.length, 'background devices');
-        
+
         for (const bgDevice of backgroundDevices) {
           // Map BackgroundBLEDevice to BleDevice format
           const bleDevice: BleDevice = {
@@ -745,7 +745,7 @@ export default function HomeScreen() {
         console.error('[BG-SEED] Failed to seed background devices:', error);
       }
     };
-    
+
     seedDevicesFromBackground();
   }, [addDebugDevice]);
 
@@ -1043,12 +1043,12 @@ export default function HomeScreen() {
   const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
     // Get deduplication key: prefer username, fall back to userId
     const dedupeKey = device.username || device.userId;
-    
+
     // Skip devices we can't uniquely identify
     if (!dedupeKey) {
       return acc;
     }
-    
+
     const existingIndex = acc.findIndex(d => (d.username || d.userId) === dedupeKey);
     if (existingIndex === -1) {
       acc.push(device);
@@ -1061,7 +1061,7 @@ export default function HomeScreen() {
   // Compute Set of linked userIds for radar detection
   const linkedUserIds = useMemo(() => {
     if (!userId || !allLinks.length) return new Set<string>();
-    
+
     const ids = new Set<string>();
     for (const link of allLinks) {
       // Add the OTHER user's ID (not the current user)
@@ -1076,7 +1076,7 @@ export default function HomeScreen() {
 
   // Helper to find Link object by userId
   const findLinkByUserId = (targetUserId: string): Link | undefined => {
-    return allLinks.find(link => 
+    return allLinks.find(link =>
       (link.userId1 === userId && link.userId2 === targetUserId) ||
       (link.userId2 === userId && link.userId1 === targetUserId)
     );
@@ -1531,7 +1531,7 @@ export default function HomeScreen() {
   const handleRaindropPress = () => {
     console.log('[DROP-MODAL] handleRaindropPress called - USER TAPPED RAINDROP');
     console.log('[DROP-MODAL] Current state - incomingDrops.length:', (incomingDrops || []).length, 'showDrops:', showDrops);
-    
+
     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
     // Phone verification gate with whitelist bypass
     // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
@@ -1562,7 +1562,7 @@ export default function HomeScreen() {
 
   const handleDropAction = async (action: 'accepted' | 'returned' | 'declined', drop: Drop) => {
     console.log('[DROP-STATE] handleDropAction called - action:', action, 'drop.id:', drop.id);
-    
+
     // Show link popup for returned drops IMMEDIATELY
     if (action === 'returned') {
       showLinkPopupAnimation();
@@ -2759,352 +2759,352 @@ export default function HomeScreen() {
                     </View>
                   ) : (
                     <>
-                    {/* Render incoming drops */}
-                    {incomingDrops.map((drop) => (
-                      <View key={drop.id} style={{
-                        backgroundColor: theme.colors.white,
-                        borderRadius: 16,
-                        marginBottom: 16,
-                        overflow: 'hidden',
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.1,
-                        shadowRadius: 4,
-                        elevation: 3,
-                      }}>
-                        {/* Header with name */}
-                        <View style={{
-                          backgroundColor: '#FF6B4A',
-                          paddingVertical: 12,
-                          paddingHorizontal: 16,
-                          alignItems: 'center',
+                      {/* Render incoming drops */}
+                      {incomingDrops.map((drop) => (
+                        <View key={drop.id} style={{
+                          backgroundColor: theme.colors.white,
+                          borderRadius: 16,
+                          marginBottom: 16,
+                          overflow: 'hidden',
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 3,
                         }}>
-                          <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                            {drop.senderName || drop.senderUsername || 'Someone'} sent you a drop
-                          </Text>
-                          {/* Distance and username */}
+                          {/* Header with name */}
                           <View style={{
-                            flexDirection: 'row',
+                            backgroundColor: '#FF6B4A',
+                            paddingVertical: 12,
+                            paddingHorizontal: 16,
                             alignItems: 'center',
-                            marginTop: 4,
                           }}>
-                            {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
-                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
-                                {drop.distanceFeet.toFixed(1)} ft away
-                              </Text>
-                            )}
-                            {drop.distanceFeet !== undefined && drop.senderUsername && (
-                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginHorizontal: 6 }}>•</Text>
-                            )}
-                            {drop.senderUsername && (
-                              <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
-                                @{drop.senderUsername}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Contact Card Content */}
-                        <View style={{ padding: 16 }}>
-                          {/* Profile Picture */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                            <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                              {drop.senderName || drop.senderUsername || 'Someone'} sent you a drop
+                            </Text>
+                            {/* Distance and username */}
                             <View style={{
-                              width: 70,
-                              height: 70,
-                              borderRadius: 35,
-                              backgroundColor: '#FFE5DC',
+                              flexDirection: 'row',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              overflow: 'hidden',
+                              marginTop: 4,
                             }}>
-                              {drop.senderProfilePhoto ? (
-                                <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 70, height: 70 }} />
-                              ) : (
-                                <Text style={{ color: '#FF6B4A', fontSize: 28, fontWeight: '600' }}>
-                                  {(drop.senderName || drop.senderUsername || 'U').substring(0, 2).toUpperCase()}
+                              {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
+                                  {drop.distanceFeet.toFixed(1)} ft away
+                                </Text>
+                              )}
+                              {drop.distanceFeet !== undefined && drop.senderUsername && (
+                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginHorizontal: 6 }}>•</Text>
+                              )}
+                              {drop.senderUsername && (
+                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12 }}>
+                                  @{drop.senderUsername}
                                 </Text>
                               )}
                             </View>
                           </View>
 
-                          {/* Contact Information */}
-                          <View style={{ marginBottom: 12 }}>
-                            {/* Phone */}
-                            {drop.senderPhone && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
-                                <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                  {drop.senderPhone}
-                                </Text>
+                          {/* Contact Card Content */}
+                          <View style={{ padding: 16 }}>
+                            {/* Profile Picture */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                              <View style={{
+                                width: 70,
+                                height: 70,
+                                borderRadius: 35,
+                                backgroundColor: '#FFE5DC',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                overflow: 'hidden',
+                              }}>
+                                {drop.senderProfilePhoto ? (
+                                  <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 70, height: 70 }} />
+                                ) : (
+                                  <Text style={{ color: '#FF6B4A', fontSize: 28, fontWeight: '600' }}>
+                                    {(drop.senderName || drop.senderUsername || 'U').substring(0, 2).toUpperCase()}
+                                  </Text>
+                                )}
                               </View>
-                            )}
+                            </View>
 
-                            {/* Email */}
-                            {drop.senderEmail && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
-                                <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                  {drop.senderEmail}
-                                </Text>
-                              </View>
-                            )}
-
-                            {/* Social Media */}
-                            {drop.senderSocialMedia && drop.senderSocialMedia.map((social, index) => (
-                              social.platform && social.handle ? (
-                                <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                  <MaterialCommunityIcons
-                                    name={social.platform.toLowerCase() as any}
-                                    size={16}
-                                    color={theme.colors.muted}
-                                  />
+                            {/* Contact Information */}
+                            <View style={{ marginBottom: 12 }}>
+                              {/* Phone */}
+                              {drop.senderPhone && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
                                   <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                    {social.handle}
+                                    {drop.senderPhone}
                                   </Text>
                                 </View>
-                              ) : null
-                            ))}
-                          </View>
+                              )}
 
-                          {/* Bio Section */}
-                          {drop.senderBio && (
-                            <View style={{
-                              backgroundColor: theme.colors.bg,
-                              padding: 12,
-                              borderRadius: 8,
-                              marginBottom: 16,
-                            }}>
-                              <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
-                                BIO
-                              </Text>
-                              <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
-                                "{drop.senderBio}"
-                              </Text>
+                              {/* Email */}
+                              {drop.senderEmail && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                                  <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                    {drop.senderEmail}
+                                  </Text>
+                                </View>
+                              )}
+
+                              {/* Social Media */}
+                              {drop.senderSocialMedia && drop.senderSocialMedia.map((social, index) => (
+                                social.platform && social.handle ? (
+                                  <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <MaterialCommunityIcons
+                                      name={social.platform.toLowerCase() as any}
+                                      size={16}
+                                      color={theme.colors.muted}
+                                    />
+                                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                      {social.handle}
+                                    </Text>
+                                  </View>
+                                ) : null
+                              ))}
                             </View>
-                          )}
 
-                          {/* No contact info message */}
-                          {!drop.senderPhone && !drop.senderEmail && !drop.senderBio && (!drop.senderSocialMedia || drop.senderSocialMedia.length === 0) && (
-                            <View style={{
-                              backgroundColor: theme.colors.bg,
-                              padding: 12,
-                              borderRadius: 8,
-                              marginBottom: 16,
-                              alignItems: 'center',
-                            }}>
-                              <Text style={[theme.type.muted, { fontSize: 13, textAlign: 'center' }]}>
-                                No additional contact info shared
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Action Buttons */}
-                          <View style={{
-                            flexDirection: 'row',
-                            gap: 8,
-                          }}>
-                            <Pressable
-                              onPress={() => handleDropAction('accepted', drop)}
-                              style={{
-                                flex: 1,
-                                backgroundColor: theme.colors.blue,
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                borderRadius: 8,
-                              }}
-                            >
-                              <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
-                                Accept
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => handleDropAction('returned', drop)}
-                              style={{
-                                flex: 1,
-                                backgroundColor: '#FF6B4A',
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
-                                borderRadius: 8,
-                              }}
-                            >
-                              <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
-                                Return Drop
-                              </Text>
-                            </Pressable>
-                            <Pressable
-                              onPress={() => handleDropAction('declined', drop)}
-                              style={{
-                                flex: 1,
+                            {/* Bio Section */}
+                            {drop.senderBio && (
+                              <View style={{
                                 backgroundColor: theme.colors.bg,
-                                paddingVertical: 10,
-                                paddingHorizontal: 12,
+                                padding: 12,
                                 borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: theme.colors.border,
-                              }}
-                            >
-                              <Text style={[theme.type.body, { fontSize: 13, textAlign: 'center', color: theme.colors.muted }]}>
-                                Decline
-                              </Text>
-                            </Pressable>
+                                marginBottom: 16,
+                              }}>
+                                <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                                  BIO
+                                </Text>
+                                <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                                  "{drop.senderBio}"
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* No contact info message */}
+                            {!drop.senderPhone && !drop.senderEmail && !drop.senderBio && (!drop.senderSocialMedia || drop.senderSocialMedia.length === 0) && (
+                              <View style={{
+                                backgroundColor: theme.colors.bg,
+                                padding: 12,
+                                borderRadius: 8,
+                                marginBottom: 16,
+                                alignItems: 'center',
+                              }}>
+                                <Text style={[theme.type.muted, { fontSize: 13, textAlign: 'center' }]}>
+                                  No additional contact info shared
+                                </Text>
+                              </View>
+                            )}
+
+                            {/* Action Buttons */}
+                            <View style={{
+                              flexDirection: 'row',
+                              gap: 8,
+                            }}>
+                              <Pressable
+                                onPress={() => handleDropAction('accepted', drop)}
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: theme.colors.blue,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
+                                  Accept
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => handleDropAction('returned', drop)}
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: '#FF6B4A',
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Text style={[theme.type.button, { fontSize: 13, textAlign: 'center' }]}>
+                                  Return Drop
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => handleDropAction('declined', drop)}
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: theme.colors.bg,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 8,
+                                  borderWidth: 1,
+                                  borderColor: theme.colors.border,
+                                }}
+                              >
+                                <Text style={[theme.type.body, { fontSize: 13, textAlign: 'center', color: theme.colors.muted }]}>
+                                  Decline
+                                </Text>
+                              </Pressable>
+                            </View>
                           </View>
                         </View>
-                      </View>
-                    ))}
+                      ))}
 
-                    {/* New Links Section */}
-                    {(unviewedLinksFromDb || []).length > 0 && (
-                      <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
-                        <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
-                          🔗 New Links
-                        </Text>
-                        {unviewedLinksFromDb.map((link) => (
-                          <View key={link.id} style={{
-                            backgroundColor: theme.colors.white,
-                            borderRadius: 16,
-                            marginBottom: 16,
-                            overflow: 'hidden',
-                            borderWidth: 1,
-                            borderColor: theme.colors.border,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.1,
-                            shadowRadius: 4,
-                            elevation: 3,
-                          }}>
-                            {/* Header */}
-                            <View style={{
-                              backgroundColor: theme.colors.green,
-                              paddingVertical: 12,
-                              paddingHorizontal: 16,
-                              alignItems: 'center',
+                      {/* New Links Section */}
+                      {(unviewedLinksFromDb || []).length > 0 && (
+                        <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
+                          <Text style={[theme.type.h2, { marginBottom: 12, fontSize: 14, color: theme.colors.green }]}>
+                            🔗 New Links
+                          </Text>
+                          {unviewedLinksFromDb.map((link) => (
+                            <View key={link.id} style={{
+                              backgroundColor: theme.colors.white,
+                              borderRadius: 16,
+                              marginBottom: 16,
+                              overflow: 'hidden',
+                              borderWidth: 1,
+                              borderColor: theme.colors.border,
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.1,
+                              shadowRadius: 4,
+                              elevation: 3,
                             }}>
-                              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
-                                You linked with {link.otherUserName || link.otherUserUsername || 'someone'}!
-                              </Text>
-                              {link.otherUserUsername && (
-                                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 4 }}>
-                                  @{link.otherUserUsername}
+                              {/* Header */}
+                              <View style={{
+                                backgroundColor: theme.colors.green,
+                                paddingVertical: 12,
+                                paddingHorizontal: 16,
+                                alignItems: 'center',
+                              }}>
+                                <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 16 }]}>
+                                  You linked with {link.otherUserName || link.otherUserUsername || 'someone'}!
                                 </Text>
-                              )}
-                            </View>
-
-                            {/* Content */}
-                            <View style={{ padding: 16 }}>
-                              {/* Profile Picture */}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                                <View style={{
-                                  width: 70,
-                                  height: 70,
-                                  borderRadius: 35,
-                                  backgroundColor: '#E8F5E9',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  overflow: 'hidden',
-                                }}>
-                                  {link.otherUserProfilePhoto ? (
-                                    <Image source={{ uri: link.otherUserProfilePhoto }} style={{ width: 70, height: 70 }} />
-                                  ) : (
-                                    <MaterialCommunityIcons name="link-variant" size={32} color={theme.colors.green} />
-                                  )}
-                                </View>
+                                {link.otherUserUsername && (
+                                  <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, marginTop: 4 }}>
+                                    @{link.otherUserUsername}
+                                  </Text>
+                                )}
                               </View>
 
-                              {/* Contact Information */}
-                              <View style={{ marginBottom: 12 }}>
-                                {link.otherUserPhone && (
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                    <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                      {link.otherUserPhone}
-                                    </Text>
+                              {/* Content */}
+                              <View style={{ padding: 16 }}>
+                                {/* Profile Picture */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                                  <View style={{
+                                    width: 70,
+                                    height: 70,
+                                    borderRadius: 35,
+                                    backgroundColor: '#E8F5E9',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    overflow: 'hidden',
+                                  }}>
+                                    {link.otherUserProfilePhoto ? (
+                                      <Image source={{ uri: link.otherUserProfilePhoto }} style={{ width: 70, height: 70 }} />
+                                    ) : (
+                                      <MaterialCommunityIcons name="link-variant" size={32} color={theme.colors.green} />
+                                    )}
                                   </View>
-                                )}
-                                {link.otherUserEmail && (
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                    <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                      {link.otherUserEmail}
-                                    </Text>
-                                  </View>
-                                )}
-                                {link.otherUserSocialMedia && link.otherUserSocialMedia.map((social, index) => (
-                                  social.platform && social.handle ? (
-                                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                                      <MaterialCommunityIcons
-                                        name={social.platform.toLowerCase() as any}
-                                        size={16}
-                                        color={theme.colors.muted}
-                                      />
+                                </View>
+
+                                {/* Contact Information */}
+                                <View style={{ marginBottom: 12 }}>
+                                  {link.otherUserPhone && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                      <MaterialCommunityIcons name="phone" size={16} color={theme.colors.muted} />
                                       <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
-                                        {social.handle}
+                                        {link.otherUserPhone}
                                       </Text>
                                     </View>
-                                  ) : null
-                                ))}
-                              </View>
-
-                              {/* Bio */}
-                              {link.otherUserBio && (
-                                <View style={{
-                                  backgroundColor: theme.colors.bg,
-                                  padding: 12,
-                                  borderRadius: 8,
-                                  marginBottom: 16,
-                                }}>
-                                  <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
-                                    BIO
-                                  </Text>
-                                  <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
-                                    "{link.otherUserBio}"
-                                  </Text>
+                                  )}
+                                  {link.otherUserEmail && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                      <MaterialCommunityIcons name="email" size={16} color={theme.colors.muted} />
+                                      <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                        {link.otherUserEmail}
+                                      </Text>
+                                    </View>
+                                  )}
+                                  {link.otherUserSocialMedia && link.otherUserSocialMedia.map((social, index) => (
+                                    social.platform && social.handle ? (
+                                      <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                        <MaterialCommunityIcons
+                                          name={social.platform.toLowerCase() as any}
+                                          size={16}
+                                          color={theme.colors.muted}
+                                        />
+                                        <Text style={[theme.type.body, { marginLeft: 8, color: theme.colors.text, fontSize: 14 }]}>
+                                          {social.handle}
+                                        </Text>
+                                      </View>
+                                    ) : null
+                                  ))}
                                 </View>
-                              )}
 
-                              {/* Action buttons */}
-                              <View style={{ flexDirection: 'row', gap: 8 }}>
-                                <Pressable
-                                  onPress={() => {
-                                    handleDismissLinkCard(link.id);
-                                    setShowDrops(false);
-                                    navigateToTab('History');
-                                  }}
-                                  style={{
-                                    flex: 1,
-                                    backgroundColor: theme.colors.green,
-                                    paddingVertical: 12,
-                                    borderRadius: 8,
-                                    alignItems: 'center',
-                                  }}
-                                >
-                                  <Text style={[theme.type.body, { color: '#fff', fontWeight: '600' }]}>
-                                    View Link
-                                  </Text>
-                                </Pressable>
-                                <Pressable
-                                  onPress={() => handleDismissLinkCard(link.id)}
-                                  style={{
-                                    flex: 1,
+                                {/* Bio */}
+                                {link.otherUserBio && (
+                                  <View style={{
                                     backgroundColor: theme.colors.bg,
-                                    paddingVertical: 12,
+                                    padding: 12,
                                     borderRadius: 8,
-                                    alignItems: 'center',
-                                    borderWidth: 1,
-                                    borderColor: theme.colors.border,
-                                  }}
-                                >
-                                  <Text style={[theme.type.body, { color: theme.colors.text, fontWeight: '600' }]}>
-                                    Okay
-                                  </Text>
-                                </Pressable>
+                                    marginBottom: 16,
+                                  }}>
+                                    <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 4 }]}>
+                                      BIO
+                                    </Text>
+                                    <Text style={[theme.type.body, { fontSize: 13, color: theme.colors.text }]}>
+                                      "{link.otherUserBio}"
+                                    </Text>
+                                  </View>
+                                )}
+
+                                {/* Action buttons */}
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                  <Pressable
+                                    onPress={() => {
+                                      handleDismissLinkCard(link.id);
+                                      setShowDrops(false);
+                                      navigateToTab('History');
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      backgroundColor: theme.colors.green,
+                                      paddingVertical: 12,
+                                      borderRadius: 8,
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    <Text style={[theme.type.body, { color: '#fff', fontWeight: '600' }]}>
+                                      View Link
+                                    </Text>
+                                  </Pressable>
+                                  <Pressable
+                                    onPress={() => handleDismissLinkCard(link.id)}
+                                    style={{
+                                      flex: 1,
+                                      backgroundColor: theme.colors.bg,
+                                      paddingVertical: 12,
+                                      borderRadius: 8,
+                                      alignItems: 'center',
+                                      borderWidth: 1,
+                                      borderColor: theme.colors.border,
+                                    }}
+                                  >
+                                    <Text style={[theme.type.body, { color: theme.colors.text, fontWeight: '600' }]}>
+                                      Okay
+                                    </Text>
+                                  </Pressable>
+                                </View>
                               </View>
                             </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+                          ))}
+                        </View>
+                      )}
                     </>
                   )}
                 </>
@@ -3720,7 +3720,7 @@ export default function HomeScreen() {
                     console.log('[DROP-CRASH] Send button pressed - timestamp:', sendTimestamp);
                     console.log('[DROP-DUPE] HomeScreen send button onPress - timestamp:', sendTimestamp);
                     console.log('[DROP-DUPE] Guard check - selectedBlipDevice:', !!selectedBlipDevice, 'isSendingDrop:', isSendingDrop);
-                    
+
                     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
                     // Phone verification gate with whitelist bypass
                     // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
@@ -3761,7 +3761,7 @@ export default function HomeScreen() {
                         // Send drop with current user's profile info and distance
                         console.log('[DROP-CRASH] About to call sendDrop - receiverUserId:', receiverUserId, 'distanceFeet:', selectedBlipDevice.distanceFeet);
                         console.log('[DROP-DUPE] Calling sendDrop from HomeScreen - receiverUserId:', receiverUserId, 'timestamp:', Date.now());
-                        await sendDrop(receiverUserId, {
+                        const sentDrop = await sendDrop(receiverUserId, {
                           name: profile?.name || 'User',
                           username: username ?? undefined,
                           email: profile?.email,
@@ -3774,17 +3774,29 @@ export default function HomeScreen() {
                         console.log('[DROP-CRASH] sendDrop returned successfully');
                         console.log('[DROP-DUPE] sendDrop completed in HomeScreen - timestamp:', Date.now());
                         console.log('[DROP-STATE] HomeScreen setShowBlipModal(false) - after successful send');
-                        
+
                         // Close modal after successful send
                         setShowBlipModal(false);
 
-                        // Show success toast
+                        // Capture the sent drop's id for undo
+                        const sentDropId = sentDrop?.id;
+
+                        // Show success toast with 5s undo option
                         showToast({
                           message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
                           type: 'success',
-                          duration: 3000,
+                          duration: 5000,
+                          actionLabel: 'Undo',
+                          onAction: async () => {
+                            if (!sentDropId) return;
+                            try {
+                              await deleteDrop(sentDropId);
+                              showToast({ message: 'Drop undone', type: 'info', duration: 2000 });
+                            } catch (e) {
+                              showToast({ message: 'Could not undo drop', type: 'error', duration: 2000 });
+                            }
+                          },
                         });
-
                         // Note: No more simulated return - real returns come from receiver's device
                       } catch (error: any) {
                         // Set detailed error message with actual error details
