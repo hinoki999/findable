@@ -1041,19 +1041,32 @@ export default function HomeScreen() {
   // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
   // Devices without username or userId are excluded since we can't identify them as unique users
   const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
-    // Get deduplication key: prefer username, fall back to userId
-    const dedupeKey = device.username || device.userId;
+    // Deduplicate by normalized userId (first 8 chars) so the short manufacturer-data
+    // prefix and the full Supabase UUID for the same person collapse into one entry.
+    const dedupeKey = device.userId ? device.userId.toLowerCase().slice(0, 8) : undefined;
 
-    // Skip devices we can't uniquely identify
+    // Skip devices we can't uniquely identify by userId
     if (!dedupeKey) {
       return acc;
     }
 
-    const existingIndex = acc.findIndex(d => (d.username || d.userId) === dedupeKey);
+    const existingIndex = acc.findIndex(d =>
+      d.userId ? d.userId.toLowerCase().slice(0, 8) === dedupeKey : false
+    );
     if (existingIndex === -1) {
       acc.push(device);
-    } else if ((device.rssi || -100) > (acc[existingIndex].rssi || -100)) {
-      acc[existingIndex] = device;
+    } else {
+      // Same person already present. Keep the richer/stronger entry:
+      // prefer the one that has a username (profile loaded), then stronger RSSI.
+      const existing = acc[existingIndex];
+      const deviceHasName = !!device.username;
+      const existingHasName = !!existing.username;
+      if (deviceHasName && !existingHasName) {
+        acc[existingIndex] = device;
+      } else if (deviceHasName === existingHasName &&
+        (device.rssi || -100) > (existing.rssi || -100)) {
+        acc[existingIndex] = device;
+      }
     }
     return acc;
   }, [] as typeof filteredDevices);
