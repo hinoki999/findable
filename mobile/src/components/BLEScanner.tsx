@@ -331,18 +331,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
             // Check cache first — skip Supabase if we already resolved this prefix
-              const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
-              if (cachedProfile) {
-                setDevices(prevDevices => prevDevices.map(d =>
-                  d.id === device.id
-                    ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
-                    : d
-                ));
-                return;
-              }
+            const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
+            if (cachedProfile) {
+              setDevices(prevDevices => prevDevices.map(d =>
+                d.id === device.id
+                  ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
+                  : d
+              ));
+              return;
+            }
 
-              console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
-              (async () => {
+            console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
+            (async () => {
               try {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
@@ -366,6 +366,9 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   // Use name for display, fall back to username, then deviceId
                   displayName = profile.name || profile.username || deviceId || 'User';
                   console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
+                  if (userId && displayName) {
+                    profileCacheRef.current.set(deviceId.toLowerCase().trim(), { userId, displayName });
+                  }
                   console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
                 } else {
                   console.log('[BLE-ID] No profile found for deviceId:', deviceId);
