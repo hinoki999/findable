@@ -113,6 +113,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const errorRef = useRef<string | null>(null);
   const startScanCountRef = useRef(0);
   const staleCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const profileCacheRef = useRef<Map<string, { userId: string; displayName: string }>>(new Map());
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
@@ -329,8 +330,19 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
-            console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
-            (async () => {
+            // Check cache first — skip Supabase if we already resolved this prefix
+              const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
+              if (cachedProfile) {
+                setDevices(prevDevices => prevDevices.map(d =>
+                  d.id === device.id
+                    ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
+                    : d
+                ));
+                return;
+              }
+
+              console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
+              (async () => {
               try {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
