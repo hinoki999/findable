@@ -703,8 +703,8 @@ export default function HomeScreen() {
   const { isDarkMode } = useDarkMode();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { profile } = useUserProfile();
+  const { navigateToTab, setFocusContactId } = useTabNavigation();
   const { showToast } = useToast();
-  const { navigateToTab } = useTabNavigation();
   const phoneVerified = profile?.phoneVerified || false;
   const phone = profile?.phone || '';
   const email = profile?.email || '';
@@ -1998,22 +1998,9 @@ export default function HomeScreen() {
                   nucleusY={nucleusY}
                   viewTransform={viewTransformTensor}
                   onPress={() => {
-                    const link = findLinkByUserId(device.userId!);
-                    if (link) {
-                      // Convert Link to Device format for the existing modal
-                      const linkAsDevice: Device = {
-                        name: link.otherUserName || link.otherUserUsername || 'Linked User',
-                        rssi: device.rssi,
-                        distanceFeet: device.distanceFeet,
-                        action: 'returned',
-                        phoneNumber: link.otherUserPhone,
-                        email: link.otherUserEmail,
-                        bio: link.otherUserBio,
-                        profilePhoto: link.otherUserProfilePhoto,
-                        socialMedia: link.otherUserSocialMedia,
-                      };
-                      setSelectedLink(linkAsDevice);
-                      setShowLinkModal(true);
+                    if (device.userId) {
+                      setFocusContactId(device.userId);
+                      navigateToTab('History');
                     }
                   }}
                 />

@@ -5,6 +5,7 @@ import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, delete
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
+import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
@@ -50,12 +51,13 @@ export default function HistoryScreen() {
   const [itemToDelete, setItemToDelete] = useState<Link | null>(null);
   const lastDeletedItemRef = useRef<Link | null>(null); // Using ref to avoid closure issues
   const { isDarkMode } = useDarkMode();
+  const { focusContactId, setFocusContactId } = useTabNavigation();
   const { pinnedIds, togglePin } = usePinnedProfiles();
   const { showToast } = useToast();
   const { userId } = useAuth();
   const theme = getTheme(isDarkMode);
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
-  
+
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -63,6 +65,19 @@ export default function HistoryScreen() {
   useEffect(() => {
     startScreenTutorial('History', 1);
   }, []);
+
+  // Auto-open a specific contact when navigated here from the radar link icon
+  useEffect(() => {
+    if (focusContactId && data.length > 0) {
+      const match = data.find(
+        l => l.userId1 === focusContactId || l.userId2 === focusContactId
+      );
+      if (match) {
+        handleContactPress(match);
+      }
+      setFocusContactId(null);
+    }
+  }, [focusContactId, data]);
 
   useEffect(() => {
     (async () => {
@@ -72,7 +87,7 @@ export default function HistoryScreen() {
         console.log('[DROPS] HISTORY: Fetched linked drops:', drops?.length);
         setData(drops);
         setErr(null);
-      } catch (e:any) {
+      } catch (e: any) {
         console.error('[DROPS] ERROR: HISTORY: Failed to load drops:', e);
         // Don't show error toast - just log it
         console.log('[DROPS] WARNING: HISTORY: Error loading links (this is OK if user has no links yet)');
@@ -105,7 +120,7 @@ export default function HistoryScreen() {
     if (itemToDelete && itemToDelete.id) {
       // Store for undo using ref (synchronous)
       lastDeletedItemRef.current = itemToDelete;
-      
+
       // Delete the associated drop (sets status to 'deleted')
       if (itemToDelete.dropId) {
         await deleteDrop(itemToDelete.dropId);
@@ -113,7 +128,7 @@ export default function HistoryScreen() {
       // Remove from local state
       setData(prevData => prevData.filter(item => item.id !== itemToDelete.id));
       console.log('[DROPS] Link deleted from history');
-      
+
       // Show toast with undo (note: undo not fully implemented for links yet)
       showToast({
         message: `${itemToDelete.otherUserName || 'Contact'} deleted`,
@@ -166,19 +181,19 @@ export default function HistoryScreen() {
   // Filter data based on search query (using Drop fields)
   const filteredData = data.filter(item => {
     if (!searchQuery.trim()) return true;
-    
+
     const query = searchQuery.toLowerCase();
     const name = item.otherUserName?.toLowerCase() || '';
     const username = item.otherUserUsername?.toLowerCase() || '';
     const email = item.otherUserEmail?.toLowerCase() || '';
     const phone = item.otherUserPhone?.toLowerCase() || '';
     const bio = item.otherUserBio?.toLowerCase() || '';
-    
-    return name.includes(query) || 
-           username.includes(query) ||
-           email.includes(query) || 
-           phone.includes(query) || 
-           bio.includes(query);
+
+    return name.includes(query) ||
+      username.includes(query) ||
+      email.includes(query) ||
+      phone.includes(query) ||
+      bio.includes(query);
   });
 
   // Sort filtered data: pinned items first, then by timestamp (newest first)
@@ -188,7 +203,7 @@ export default function HistoryScreen() {
     const bPinned = b.id ? pinnedIds.has(b.id) : false;
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
-    
+
     // Then sort by createdAt (when link was formed)
     const aTime = a.createdAt?.getTime() || 0;
     const bTime = b.createdAt?.getTime() || 0;
@@ -199,10 +214,10 @@ export default function HistoryScreen() {
   const tutorialSteps = [
     {
       message: 'When you link with someone (have a mutual drop), you can view their contact here!',
-      position: { 
-        top: screenHeight * 0.35, 
-        left: 30, 
-        right: 30 
+      position: {
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30
       },
     },
   ];
@@ -212,9 +227,9 @@ export default function HistoryScreen() {
       <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
         <TopBar logoMode={true} logoIcon="link-variant" />
         <NetworkBanner isDarkMode={isDarkMode} />
-        <View style={{ 
-          flex: 1, 
-          justifyContent: 'center', 
+        <View style={{
+          flex: 1,
+          justifyContent: 'center',
           alignItems: 'center',
           paddingHorizontal: 40,
         }}>
@@ -235,9 +250,9 @@ export default function HistoryScreen() {
           }}>
             <ActivityIndicator size="large" color={theme.colors.blue} />
           </View>
-          
+
           {/* Loading Text */}
-          <Text style={[theme.type.h2, { 
+          <Text style={[theme.type.h2, {
             textAlign: 'center',
             marginBottom: 8,
             fontSize: 18,
@@ -245,7 +260,7 @@ export default function HistoryScreen() {
           }]}>
             Loading your links
           </Text>
-          <Text style={[theme.type.muted, { 
+          <Text style={[theme.type.muted, {
             textAlign: 'center',
             fontSize: 14,
             opacity: 0.7,
@@ -279,10 +294,10 @@ export default function HistoryScreen() {
                 borderWidth: 1,
                 borderColor: theme.colors.border,
               }}>
-                <MaterialCommunityIcons 
-                  name="magnify" 
-                  size={20} 
-                  color={theme.colors.muted} 
+                <MaterialCommunityIcons
+                  name="magnify"
+                  size={20}
+                  color={theme.colors.muted}
                 />
                 <TextInput
                   style={[
@@ -305,10 +320,10 @@ export default function HistoryScreen() {
                 />
                 {searchQuery.length > 0 && (
                   <Pressable onPress={() => setSearchQuery('')}>
-                    <MaterialCommunityIcons 
-                      name="close-circle" 
-                      size={18} 
-                      color={theme.colors.muted} 
+                    <MaterialCommunityIcons
+                      name="close-circle"
+                      size={18}
+                      color={theme.colors.muted}
                     />
                   </Pressable>
                 )}
@@ -326,172 +341,172 @@ export default function HistoryScreen() {
           />
         }
         renderItem={({ item }) => {
-            const formatTimestamp = (timestamp?: Date | string) => {
-              if (!timestamp) return 'Unknown time';
-              const now = new Date();
-              const timestampDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
-              const diffMs = now.getTime() - timestampDate.getTime();
-              const diffMins = Math.floor(diffMs / (1000 * 60));
-              const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-              const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-              
-              if (diffMins < 1) return 'Just now';
-              if (diffMins < 60) return `${diffMins}m ago`;
-              if (diffHours < 24) return `${diffHours}h ago`;
-              if (diffDays < 7) return `${diffDays}d ago`;
-              
-              return timestampDate.toLocaleDateString();
-            };
+          const formatTimestamp = (timestamp?: Date | string) => {
+            if (!timestamp) return 'Unknown time';
+            const now = new Date();
+            const timestampDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+            const diffMs = now.getTime() - timestampDate.getTime();
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-                const getActionColor = (action?: string) => {
-                  return '#FF6B4A'; // Strawberry Apricot Orange for all actions
-                };
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) return `${diffDays}d ago`;
 
-                        const getActionText = (action?: string) => {
-                          switch (action) {
-                            case 'sent': return 'Sent';
-                            case 'received': return 'Received';
-                            case 'accepted': return 'Accepted';
-                            case 'returned': return 'Link';
-                            case 'linked': return 'Linked';
-                            case 'dropped': return 'Dropped';
-                            case 'declined': return 'Declined';
-                            default: return 'Unknown';
-                          }
-                        };
+            return timestampDate.toLocaleDateString();
+          };
 
-                        const getActionIcon = (action?: string) => {
-                          if (action === 'returned' || action === 'linked') {
-                            return <MaterialCommunityIcons name="link-variant" size={16} color="#FF6B4A" />;
-                          }
-                          if (action === 'sent') {
-                            return <MaterialCommunityIcons name="send" size={16} color={theme.colors.muted} />;
-                          }
-                          return null;
-                        };
+          const getActionColor = (action?: string) => {
+            return '#FF6B4A'; // Strawberry Apricot Orange for all actions
+          };
 
-            return (
-              <Pressable 
-                onPress={() => handleContactPress(item)}
-                style={({ pressed }) => ({
-                  ...theme.card,
-                  marginHorizontal: 16,
-                  marginBottom: 12,
-                  opacity: pressed ? 0.8 : 1,
-                })}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  {/* Avatar */}
-                  <View style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    backgroundColor: getAvatarColor(item.otherUserName || 'User'),
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                    overflow: 'hidden',
-                  }}>
-                    {item.otherUserProfilePhoto ? (
-                      <Image source={{ uri: item.otherUserProfilePhoto }} style={{ width: 44, height: 44 }} />
-                    ) : (
-                      <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                        {getInitials(item.otherUserName || 'U')}
-                      </Text>
-                    )}
-                  </View>
-                  
-                  {/* Name & Status */}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.otherUserName || 'User'}</Text>
-                    {item.otherUserUsername && (
-                      <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>@{item.otherUserUsername}</Text>
-                    )}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                      <MaterialCommunityIcons name="link" size={12} color={theme.colors.green} />
-                      <Text style={[theme.type.muted, { fontSize: 11, marginLeft: 4 }]}>
-                        Linked • {formatTimestamp(item.createdAt)}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {/* Action Icons */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {/* Pin Icon */}
-                    <Pressable 
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleTogglePin(item);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={{ padding: 6 }}
-                    >
-                      <MaterialCommunityIcons 
-                        name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"}
-                        size={18} 
-                        color={item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.muted} 
-                      />
-                    </Pressable>
-                    
-                    {/* Delete Icon */}
-                    <Pressable 
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteClick(item);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={{ padding: 6 }}
-                    >
-                      <MaterialCommunityIcons 
-                        name="trash-can-outline"
-                        size={18} 
-                        color={theme.colors.muted} 
-                      />
-                    </Pressable>
+          const getActionText = (action?: string) => {
+            switch (action) {
+              case 'sent': return 'Sent';
+              case 'received': return 'Received';
+              case 'accepted': return 'Accepted';
+              case 'returned': return 'Link';
+              case 'linked': return 'Linked';
+              case 'dropped': return 'Dropped';
+              case 'declined': return 'Declined';
+              default: return 'Unknown';
+            }
+          };
+
+          const getActionIcon = (action?: string) => {
+            if (action === 'returned' || action === 'linked') {
+              return <MaterialCommunityIcons name="link-variant" size={16} color="#FF6B4A" />;
+            }
+            if (action === 'sent') {
+              return <MaterialCommunityIcons name="send" size={16} color={theme.colors.muted} />;
+            }
+            return null;
+          };
+
+          return (
+            <Pressable
+              onPress={() => handleContactPress(item)}
+              style={({ pressed }) => ({
+                ...theme.card,
+                marginHorizontal: 16,
+                marginBottom: 12,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {/* Avatar */}
+                <View style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: getAvatarColor(item.otherUserName || 'User'),
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                  overflow: 'hidden',
+                }}>
+                  {item.otherUserProfilePhoto ? (
+                    <Image source={{ uri: item.otherUserProfilePhoto }} style={{ width: 44, height: 44 }} />
+                  ) : (
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                      {getInitials(item.otherUserName || 'U')}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Name & Status */}
+                <View style={{ flex: 1 }}>
+                  <Text style={[theme.type.h2, { color: '#FF6B4A' }]}>{item.otherUserName || 'User'}</Text>
+                  {item.otherUserUsername && (
+                    <Text style={[theme.type.muted, { fontSize: 12, marginTop: 1 }]}>@{item.otherUserUsername}</Text>
+                  )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                    <MaterialCommunityIcons name="link" size={12} color={theme.colors.green} />
+                    <Text style={[theme.type.muted, { fontSize: 11, marginLeft: 4 }]}>
+                      Linked • {formatTimestamp(item.createdAt)}
+                    </Text>
                   </View>
                 </View>
-              </Pressable>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', paddingHorizontal: 40, paddingVertical: 60 }}>
-              {searchQuery.trim() ? (
-                <>
-                  <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12, opacity: 0.6 }} />
-                  <Text style={[theme.type.h2, { marginBottom: 8, fontSize: 18, textAlign: 'center' }]}>No results found</Text>
-                  <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
-                    Try searching with a different name, email, or phone number
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <MaterialCommunityIcons 
-                    name="link-variant-off" 
-                    size={64} 
-                    color={theme.colors.muted} 
-                    style={{ marginBottom: 20, opacity: 0.6 }} 
-                  />
-                  <Text style={[theme.type.h1, { 
-                    textAlign: 'center', 
-                    marginBottom: 12, 
-                    fontSize: 20,
-                    color: theme.colors.text,
-                  }]}>
-                    No links made yet!
-                  </Text>
-                  <Text style={[theme.type.muted, { 
-                    textAlign: 'center', 
-                    fontSize: 15, 
-                    lineHeight: 22,
-                    opacity: 0.8,
-                  }]}>
-                    Keep making connections and your links will show up here
-                  </Text>
-                </>
-              )}
-            </View>
-          }
-        />
+
+                {/* Action Icons */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {/* Pin Icon */}
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleTogglePin(item);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 6 }}
+                  >
+                    <MaterialCommunityIcons
+                      name={item.id && pinnedIds.has(item.id) ? "pin" : "pin-outline"}
+                      size={18}
+                      color={item.id && pinnedIds.has(item.id) ? '#FF6B4A' : theme.colors.muted}
+                    />
+                  </Pressable>
+
+                  {/* Delete Icon */}
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClick(item);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 6 }}
+                  >
+                    <MaterialCommunityIcons
+                      name="trash-can-outline"
+                      size={18}
+                      color={theme.colors.muted}
+                    />
+                  </Pressable>
+                </View>
+              </View>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={{ alignItems: 'center', paddingHorizontal: 40, paddingVertical: 60 }}>
+            {searchQuery.trim() ? (
+              <>
+                <MaterialCommunityIcons name="magnify" size={48} color={theme.colors.muted} style={{ marginBottom: 12, opacity: 0.6 }} />
+                <Text style={[theme.type.h2, { marginBottom: 8, fontSize: 18, textAlign: 'center' }]}>No results found</Text>
+                <Text style={[theme.type.muted, { textAlign: 'center', fontSize: 14, lineHeight: 20 }]}>
+                  Try searching with a different name, email, or phone number
+                </Text>
+              </>
+            ) : (
+              <>
+                <MaterialCommunityIcons
+                  name="link-variant-off"
+                  size={64}
+                  color={theme.colors.muted}
+                  style={{ marginBottom: 20, opacity: 0.6 }}
+                />
+                <Text style={[theme.type.h1, {
+                  textAlign: 'center',
+                  marginBottom: 12,
+                  fontSize: 20,
+                  color: theme.colors.text,
+                }]}>
+                  No links made yet!
+                </Text>
+                <Text style={[theme.type.muted, {
+                  textAlign: 'center',
+                  fontSize: 15,
+                  lineHeight: 22,
+                  opacity: 0.8,
+                }]}>
+                  Keep making connections and your links will show up here
+                </Text>
+              </>
+            )}
+          </View>
+        }
+      />
 
       {/* Contact Card Modal */}
       <Modal
@@ -645,7 +660,7 @@ export default function HistoryScreen() {
             <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.muted }]}>
               Are you sure you want to delete this profile?
             </Text>
-            
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 onPress={cancelDelete}
@@ -664,20 +679,20 @@ export default function HistoryScreen() {
                 </Text>
               </Pressable>
 
-            <Pressable
-              onPress={confirmDelete}
-              style={{
-                flex: 1,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 6,
-                backgroundColor: '#FF6B4A',
-              }}
-            >
-              <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
-                Yes, Delete
-              </Text>
-            </Pressable>
+              <Pressable
+                onPress={confirmDelete}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  backgroundColor: '#FF6B4A',
+                }}
+              >
+                <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
+                  Yes, Delete
+                </Text>
+              </Pressable>
             </View>
           </View>
         </View>
