@@ -3642,7 +3642,7 @@ export default function HomeScreen() {
                   justifyContent: 'center',
                   marginBottom: 12,
                   borderWidth: 2,
-                  borderColor: '#00FF00',
+                  borderColor: '#FF6B4A',
                   overflow: 'hidden',
                 }}>
                   {blipProfilePhoto ? (
