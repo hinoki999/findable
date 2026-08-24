@@ -3823,7 +3823,7 @@ export default function HomeScreen() {
                   }}
                   disabled={isSendingDrop}
                   style={({ pressed }) => ({
-                    backgroundColor: '#00FF00',
+                    backgroundColor: '#A8E6A3',
                     paddingVertical: 14,
                     borderRadius: 10,
                     alignItems: 'center',
