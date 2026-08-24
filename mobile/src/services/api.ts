@@ -37,7 +37,7 @@ export class TimeoutError extends Error {
 // Helper to get auth token
 async function getAuthToken(): Promise<string | null> {
   const token = await storage.getItem('authToken');
-  
+
   // DEBUG: POINT D: Token retrieval from storage
   console.log('═══════════════════════════════════════════════════════');
   console.log('DEBUG: POINT D: api.ts - Token Retrieved from Storage');
@@ -50,7 +50,7 @@ async function getAuthToken(): Promise<string | null> {
   console.log('  is undefined?:', token === undefined);
   console.log('  JWT segments:', token?.split('.').length);
   console.log('═══════════════════════════════════════════════════════');
-  
+
   return token;
 }
 
@@ -60,15 +60,15 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   console.log('DEBUG: getAuthHeaders - Token exists:', !!token);
   console.log('DEBUG: Token length:', token?.length || 0);
   console.log('DEBUG: Token first 20 chars:', token?.substring(0, 20));
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
-  
-  
+
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    
+
     // DEBUG: POINT E: Final Authorization header
     console.log('═══════════════════════════════════════════════════════');
     console.log('DEBUG: POINT E: api.ts - Authorization Header Constructed');
@@ -119,7 +119,7 @@ export async function secureFetch(
       const payload = JSON.parse(atob(token.split('.')[1]));
       logData.user_id = payload.user_id || payload.sub || null;
     }
-  } catch {}
+  } catch { }
 
   // Capture start time for performance tracking
   const startTime = Date.now();
@@ -216,10 +216,10 @@ export async function secureFetch(
   }
 }
 
-export type Device = { 
-  id?: number; 
-  name: string; 
-  rssi: number; 
+export type Device = {
+  id?: number;
+  name: string;
+  rssi: number;
   distanceFeet: number;
   action?: 'dropped' | 'accepted' | 'declined' | 'returned';
   timestamp?: Date;
@@ -232,7 +232,7 @@ export type Device = {
 
 // --- simple in-memory store for stub mode (empty - no mock data) ---
 const _store: Device[] = [];
-const sleep = (ms:number) => new Promise(r => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export async function saveDevice(d: Device, userId: string): Promise<any> {
   // Validate userId parameter
@@ -287,12 +287,12 @@ export async function saveDevice(d: Device, userId: string): Promise<any> {
     return data;
   } catch (error: any) {
     console.error('ERROR: Device save error:', error);
-    
+
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     throw new Error(error.message || 'Failed to save device. Please try again.');
   }
 }
@@ -306,7 +306,7 @@ export async function getDevices(): Promise<Device[]> {
   try {
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -324,7 +324,7 @@ export async function getDevices(): Promise<Device[]> {
     }
 
     console.log(`SUCCESS: Loaded ${data?.length || 0} devices from Supabase`);
-    
+
     // Map database format to frontend format (snake_case to camelCase)
     return (data || []).map((d: any) => ({
       id: d.id,
@@ -367,12 +367,12 @@ export async function deleteDevice(deviceId: number, userId: string): Promise<vo
     console.log(`SUCCESS: Device ${deviceId} deleted successfully`);
   } catch (error: any) {
     console.error('ERROR: Device delete error:', error);
-    
+
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     throw new Error(error.message || 'Failed to delete device. Please try again.');
   }
 }
@@ -443,10 +443,10 @@ function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<str
   // Determine which user is "the other user" from current user's perspective
   // user_id_1 = original drop sender, user_id_2 = original drop receiver
   const isCurrentUserTheSender = l.user_id_1 === currentUserId;
-  
+
   // Get the nested drop data (from the join)
   const drop = l.drops;
-  
+
   // If current user is user_id_1 (the sender), check if we have receiver profile data
   // Otherwise use sender fields from the drop
   let otherUserName = drop?.sender_name;
@@ -456,7 +456,7 @@ function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<str
   let otherUserBio = drop?.sender_bio;
   let otherUserProfilePhoto = drop?.sender_profile_photo;
   let otherUserSocialMedia = drop?.sender_social_media;
-  
+
   if (isCurrentUserTheSender && receiverProfiles) {
     const receiverProfile = receiverProfiles.get(l.user_id_2);
     if (receiverProfile) {
@@ -469,7 +469,7 @@ function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<str
       otherUserSocialMedia = receiverProfile.social_media;
     }
   }
-  
+
   return {
     id: l.id,
     userId1: l.user_id_1,
@@ -511,16 +511,16 @@ export async function sendDrop(
   console.log('[DROP-DUPE] sendDrop ENTRY - timestamp:', callTimestamp, 'receiverId:', receiverId);
   console.log('[DROP-CRASH] sendDrop called with receiverId:', receiverId, 'distanceFeet:', distanceFeet);
   console.log('[DROP-CRASH] senderProfile:', JSON.stringify(senderProfile, null, 2));
-  
+
   try {
     console.log('[DROP-CRASH] Step 1: Getting session...');
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError) {
       console.error('[DROP-CRASH] Session error:', JSON.stringify(sessionError, null, 2));
       throw new Error('User not authenticated');
     }
-    
+
     if (!session) {
       console.error('[DROP-CRASH] No session found');
       throw new Error('User not authenticated');
@@ -569,6 +569,53 @@ export async function sendDrop(
       throw new Error('You are already linked with this person');
     }
 
+    // Check for a mutual drop: has the receiver already dropped the current user?
+    // If so, auto-create a link instead of sending a new drop.
+    const { data: reverseDrop, error: reverseDropError } = await supabase
+      .from('drops')
+      .select('id, sender_id, receiver_id')
+      .eq('sender_id', receiverId)
+      .eq('receiver_id', senderId)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    if (reverseDropError) {
+      console.error('[DROPS] Error checking reverse drop:', reverseDropError);
+    } else if (reverseDrop) {
+      console.log('[DROPS] Mutual drop detected - auto-linking. reverseDrop:', reverseDrop.id);
+
+      // Create the link using the existing reverse drop (they dropped first)
+      const { error: mutualLinkError } = await supabase
+        .from('links')
+        .insert({
+          user_id_1: receiverId,
+          user_id_2: senderId,
+          drop_id: reverseDrop.id,
+        });
+      if (mutualLinkError) {
+        console.error('[DROPS] Failed to auto-create mutual link:', mutualLinkError);
+        throw new Error('Failed to create link. Please try again.');
+      }
+
+      // Mark the reverse drop as linked so it's no longer pending
+      const { error: reverseUpdateError } = await supabase
+        .from('drops')
+        .update({ status: 'linked', responded_at: new Date().toISOString() })
+        .eq('id', reverseDrop.id);
+      if (reverseUpdateError) {
+        console.error('[DROPS] Failed to update reverse drop status:', reverseUpdateError);
+      }
+
+      // Return the linked drop (no new pending drop inserted)
+      return {
+        id: reverseDrop.id,
+        senderId: receiverId,
+        receiverId: senderId,
+        status: 'linked',
+        createdAt: new Date(),
+      };
+    }
+
     console.log('[DROP-CRASH] Step 4: Building drop data...');
 
     // Drop data - single row with status 'pending'
@@ -585,7 +632,7 @@ export async function sendDrop(
       sender_profile_photo: senderProfile.profilePhoto || null,
       sender_social_media: senderProfile.socialMedia || null,
     };
-    
+
     console.log('[DROP-CRASH] Step 5: Drop data built:', JSON.stringify(dropData, null, 2));
     console.log('[DROP-DUPE] About to insert single drop row, timestamp:', callTimestamp);
 
@@ -607,7 +654,7 @@ export async function sendDrop(
     console.log('[DROPS] SUCCESS: Drop created with id:', data?.id);
     console.log('[DROP-DUPE] Insert completed - drop ID:', data?.id, 'timestamp:', callTimestamp);
     console.log('[DROP-DUPE] Full insert response:', JSON.stringify(data, null, 2));
-    
+
     console.log('[DROP-CRASH] Step 7: Returning drop:', data?.id);
     console.log('[DROP-DUPE] sendDrop EXIT - timestamp:', callTimestamp, 'returning drop ID:', data?.id);
     return mapDropFromDb(data);
@@ -627,10 +674,10 @@ export async function sendDrop(
 export async function getIncomingDrops(): Promise<Drop[]> {
   const callTimestamp = Date.now();
   console.log('[DROP-SCREEN] getIncomingDrops ENTRY - timestamp:', callTimestamp);
-  
+
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       console.error('[DROP-SCREEN] No session for getIncomingDrops');
       throw new Error('User not authenticated');
@@ -672,7 +719,7 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 export async function getSentDrops(): Promise<Drop[]> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -706,10 +753,10 @@ export async function getSentDrops(): Promise<Drop[]> {
 export async function getAcceptedDrops(): Promise<Drop[]> {
   const callTimestamp = Date.now();
   console.log('[DROP-SCREEN] getAcceptedDrops ENTRY - timestamp:', callTimestamp);
-  
+
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       console.error('[DROP-SCREEN] getAcceptedDrops - no session');
       throw new Error('User not authenticated');
@@ -755,7 +802,7 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
 export async function getLinkedDrops(): Promise<Link[]> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -776,13 +823,13 @@ export async function getLinkedDrops(): Promise<Link[]> {
     }
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} links`);
-    
+
     // Collect user_id_2 values for links where current user is user_id_1 (the sender)
     // These are the receiver profiles we need to fetch separately
     const receiverUserIds = (data || [])
       .filter((l: any) => l.user_id_1 === userId)
       .map((l: any) => l.user_id_2);
-    
+
     // Fetch receiver profiles if any exist
     let receiverProfiles: Map<string, any> | undefined;
     if (receiverUserIds.length > 0) {
@@ -791,7 +838,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
         .from('user_profiles')
         .select('user_id, name, username, email, phone, bio, profile_photo, social_media')
         .in('user_id', receiverUserIds);
-      
+
       if (profilesError) {
         console.error('[DROPS] Error fetching receiver profiles:', profilesError);
       } else if (profilesData) {
@@ -799,7 +846,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
         console.log('[DROPS] Loaded', receiverProfiles.size, 'receiver profiles');
       }
     }
-    
+
     return (data || []).map(l => mapLinkFromDb(l, userId, receiverProfiles));
   } catch (error: any) {
     console.error('[DROPS] ERROR: Get links error:', error);
@@ -811,34 +858,34 @@ export async function getLinkedDrops(): Promise<Link[]> {
  * Get unviewed link notifications
  * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
  */
-  export async function getUnviewedLinks(): Promise<Link[]> {
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError || !session) {
-        throw new Error('User not authenticated');
-      }
+export async function getUnviewedLinks(): Promise<Link[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      const userId = session.user.id;
-      console.log('[DROPS] Fetching unviewed links for user:', userId);
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
 
-      // Query links table with join to drops table for profile data
-      // Only return links where viewed_at IS NULL
-      const { data, error } = await supabase
-        .from('links')
-        .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
-        .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
-        .is('viewed_at', null)
-        .order('created_at', { ascending: false });
+    const userId = session.user.id;
+    console.log('[DROPS] Fetching unviewed links for user:', userId);
 
-      if (error) {
-        console.error('[DROPS] Supabase unviewed links query error:', error);
-        throw new Error('Failed to load unviewed links.');
-      }
+    // Query links table with join to drops table for profile data
+    // Only return links where viewed_at IS NULL
+    const { data, error } = await supabase
+      .from('links')
+      .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
+      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
+      .is('viewed_at', null)
+      .order('created_at', { ascending: false });
 
-      console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
-      return (data || []).map(l => mapLinkFromDb(l, userId));
-    } catch (error: any) {
+    if (error) {
+      console.error('[DROPS] Supabase unviewed links query error:', error);
+      throw new Error('Failed to load unviewed links.');
+    }
+
+    console.log(`[DROPS] SUCCESS: Found ${data?.length || 0} unviewed links`);
+    return (data || []).map(l => mapLinkFromDb(l, userId));
+  } catch (error: any) {
     console.error('[DROPS] ERROR: Get unviewed links error:', error);
     throw new Error(error.message || 'Failed to load unviewed links.');
   }
@@ -852,7 +899,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
 export async function markLinkViewed(linkId: string): Promise<void> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -900,7 +947,7 @@ export async function updateDropStatus(
 ): Promise<Drop> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -944,11 +991,11 @@ export async function updateDropStatus(
     }
 
     console.log('[DROPS] SUCCESS: Drop updated:', dropId, dbStatus);
-    
+
     // If status is 'returned' (mutual link), create a link record
     if (status === 'returned') {
       console.log('[DROPS] Creating link for drop:', dropId);
-      
+
       // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
       // viewed_at is NULL on creation so both users see it as a new link notification
       const { data: linkData, error: linkError } = await supabase
@@ -982,7 +1029,7 @@ export async function updateDropStatus(
 export async function getDrop(dropId: string): Promise<Drop | null> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -1015,13 +1062,13 @@ export async function getDrop(dropId: string): Promise<Drop | null> {
 export async function deleteDrop(dropId: string): Promise<void> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
 
     const userId = session.user.id;
-    
+
     console.log('[DROPS] SOFT-DELETE: Starting soft delete operation');
     console.log('[DROPS] SOFT-DELETE: dropId =', dropId);
     console.log('[DROPS] SOFT-DELETE: userId =', userId);
@@ -1029,7 +1076,7 @@ export async function deleteDrop(dropId: string): Promise<void> {
     // Soft delete: update status to 'deleted' instead of removing row
     const { data, error } = await supabase
       .from('drops')
-      .update({ 
+      .update({
         status: 'deleted',
         responded_at: new Date().toISOString()
       })
@@ -1082,7 +1129,7 @@ export async function getUserSettings(): Promise<UserSettings> {
   try {
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -1105,7 +1152,7 @@ export async function getUserSettings(): Promise<UserSettings> {
     }
 
     console.log('SUCCESS: Settings loaded from Supabase');
-    
+
     // Map database format to frontend format (snake_case to camelCase)
     return {
       darkMode: data.dark_mode ?? false,
@@ -1114,12 +1161,12 @@ export async function getUserSettings(): Promise<UserSettings> {
     };
   } catch (error: any) {
     console.error('ERROR: Get settings error:', error);
-    
+
     // Return defaults on error instead of throwing
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     // For other errors, return defaults to not block app
     console.log('WARNING: Returning default settings due to error');
     return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
@@ -1152,12 +1199,12 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
     console.log('SUCCESS: Settings saved successfully');
   } catch (error: any) {
     console.error('ERROR: Settings save error:', error);
-    
+
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     throw new Error(error.message || 'Failed to save settings. Please try again.');
   }
 }
@@ -1172,7 +1219,7 @@ export async function getPinnedContacts(): Promise<number[]> {
   try {
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -1189,7 +1236,7 @@ export async function getPinnedContacts(): Promise<number[]> {
     }
 
     console.log(`SUCCESS: Loaded ${data?.length || 0} pinned contacts from Supabase`);
-    
+
     // Return array of device IDs
     return (data || []).map((row: any) => row.device_id);
   } catch (error: any) {
@@ -1207,7 +1254,7 @@ export async function pinContact(deviceId: number): Promise<void> {
   try {
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -1243,7 +1290,7 @@ export async function unpinContact(deviceId: number): Promise<void> {
   try {
     // Get current user session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+
     if (sessionError || !session) {
       throw new Error('User not authenticated');
     }
@@ -1276,7 +1323,7 @@ export async function checkUsernameAvailability(username: string): Promise<boole
       .select('id')
       .eq('name', username)
       .single();
-    
+
     // If data exists, username is taken
     // If error.code is 'PGRST116' (not found), username is available
     return !data;
@@ -1295,7 +1342,7 @@ export async function checkEmailAvailability(email: string): Promise<boolean> {
       .select('id')
       .eq('email', email.toLowerCase())
       .single();
-    
+
     // If data exists, email is taken
     return !data;
   } catch (error) {
@@ -1337,12 +1384,12 @@ export async function changeUsername(newUsername: string, userId: string): Promi
     console.log('SUCCESS: Username changed successfully');
   } catch (error: any) {
     console.error('ERROR: Change username error:', error);
-    
+
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     throw new Error(error.message || 'Failed to change username. Please try again.');
   }
 }
@@ -1374,7 +1421,7 @@ export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): P
   console.log('[EMAIL-VERIFY] type:', type);
   try {
     console.log('[EMAIL-VERIFY] Calling supabase.auth.signInWithOtp...');
-    const { error} = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithOtp({
       email: email.toLowerCase(),
       options: {
         shouldCreateUser: type === 'signup', // Only create user for signup verification
@@ -1400,8 +1447,8 @@ export async function sendOtpCode(email: string, type: 'recovery' | 'signup'): P
 
 // Verify OTP code
 export async function verifyOtpCode(
-  email: string, 
-  code: string, 
+  email: string,
+  code: string,
   verificationType: 'email' | 'signup' = 'email'
 ): Promise<{ userId: string }> {
   console.log('[EMAIL-VERIFY] verifyOtpCode called');
@@ -1414,7 +1461,7 @@ export async function verifyOtpCode(
     const supabaseType = 'email';
     console.log(`[EMAIL-VERIFY] Calling supabase.auth.verifyOtp with type: ${supabaseType}`);
     console.log(`DEBUG: Verifying OTP with type: ${supabaseType} (requested: ${verificationType})`);
-    
+
     const { data, error } = await supabase.auth.verifyOtp({
       email: email.toLowerCase(),
       token: code,
@@ -1557,7 +1604,7 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
 // DISABLED: Twilio account suspended - stub functions to prevent app crashes
 export async function sendPhoneVerificationCodeTwilio(phoneNumber: string): Promise<void> {
   throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
-  }
+}
 
 export async function verifyPhoneCodeTwilio(phoneNumber: string, code: string, userId: string): Promise<void> {
   throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
@@ -1616,9 +1663,9 @@ export async function deleteAccount(userId: string): Promise<void> {
     console.log('Starting account deletion for user:', userId);
 
     // Validate userId parameter
-  if (!userId) {
-    throw new Error('User not authenticated');
-  }
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
 
     // Step 1: Delete from devices table
     const { error: devicesError } = await supabase
@@ -1676,12 +1723,12 @@ export async function deleteAccount(userId: string): Promise<void> {
     console.log('SUCCESS: Account deletion complete');
   } catch (error: any) {
     console.error('ERROR: Delete account error:', error);
-    
+
     // Re-throw validation errors as-is
     if (error.message?.includes('User not authenticated')) {
       throw error;
     }
-    
+
     throw new Error(error.message || 'Failed to delete account. Please try again.');
   }
 }
@@ -1705,41 +1752,41 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
   const extension = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
   const filePath = `${userId}/profile.${extension}`;
   const cleanUri = imageUri.replace('file://', '');
-  
+
   // Read as base64
   const base64 = await ReactNativeBlobUtil.fs.readFile(cleanUri, 'base64');
-  
+
   // Convert base64 to Uint8Array (binary)
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
   for (let i = 0; i < binaryString.length; i++) {
     bytes[i] = binaryString.charCodeAt(i);
   }
-  
+
   // Upload using Supabase SDK
   const { error: uploadError } = await supabase.storage
     .from('profile_photos')
     .upload(filePath, bytes.buffer, {
-        contentType: `image/${extension}`,
+      contentType: `image/${extension}`,
       upsert: true
-      });
+    });
 
   if (uploadError) throw uploadError;
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
     .from('profile_photos')
-      .getPublicUrl(filePath);
+    .getPublicUrl(filePath);
 
   // Update database
   const { error: dbError } = await supabase
-      .from('user_profiles')
-      .update({ profile_photo: publicUrl })
-      .eq('user_id', userId);
+    .from('user_profiles')
+    .update({ profile_photo: publicUrl })
+    .eq('user_id', userId);
 
   if (dbError) throw dbError;
 
-    return publicUrl;
+  return publicUrl;
 }
 
 // Save push notification token to user profile

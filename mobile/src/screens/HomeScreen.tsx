@@ -3778,25 +3778,32 @@ export default function HomeScreen() {
                         // Close modal after successful send
                         setShowBlipModal(false);
 
-                        // Capture the sent drop's id for undo
-                        const sentDropId = sentDrop?.id;
-
-                        // Show success toast with 5s undo option
-                        showToast({
-                          message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
-                          type: 'success',
-                          duration: 5000,
-                          actionLabel: 'Undo',
-                          onAction: async () => {
-                            if (!sentDropId) return;
-                            try {
-                              await deleteDrop(sentDropId);
-                              showToast({ message: 'Drop undone', type: 'info', duration: 2000 });
-                            } catch (e) {
-                              showToast({ message: 'Could not undo drop', type: 'error', duration: 2000 });
-                            }
-                          },
-                        });
+                        // If a mutual drop auto-created a link, show link message (no undo)
+                        if (sentDrop?.status === 'linked') {
+                          showToast({
+                            message: `You linked with ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
+                            type: 'success',
+                            duration: 4000,
+                          });
+                        } else {
+                          // Normal drop sent — offer 5s undo
+                          const sentDropId = sentDrop?.id;
+                          showToast({
+                            message: `Drop sent to ${selectedBlipDevice.username || selectedBlipDevice.name}!`,
+                            type: 'success',
+                            duration: 5000,
+                            actionLabel: 'Undo',
+                            onAction: async () => {
+                              if (!sentDropId) return;
+                              try {
+                                await deleteDrop(sentDropId);
+                                showToast({ message: 'Drop undone', type: 'info', duration: 2000 });
+                              } catch (e) {
+                                showToast({ message: 'Could not undo drop', type: 'error', duration: 2000 });
+                              }
+                            },
+                          });
+                        }
                         // Note: No more simulated return - real returns come from receiver's device
                       } catch (error: any) {
                         // Set detailed error message with actual error details
