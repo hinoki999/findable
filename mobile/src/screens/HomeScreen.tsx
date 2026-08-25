@@ -3830,7 +3830,9 @@ export default function HomeScreen() {
                   }}
                   disabled={isSendingDrop}
                   style={({ pressed }) => ({
-                    backgroundColor: '#A8E6A3',
+                    backgroundColor: theme.colors.white,
+                    borderWidth: 1,
+                    borderColor: '#007AFF',
                     paddingVertical: 14,
                     borderRadius: 10,
                     alignItems: 'center',
@@ -3842,15 +3844,15 @@ export default function HomeScreen() {
                 >
                   {isSendingDrop ? (
                     <>
-                      <ActivityIndicator size="small" color="#000" />
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                      <ActivityIndicator size="small" color="#007AFF" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#007AFF' }}>
                         Sending...
                       </Text>
                     </>
                   ) : (
                     <>
-                      <MaterialCommunityIcons name="water" size={18} color="#000" />
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#000' }}>
+                      <MaterialCommunityIcons name="water" size={18} color="#007AFF" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#007AFF' }}>
                         Drop
                       </Text>
                     </>
