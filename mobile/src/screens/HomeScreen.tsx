@@ -3851,8 +3851,8 @@ export default function HomeScreen() {
                     </>
                   ) : (
                     <>
-                      <MaterialCommunityIcons name="water" size={18} color="#007AFF" />
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#007AFF' }}>
+                      <MaterialCommunityIcons name="water" size={18} color="#FF6B4A" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#FF6B4A' }}>
                         Drop
                       </Text>
                     </>
