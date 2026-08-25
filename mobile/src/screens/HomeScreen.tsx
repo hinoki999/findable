@@ -3897,7 +3897,7 @@ export default function HomeScreen() {
                   width: 70,
                   height: 70,
                   borderRadius: 35,
-                  backgroundColor: '#E5FFE5',
+                  backgroundColor: 'transparent',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 12,
