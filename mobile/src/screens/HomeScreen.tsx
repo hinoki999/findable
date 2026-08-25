@@ -3642,7 +3642,7 @@ export default function HomeScreen() {
                   justifyContent: 'center',
                   marginBottom: 12,
                   borderWidth: 2,
-                  borderColor: '#FF6B4A',
+                  borderColor: '#007AFF',
                   overflow: 'hidden',
                 }}>
                   {blipProfilePhoto ? (
@@ -3832,7 +3832,7 @@ export default function HomeScreen() {
                   style={({ pressed }) => ({
                     backgroundColor: theme.colors.white,
                     borderWidth: 1,
-                    borderColor: '#007AFF',
+                    borderColor: '#FF6B4A',
                     paddingVertical: 14,
                     borderRadius: 10,
                     alignItems: 'center',
@@ -3844,8 +3844,8 @@ export default function HomeScreen() {
                 >
                   {isSendingDrop ? (
                     <>
-                      <ActivityIndicator size="small" color="#007AFF" />
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#007AFF' }}>
+                      <ActivityIndicator size="small" color="#FF6B4A" />
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#FF6B4A' }}>
                         Sending...
                       </Text>
                     </>
