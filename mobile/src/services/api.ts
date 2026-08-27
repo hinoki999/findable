@@ -835,9 +835,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
     if (receiverUserIds.length > 0) {
       console.log('[DROPS] Fetching receiver profiles for:', receiverUserIds);
       const { data: profilesData, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('user_id, name, username, email, phone, bio, profile_photo, social_media')
-        .in('user_id', receiverUserIds);
+        .rpc('get_contact_profiles', { target_ids: receiverUserIds });
 
       if (profilesError) {
         console.error('[DROPS] Error fetching receiver profiles:', profilesError);
@@ -1319,14 +1317,10 @@ export async function unpinContact(deviceId: number): Promise<void> {
 export async function checkUsernameAvailability(username: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('name', username)
-      .single();
+      .rpc('is_username_taken', { check_name: username });
 
-    // If data exists, username is taken
-    // If error.code is 'PGRST116' (not found), username is available
-    return !data;
+    // Function returns true if taken, false if available
+    return data !== true;
   } catch (error) {
     console.error('Username check error:', error);
     // On error, assume available (don't block signup)
@@ -1338,13 +1332,9 @@ export async function checkUsernameAvailability(username: string): Promise<boole
 export async function checkEmailAvailability(email: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('id')
-      .eq('email', email.toLowerCase())
-      .single();
-
-    // If data exists, email is taken
-    return !data;
+      .rpc('is_email_taken', { check_email: email });
+    // Function returns true if taken; availability is the inverse
+    return data !== true;
   } catch (error) {
     console.error('Email check error:', error);
     // On error, assume available (don't block signup)
@@ -1641,17 +1631,14 @@ export async function resetPasswordWithOtp(email: string, code: string, newPassw
 export async function getUsernameByEmail(email: string): Promise<string> {
   try {
     const { data, error } = await supabase
-      .from('user_profiles')
-      .select('name')
-      .eq('email', email.toLowerCase())
-      .single();
+      .rpc('get_name_by_email', { check_email: email });
 
     if (error || !data) {
       console.error('Failed to get username:', error);
       throw new Error('No account found with this email address.');
     }
 
-    return data.name;
+    return data;
   } catch (error: any) {
     console.error('ERROR: Get username error:', error);
     throw new Error(error.message || 'Failed to retrieve username. Please try again.');
