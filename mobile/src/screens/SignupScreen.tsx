@@ -188,10 +188,10 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const formatBirthday = (text: string) => {
     // Remove all non-digits
     let digits = text.replace(/\D/g, '');
-    
+
     // Limit to 8 digits (MMDDYYYY)
     digits = digits.slice(0, 8);
-    
+
     // Format with slashes
     let formatted = '';
     if (digits.length > 0) {
@@ -203,33 +203,33 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     if (digits.length > 4) {
       formatted += '/' + digits.slice(4, 8);
     }
-    
+
     setBirthday(formatted);
     setBirthdayError(''); // Clear error on typing
-    
+
     // Validate age only when full date is entered
     if (digits.length === 8) {
       const month = parseInt(digits.slice(0, 2), 10);
       const day = parseInt(digits.slice(2, 4), 10);
       const year = parseInt(digits.slice(4, 8), 10);
-      
+
       // Basic date validation
       if (month < 1 || month > 12 || day < 1 || day > 31) {
         setBirthdayError('Please enter a valid date');
         return;
       }
-      
+
       // Check if user is at least 13 years old
       const birthDate = new Date(year, month - 1, day);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
-      
+
       // Adjust age if birthday hasn't occurred this year yet
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
-      
+
       if (age < 13) {
         setBirthdayError('You must be 13 or older to use DropLink');
       }
@@ -240,22 +240,22 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const isBirthdayValid = () => {
     const digits = birthday.replace(/\D/g, '');
     if (digits.length !== 8) return false;
-    
+
     const month = parseInt(digits.slice(0, 2), 10);
     const day = parseInt(digits.slice(2, 4), 10);
     const year = parseInt(digits.slice(4, 8), 10);
-    
+
     if (month < 1 || month > 12 || day < 1 || day > 31) return false;
-    
+
     const birthDate = new Date(year, month - 1, day);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    
+
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-    
+
     return age >= 13;
   };
 
@@ -320,7 +320,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     // All validation passed
     setError('');
     setBirthdayError('');
-    
+
     // Check if email is whitelisted - skip verification for whitelisted users
     if (VERIFICATION_WHITELIST.emails.includes(email.toLowerCase().trim())) {
       console.log('[EMAIL-VERIFY] Email is whitelisted, skipping verification:', email);
@@ -364,7 +364,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log('[SIGNUP-DEBUG] Creating profile with name:', name, 'username:', username, 'email:', email);
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
-        email: email,
+        email: email.toLowerCase().trim(),
         username: username,   // Login username for identification
         name: name,           // Display name for BLE discovery
         phone: null,
@@ -395,7 +395,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
       // Check if we got a session from signUp (Supabase may auto-confirm in development)
       let session = data.session;
-      
+
       // If no session, sign in immediately (email confirmation may be required in production)
       if (!session) {
         console.log('No session from signUp, attempting sign in...');
@@ -407,20 +407,20 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         if (signInError || !signInData.user) {
           throw new Error('Account created but sign-in failed. Please try logging in.');
         }
-        
+
         session = signInData.session;
       }
 
       // Update auth context by refreshing auth state (we've already created account and signed in)
       await refreshAuth();
-      
+
       console.log('SUCCESS: User signed in and auth context updated');
 
       // Navigate to home screen
       if (typeof onSignupSuccess !== 'function') {
         throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
       }
-      
+
       onSignupSuccess(undefined);
     } catch (err: any) {
       console.error(`ERROR: Direct signup error: ${err.message}`);
@@ -504,7 +504,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log('[SIGNUP-VERIFY-DEBUG] Creating profile after verification, name:', name, 'email:', email);
       const { error: profileError } = await supabase.from('user_profiles').insert({
         user_id: userId,
-        email: email,
+        email: email.toLowerCase().trim(),
         username: username,   // Login username for identification
         name: name,           // Display name for BLE discovery
         phone: null,
@@ -538,15 +538,15 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
 
       // Success! Close modal and navigate
       setShowVerificationModal(false);
-      
+
       // Validate navigation handler before calling
       if (typeof onSignupSuccess !== 'function') {
         console.error('ERROR: onSignupSuccess is not a function!');
         throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
       }
-      
+
       console.log('🚀 [SignupScreen] About to call onSignupSuccess');
-      
+
       // SignupScreen doesn't collect name/phone/bio, so pass undefined
       // Profile will be set up later via profile editing or onboarding
       try {
