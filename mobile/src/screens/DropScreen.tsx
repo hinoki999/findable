@@ -43,7 +43,7 @@ const getAvatarColor = (name: string): string => {
 };
 
 export default function DropScreen() {
-  const [active, setActive] = useState<BleDevice|null>(null);
+  const [active, setActive] = useState<BleDevice | null>(null);
   const [incomingDrop, setIncomingDrop] = useState<Drop | null>(null);
   const [acceptedDrops, setAcceptedDrops] = useState<Drop[]>([]);
   const [bounceAnim] = useState(new Animated.Value(0));
@@ -66,7 +66,7 @@ export default function DropScreen() {
   const phone = profile?.phone || '';
   const email = profile?.email || '';
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
-  
+
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
 
@@ -115,32 +115,32 @@ export default function DropScreen() {
 
   const handleLinkWithContact = async () => {
     if (!selectedContact) return;
-    
+
     const contactName = selectedContact.senderName || selectedContact.senderUsername || 'User';
     const contactId = selectedContact.id;
-    
+
     try {
       console.log('[DROPS] Creating link with:', contactName);
       await updateDropStatus(contactId, 'returned');
-      
+
       // IMMEDIATELY close modals and update UI after successful updateDropStatus
       setShowLinkConfirmModal(false);
       closeContactModal();
-      
+
       // Remove the drop from local state immediately (optimistic update)
       setAcceptedDrops(prev => prev.filter(d => d.id !== contactId));
-      
+
       // Show success notification
       addLinkNotification({
         name: contactName,
       });
-      
+
       showToast({
         message: `You linked with ${contactName}!`,
         type: 'success',
         duration: 3000,
       });
-      
+
       // Refresh data in background (non-blocking)
       fetchAcceptedDrops().catch(err => console.error('[DROPS] Background refresh failed:', err));
     } catch (error: any) {
@@ -161,12 +161,12 @@ export default function DropScreen() {
     const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
+
     return timestamp.toLocaleDateString();
   };
 
@@ -187,7 +187,7 @@ export default function DropScreen() {
     const bPinned = b.id ? pinnedIds.has(b.id) : false;
     if (aPinned && !bPinned) return -1;
     if (!aPinned && bPinned) return 1;
-    
+
     const aTime = a.createdAt?.getTime() || 0;
     const bTime = b.createdAt?.getTime() || 0;
     return bTime - aTime;
@@ -224,12 +224,12 @@ export default function DropScreen() {
 
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
-  
+
   // Filter to only show DropLink users (same filtering as HomeScreen)
   // Normalize UUID for comparison
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
   const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
-  
+
   // Filter to only DropLink devices (by Service UUID)
   // Manufacturer data provides user identity, Service UUID identifies DropLink devices
   const dropLinkDevices = devices.filter(device => {
@@ -240,7 +240,7 @@ export default function DropScreen() {
     }
     return false;
   });
-  
+
   // Then filter by max distance setting and sort by distance (closest first)
   const filteredDevices = dropLinkDevices
     .filter(device => device.distanceFeet <= maxDistance)
@@ -262,9 +262,9 @@ export default function DropScreen() {
     const sendTimestamp = Date.now();
     console.log('[DROP-CRASH] DropScreen handleDrop called - timestamp:', sendTimestamp);
     console.log('[DROP-DUPE] DropScreen handleDrop - device:', JSON.stringify(device, null, 2), 'timestamp:', sendTimestamp);
-    
+
     // Phone verification check disabled - users can drop without phone verification
-    
+
     // Validate device has userId for sending drop
     if (!device.userId) {
       console.error('[DROP-CRASH] Cannot send drop - device has no userId');
@@ -277,12 +277,12 @@ export default function DropScreen() {
       setActive(null);
       return;
     }
-    
+
     try {
       console.log('[DROPS] Sending drop to:', device.userId, device.username || device.name, 'distance:', device.distanceFeet);
       console.log('[DROP-CRASH] DropScreen about to call sendDrop - receiverId:', device.userId);
       console.log('[DROP-DUPE] Calling sendDrop from DropScreen - receiverId:', device.userId, 'timestamp:', sendTimestamp);
-      
+
       // Send drop with current user's profile info and distance
       await sendDrop(device.userId, {
         name: profile?.name || 'User',
@@ -292,7 +292,7 @@ export default function DropScreen() {
         profilePhoto: profile?.profilePhoto,
         socialMedia: profile?.socialMedia,
       }, device.distanceFeet);
-      
+
       console.log('[DROP-CRASH] DropScreen sendDrop returned successfully');
       console.log('[DROP-DUPE] DropScreen sendDrop completed - timestamp:', Date.now());
       console.log('[DROP-STATE] DropScreen setActive(null) after successful send');
@@ -302,7 +302,7 @@ export default function DropScreen() {
         type: 'success',
         duration: 3000,
       });
-      
+
       // Note: No more simulated return - real returns come from receiver's device
     } catch (error: any) {
       console.error('[DROP-CRASH] DropScreen handleDrop EXCEPTION:', error?.message);
@@ -331,10 +331,10 @@ export default function DropScreen() {
           profilePhoto: profile?.profilePhoto,
           socialMedia: profile?.socialMedia,
         } : undefined;
-        
+
         await updateDropStatus(incomingDrop.id, action, responseProfile);
-      setIncomingDrop(null);
-        
+        setIncomingDrop(null);
+
         if (action === 'returned') {
           showToast({
             message: `Linked with ${incomingDrop.senderName || 'User'}!`,
@@ -374,18 +374,18 @@ export default function DropScreen() {
   const tutorialSteps = [
     {
       message: 'This page shows all nearby users within your 33 ft radius—tap their card to send a drop!',
-      position: { 
-        top: screenHeight * 0.35, 
-        left: 30, 
-        right: 30 
+      position: {
+        top: screenHeight * 0.35,
+        left: 30,
+        right: 30
       },
     },
   ];
 
   return (
-    <View style={{ flex:1, backgroundColor: theme.colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
       <TopBar logoMode={true} logoIcon="water-outline" />
-      
+
       {/* Phone Verification Banner with whitelist bypass */}
       {/* TEMP DISABLED - RE-ENABLE AFTER DROP TESTING */}
       {false && !phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email) ? (
@@ -429,264 +429,264 @@ export default function DropScreen() {
         </View>
       ) : (
         <>
-      {/* Floating Contact Card Notification */}
-      {incomingDrop && (
-        <Animated.View
-          style={{
-            position: 'absolute',
-            top: 60,
-            right: 16,
-            zIndex: 1000,
-            transform: [{
-              scale: bounceAnim.interpolate({
-                inputRange: [0, 1],
-               outputRange: [1, 1.1],
-              }),
-            }],
-          }}
-        >
-          <View style={{
-            backgroundColor: theme.colors.white,
-            borderRadius: 12,
-            padding: 12,
-            minWidth: 200,
-            maxWidth: 250,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.15,
-            shadowRadius: 8,
-            elevation: 8,
-            borderWidth: 1,
-            borderColor: theme.colors.border,
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+          {/* Floating Contact Card Notification */}
+          {incomingDrop && (
+            <Animated.View
+              style={{
+                position: 'absolute',
+                top: 60,
+                right: 16,
+                zIndex: 1000,
+                transform: [{
+                  scale: bounceAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 1.1],
+                  }),
+                }],
+              }}
+            >
               <View style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: theme.colors.blue,
-                marginRight: 8,
-              }} />
-              <Text style={[theme.type.h2, { fontSize: 14 }]}>New Drop</Text>
-            </View>
-            <Text style={[theme.type.body, { fontSize: 14, marginBottom: 8 }]}>
-              {incomingDrop.senderName || incomingDrop.senderUsername || 'Someone'} just sent you a drop
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Pressable
-                onPress={() => handleIncomingAction('accepted')}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.blue,
-                  paddingVertical: 6,
-                  paddingHorizontal: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
-                  Accept
+                backgroundColor: theme.colors.white,
+                borderRadius: 12,
+                padding: 12,
+                minWidth: 200,
+                maxWidth: 250,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 8,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: theme.colors.blue,
+                    marginRight: 8,
+                  }} />
+                  <Text style={[theme.type.h2, { fontSize: 14 }]}>New Drop</Text>
+                </View>
+                <Text style={[theme.type.body, { fontSize: 14, marginBottom: 8 }]}>
+                  {incomingDrop.senderName || incomingDrop.senderUsername || 'Someone'} just sent you a drop
                 </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => handleIncomingAction('returned')}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.blue,
-                  paddingVertical: 6,
-                  paddingHorizontal: 8,
-                  borderRadius: 6,
-                }}
-              >
-                <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
-                  Return
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => handleIncomingAction('declined')}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.bg,
-                  paddingVertical: 6,
-                  paddingHorizontal: 8,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: theme.colors.border,
-                }}
-              >
-                <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.muted }]}>
-                  Decline
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Animated.View>
-      )}
-
-
-      <FlatList
-        contentContainerStyle={{ padding: 16, paddingBottom:80 }}
-        ListHeaderComponent={
-          <>
-            <NetworkBanner isDarkMode={isDarkMode} />
-            
-            {/* Accepted Drops Section */}
-            {(sortedAcceptedDrops || []).length > 0 && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 12, color: '#FF6B4A' }]}>
-                  Your Accepted Drops
-                </Text>
-                {sortedAcceptedDrops.map((drop) => (
-                  <Pressable 
-                    key={drop.id}
-                    onPress={() => handleContactPress(drop)}
-                    style={({ pressed }) => ({
-                      ...theme.card,
-                      marginBottom: 12,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      opacity: pressed ? 0.8 : 1,
-                    })}
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable
+                    onPress={() => handleIncomingAction('accepted')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: theme.colors.blue,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 6,
+                    }}
                   >
-                    {/* Avatar */}
-                    <View style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 22,
-                      backgroundColor: getAvatarColor(drop.senderName || 'User'),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 12,
-                      overflow: 'hidden',
-                    }}>
-                      {drop.senderProfilePhoto ? (
-                        <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
-                      ) : (
-                        <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
-                          {getInitials(drop.senderName || 'U')}
-                        </Text>
-                      )}
-                    </View>
-                    
-                    {/* Info */}
-                    <View style={{ flex: 1 }}>
-                      <Text style={[theme.type.h2, { fontSize: 15 }]}>
-                        {drop.senderName || drop.senderUsername || 'User'}
-                      </Text>
-                      {drop.senderUsername && (
-                        <Text style={[theme.type.muted, { fontSize: 12 }]}>
-                          @{drop.senderUsername}
-                        </Text>
-                      )}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 }}>
-                        <Text style={[theme.type.muted, { fontSize: 11 }]}>
-                          Accepted {formatTimeAgo(drop.respondedAt || drop.createdAt)}
-                        </Text>
-                        {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
-                          <Text style={[theme.type.muted, { fontSize: 11 }]}>
-                            • {drop.distanceFeet.toFixed(1)} ft
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                    
-                    {/* Action Icons */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      {/* Pin Icon */}
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleTogglePin(drop);
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={{ padding: 6 }}
-                      >
-                        <MaterialCommunityIcons 
-                          name={drop.id && pinnedIds.has(drop.id) ? "pin" : "pin-outline"}
-                          size={18} 
-                          color={drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.muted} 
-                        />
-                      </Pressable>
-                      
-                      {/* Delete Icon */}
-                      <Pressable
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDrop(drop);
-                        }}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        style={{ padding: 6 }}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.colors.muted} />
-                      </Pressable>
-                    </View>
+                    <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
+                      Accept
+                    </Text>
                   </Pressable>
-                ))}
+                  <Pressable
+                    onPress={() => handleIncomingAction('returned')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: theme.colors.blue,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Text style={[theme.type.button, { fontSize: 12, textAlign: 'center' }]}>
+                      Return
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleIncomingAction('declined')}
+                    style={{
+                      flex: 1,
+                      backgroundColor: theme.colors.bg,
+                      paddingVertical: 6,
+                      paddingHorizontal: 8,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                    }}
+                  >
+                    <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', color: theme.colors.muted }]}>
+                      Decline
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            )}
-            
-            {/* Nearby Users Section Header */}
-            <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 8, color: theme.colors.blue }]}>
-              Nearby Users
-            </Text>
-            <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 12 }]}>
-              {isScanning ? 'Scanning for nearby devices...' : 'Scan completed'} • Within {maxDistance} ft
-            </Text>
-          </>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.blue}
-            colors={[theme.colors.blue]}
-          />
-        }
-        data={filteredDevices}
-        keyExtractor={(device) => device.id}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setActive(item)}
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.9 : 1,
-            })}
-          >
-            <DeviceCard
-              id={item.id}
-              name={item.username || item.name}
-              distanceFeet={item.distanceFeet}
-              rssi={item.rssi}
-              isDarkMode={isDarkMode}
-            />
-          </Pressable>
-        )}
-        ListEmptyComponent={
-          (acceptedDrops || []).length === 0 ? (
-            <View style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: 300,
-              paddingHorizontal: 40,
-            }}>
-              <MaterialCommunityIcons name="account-search" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
-              <Text style={[theme.type.body, {
-                textAlign: 'center',
-                fontSize: 15,
-                color: theme.colors.muted,
-              }]}>
-                No DropLink users nearby
-              </Text>
-            </View>
-          ) : null
-        }
-      />
+            </Animated.View>
+          )}
 
-      {/* Confirmation modal */}
+
+          <FlatList
+            contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
+            ListHeaderComponent={
+              <>
+                <NetworkBanner isDarkMode={isDarkMode} />
+
+                {/* Accepted Drops Section */}
+                {(sortedAcceptedDrops || []).length > 0 && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 12, color: '#FF6B4A' }]}>
+                      Your Accepted Drops
+                    </Text>
+                    {sortedAcceptedDrops.map((drop) => (
+                      <Pressable
+                        key={drop.id}
+                        onPress={() => handleContactPress(drop)}
+                        style={({ pressed }) => ({
+                          ...theme.card,
+                          marginBottom: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        {/* Avatar */}
+                        <View style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 22,
+                          backgroundColor: getAvatarColor(drop.senderName || 'User'),
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 12,
+                          overflow: 'hidden',
+                        }}>
+                          {drop.senderProfilePhoto ? (
+                            <Image source={{ uri: drop.senderProfilePhoto }} style={{ width: 44, height: 44 }} />
+                          ) : (
+                            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>
+                              {getInitials(drop.senderName || 'U')}
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Info */}
+                        <View style={{ flex: 1 }}>
+                          <Text style={[theme.type.h2, { fontSize: 15 }]}>
+                            {drop.senderName || drop.senderUsername || 'User'}
+                          </Text>
+                          {drop.senderUsername && (
+                            <Text style={[theme.type.muted, { fontSize: 12 }]}>
+                              @{drop.senderUsername}
+                            </Text>
+                          )}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 }}>
+                            <Text style={[theme.type.muted, { fontSize: 11 }]}>
+                              Accepted {formatTimeAgo(drop.respondedAt || drop.createdAt)}
+                            </Text>
+                            {drop.distanceFeet !== undefined && drop.distanceFeet !== null && (
+                              <Text style={[theme.type.muted, { fontSize: 11 }]}>
+                                • {drop.distanceFeet.toFixed(1)} ft
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Action Icons */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          {/* Pin Icon */}
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleTogglePin(drop);
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={{ padding: 6 }}
+                          >
+                            <MaterialCommunityIcons
+                              name={drop.id && pinnedIds.has(drop.id) ? "pin" : "pin-outline"}
+                              size={18}
+                              color={drop.id && pinnedIds.has(drop.id) ? '#FF6B4A' : theme.colors.muted}
+                            />
+                          </Pressable>
+
+                          {/* Delete Icon */}
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeleteDrop(drop);
+                            }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            style={{ padding: 6 }}
+                          >
+                            <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.colors.muted} />
+                          </Pressable>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+
+                {/* People You Can Drop To - Section Header */}
+                <Text style={[theme.type.h2, { fontSize: 16, marginBottom: 8, color: theme.colors.blue }]}>
+                  Drop Your Card
+                </Text>
+                <Text style={[theme.type.muted, { fontSize: 12, marginBottom: 12 }]}>
+                  {isScanning ? 'Ready to send' : 'Ready'} • Within {maxDistance} ft
+                </Text>
+              </>
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.colors.blue}
+                colors={[theme.colors.blue]}
+              />
+            }
+            data={filteredDevices}
+            keyExtractor={(device) => device.id}
+            renderItem={({ item }) => (
+              <Pressable
+                onPress={() => setActive(item)}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.9 : 1,
+                })}
+              >
+                <DeviceCard
+                  id={item.id}
+                  name={item.username || item.name}
+                  distanceFeet={item.distanceFeet}
+                  rssi={item.rssi}
+                  isDarkMode={isDarkMode}
+                />
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              (acceptedDrops || []).length === 0 ? (
+                <View style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 300,
+                  paddingHorizontal: 40,
+                }}>
+                  <MaterialCommunityIcons name="account-search" size={48} color={theme.colors.muted} style={{ marginBottom: 12 }} />
+                  <Text style={[theme.type.body, {
+                    textAlign: 'center',
+                    fontSize: 15,
+                    color: theme.colors.muted,
+                  }]}>
+                    No DropLink users nearby
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
+
+          {/* Confirmation modal */}
         </>
       )}
-      <Modal visible={!!active} transparent animationType="fade" onRequestClose={()=>setActive(null)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.5)', justifyContent:'center', padding:20 }}>
-          <View style={{ ...theme.card, padding:24 }}>
+      <Modal visible={!!active} transparent animationType="fade" onRequestClose={() => setActive(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 }}>
+          <View style={{ ...theme.card, padding: 24 }}>
             {/* Icon */}
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <View style={{
@@ -698,46 +698,46 @@ export default function DropScreen() {
                 justifyContent: 'center',
                 marginBottom: 12,
               }}>
-                <MaterialCommunityIcons 
-                  name="account-arrow-right" 
-                  size={28} 
-                  color={theme.colors.blue} 
+                <MaterialCommunityIcons
+                  name="account-arrow-right"
+                  size={28}
+                  color={theme.colors.blue}
                 />
               </View>
             </View>
 
             {/* Confirmation text */}
-            <Text style={{ ...theme.type.h1, textAlign:'center', marginBottom:12, fontSize: 22 }}>
+            <Text style={{ ...theme.type.h1, textAlign: 'center', marginBottom: 12, fontSize: 22 }}>
               Send drop to {active?.username || active?.name}?
             </Text>
-            <Text style={{ ...theme.type.body, textAlign:'center', marginBottom:8, color: theme.colors.muted }}>
+            <Text style={{ ...theme.type.body, textAlign: 'center', marginBottom: 8, color: theme.colors.muted }}>
               This will share your contact card with them
             </Text>
-            <Text style={{ ...theme.type.muted, textAlign:'center', fontSize: 12 }}>
+            <Text style={{ ...theme.type.muted, textAlign: 'center', fontSize: 12 }}>
               {active?.distanceFeet.toFixed(1)} ft away
             </Text>
 
             {/* Action buttons */}
-            <View style={{ marginTop:24, gap: 10 }}>
+            <View style={{ marginTop: 24, gap: 10 }}>
               <Pressable
                 onPress={() => active && handleDrop(active)}
                 style={({ pressed }) => ({
                   backgroundColor: theme.colors.blue,
-                  paddingVertical:14,
+                  paddingVertical: 14,
                   borderRadius: radius.pill,
-                  alignItems:'center',
+                  alignItems: 'center',
                   opacity: pressed ? 0.9 : 1,
                 })}
               >
                 <Text style={theme.type.button}>Send Drop</Text>
               </Pressable>
 
-              <Pressable 
-                onPress={()=>setActive(null)} 
+              <Pressable
+                onPress={() => setActive(null)}
                 style={({ pressed }) => ({
-                  paddingVertical:14,
+                  paddingVertical: 14,
                   borderRadius: radius.pill,
-                  alignItems:'center',
+                  alignItems: 'center',
                   backgroundColor: theme.colors.bg,
                   borderWidth: 1,
                   borderColor: theme.colors.border,
@@ -988,7 +988,7 @@ export default function DropScreen() {
             <Text style={[theme.type.body, { fontSize: 12, textAlign: 'center', marginBottom: 14, color: theme.colors.muted }]}>
               Remove this accepted drop?
             </Text>
-            
+
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable
                 onPress={() => setShowDeleteModal(false)}
