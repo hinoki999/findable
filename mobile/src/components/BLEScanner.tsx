@@ -164,65 +164,77 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     if (Platform.OS === 'android') {
       try {
-        const permissions = [
+        const bluetoothPermissions = [
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ];
 
         // Check current status first before requesting
+        const allPermissions = [...bluetoothPermissions, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
         const checkResults = await Promise.all(
-          permissions.map(p => PermissionsAndroid.check(p))
+          allPermissions.map(p => PermissionsAndroid.check(p))
         );
         const alreadyGranted = checkResults.every(result => result === true);
         console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted);
 
         if (!alreadyGranted) {
-          console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
-          const granted = await PermissionsAndroid.requestMultiple(permissions);
-          console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
-          console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
+          console.log('[PERMS-DEBUG] Requesting Bluetooth permissions...');
+          const bluetoothGranted = await PermissionsAndroid.requestMultiple(bluetoothPermissions);
 
-          const allGranted = Object.values(granted).every(
+          console.log('[PERMS-DEBUG] Requesting location permission with rationale...');
+          const locationGranted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message: 'DropLink needs location access to detect nearby Bluetooth devices. Your GPS location is never tracked or stored.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Deny',
+            }
+          );
+
+          const bluetoothAllGranted = Object.values(bluetoothGranted).every(
             permission =>
               permission === PermissionsAndroid.RESULTS.GRANTED ||
               permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
           );
-          console.log('[PERMS-DEBUG] allGranted:', allGranted);
+          const locationOk =
+            locationGranted === PermissionsAndroid.RESULTS.GRANTED ||
+            locationGranted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
 
-          if (!allGranted) {
+          console.log('[PERMS-DEBUG] bluetoothAllGranted:', bluetoothAllGranted, 'locationOk:', locationOk);
+
+          if (!bluetoothAllGranted || !locationOk) {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
             errorRef.current = 'Bluetooth permissions not granted';
             setError('Bluetooth permissions not granted');
             return false;
           }
+        } catch (err) {
+          console.warn('Permission request error:', err);
+          errorRef.current = 'Failed to request permissions';
+          setError('Failed to request permissions');
+          return false;
         }
-      } catch (err) {
-        console.warn('Permission request error:', err);
-        errorRef.current = 'Failed to request permissions';
-        setError('Failed to request permissions');
-        return false;
       }
-    }
 
     // Persist granted state
     try {
-      await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
-    } catch (err) {
-      console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
-    }
-
-    setTimeout(async () => {
-      try {
-        await Notifications.requestPermissionsAsync();
-      } catch (error) {
-        console.warn('[PERMS-DEBUG] Notification permission request error:', error);
+        await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
+      } catch (err) {
+        console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
       }
-    }, 500);
 
-    permissionsGranted = true;
-    return true;
-  }, []);
+      setTimeout(async () => {
+        try {
+          await Notifications.requestPermissionsAsync();
+        } catch (error) {
+          console.warn('[PERMS-DEBUG] Notification permission request error:', error);
+        }
+      }, 500);
+
+      permissionsGranted = true;
+      return true;
+    }, []);
 
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {

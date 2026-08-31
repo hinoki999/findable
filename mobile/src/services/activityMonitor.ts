@@ -208,8 +208,8 @@ export const logApiCall = (
     const statusColor = response.status >= 200 && response.status < 300
       ? colors.brightGreen
       : response.status >= 400
-      ? colors.brightRed
-      : colors.brightYellow;
+        ? colors.brightRed
+        : colors.brightYellow;
 
     console.log(`${statusColor}[${timestamp}] SUCCESS: RESPONSE: ${response.status} ${response.statusText || 'OK'}${colors.reset}`);
 
@@ -238,125 +238,9 @@ export const runDiagnostics = async (
   diagnosticType: 'profile_save' | 'auth' | 'database',
   context: any
 ) => {
-  try {
-    // SAFEGUARD 1: Prevent concurrent runs
-    if (diagnosticState.isRunning) {
-      console.log(`${colors.yellow}[SKIP] Diagnostics already running, skipping...${colors.reset}`);
-      return;
-    }
-
-    // SAFEGUARD 2: Cooldown check
-    if (diagnosticState.lastRun) {
-      const timeSinceLastRun = Date.now() - diagnosticState.lastRun.getTime();
-      if (timeSinceLastRun < diagnosticState.cooldownMs) {
-        console.log(`${colors.yellow}[COOLDOWN] Diagnostics in cooldown (${Math.ceil((diagnosticState.cooldownMs - timeSinceLastRun) / 1000)}s remaining)${colors.reset}`);
-        return;
-      }
-    }
-
-    // SAFEGUARD 3: Deduplication check
-    const errorKey = `${diagnosticType}:${JSON.stringify(context)}`;
-    if (diagnosticState.recentErrors.has(errorKey)) {
-      console.log(`${colors.yellow}[SKIP] Diagnostics already ran for this error${colors.reset}`);
-      return;
-    }
-
-    // Mark as running
-    diagnosticState.isRunning = true;
-    diagnosticState.recentErrors.add(errorKey);
-
-    // Clear old errors after 1 minute
-    setTimeout(() => {
-      diagnosticState.recentErrors.delete(errorKey);
-    }, 60000);
-
-    console.log(`\n${colors.yellow}DEBUG: RUNNING DIAGNOSTICS: ${diagnosticType}${colors.reset}`);
-
-    const token = await AsyncStorage.getItem('@droplink_token');
-
-    // SAFEGUARD 4: Extract user_id properly
-    let userId = context?.user_id;
-    if (!userId && context?.url) {
-      console.log(`${colors.yellow}   No user_id provided, extracting from context...${colors.reset}`);
-      // Try to extract from token if available
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          userId = payload.user_id || payload.sub;
-        } catch (e) {
-          // Silent fail
-        }
-      }
-    }
-
-    // SAFEGUARD 5: Timeout protection (10 second timeout)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch('https://findable-production.up.railway.app/api/diagnostics/run', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
-      body: JSON.stringify({
-        diagnostic_type: diagnosticType,
-        context: {
-          ...context,
-          ...(userId && { user_id: userId })
-        }
-      }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Diagnostic API returned ${response.status}`);
-    }
-
-    const results = await response.json();
-
-    // Format and display results
-    console.log(`${colors.yellow}═══════════════════════════════════════════════════${colors.reset}`);
-    console.log(`${colors.yellow}📊 DIAGNOSTIC RESULTS: ${results.overall_status?.toUpperCase() || 'UNKNOWN'}${colors.reset}`);
-    console.log(`${colors.yellow}   Timestamp: ${results.timestamp}${colors.reset}`);
-
-    if (results.checks && Array.isArray(results.checks)) {
-      results.checks.forEach((check: any) => {
-        const statusIcon = check.status === 'pass' ? '[PASS]' : check.status === 'fail' ? '[FAIL]' : '[WARN]';
-        const statusColor = check.status === 'pass' ? colors.green : check.status === 'fail' ? colors.red : colors.yellow;
-
-        console.log(`\n${statusColor}${statusIcon} ${check.name}: ${check.status?.toUpperCase() || 'UNKNOWN'}${colors.reset}`);
-
-        if (check.details) {
-          Object.entries(check.details).forEach(([key, value]) => {
-            console.log(`   ${key}: ${JSON.stringify(value, null, 2)}`);
-          });
-        }
-
-        if (check.error) {
-          console.log(`${colors.red}   Error: ${check.error}${colors.reset}`);
-        }
-      });
-    }
-
-    console.log(`${colors.yellow}═══════════════════════════════════════════════════${colors.reset}\n`);
-
-    // Update last run time
-    diagnosticState.lastRun = new Date();
-
-  } catch (error: any) {
-    // SAFEGUARD 6: Error isolation - diagnostics failure should not break app
-    if (error.name === 'AbortError') {
-      console.log(`${colors.red}[TIMEOUT] Diagnostic timed out after 10 seconds${colors.reset}`);
-    } else {
-      console.log(`${colors.red}ERROR: Diagnostic failed: ${error.message}${colors.reset}`);
-    }
-  } finally {
-    // Always clear running flag
-    diagnosticState.isRunning = false;
-  }
+  // Railway backend removed - remote diagnostics reporting disabled.
+  console.log(`[DIAGNOSTICS] Skipped (remote diagnostics disabled): ${diagnosticType}`);
+  return;
 };
 
 /**
