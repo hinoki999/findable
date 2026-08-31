@@ -66,6 +66,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
     } catch (err) {
       console.error('ERROR: Failed to check username:', err);
+      setUsernameError('Could not verify username. Please try again.');
     }
   };
 
@@ -78,6 +79,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       }
     } catch (err) {
       console.error('ERROR: Failed to check email:', err);
+      setEmailError('Could not verify email. Please try again.');
     }
   };
 

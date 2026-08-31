@@ -1319,11 +1319,16 @@ export async function checkUsernameAvailability(username: string): Promise<boole
     const { data, error } = await supabase
       .rpc('is_username_taken', { check_name: username });
 
+    if (error) {
+      console.error('Username check RPC error:', error);
+      throw error; // Fail closed - do not assume availability on error
+    }
+
     // Function returns true if taken, false if available
     return data !== true;
   } catch (error) {
     console.error('Username check error:', error);
-    // On error, assume available (don't block signup)
+    throw new Error('Unable to verify username availability. Please try again.');
     return true;
   }
 }
@@ -1331,14 +1336,19 @@ export async function checkUsernameAvailability(username: string): Promise<boole
 // Check if email is available (for signup validation)
 export async function checkEmailAvailability(email: string): Promise<boolean> {
   try {
-    const { data, error } = await supabase
+        const { data, error } = await supabase
       .rpc('is_email_taken', { check_email: email });
+
+    if (error) {
+      console.error('Email check RPC error:', error);
+      throw error; // Fail closed - do not assume availability on error
+    }
+
     // Function returns true if taken; availability is the inverse
     return data !== true;
   } catch (error) {
     console.error('Email check error:', error);
-    // On error, assume available (don't block signup)
-    return true;
+    throw new Error('Unable to verify email availability. Please try again.');
   }
 }
 
@@ -1694,15 +1704,11 @@ export async function deleteAccount(userId: string): Promise<void> {
 
     // Step 4: Delete from Supabase Auth (must be done while user is still authenticated)
     const { error: authError } = await supabase.rpc('delete_user');
-
     if (authError) {
       console.error('Auth deletion error:', authError);
-      // Profile is already deleted, so account is effectively deleted
-      console.log('WARNING: Auth account not deleted but profile removed');
-    } else {
-      console.log('SUCCESS: Auth account deleted');
+      throw new Error('Account deletion incomplete: profile removed but authentication record could not be deleted. Please contact support.');
     }
-
+    console.log('SUCCESS: Auth account deleted');
     // Step 5: Sign out user
     await supabase.auth.signOut();
     console.log('SUCCESS: User signed out');
