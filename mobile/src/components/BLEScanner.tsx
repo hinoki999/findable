@@ -168,42 +168,33 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         ];
-        const allPermissions = [...bluetoothPermissions, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
+        // Android 12+ (API 31+) doesn't need location for BLE scanning when
+        // neverForLocation is declared in the manifest. Only request it on older versions.
+        const needsLocation = Platform.Version < 31;
+        const allPermissions = needsLocation
+          ? [...bluetoothPermissions, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION]
+          : bluetoothPermissions;
 
         // Check current status first before requesting
         const checkResults = await Promise.all(
           allPermissions.map(p => PermissionsAndroid.check(p))
         );
         const alreadyGranted = checkResults.every(result => result === true);
-        console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted);
+        console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted, 'needsLocation:', needsLocation);
 
         if (!alreadyGranted) {
-          console.log('[PERMS-DEBUG] Requesting Bluetooth permissions...');
-          const bluetoothGranted = await PermissionsAndroid.requestMultiple(bluetoothPermissions);
+          console.log('[PERMS-DEBUG] Requesting permissions:', allPermissions);
+          const granted = await PermissionsAndroid.requestMultiple(allPermissions);
 
-          console.log('[PERMS-DEBUG] Requesting location permission with rationale...');
-          const locationGranted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message: 'DropLink needs location access to detect nearby Bluetooth devices. Your GPS location is never tracked or stored.',
-              buttonPositive: 'Allow',
-              buttonNegative: 'Deny',
-            }
-          );
-
-          const bluetoothAllGranted = Object.values(bluetoothGranted).every(
+          const allGranted = Object.values(granted).every(
             permission =>
               permission === PermissionsAndroid.RESULTS.GRANTED ||
               permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
           );
-          const locationOk =
-            locationGranted === PermissionsAndroid.RESULTS.GRANTED ||
-            locationGranted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
 
-          console.log('[PERMS-DEBUG] bluetoothAllGranted:', bluetoothAllGranted, 'locationOk:', locationOk);
+          console.log('[PERMS-DEBUG] allGranted:', allGranted);
 
-          if (!bluetoothAllGranted || !locationOk) {
+          if (!allGranted) {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
             errorRef.current = 'Bluetooth permissions not granted';
             setError('Bluetooth permissions not granted');
