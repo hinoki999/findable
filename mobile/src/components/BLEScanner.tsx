@@ -164,33 +164,46 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     if (Platform.OS === 'android') {
       try {
-        const permissions = [
+        const bluetoothPermissions = [
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ];
+        const allPermissions = [...bluetoothPermissions, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
 
         // Check current status first before requesting
         const checkResults = await Promise.all(
-          permissions.map(p => PermissionsAndroid.check(p))
+          allPermissions.map(p => PermissionsAndroid.check(p))
         );
         const alreadyGranted = checkResults.every(result => result === true);
         console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted);
 
         if (!alreadyGranted) {
-          console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
-          const granted = await PermissionsAndroid.requestMultiple(permissions);
-          console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
-          console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
+          console.log('[PERMS-DEBUG] Requesting Bluetooth permissions...');
+          const bluetoothGranted = await PermissionsAndroid.requestMultiple(bluetoothPermissions);
 
-          const allGranted = Object.values(granted).every(
+          console.log('[PERMS-DEBUG] Requesting location permission with rationale...');
+          const locationGranted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            {
+              title: 'Location Permission',
+              message: 'DropLink needs location access to detect nearby Bluetooth devices. Your GPS location is never tracked or stored.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Deny',
+            }
+          );
+
+          const bluetoothAllGranted = Object.values(bluetoothGranted).every(
             permission =>
               permission === PermissionsAndroid.RESULTS.GRANTED ||
               permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
           );
-          console.log('[PERMS-DEBUG] allGranted:', allGranted);
+          const locationOk =
+            locationGranted === PermissionsAndroid.RESULTS.GRANTED ||
+            locationGranted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
 
-          if (!allGranted) {
+          console.log('[PERMS-DEBUG] bluetoothAllGranted:', bluetoothAllGranted, 'locationOk:', locationOk);
+
+          if (!bluetoothAllGranted || !locationOk) {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
             errorRef.current = 'Bluetooth permissions not granted';
             setError('Bluetooth permissions not granted');
@@ -331,18 +344,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
             // Check cache first — skip Supabase if we already resolved this prefix
-              const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
-              if (cachedProfile) {
-                setDevices(prevDevices => prevDevices.map(d =>
-                  d.id === device.id
-                    ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
-                    : d
-                ));
-                return;
-              }
+            const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
+            if (cachedProfile) {
+              setDevices(prevDevices => prevDevices.map(d =>
+                d.id === device.id
+                  ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
+                  : d
+              ));
+              return;
+            }
 
-              console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
-              (async () => {
+            console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
+            (async () => {
               try {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
