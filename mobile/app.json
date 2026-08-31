@@ -24,7 +24,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.hirule.mobile",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSBluetoothAlwaysUsageDescription": "DropLink uses Bluetooth to detect nearby devices for sending and receiving drops. Your location is never tracked or stored.",
+        "NSBluetoothPeripheralUsageDescription": "DropLink uses Bluetooth to broadcast your presence to nearby devices so others can send you a drop."
       }
     },
     "android": {
@@ -55,12 +57,12 @@
       }
     },
     "plugins": [
-        "react-native-ble-plx",
-        "expo-font",
-        "expo-secure-store",
-        "./app.plugin.js",
-        "@react-native-firebase/app",
-        "expo-notifications"
-      ]
-    }
+      "react-native-ble-plx",
+      "expo-font",
+      "expo-secure-store",
+      "./app.plugin.js",
+      "@react-native-firebase/app",
+      "expo-notifications"
+    ]
   }
+}
