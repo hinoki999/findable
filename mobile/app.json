@@ -25,8 +25,8 @@
       "bundleIdentifier": "com.hirule.mobile",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSBluetoothAlwaysUsageDescription": "DropLink uses Bluetooth to detect nearby devices for sending and receiving drops. Your location is never tracked or stored.",
-        "NSBluetoothPeripheralUsageDescription": "DropLink uses Bluetooth to broadcast your presence to nearby devices so others can send you a drop."
+        "NSBluetoothAlwaysUsageDescription": "Dropshake uses Bluetooth to hand your contact card to people you're with.",
+        "NSBluetoothPeripheralUsageDescription": "Dropshake uses Bluetooth to hand your contact card to people you're with."
       }
     },
     "android": {
