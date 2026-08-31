@@ -70,17 +70,7 @@ class BLEErrorLogger {
         console.error('Additional data:', additionalData);
       }
 
-      // Send to backend (fire and forget)
-      fetch(`${this.backendUrl}/api/log-ble-error`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(errorData),
-      }).catch((error) => {
-        // Silently fail
-        console.warn('Failed to log BLE error to backend:', error);
-      });
+      // Remote logging disabled - Railway backend removed, no replacement configured
     } catch (error) {
       // Silently fail
       console.warn('Error in BLE error logger:', error);

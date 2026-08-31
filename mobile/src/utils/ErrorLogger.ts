@@ -84,19 +84,8 @@ class ErrorLogger {
         ...customData,
       };
 
-      console.error('📤 Logging error to backend:', payload);
-
-      // Send to backend (fire and forget - don't block user experience)
-      fetch(`${this.backendUrl}/api/log-error`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }).catch((fetchError) => {
-        // Silently fail - don't crash app if logging fails
-        console.warn('Failed to log error to backend:', fetchError);
-      });
+      console.error('[ERROR-LOG]', payload);
+      // Remote logging disabled - Railway backend removed, no replacement configured
     } catch (loggingError) {
       // Silently fail - don't crash app while trying to log an error
       console.warn('Error in error logger:', loggingError);

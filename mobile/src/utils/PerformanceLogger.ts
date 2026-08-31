@@ -97,17 +97,7 @@ class PerformanceLogger {
         console.warn(`WARNING: Slow operation detected: ${metricName} took ${durationMs}ms`);
       }
 
-      // Send to backend (fire and forget)
-      fetch(`${this.backendUrl}/api/log-performance`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(metric),
-      }).catch((error) => {
-        // Silently fail
-        console.warn('Failed to log performance metric:', error);
-      });
+      // Remote logging disabled - Railway backend removed, no replacement configured
     } catch (error) {
       // Silently fail
       console.warn('Error in performance logger:', error);
