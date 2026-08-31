@@ -12,23 +12,23 @@ export interface DeviceCardProps {
   isDarkMode?: boolean;
 }
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ 
-  name, 
-  distanceFeet, 
-  rssi, 
-  isDarkMode = false 
+export const DeviceCard: React.FC<DeviceCardProps> = ({
+  name,
+  distanceFeet,
+  rssi,
+  isDarkMode = false
 }) => {
   const theme = getTheme(isDarkMode);
-  
+
   // Calculate proximity percentage based on distance (0-32.9 ft)
   // Full bar = super close (0 ft = 100%), Empty bar = 32.9 ft away (32.9 ft = 0%)
   const maxDistanceForBar = 32.9; // Maximum distance for bar visualization
   const proximityPercent = Math.max(0, Math.min(100, ((maxDistanceForBar - distanceFeet) / maxDistanceForBar) * 100));
-  
+
   // Calculate gradient width so it always spans the full track conceptually
   // If bar is 10% wide, gradient needs to be 1000% of that to span the full track
   const gradientWidthPercent = (100 / proximityPercent) * 100;
-  
+
   // Calculate pin color based on position in gradient
   const getPinColor = (percent: number) => {
     const p = percent / 100;
@@ -40,7 +40,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       return theme.colors.blue; // #007AFF
     }
   };
-  
+
   const pinColor = getPinColor(proximityPercent);
 
   return (
@@ -49,7 +49,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
         {name || 'Unknown Device'}
       </Text>
       <Text style={[styles.meta, { color: theme.colors.muted }]}>
-        {distanceFeet.toFixed(1)} ft away
+        {distanceFeet < 3 ? 'Right here' : distanceFeet < 12 ? 'Close' : 'In range'}
       </Text>
       <View style={[styles.signalTrack, { backgroundColor: theme.colors.border }]}>
         <View style={[styles.gradientWrapper, { width: `${proximityPercent}%` }]}>
@@ -64,9 +64,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
           </View>
           {/* Pin icon at the end of the bar */}
           <View style={styles.pinContainer}>
-            <MaterialCommunityIcons 
-              name="map-marker" 
-              size={18} 
+            <MaterialCommunityIcons
+              name="map-marker"
+              size={18}
               color={pinColor}
             />
           </View>
@@ -87,13 +87,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  name: { 
-    fontSize: 18, 
+  name: {
+    fontSize: 18,
     fontWeight: '600',
     fontFamily: 'Inter_600SemiBold',
   },
-  meta: { 
-    marginTop: 6, 
+  meta: {
+    marginTop: 6,
     fontSize: 13,
     fontFamily: 'Inter_400Regular',
   },
