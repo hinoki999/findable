@@ -1336,7 +1336,7 @@ export async function checkUsernameAvailability(username: string): Promise<boole
 // Check if email is available (for signup validation)
 export async function checkEmailAvailability(email: string): Promise<boolean> {
   try {
-        const { data, error } = await supabase
+    const { data, error } = await supabase
       .rpc('is_email_taken', { check_email: email });
 
     if (error) {
@@ -1658,71 +1658,18 @@ export async function getUsernameByEmail(email: string): Promise<string> {
 export async function deleteAccount(userId: string): Promise<void> {
   try {
     console.log('Starting account deletion for user:', userId);
-
-    // Validate userId parameter
     if (!userId) {
       throw new Error('User not authenticated');
     }
-
-    // Step 1: Delete from devices table
-    const { error: devicesError } = await supabase
-      .from('devices')
-      .delete()
-      .eq('user_id', userId);
-
-    if (devicesError) {
-      console.error('Failed to delete devices:', devicesError);
-      // Continue anyway - devices are not critical
-    } else {
-      console.log('SUCCESS: Devices deleted');
-    }
-
-    // Step 2: Delete from user_settings table
-    const { error: settingsError } = await supabase
-      .from('user_settings')
-      .delete()
-      .eq('user_id', userId);
-
-    if (settingsError) {
-      console.error('Failed to delete settings:', settingsError);
-      // Continue anyway - settings are not critical
-    } else {
-      console.log('SUCCESS: Settings deleted');
-    }
-
-    // Step 3: Delete from user_profiles table (CRITICAL)
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .delete()
-      .eq('user_id', userId);
-
-    if (profileError) {
-      console.error('Failed to delete profile:', profileError);
-      throw new Error('Failed to delete profile. Please try again.');
-    }
-    console.log('SUCCESS: Profile deleted');
-
-    // Step 4: Delete from Supabase Auth (must be done while user is still authenticated)
     const { error: authError } = await supabase.rpc('delete_user');
     if (authError) {
       console.error('Auth deletion error:', authError);
       throw new Error('Account deletion incomplete: profile removed but authentication record could not be deleted. Please contact support.');
     }
-    console.log('SUCCESS: Auth account deleted');
-    // Step 5: Sign out user
-    await supabase.auth.signOut();
-    console.log('SUCCESS: User signed out');
-
     console.log('SUCCESS: Account deletion complete');
   } catch (error: any) {
-    console.error('ERROR: Delete account error:', error);
-
-    // Re-throw validation errors as-is
-    if (error.message?.includes('User not authenticated')) {
-      throw error;
-    }
-
-    throw new Error(error.message || 'Failed to delete account. Please try again.');
+    console.error('Delete account error:', error);
+    throw error;
   }
 }
 
