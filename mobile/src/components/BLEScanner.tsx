@@ -164,77 +164,65 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
     if (Platform.OS === 'android') {
       try {
-        const bluetoothPermissions = [
+        const permissions = [
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         ];
 
         // Check current status first before requesting
-        const allPermissions = [...bluetoothPermissions, PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION];
         const checkResults = await Promise.all(
-          allPermissions.map(p => PermissionsAndroid.check(p))
+          permissions.map(p => PermissionsAndroid.check(p))
         );
         const alreadyGranted = checkResults.every(result => result === true);
         console.log('[PERMS-DEBUG] Pre-check alreadyGranted:', alreadyGranted);
 
         if (!alreadyGranted) {
-          console.log('[PERMS-DEBUG] Requesting Bluetooth permissions...');
-          const bluetoothGranted = await PermissionsAndroid.requestMultiple(bluetoothPermissions);
+          console.log('[PERMS-DEBUG] Before PermissionsAndroid.requestMultiple...');
+          const granted = await PermissionsAndroid.requestMultiple(permissions);
+          console.log('[PERMS-DEBUG] After PermissionsAndroid.requestMultiple');
+          console.log('[PERMS-DEBUG] Granted object:', JSON.stringify(granted, null, 2));
 
-          console.log('[PERMS-DEBUG] Requesting location permission with rationale...');
-          const locationGranted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message: 'DropLink needs location access to detect nearby Bluetooth devices. Your GPS location is never tracked or stored.',
-              buttonPositive: 'Allow',
-              buttonNegative: 'Deny',
-            }
-          );
-
-          const bluetoothAllGranted = Object.values(bluetoothGranted).every(
+          const allGranted = Object.values(granted).every(
             permission =>
               permission === PermissionsAndroid.RESULTS.GRANTED ||
               permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
           );
-          const locationOk =
-            locationGranted === PermissionsAndroid.RESULTS.GRANTED ||
-            locationGranted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN;
+          console.log('[PERMS-DEBUG] allGranted:', allGranted);
 
-          console.log('[PERMS-DEBUG] bluetoothAllGranted:', bluetoothAllGranted, 'locationOk:', locationOk);
-
-          if (!bluetoothAllGranted || !locationOk) {
+          if (!allGranted) {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
             errorRef.current = 'Bluetooth permissions not granted';
             setError('Bluetooth permissions not granted');
             return false;
           }
-        } catch (err) {
-          console.warn('Permission request error:', err);
-          errorRef.current = 'Failed to request permissions';
-          setError('Failed to request permissions');
-          return false;
         }
+      } catch (err) {
+        console.warn('Permission request error:', err);
+        errorRef.current = 'Failed to request permissions';
+        setError('Failed to request permissions');
+        return false;
       }
+    }
 
     // Persist granted state
     try {
-        await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
-      } catch (err) {
-        console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
+      await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
+    } catch (err) {
+      console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
+    }
+
+    setTimeout(async () => {
+      try {
+        await Notifications.requestPermissionsAsync();
+      } catch (error) {
+        console.warn('[PERMS-DEBUG] Notification permission request error:', error);
       }
+    }, 500);
 
-      setTimeout(async () => {
-        try {
-          await Notifications.requestPermissionsAsync();
-        } catch (error) {
-          console.warn('[PERMS-DEBUG] Notification permission request error:', error);
-        }
-      }, 500);
-
-      permissionsGranted = true;
-      return true;
-    }, []);
+    permissionsGranted = true;
+    return true;
+  }, []);
 
   // Start scanning for BLE devices
   const startScan = useCallback(async () => {
@@ -343,18 +331,18 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           // Lookup username and userId from Supabase if deviceId is found
           if (deviceId) {
             // Check cache first — skip Supabase if we already resolved this prefix
-            const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
-            if (cachedProfile) {
-              setDevices(prevDevices => prevDevices.map(d =>
-                d.id === device.id
-                  ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
-                  : d
-              ));
-              return;
-            }
+              const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
+              if (cachedProfile) {
+                setDevices(prevDevices => prevDevices.map(d =>
+                  d.id === device.id
+                    ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
+                    : d
+                ));
+                return;
+              }
 
-            console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
-            (async () => {
+              console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
+              (async () => {
               try {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
@@ -378,9 +366,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   // Use name for display, fall back to username, then deviceId
                   displayName = profile.name || profile.username || deviceId || 'User';
                   console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
-                  if (userId && displayName) {
-                    profileCacheRef.current.set(deviceId.toLowerCase().trim(), { userId, displayName });
-                  }
                   console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
                 } else {
                   console.log('[BLE-ID] No profile found for deviceId:', deviceId);
