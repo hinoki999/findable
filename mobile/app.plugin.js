@@ -1,5 +1,4 @@
-const { withAppBuildGradle, withProjectBuildGradle } = require('@expo/config-plugins');
-
+const { withAppBuildGradle, withProjectBuildGradle, withAndroidManifest } = require('@expo/config-plugins');
 const withGoogleServices = (config) => {
   // Add google-services classpath to project-level build.gradle
   config = withProjectBuildGradle(config, (config) => {
@@ -26,5 +25,30 @@ const withGoogleServices = (config) => {
   return config;
 };
 
-module.exports = withGoogleServices;
+const withBluetoothPermissionFlags = (config) => {
+  return withAndroidManifest(config, (config) => {
+    const manifest = config.modResults.manifest;
+    const permissions = manifest['uses-permission'] || [];
+
+    permissions.forEach((perm) => {
+      const name = perm.$['android:name'];
+
+      if (name === 'android.permission.BLUETOOTH_SCAN') {
+        perm.$['android:usesPermissionFlags'] = 'neverForLocation';
+      }
+
+      if (name === 'android.permission.ACCESS_FINE_LOCATION') {
+        perm.$['android:maxSdkVersion'] = '30';
+      }
+    });
+
+    return config;
+  });
+};
+
+module.exports = (config) => {
+  config = withGoogleServices(config);
+  config = withBluetoothPermissionFlags(config);
+  return config;
+};
 
