@@ -62,7 +62,14 @@
       "expo-secure-store",
       "./app.plugin.js",
       "@react-native-firebase/app",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "hirule-labs",
+          "project": "dropshake"
+        }
+      ]
     ]
   }
 }

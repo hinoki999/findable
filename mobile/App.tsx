@@ -1,5 +1,12 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://799c50b2e124c9fad116346946179c7b@o4512008784052224.ingest.us.sentry.io/4512008860205056',
+  tracesSampleRate: 1.0,
+  debug: false,
+});
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder, PermissionsAndroid, NativeModules, Platform } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,12 +31,12 @@ import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
 import { supabase } from './src/services/supabase';
-import { 
-  startBackgroundScan, 
-  stopBackgroundScan, 
+import {
+  startBackgroundScan,
+  stopBackgroundScan,
   onBackgroundDeviceFound,
   getBackgroundDevices,
-  BackgroundBLEDevice 
+  BackgroundBLEDevice
 } from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
 import { useBLEAdvertiser } from './src/components/BLEAdvertiser';
@@ -171,7 +178,7 @@ const BLEAdvertisingContext = createContext<{
   isAvailable: boolean;
 }>({
   isDiscoverable: true,
-  setIsDiscoverable: () => {},
+  setIsDiscoverable: () => { },
   isAdvertising: false,
   isAvailable: false,
 });
@@ -249,7 +256,7 @@ function MainApp() {
 
   // Native BLE devices detected by background scanner
   const [nativeDevices, setNativeDevices] = useState<NativeBLEDeviceWithProfile[]>([]);
-  
+
   // RSSI history for native scanner smoothing (same as BLEScanner.tsx)
   const nativeRssiHistoryRef = useRef<Map<string, number[]>>(new Map());
 
@@ -257,7 +264,7 @@ function MainApp() {
   const [isDiscoverable, setIsDiscoverable] = useState(true);
   const [discoverableLoaded, setDiscoverableLoaded] = useState(false);
   const { isAdvertising, startAdvertising, stopAdvertising, isAvailable: advertisingAvailable } = useBLEAdvertiser();
-  
+
   // Refs to stabilize advertising callbacks (prevents useEffect re-runs)
   const startAdvertisingRef = useRef(startAdvertising);
   const stopAdvertisingRef = useRef(stopAdvertising);
@@ -287,10 +294,10 @@ function MainApp() {
         setDiscoverableLoaded(true);
       }
     };
-    
+
     loadDiscoverableState();
   }, []);
-  
+
   // Synchronous ref to prevent multiple startAdvertising calls during rapid re-renders
   const hasRequestedAdvertisingRef = useRef(false);
 
@@ -484,23 +491,23 @@ function MainApp() {
                 try {
                   const storedDevices = await getBackgroundDevices();
                   console.log('[BG-SCAN-DEBUG] Retrieved', storedDevices.length, 'stored devices');
-                  
+
                   if (storedDevices.length > 0) {
                     // Process each stored device with profile lookup
                     for (const device of storedDevices) {
                       const { id, deviceId, name, rssi, distanceFeet } = device;
-                      
+
                       if (!deviceId) continue;
-                      
+
                       // Profile lookup
                       let foundUserId: string | null = null;
                       let displayName: string | null = null;
-                      
+
                       try {
                         const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
                         const { data: userProfileData, error: userProfileError } = await supabase
                           .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
-                        
+
                         if (!userProfileError && userProfileData) {
                           foundUserId = userProfileData.user_id;
                           displayName = userProfileData.name || userProfileData.username || deviceId;
@@ -508,15 +515,15 @@ function MainApp() {
                       } catch (err) {
                         console.error('[BG-SCAN-SEED] Profile lookup error:', err);
                       }
-                      
+
                       // Initialize RSSI history
                       nativeRssiHistoryRef.current.set(id, [rssi]);
-                      
+
                       // Add to state
                       setNativeDevices(prev => {
                         const exists = prev.find(d => d.id === id);
                         if (exists) return prev;
-                        
+
                         return [...prev, {
                           id,
                           deviceId,
@@ -541,9 +548,9 @@ function MainApp() {
           // Subscribe to native device found events
           unsubscribeDeviceFound = onBackgroundDeviceFound(async (device) => {
             console.log('[BG-SCAN-NATIVE] Device found:', device);
-            
+
             const { id, deviceId, name, rssi, distanceFeet } = device;
-            
+
             if (!deviceId) {
               console.log('[BG-SCAN-NATIVE] No deviceId, skipping');
               return;
@@ -556,7 +563,7 @@ function MainApp() {
             try {
               const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
               console.log('[BG-SCAN-NATIVE] Looking up profile for deviceId:', normalizedDeviceId);
-              
+
               const { data: userProfileData, error: userProfileError } = await supabase
                 .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
 
@@ -576,7 +583,7 @@ function MainApp() {
               rssiHistory.shift();
             }
             nativeRssiHistoryRef.current.set(id, rssiHistory);
-            
+
             const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
             // Recalculate distance with averaged RSSI
             const measuredPower = -59;
@@ -621,7 +628,7 @@ function MainApp() {
         console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
       }
     };
-    
+
     checkAndStart();
 
     // Cleanup: unsubscribe from events (but don't stop scan)
@@ -1169,105 +1176,105 @@ function MainApp() {
                     <NativeBLEDevicesContext.Provider value={{ nativeDevices }}>
                       <BLEAdvertisingContext.Provider value={{ isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable: advertisingAvailable }}>
                         <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
-                        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-                        {Screen()}
-                      </View>
+                          <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+                            {Screen()}
+                          </View>
 
-                      {/* Bottom nav - Hide when sub-screen is active */}
-                      {!subScreen && (
-                        <View style={{
-                          flexDirection: 'row',
-                          borderTopWidth: 1,
-                          borderTopColor: theme.colors.border,
-                          backgroundColor: theme.colors.white,
-                          paddingBottom: insets.bottom
-                        }}>
-                          {/* Home */}
-                          <Pressable
-                            onPress={() => {
-                              logAction('Navigation', 'Home Tab');
-                              setTab('Home');
-                            }}
-                            style={{
-                              flex: 1, paddingVertical: 14, alignItems: 'center',
-                              backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
-                            }}
-                          >
-                            <MaterialCommunityIcons
-                              name="home-outline"
-                              size={24}
-                              color="#FF6B4A"
-                              style={{ fontWeight: '100' }}
+                          {/* Bottom nav - Hide when sub-screen is active */}
+                          {!subScreen && (
+                            <View style={{
+                              flexDirection: 'row',
+                              borderTopWidth: 1,
+                              borderTopColor: theme.colors.border,
+                              backgroundColor: theme.colors.white,
+                              paddingBottom: insets.bottom
+                            }}>
+                              {/* Home */}
+                              <Pressable
+                                onPress={() => {
+                                  logAction('Navigation', 'Home Tab');
+                                  setTab('Home');
+                                }}
+                                style={{
+                                  flex: 1, paddingVertical: 14, alignItems: 'center',
+                                  backgroundColor: tab === 'Home' ? '#FFE5DC' : theme.colors.white
+                                }}
+                              >
+                                <MaterialCommunityIcons
+                                  name="home-outline"
+                                  size={24}
+                                  color="#FF6B4A"
+                                  style={{ fontWeight: '100' }}
+                                />
+                              </Pressable>
+
+                              {/* Drop */}
+                              <Pressable
+                                onPress={() => {
+                                  logAction('Navigation', 'Drop Tab');
+                                  setTab('Drop');
+                                }}
+                                style={{
+                                  flex: 1, paddingVertical: 14, alignItems: 'center',
+                                  backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
+                                }}
+                              >
+                                <MaterialCommunityIcons
+                                  name="water-outline"
+                                  size={24}
+                                  color={theme.colors.blue}
+                                />
+                              </Pressable>
+
+                              {/* History */}
+                              <Pressable
+                                onPress={() => {
+                                  logAction('Navigation', 'History Tab');
+                                  setTab('History');
+                                }}
+                                style={{
+                                  flex: 1, paddingVertical: 14, alignItems: 'center',
+                                  backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
+                                }}
+                              >
+                                <MaterialCommunityIcons
+                                  name="link-variant"
+                                  size={24}
+                                  color="#FF6B4A"
+                                />
+                              </Pressable>
+
+                              {/* Account */}
+                              <Pressable
+                                onPress={() => {
+                                  logAction('Navigation', 'Account Tab');
+                                  setTab('Account');
+                                }}
+                                style={{
+                                  flex: 1, paddingVertical: 14, alignItems: 'center',
+                                  backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
+                                }}
+                              >
+                                <MaterialCommunityIcons
+                                  name="account-outline"
+                                  size={24}
+                                  color={theme.colors.blue}
+                                />
+                              </Pressable>
+                            </View>
+                          )}
+
+                          {/* Toast Notification */}
+                          {toastConfig && (
+                            <Toast
+                              message={toastConfig.message}
+                              type={toastConfig.type}
+                              duration={toastConfig.duration}
+                              actionLabel={toastConfig.actionLabel}
+                              onAction={toastConfig.onAction}
+                              onDismiss={() => setToastConfig(null)}
                             />
-                          </Pressable>
-
-                          {/* Drop */}
-                          <Pressable
-                            onPress={() => {
-                              logAction('Navigation', 'Drop Tab');
-                              setTab('Drop');
-                            }}
-                            style={{
-                              flex: 1, paddingVertical: 14, alignItems: 'center',
-                              backgroundColor: tab === 'Drop' ? theme.colors.blueLight : theme.colors.white
-                            }}
-                          >
-                            <MaterialCommunityIcons
-                              name="water-outline"
-                              size={24}
-                              color={theme.colors.blue}
-                            />
-                          </Pressable>
-
-                          {/* History */}
-                          <Pressable
-                            onPress={() => {
-                              logAction('Navigation', 'History Tab');
-                              setTab('History');
-                            }}
-                            style={{
-                              flex: 1, paddingVertical: 14, alignItems: 'center',
-                              backgroundColor: tab === 'History' ? '#FFE5DC' : theme.colors.white
-                            }}
-                          >
-                            <MaterialCommunityIcons
-                              name="link-variant"
-                              size={24}
-                              color="#FF6B4A"
-                            />
-                          </Pressable>
-
-                          {/* Account */}
-                          <Pressable
-                            onPress={() => {
-                              logAction('Navigation', 'Account Tab');
-                              setTab('Account');
-                            }}
-                            style={{
-                              flex: 1, paddingVertical: 14, alignItems: 'center',
-                              backgroundColor: tab === 'Account' ? theme.colors.blueLight : theme.colors.white
-                            }}
-                          >
-                            <MaterialCommunityIcons
-                              name="account-outline"
-                              size={24}
-                              color={theme.colors.blue}
-                            />
-                          </Pressable>
-                        </View>
-                      )}
-
-                      {/* Toast Notification */}
-                      {toastConfig && (
-                        <Toast
-                          message={toastConfig.message}
-                          type={toastConfig.type}
-                          duration={toastConfig.duration}
-                          actionLabel={toastConfig.actionLabel}
-                          onAction={toastConfig.onAction}
-                          onDismiss={() => setToastConfig(null)}
-                        />
-                        )}
+                          )}
                         </View>
                       </BLEAdvertisingContext.Provider>
                     </NativeBLEDevicesContext.Provider>
