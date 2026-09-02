@@ -7,12 +7,6 @@ import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyO
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 
-// Verification whitelist - these users bypass email verification during signup
-const VERIFICATION_WHITELIST = {
-  emails: ['caitie690@gmail.com'],
-  phones: ['7344317582', '+17344317582', '17344317582'],
-};
-
 interface SignupScreenProps {
   onSignupSuccess: (profileData?: { name: string; phone: string; bio: string }) => void;
   onLoginPress: () => void;
@@ -321,17 +315,11 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setError('');
     setBirthdayError('');
 
-    // Check if email is whitelisted - skip verification for whitelisted users
-    if (VERIFICATION_WHITELIST.emails.includes(email.toLowerCase().trim())) {
-      console.log('[EMAIL-VERIFY] Email is whitelisted, skipping verification:', email);
-      handleDirectSignup();
-    } else {
-      // Show email verification modal for non-whitelisted users
-      console.log('[EMAIL-VERIFY] Triggering verification modal for email:', email);
-      setShowVerificationModal(true);
-      setVerificationStep('confirm');
-      console.log('[EMAIL-VERIFY] verificationStep set to: confirm');
-    }
+    // Show email verification modal — all users must verify
+    console.log('[EMAIL-VERIFY] Triggering verification modal for email:', email);
+    setShowVerificationModal(true);
+    setVerificationStep('confirm');
+    console.log('[EMAIL-VERIFY] verificationStep set to: confirm');
   };
 
   const handleDirectSignup = async () => {
