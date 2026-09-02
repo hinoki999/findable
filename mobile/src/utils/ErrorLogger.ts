@@ -27,11 +27,8 @@ class ErrorLogger {
   private static instance: ErrorLogger;
   private userId?: string | number;
   private currentScreen?: string;
-  private backendUrl: string;
 
-  private constructor() {
-    this.backendUrl = ENV.BASE_URL;
-  }
+  private constructor() { }
 
   public static getInstance(): ErrorLogger {
     if (!ErrorLogger.instance) {

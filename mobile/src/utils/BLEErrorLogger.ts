@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-import { ENV } from '../config/environment';
 
 interface BLEError {
   errorType: 'initialization' | 'scan' | 'connection' | 'permission' | 'unknown';
@@ -22,11 +21,8 @@ interface BLEError {
 class BLEErrorLogger {
   private static instance: BLEErrorLogger;
   private userId?: string | number;
-  private backendUrl: string;
 
-  private constructor() {
-    this.backendUrl = ENV.BASE_URL;
-  }
+  private constructor() { }
 
   public static getInstance(): BLEErrorLogger {
     if (!BLEErrorLogger.instance) {

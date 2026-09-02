@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-import { ENV } from '../config/environment';
 
 interface PerformanceMetric {
   metricName: string;
@@ -18,12 +17,9 @@ class PerformanceLogger {
   private static instance: PerformanceLogger;
   private userId?: string | number;
   private currentScreen?: string;
-  private backendUrl: string;
   private timers: Map<string, number> = new Map();
 
-  private constructor() {
-    this.backendUrl = ENV.BASE_URL;
-  }
+  private constructor() { }
 
   public static getInstance(): PerformanceLogger {
     if (!PerformanceLogger.instance) {
