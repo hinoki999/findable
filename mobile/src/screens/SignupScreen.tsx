@@ -221,24 +221,22 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         return;
       }
 
-      // Check if user is at least 13 years old
+      // Check if user is at least 18 years old
       const birthDate = new Date(year, month - 1, day);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const monthDiff = today.getMonth() - birthDate.getMonth();
-
       // Adjust age if birthday hasn't occurred this year yet
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
-
-      if (age < 13) {
-        setBirthdayError('You must be 13 or older to use DropLink');
+      if (age < 18) {
+        setBirthdayError('You must be 18 or older to use DropLink');
       }
     }
   };
 
-  // Check if birthday is valid and user is 13+
+  // Check if birthday is valid and user is 18+
   const isBirthdayValid = () => {
     const digits = birthday.replace(/\D/g, '');
     if (digits.length !== 8) return false;
@@ -258,7 +256,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       age--;
     }
 
-    return age >= 13;
+    return age >= 18;
   };
 
   const handleSignup = () => {
@@ -315,7 +313,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
 
     if (!isBirthdayValid()) {
-      setBirthdayError('You must be 13 or older to use DropLink');
+      setBirthdayError('You must be 18 or older to use DropLink');
       return;
     }
 
@@ -1062,7 +1060,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               1. Agreement to Terms
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropLink, a product of HiRule Labs ("we," "us," or "our"), governing your access to and use of the DropLink mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropLink, you represent and warrant that you are at least 13 years of age. If you are under 13, you are not permitted to create an account or use the Application.
+              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropLink, a product of HiRule Labs ("we," "us," or "our"), governing your access to and use of the DropLink mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropLink, you represent and warrant that you are at least 18 years of age. If you are under 18, you are not permitted to create an account or use the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
