@@ -82,7 +82,20 @@ class ErrorLogger {
       };
 
       console.error('[ERROR-LOG]', payload);
-      // Remote logging disabled - Railway backend removed, no replacement configured
+      // Report to Sentry with full context
+      Sentry.captureException(error, {
+        tags: {
+          screen: errorData.screenName,
+        },
+        contexts: {
+          errorDetails: {
+            userId: errorData.userId,
+            deviceModel: errorData.deviceInfo.deviceModel,
+            appVersion: errorData.deviceInfo.appVersion,
+          },
+        },
+        extra: customData,
+      });
     } catch (loggingError) {
       // Silently fail - don't crash app while trying to log an error
       console.warn('Error in error logger:', loggingError);
