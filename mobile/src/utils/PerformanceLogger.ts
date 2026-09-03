@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import * as Sentry from '@sentry/react-native';
 
 interface PerformanceMetric {
   metricName: string;
@@ -91,6 +92,20 @@ class PerformanceLogger {
       // Warn if operation is slow
       if (durationMs > 3000) {
         console.warn(`WARNING: Slow operation detected: ${metricName} took ${durationMs}ms`);
+        Sentry.captureMessage(`Slow operation: ${metricName} took ${durationMs}ms`, {
+          level: 'warning',
+          tags: {
+            metricName,
+          },
+          contexts: {
+            performanceDetails: {
+              screenName: metric.screenName,
+              userId: metric.userId,
+              durationMs,
+            },
+          },
+          extra: additionalData,
+        });
       }
 
       // Remote logging disabled - Railway backend removed, no replacement configured
