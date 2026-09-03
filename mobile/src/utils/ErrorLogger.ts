@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import * as Sentry from '@sentry/react-native';
 
 interface ErrorData {
   message: string;
@@ -133,11 +134,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('🔴 Error Boundary caught error:', error);
     console.error('Error Info:', errorInfo);
-
-    // Log to backend
+    // Log locally
     errorLogger.logError(error, errorInfo);
+    // Report to Sentry
+    Sentry.captureException(error, {
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
+    });
   }
-
   render() {
     if (this.state.hasError && this.state.error) {
       // Render fallback UI if provided
