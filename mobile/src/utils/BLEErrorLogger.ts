@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
+import * as Sentry from '@sentry/react-native';
 
 interface BLEError {
   errorType: 'initialization' | 'scan' | 'connection' | 'permission' | 'unknown';
@@ -66,7 +67,20 @@ class BLEErrorLogger {
         console.error('Additional data:', additionalData);
       }
 
-      // Remote logging disabled - Railway backend removed, no replacement configured
+      // Report to Sentry
+      Sentry.captureMessage(`BLE Error [${errorType}]: ${errorMessage}`, {
+        level: 'error',
+        tags: {
+          bleErrorType: errorType,
+        },
+        contexts: {
+          bleErrorDetails: {
+            userId: errorData.userId,
+            deviceModel: errorData.deviceInfo.deviceModel,
+          },
+        },
+        extra: additionalData,
+      });
     } catch (error) {
       // Silently fail
       console.warn('Error in BLE error logger:', error);
