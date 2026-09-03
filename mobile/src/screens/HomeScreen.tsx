@@ -16,11 +16,6 @@ import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 import { supabase } from '../services/supabase';
 
-// Verification whitelist - these users bypass all verification gates
-const VERIFICATION_WHITELIST = {
-  emails: ['caitie690@gmail.com'],
-  phones: ['7344317582', '+17344317582', '17344317582'],
-};
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
 // Multi-dimensional tensor operations for spatial calculations
@@ -1546,8 +1541,8 @@ export default function HomeScreen() {
     console.log('[DROP-MODAL] Current state - incomingDrops.length:', (incomingDrops || []).length, 'showDrops:', showDrops);
 
     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
-    // Phone verification gate with whitelist bypass
-    // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
+    // Phone verification gate
+    // if (!phoneVerified) {
     //   showToast({ message: 'Verify your phone number to see your drops', type: 'info', duration: 3000 });
     //   navigateToTab('Account');
     //   return;
@@ -3722,9 +3717,9 @@ export default function HomeScreen() {
                     console.log('[DROP-DUPE] Guard check - selectedBlipDevice:', !!selectedBlipDevice, 'isSendingDrop:', isSendingDrop);
 
                     // TEMP DISABLED - RE-ENABLE AFTER DROP TESTING
-                    // Phone verification gate with whitelist bypass
-                    // if (!phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email)) {
-                    //   showToast({ message: 'Verify your phone number to send drops', type: 'info', duration: 3000 });
+                    // Phone verification gate
+                    // if (!phoneVerified) {
+                    //   showToast({ message: 'Verify your phone number to see your drops', type: 'info', duration: 3000 });
                     //   navigateToTab('Account');
                     //   return;
                     // }

@@ -7,7 +7,6 @@ import { logApiCall, logError } from './activityMonitor';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { supabase } from './supabase';
 
-export const BASE_URL = ENV.BASE_URL;
 const USE_STUB = false; // Connected to backend!
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const MAX_RETRIES = 3;

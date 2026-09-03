@@ -14,12 +14,6 @@ import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
 import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
 
-// Verification whitelist - these users bypass all verification gates
-const VERIFICATION_WHITELIST = {
-  emails: ['caitie690@gmail.com'],
-  phones: ['7344317582', '+17344317582', '17344317582'],
-};
-
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
   const parts = name.trim().split(' ');
@@ -388,7 +382,7 @@ export default function DropScreen() {
 
       {/* Phone Verification Banner with whitelist bypass */}
       {/* TEMP DISABLED - RE-ENABLE AFTER DROP TESTING */}
-      {false && !phoneVerified && !VERIFICATION_WHITELIST.phones.some(p => phone?.includes(p)) && !VERIFICATION_WHITELIST.emails.includes(email) ? (
+      {false && !phoneVerified ? (
         <View style={{
           flex: 1,
           justifyContent: 'center',

@@ -20,7 +20,7 @@ export default function EnvironmentBadge({ show = true }: EnvironmentBadgeProps)
       { backgroundColor: isDevelopment() ? '#FF9500' : '#34C759' }
     ]}>
       <Text style={styles.text}>
-        {ENV.NAME} • {ENV.BASE_URL.replace('https://', '').replace('http://', '')}
+        {ENV.NAME} • Supabase
       </Text>
     </View>
   );
