@@ -1080,6 +1080,10 @@ export default function HomeScreen() {
       return acc;
     }
 
+    // Skip devices involved in a block relationship (either direction)
+    if (device.userId && blockedUserIds.has(device.userId)) {
+      return acc;
+    }
     const existingIndex = acc.findIndex(d =>
       d.userId ? d.userId.toLowerCase().slice(0, 8) === dedupeKey : false
     );
