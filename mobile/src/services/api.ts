@@ -1883,3 +1883,38 @@ export async function getBlockedUserIds(): Promise<Set<string>> {
     return new Set();
   }
 }
+export type ReportReason = 'harassment' | 'inappropriate_content' | 'spam' | 'fake_profile' | 'other';
+
+export async function reportUser(reportedUserId: string, reason: ReportReason, details?: string): Promise<void> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    if (!reportedUserId) {
+      throw new Error('Invalid user to report');
+    }
+
+    const reasonText = details ? `${reason}: ${details}` : reason;
+
+    const { error } = await supabase
+      .from('reports')
+      .insert({
+        reporter_id: session.user.id,
+        reported_id: reportedUserId,
+        reason: reasonText,
+      });
+
+    if (error) {
+      console.error('[REPORTS] Failed to submit report:', error);
+      throw new Error('Failed to submit report. Please try again.');
+    }
+
+    console.log('[REPORTS] SUCCESS: Reported user:', reportedUserId);
+  } catch (error: any) {
+    console.error('[REPORTS] Report user error:', error);
+    throw new Error(error.message || 'Failed to submit report. Please try again.');
+  }
+}
