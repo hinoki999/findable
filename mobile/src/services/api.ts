@@ -1745,3 +1745,98 @@ export const savePushToken = async (token: string): Promise<void> => {
     .eq('user_id', user.id);
   console.log('[PUSH-DEBUG] Supabase update result - error:', updateError ? updateError.message : 'none (success)');
 };
+
+// ==================== BLOCKING ====================
+
+export async function blockUser(blockedUserId: string): Promise<void> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    if (!blockedUserId) {
+      throw new Error('Invalid user to block');
+    }
+
+    const { error } = await supabase
+      .from('blocks')
+      .insert({
+        blocker_id: session.user.id,
+        blocked_id: blockedUserId,
+      });
+
+    if (error) {
+      console.error('[BLOCKS] Failed to block user:', error);
+      throw new Error('Failed to block user. Please try again.');
+    }
+
+    console.log('[BLOCKS] SUCCESS: Blocked user:', blockedUserId);
+  } catch (error: any) {
+    console.error('[BLOCKS] Block user error:', error);
+    throw new Error(error.message || 'Failed to block user. Please try again.');
+  }
+}
+
+export async function unblockUser(blockedUserId: string): Promise<void> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const { error } = await supabase
+      .from('blocks')
+      .delete()
+      .eq('blocker_id', session.user.id)
+      .eq('blocked_id', blockedUserId);
+
+    if (error) {
+      console.error('[BLOCKS] Failed to unblock user:', error);
+      throw new Error('Failed to unblock user. Please try again.');
+    }
+
+    console.log('[BLOCKS] SUCCESS: Unblocked user:', blockedUserId);
+  } catch (error: any) {
+    console.error('[BLOCKS] Unblock user error:', error);
+    throw new Error(error.message || 'Failed to unblock user. Please try again.');
+  }
+}
+
+export interface BlockedUser {
+  id: string;
+  blockedUserId: string;
+  createdAt: Date;
+}
+
+export async function getBlockedUsers(): Promise<BlockedUser[]> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const { data, error } = await supabase
+      .from('blocks')
+      .select('id, blocked_id, created_at')
+      .eq('blocker_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[BLOCKS] Failed to fetch blocked users:', error);
+      throw new Error('Failed to load blocked users.');
+    }
+
+    return (data || []).map(row => ({
+      id: row.id,
+      blockedUserId: row.blocked_id,
+      createdAt: new Date(row.created_at),
+    }));
+  } catch (error: any) {
+    console.error('[BLOCKS] Get blocked users error:', error);
+    throw new Error(error.message || 'Failed to load blocked users.');
+  }
+}
