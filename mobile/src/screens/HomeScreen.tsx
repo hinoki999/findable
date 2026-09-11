@@ -955,20 +955,39 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [userId]);
 
-  // Fetch blocked user relationships (either direction) for radar/drop filtering
+  // Fetch blocked user relationships (either direction) for radar/drop filtering,
+  // then stay in sync via Realtime instead of polling.
   useEffect(() => {
     if (!userId) return;
+
     const fetchBlockedUserIds = async () => {
       try {
         const ids = await getBlockedUserIds();
         setBlockedUserIds(ids);
       } catch (error) {
-        // Silent fail - will retry on next interval
+        // Silent fail - will retry on next relevant change
       }
     };
+
     fetchBlockedUserIds();
-    const interval = setInterval(fetchBlockedUserIds, 10000);
-    return () => clearInterval(interval);
+
+    const channel = supabase
+      .channel('blocks-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'blocks', filter: `blocker_id=eq.${userId}` },
+        () => fetchBlockedUserIds()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'blocks', filter: `blocked_id=eq.${userId}` },
+        () => fetchBlockedUserIds()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = (linkNotifications || []).filter(notif => !notif.viewed && !notif.dismissed);
