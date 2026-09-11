@@ -408,6 +408,7 @@ export interface Link {
   dropId: string;
   createdAt: Date;
   // Contact info for the other user (fetched separately or joined)
+  otherUserId: string;
   otherUserName?: string;
   otherUserUsername?: string;
   otherUserEmail?: string;
@@ -475,6 +476,7 @@ function mapLinkFromDb(l: any, currentUserId: string, receiverProfiles?: Map<str
     userId2: l.user_id_2,
     dropId: l.drop_id,
     createdAt: new Date(l.created_at),
+    otherUserId: isCurrentUserTheSender ? l.user_id_2 : l.user_id_1,
     // Contact info - from receiver profile if sender, from drop sender fields if receiver
     otherUserName,
     otherUserUsername,
