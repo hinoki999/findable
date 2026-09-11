@@ -568,6 +568,19 @@ export async function sendDrop(
       throw new Error('You are already linked with this person');
     }
 
+    // Check if either user has blocked the other
+    const { data: blockRow, error: blockCheckError } = await supabase
+      .from('blocks')
+      .select('id')
+      .or(`and(blocker_id.eq.${senderId},blocked_id.eq.${receiverId}),and(blocker_id.eq.${receiverId},blocked_id.eq.${senderId})`)
+      .maybeSingle();
+
+    if (blockCheckError) {
+      console.error('[DROPS] Error checking blocks:', blockCheckError);
+    } else if (blockRow) {
+      throw new Error('Unable to send drop to this user');
+    }
+
     // Check for a mutual drop: has the receiver already dropped the current user?
     // If so, auto-create a link instead of sending a new drop.
     const { data: reverseDrop, error: reverseDropError } = await supabase
@@ -1838,5 +1851,35 @@ export async function getBlockedUsers(): Promise<BlockedUser[]> {
   } catch (error: any) {
     console.error('[BLOCKS] Get blocked users error:', error);
     throw new Error(error.message || 'Failed to load blocked users.');
+  }
+}
+export async function getBlockedUserIds(): Promise<Set<string>> {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      return new Set();
+    }
+
+    const { data, error } = await supabase
+      .from('blocks')
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${session.user.id},blocked_id.eq.${session.user.id}`);
+
+    if (error) {
+      console.error('[BLOCKS] Failed to fetch block relationships:', error);
+      return new Set();
+    }
+
+    const ids = new Set<string>();
+    (data || []).forEach(row => {
+      if (row.blocker_id === session.user.id) ids.add(row.blocked_id);
+      if (row.blocked_id === session.user.id) ids.add(row.blocker_id);
+    });
+
+    return ids;
+  } catch (error) {
+    console.error('[BLOCKS] Get blocked user IDs error:', error);
+    return new Set();
   }
 }
