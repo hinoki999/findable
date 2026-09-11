@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop, Link } from '../services/api';
+import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop, Link, blockUser, reportUser, ReportReason } from '../services/api';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +48,9 @@ export default function HistoryScreen() {
   const [selectedContact, setSelectedContact] = useState<Link | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showBlockReportModal, setShowBlockReportModal] = useState(false);
+  const [blockReportMode, setBlockReportMode] = useState<'choose' | 'report'>('choose');
+  const [selectedReportReason, setSelectedReportReason] = useState<ReportReason | null>(null);
   const [itemToDelete, setItemToDelete] = useState<Link | null>(null);
   const lastDeletedItemRef = useRef<Link | null>(null); // Using ref to avoid closure issues
   const { isDarkMode } = useDarkMode();
@@ -619,6 +622,20 @@ export default function HistoryScreen() {
                 </View>
               )}
 
+              {/* Block/Report Action */}
+              <Pressable
+                onPress={() => setShowBlockReportModal(true)}
+                style={{
+                  paddingVertical: 10,
+                  alignItems: 'center',
+                  marginBottom: 8,
+                }}
+              >
+                <Text style={{ color: theme.colors.muted, fontSize: 13, textDecorationLine: 'underline' }}>
+                  Block or Report User
+                </Text>
+              </Pressable>
+
               {/* Close Button */}
               <Pressable
                 onPress={closeContactModal}
@@ -635,6 +652,125 @@ export default function HistoryScreen() {
                 </Text>
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Block/Report Modal */}
+      <Modal
+        visible={showBlockReportModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowBlockReportModal(false);
+          setBlockReportMode('choose');
+          setSelectedReportReason(null);
+        }}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 20
+        }}>
+          <View style={[theme.card, { width: '100%', maxWidth: 300, padding: 20 }]}>
+            {blockReportMode === 'choose' ? (
+              <>
+                <Text style={[theme.type.h2, { fontSize: 16, textAlign: 'center', marginBottom: 16 }]}>
+                  Block or Report
+                </Text>
+
+                <Pressable
+                  onPress={async () => {
+                    if (!selectedContact?.otherUserId) return;
+                    try {
+                      await blockUser(selectedContact.otherUserId);
+                      setShowBlockReportModal(false);
+                      setBlockReportMode('choose');
+                      closeContactModal();
+                    } catch (err) {
+                      console.error('[BLOCKS] Failed to block from HistoryScreen:', err);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: '#FF6B4A',
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={[theme.type.button, { fontSize: 14 }]}>Block This User</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setBlockReportMode('report')}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: theme.colors.text, fontSize: 14 }}>Report This User</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setShowBlockReportModal(false);
+                    setBlockReportMode('choose');
+                  }}
+                  style={{ paddingVertical: 10, alignItems: 'center' }}
+                >
+                  <Text style={{ color: theme.colors.muted, fontSize: 13 }}>Cancel</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[theme.type.h2, { fontSize: 16, textAlign: 'center', marginBottom: 16 }]}>
+                  Why are you reporting this user?
+                </Text>
+
+                {(['harassment', 'inappropriate_content', 'spam', 'fake_profile', 'other'] as ReportReason[]).map((reason) => (
+                  <Pressable
+                    key={reason}
+                    onPress={async () => {
+                      if (!selectedContact?.otherUserId) return;
+                      try {
+                        await reportUser(selectedContact.otherUserId, reason);
+                        setShowBlockReportModal(false);
+                        setBlockReportMode('choose');
+                        closeContactModal();
+                      } catch (err) {
+                        console.error('[REPORTS] Failed to report from HistoryScreen:', err);
+                      }
+                    }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text style={{ color: theme.colors.text, fontSize: 13 }}>
+                      {reason.replace('_', ' ')}
+                    </Text>
+                  </Pressable>
+                ))}
+
+                <Pressable
+                  onPress={() => setBlockReportMode('choose')}
+                  style={{ paddingVertical: 10, alignItems: 'center' }}
+                >
+                  <Text style={{ color: theme.colors.muted, fontSize: 13 }}>Back</Text>
+                </Pressable>
+              </>
+            )}
           </View>
         </View>
       </Modal>
