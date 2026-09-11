@@ -7,7 +7,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useBLEAdvertising } from '../../App';
 import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed, getBlockedUserIds } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -627,6 +627,7 @@ export default function HomeScreen() {
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set()); // Blocked users (either direction) for radar/drop filtering
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
   const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
   const [showReturnLinkModal, setShowReturnLinkModal] = useState(false);
@@ -954,6 +955,21 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // Fetch blocked user relationships (either direction) for radar/drop filtering
+  useEffect(() => {
+    if (!userId) return;
+    const fetchBlockedUserIds = async () => {
+      try {
+        const ids = await getBlockedUserIds();
+        setBlockedUserIds(ids);
+      } catch (error) {
+        // Silent fail - will retry on next interval
+      }
+    };
+    fetchBlockedUserIds();
+    const interval = setInterval(fetchBlockedUserIds, 10000);
+    return () => clearInterval(interval);
+  }, [userId]);
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = (linkNotifications || []).filter(notif => !notif.viewed && !notif.dismissed);
   const hasUnviewedLinks = (unviewedLinksFromContext || []).length > 0 || (unviewedLinksFromDb || []).length > 0;
