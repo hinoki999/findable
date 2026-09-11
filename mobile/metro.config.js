@@ -37,6 +37,5 @@ config.resolver = {
   assetExts: config.resolver.assetExts.filter(ext => ext !== 'svg'),
 };
 
-const { withSentryConfig } = require('@sentry/react-native/metro');
-module.exports = withSentryConfig(config);
+module.exports = config;
 
