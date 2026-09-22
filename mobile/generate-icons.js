@@ -153,7 +153,7 @@ function generateIcon(filename, withPadding = false) {
 }
 
 console.log('');
-console.log('Generating DropLink app icons...');
+console.log('Generating DropShake app icons...');
 console.log('');
 console.log('Configuration:');
 console.log(`  Background: ${BG_COLOR}`);
