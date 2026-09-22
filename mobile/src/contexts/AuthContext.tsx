@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('[AUTH-CONTEXT-TRACE] Creating real Supabase user for deviceId:', deviceId);
           
           // Generate email from deviceId
-          const email = `test-${deviceId}@droplink.test`;
+          const email = `test-${deviceId}@dropshake.test`;
           const password = `Test${deviceId}123!`; // Simple password for test users
           
           // Create auth user in Supabase
@@ -252,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // For bypass mode, use the same logic as initialization
       // This ensures we get/create the same user
       const deviceId = await getOrCreateDeviceUniqueId();
-      const testEmail = `test-${deviceId}@droplink.test`;
+      const testEmail = `test-${deviceId}@dropshake.test`;
       const testPassword = `Test${deviceId}123!`;
       
       try {
@@ -407,7 +407,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (AUTH_BYPASS_ENABLED) {
       // For bypass mode, re-run the initialization logic
       const deviceId = await getOrCreateDeviceUniqueId();
-      const testEmail = `test-${deviceId}@droplink.test`;
+      const testEmail = `test-${deviceId}@dropshake.test`;
       const testPassword = `Test${deviceId}123!`;
       
       try {

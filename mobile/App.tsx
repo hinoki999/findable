@@ -811,7 +811,7 @@ function MainApp() {
     console.log('✅ [App] Navigation complete - HomeScreen should mount now');
 
     showToast({
-      message: 'Welcome to DropLink!',
+      message: 'Welcome to DROPSHAKE!',
       type: 'success',
       duration: 3000,
     });
