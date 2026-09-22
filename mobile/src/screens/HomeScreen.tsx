@@ -7,7 +7,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useBLEAdvertising } from '../../App';
 import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed, getBlockedUserIds, blockUser, reportUser, ReportReason } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed, getBlockedUserIds } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
@@ -625,9 +625,6 @@ export default function HomeScreen() {
   const [showDrops, setShowDrops] = useState(false);
   const [selectedContactCard, setSelectedContactCard] = useState<any>(null);
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
-  const [showDropBlockReportModal, setShowDropBlockReportModal] = useState(false);
-  const [dropToBlockReport, setDropToBlockReport] = useState<Drop | null>(null);
-  const [dropBlockReportMode, setDropBlockReportMode] = useState<'choose' | 'report'>('choose');
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set()); // Blocked users (either direction) for radar/drop filtering
@@ -999,7 +996,7 @@ export default function HomeScreen() {
   // Tutorial steps for Home screen
   const tutorialSteps = [
     {
-      message: 'Welcome to DROPSHAKE! This is your home screen.',
+      message: 'Welcome to DropShake! This is your home screen.',
       position: {
         top: screenHeight * 0.35,
         left: 30,
@@ -1053,22 +1050,22 @@ export default function HomeScreen() {
   // Use devices directly from react-native-ble-plx (pre-populated by background scan on mount)
   const mergedDevices = devices;
 
-  // Filter devices: DROPSHAKE devices only (has DROPSHAKE Service UUID)
-  // Manufacturer data provides user identity, Service UUID identifies DROPSHAKE devices
+  // Filter devices: DropShake devices only (has DropShake Service UUID)
+  // Manufacturer data provides user identity, Service UUID identifies DropShake devices
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
-  const normalizedDROPSHAKEUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
+  const normalizedDropShakeUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
 
-  const DROPSHAKEDevices = mergedDevices.filter(device => {
-    // Filter by DROPSHAKE Service UUID only
+  const dropLinkDevices = mergedDevices.filter(device => {
+    // Filter by DropShake Service UUID only
     if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
       return device.serviceUUIDs.some(
-        uuid => normalizeUUID(uuid) === normalizedDROPSHAKEUUID
+        uuid => normalizeUUID(uuid) === normalizedDropShakeUUID
       );
     }
     return false;
   });
 
-  const filteredDevices = DROPSHAKEDevices.filter(device => device.distanceFeet <= maxDistance);
+  const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
 
   // Deduplicate by username (or userId as fallback) - keep the one with strongest RSSI
   // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
@@ -1134,9 +1131,9 @@ export default function HomeScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'DROPSHAKE:', (DROPSHAKEDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
     console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify((deduplicatedDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, DROPSHAKEDevices, filteredDevices, deduplicatedDevices]);
+  }, [devices, dropLinkDevices, filteredDevices, deduplicatedDevices]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {
@@ -2987,22 +2984,10 @@ export default function HomeScreen() {
                                 </Text>
                               </Pressable>
                             </View>
-
-                            {/* Block/Report Action */}
-                            <Pressable
-                              onPress={() => {
-                                setDropToBlockReport(drop);
-                                setShowDropBlockReportModal(true);
-                              }}
-                              style={{ paddingVertical: 8, alignItems: 'center', marginTop: 4 }}
-                            >
-                              <Text style={{ color: theme.colors.muted, fontSize: 12, textDecorationLine: 'underline' }}>
-                                Block or Report
-                              </Text>
-                            </Pressable>
                           </View>
                         </View>
                       ))}
+
                       {/* New Links Section */}
                       {(unviewedLinksFromDb || []).length > 0 && (
                         <View style={{ marginTop: (incomingDrops || []).length > 0 ? 20 : 0 }}>
@@ -3624,126 +3609,6 @@ export default function HomeScreen() {
           </View>
         </Modal>
 
-        {/* Drop Block/Report Modal */}
-        <Modal
-          visible={showDropBlockReportModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => {
-            setShowDropBlockReportModal(false);
-            setDropBlockReportMode('choose');
-            setDropToBlockReport(null);
-          }}
-        >
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20
-          }}>
-            <View style={[theme.card, { width: '100%', maxWidth: 300, padding: 20 }]}>
-              {dropBlockReportMode === 'choose' ? (
-                <>
-                  <Text style={[theme.type.h2, { fontSize: 16, textAlign: 'center', marginBottom: 16 }]}>
-                    Block or Report
-                  </Text>
-
-                  <Pressable
-                    onPress={async () => {
-                      if (!dropToBlockReport?.senderId) return;
-                      try {
-                        await blockUser(dropToBlockReport.senderId);
-                        setShowDropBlockReportModal(false);
-                        setDropBlockReportMode('choose');
-                        setDropToBlockReport(null);
-                      } catch (err) {
-                        console.error('[BLOCKS] Failed to block from HomeScreen drop:', err);
-                      }
-                    }}
-                    style={{
-                      backgroundColor: '#FF6B4A',
-                      paddingVertical: 12,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                      marginBottom: 10,
-                    }}
-                  >
-                    <Text style={[theme.type.button, { fontSize: 14 }]}>Block This User</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => setDropBlockReportMode('report')}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                      paddingVertical: 12,
-                      borderRadius: 8,
-                      alignItems: 'center',
-                      marginBottom: 10,
-                    }}
-                  >
-                    <Text style={{ color: theme.colors.text, fontSize: 14 }}>Report This User</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => {
-                      setShowDropBlockReportModal(false);
-                      setDropBlockReportMode('choose');
-                      setDropToBlockReport(null);
-                    }}
-                    style={{ paddingVertical: 10, alignItems: 'center' }}
-                  >
-                    <Text style={{ color: theme.colors.muted, fontSize: 13 }}>Cancel</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Text style={[theme.type.h2, { fontSize: 16, textAlign: 'center', marginBottom: 16 }]}>
-                    Why are you reporting this user?
-                  </Text>
-
-                  {(['harassment', 'inappropriate_content', 'spam', 'fake_profile', 'other'] as ReportReason[]).map((reason) => (
-                    <Pressable
-                      key={reason}
-                      onPress={async () => {
-                        if (!dropToBlockReport?.senderId) return;
-                        try {
-                          await reportUser(dropToBlockReport.senderId, reason);
-                          setShowDropBlockReportModal(false);
-                          setDropBlockReportMode('choose');
-                          setDropToBlockReport(null);
-                        } catch (err) {
-                          console.error('[REPORTS] Failed to report from HomeScreen drop:', err);
-                        }
-                      }}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        alignItems: 'center',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <Text style={{ color: theme.colors.text, fontSize: 13 }}>
-                        {reason.replace('_', ' ')}
-                      </Text>
-                    </Pressable>
-                  ))}
-
-                  <Pressable
-                    onPress={() => setDropBlockReportMode('choose')}
-                    style={{ paddingVertical: 10, alignItems: 'center' }}
-                  >
-                    <Text style={{ color: theme.colors.muted, fontSize: 13 }}>Back</Text>
-                  </Pressable>
-                </>
-              )}
-            </View>
-          </View>
-
-        </Modal>
         {/* Blip Device Modal - Execute Drop */}
         <Modal
           visible={showBlipModal}

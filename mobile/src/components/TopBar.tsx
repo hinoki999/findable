@@ -35,7 +35,7 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
       <View style={{ alignItems: 'center', flexDirection: 'column', gap: 2 }}>
         {logoMode ? (
           <>
-            {/* DROPSHAKE Logo with Gradient Effect */}
+            {/* DropShake Logo with Gradient Effect */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 {/* D - Full orange */}

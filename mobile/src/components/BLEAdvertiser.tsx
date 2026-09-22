@@ -53,7 +53,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
 
   // localName is no longer used for device identification (manufacturer data is used instead)
   // Keep for display/logging purposes only
-  const localName = `DROPSHAKE-${deviceId}`;
+  const localName = `DropShake-${deviceId}`;
 
   // ========== USER ID TRACING ==========
   // Log userId immediately when component mounts/updates
@@ -266,7 +266,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       // Use first 8 characters of userId as deviceId
       const calculatedDeviceId = userId.substring(0, 8);
       // localName is no longer used for device identification (manufacturer data is used instead)
-      const currentLocalName = `DROPSHAKE-${calculatedDeviceId}`;
+      const currentLocalName = `DropShake-${calculatedDeviceId}`;
 
       console.log('[BLE-ADV-DIAG] Step 2: Starting native BLE advertising...');
       console.log('[BLE-ADV-DIAG] UserId:', userId);

@@ -264,7 +264,7 @@ export default function ProfilePhotoScreen({ navigation, onPhotoSaved }: Profile
         <View style={styles.centeredContent}>
           <MaterialCommunityIcons name="image-multiple" size={80} color={theme.colors.blue} style={{ marginBottom: 24 }} />
           <Text style={[theme.type.h1, { fontSize: 22, marginBottom: 12, textAlign: 'center' }]}>
-            Allow DROPSHAKE to access your photos?
+            Allow DropShake to access your photos?
           </Text>
           <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', marginBottom: 40, paddingHorizontal: 40 }]}>
             We need permission to access your photos and camera to set your profile photo.

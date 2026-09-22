@@ -225,7 +225,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         age--;
       }
       if (age < 18) {
-        setBirthdayError('You must be 18 or older to use DROPSHAKE');
+        setBirthdayError('You must be 18 or older to use DropShake');
       }
     }
   };
@@ -307,7 +307,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
 
     if (!isBirthdayValid()) {
-      setBirthdayError('You must be 18 or older to use DROPSHAKE');
+      setBirthdayError('You must be 18 or older to use DropShake');
       return;
     }
 
@@ -1048,35 +1048,35 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               1. Agreement to Terms
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DROPSHAKE, a product of HiRule Labs ("we," "us," or "our"), governing your access to and use of the DROPSHAKE mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DROPSHAKE, you represent and warrant that you are at least 18 years of age. If you are under 18, you are not permitted to create an account or use the Application.
+              These Terms and Conditions ("Agreement") constitute a legally binding agreement between you ("User") and DropShake, a product of HiRule Labs ("we," "us," or "our"), governing your access to and use of the DropShake mobile application ("Application"). By creating an account, downloading, or otherwise accessing the Application, you acknowledge that you have read, understood, and agree to be bound by this Agreement in its entirety. If you do not agree to these terms, you must immediately discontinue use of the Application. By using DropShake, you represent and warrant that you are at least 18 years of age. If you are under 18, you are not permitted to create an account or use the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               2. License to Use
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              Subject to your compliance with this Agreement, DROPSHAKE grants you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to download and use the Application solely for your personal, non-commercial use. This license does not constitute a transfer of title or ownership in the Application or any component thereof. DROPSHAKE reserves all rights not expressly granted herein.
+              Subject to your compliance with this Agreement, DropShake grants you a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to download and use the Application solely for your personal, non-commercial use. This license does not constitute a transfer of title or ownership in the Application or any component thereof. DropShake reserves all rights not expressly granted herein.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               3. Account Registration & Security
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              To access certain features of the Application, you must register for an account. You agree to provide accurate, current, and complete information during the registration process and to update such information as necessary to maintain its accuracy. You are solely responsible for safeguarding your account credentials and for all activity that occurs under your account. You agree to notify DROPSHAKE immediately of any unauthorized use of your account. DROPSHAKE shall not be liable for any loss or damage arising from your failure to maintain the security of your account credentials. One account per individual is permitted.
+              To access certain features of the Application, you must register for an account. You agree to provide accurate, current, and complete information during the registration process and to update such information as necessary to maintain its accuracy. You are solely responsible for safeguarding your account credentials and for all activity that occurs under your account. You agree to notify DropShake immediately of any unauthorized use of your account. DropShake shall not be liable for any loss or damage arising from your failure to maintain the security of your account credentials. One account per individual is permitted.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               4. SMS Communications & Phone Verification
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              By submitting your phone number for verification within the Application, you expressly consent to receive SMS messages from DROPSHAKE for the purpose of identity and account verification. You acknowledge that message frequency will not exceed one (1) verification code per verification request, and that standard message and data rates may apply depending on your carrier and service plan. By providing your email address during registration, you expressly consent to receive a one-time verification code via email for the purpose of confirming your identity and activating your account.
+              By submitting your phone number for verification within the Application, you expressly consent to receive SMS messages from DropShake for the purpose of identity and account verification. You acknowledge that message frequency will not exceed one (1) verification code per verification request, and that standard message and data rates may apply depending on your carrier and service plan. By providing your email address during registration, you expressly consent to receive a one-time verification code via email for the purpose of confirming your identity and activating your account.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               5. Location Data & GPS
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              By using the Application, you expressly consent to DROPSHAKE's collection, use, and transmission of location data, including GPS-derived location information, for the purpose of enabling proximity-based features within the Application. DROPSHAKE may use your location data to detect nearby users, facilitate drops, and improve Application functionality. Your location data will not be sold to third parties. You may withdraw consent to location access at any time through your device settings, with the understanding that doing so may limit or disable core features of the Application.
+              By using the Application, you expressly consent to DropShake's collection, use, and transmission of location data, including GPS-derived location information, for the purpose of enabling proximity-based features within the Application. DropShake may use your location data to detect nearby users, facilitate drops, and improve Application functionality. Your location data will not be sold to third parties. You may withdraw consent to location access at any time through your device settings, with the understanding that doing so may limit or disable core features of the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
@@ -1108,63 +1108,63 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               • Use the Application in any manner that could damage, disable, or impair the Application or interfere with any other user's access to or use of the Application.
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              DROPSHAKE reserves the right to suspend or permanently terminate any account found to be in violation of this section without prior notice.
+              DropShake reserves the right to suspend or permanently terminate any account found to be in violation of this section without prior notice.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               8. User-Generated Content & Contact Information Sharing
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              When initiating a drop, you retain full control over which personal contact information you elect to share. By transmitting a drop, you grant the recipient a limited right to retain and use the contact information you have chosen to share. DROPSHAKE is not a party to any interaction between users and assumes no responsibility or liability for the manner in which users utilize shared contact information following the acceptance of a drop. You agree not to include false, misleading, or third-party contact information in any drop without authorization.
+              When initiating a drop, you retain full control over which personal contact information you elect to share. By transmitting a drop, you grant the recipient a limited right to retain and use the contact information you have chosen to share. DropShake is not a party to any interaction between users and assumes no responsibility or liability for the manner in which users utilize shared contact information following the acceptance of a drop. You agree not to include false, misleading, or third-party contact information in any drop without authorization.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               9. Intellectual Property
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              The Application, including its software, design, graphics, user interface, and all associated branding and trademarks, is the exclusive property of DROPSHAKE and is protected by applicable intellectual property laws. Nothing in this Agreement shall be construed as granting you any right, title, or interest in any DROPSHAKE intellectual property. Unauthorized reproduction, modification, distribution, or commercial exploitation of the Application is strictly prohibited without the prior written consent of DROPSHAKE.
+              The Application, including its software, design, graphics, user interface, and all associated branding and trademarks, is the exclusive property of DropShake and is protected by applicable intellectual property laws. Nothing in this Agreement shall be construed as granting you any right, title, or interest in any DropShake intellectual property. Unauthorized reproduction, modification, distribution, or commercial exploitation of the Application is strictly prohibited without the prior written consent of DropShake.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               10. Disclaimer of Warranties
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              The Application is provided on an "as is" and "as available" basis without warranties of any kind, either express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement. DROPSHAKE does not warrant that the Application will be uninterrupted, error-free, or free of harmful components, or that any defects will be corrected.
+              The Application is provided on an "as is" and "as available" basis without warranties of any kind, either express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, and non-infringement. DropShake does not warrant that the Application will be uninterrupted, error-free, or free of harmful components, or that any defects will be corrected.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               11. Limitation of Liability
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              To the maximum extent permitted by applicable law, DROPSHAKE and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your access to or use of, or inability to access or use, the Application, including but not limited to loss of data, unauthorized access to your account, or interactions with other users, regardless of whether such damages were foreseeable or whether DROPSHAKE was advised of the possibility of such damages.
+              To the maximum extent permitted by applicable law, DropShake and its officers, directors, employees, and agents shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your access to or use of, or inability to access or use, the Application, including but not limited to loss of data, unauthorized access to your account, or interactions with other users, regardless of whether such damages were foreseeable or whether DropShake was advised of the possibility of such damages.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               12. Indemnification
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              You agree to indemnify, defend, and hold harmless DROPSHAKE and its officers, directors, employees, and agents from and against any and all claims, liabilities, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Application, your violation of this Agreement, or your violation of any rights of another user.
+              You agree to indemnify, defend, and hold harmless DropShake and its officers, directors, employees, and agents from and against any and all claims, liabilities, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or related to your use of the Application, your violation of this Agreement, or your violation of any rights of another user.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               13. Termination
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              DROPSHAKE reserves the right to suspend or terminate your access to the Application at any time, with or without cause, and with or without notice, without liability to you. Upon termination, all licenses granted under this Agreement shall immediately cease. Provisions of this Agreement that by their nature should survive termination shall survive, including ownership provisions, warranty disclaimers, indemnification, and limitations of liability.
+              DropShake reserves the right to suspend or terminate your access to the Application at any time, with or without cause, and with or without notice, without liability to you. Upon termination, all licenses granted under this Agreement shall immediately cease. Provisions of this Agreement that by their nature should survive termination shall survive, including ownership provisions, warranty disclaimers, indemnification, and limitations of liability.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               14. Modifications to This Agreement
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              DROPSHAKE reserves the right to modify or update this Agreement at any time. When changes are made, DROPSHAKE will notify you through the Application and the "Last Updated" date at the top of this Agreement will be updated. You will be required to review and accept the revised Agreement before continuing to use the Application. If you do not agree to the revised terms, you must discontinue use of the Application.
+              DropShake reserves the right to modify or update this Agreement at any time. When changes are made, DropShake will notify you through the Application and the "Last Updated" date at the top of this Agreement will be updated. You will be required to review and accept the revised Agreement before continuing to use the Application. If you do not agree to the revised terms, you must discontinue use of the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               15. Contact Information
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 24, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              For legal inquiries, support requests, or questions regarding this Agreement, please contact DROPSHAKE at: link@hirulelabs.com
+              For legal inquiries, support requests, or questions regarding this Agreement, please contact DropShake at: link@hirulelabs.com
             </Text>
 
             <Text style={{ fontSize: 12, color: theme.colors.muted, textAlign: 'center', marginBottom: 40, fontFamily: 'Inter_400Regular' }}>

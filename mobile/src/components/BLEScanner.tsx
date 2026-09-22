@@ -4,7 +4,7 @@ import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 let permissionsGranted = false;
-const BLE_PERMISSIONS_KEY = '@DROPSHAKE_ble_permissions_granted';
+const BLE_PERMISSIONS_KEY = '@dropshake_ble_permissions_granted';
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -22,7 +22,7 @@ import { supabase } from '../services/supabase';
  * Decode base64 manufacturer data and extract userId prefix
  * Uses atob() which is natively available in React Native
  * @param manufacturerData - Base64 encoded manufacturer data from BLE scan
- * @returns userId prefix string or null if not DROPSHAKE device
+ * @returns userId prefix string or null if not DropShake device
  */
 const extractUserIdFromManufacturerData = (manufacturerData: string | null): string | null => {
   if (!manufacturerData) return null;
@@ -69,7 +69,7 @@ export interface BleDevice {
   distanceFeet: number;
   bio?: string;
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
-  username?: string; // DROPSHAKE username from Supabase lookup
+  username?: string; // DropShake username from Supabase lookup
   userId?: string; // User ID from Supabase lookup (for sending drops)
   lastSeen?: number; // Timestamp (Date.now()) when device was last heard
 }
@@ -77,7 +77,7 @@ export interface BleDevice {
 export interface RecentScanEntry {
   name: string | null;
   id: string;
-  hasDROPSHAKEUUID: boolean;
+  hasDropShakeUUID: boolean;
 }
 
 interface UseBLEScannerReturn {
@@ -302,12 +302,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[BLE-ID] RAW BLE detection - device:', JSON.stringify({ id: device.id, name: device.name, rssi: device.rssi, serviceUUIDs: device.serviceUUIDs }, null, 2));
           setDevicesScanned(prev => prev + 1);
 
-          // Check if device has DROPSHAKE Service UUID (for recent scans tracking)
-          let hasDROPSHAKEUUID = false;
+          // Check if device has DropShake Service UUID (for recent scans tracking)
+          let hasDropShakeUUID = false;
           if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-            const normalizedDROPSHAKEUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
-            hasDROPSHAKEUUID = device.serviceUUIDs.some(
-              uuid => normalizeUUID(uuid) === normalizedDROPSHAKEUUID
+            const normalizedDropShakeUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
+            hasDropShakeUUID = device.serviceUUIDs.some(
+              uuid => normalizeUUID(uuid) === normalizedDropShakeUUID
             );
           }
 
@@ -316,7 +316,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             const newEntry: RecentScanEntry = {
               name: device.name || null,
               id: device.id,
-              hasDROPSHAKEUUID,
+              hasDropShakeUUID,
             };
             // Remove duplicates (same ID) and add new entry at the end
             const filtered = prev.filter(entry => entry.id !== device.id);

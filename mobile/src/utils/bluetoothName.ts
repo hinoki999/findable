@@ -45,7 +45,7 @@ export async function getBluetoothName(): Promise<string | null> {
 
 /**
  * Get instructions for manually setting Bluetooth name
- * @param desiredName The name the user should set (e.g., "DROPSHAKE-username")
+ * @param desiredName The name the user should set (e.g., "DropShake-username")
  * @returns Instructions string
  */
 export function getBluetoothNameInstructions(desiredName: string): string {
@@ -55,22 +55,22 @@ export function getBluetoothNameInstructions(desiredName: string): string {
 2. Go to "Connected devices" or "Bluetooth"
 3. Tap "Device name" or "Bluetooth device name"
 4. Change it to: ${desiredName}
-5. Save and return to DROPSHAKE`;
+5. Save and return to DropShake`;
   } else if (Platform.OS === 'ios') {
     return `To set your Bluetooth name to "${desiredName}":
 1. Open iOS Settings
 2. Go to "General" > "About" > "Name"
 3. Change your device name to: ${desiredName}
-4. Return to DROPSHAKE`;
+4. Return to DropShake`;
   }
   
   return `Please set your Bluetooth device name to: ${desiredName}`;
 }
 
 /**
- * Check if the current Bluetooth name matches the desired DROPSHAKE format
+ * Check if the current Bluetooth name matches the desired DropShake format
  * @param currentName Current Bluetooth name (or null if unknown)
- * @param desiredName Desired name (e.g., "DROPSHAKE-username")
+ * @param desiredName Desired name (e.g., "DropShake-username")
  * @returns true if names match, false otherwise
  */
 export function isBluetoothNameCorrect(

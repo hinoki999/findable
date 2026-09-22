@@ -1,17 +1,17 @@
     /**
-     * BLE Configuration for DROPSHAKE
+     * BLE Configuration for DropShake
      * Centralized configuration for BLE advertising and scanning
      * 
      * This file contains all BLE-related constants and configuration.
      * It is safe to import this file even if BLE advertising is not implemented.
      */
 
-// DROPSHAKE Service UUID - Used for advertising and device detection
+// DropShake Service UUID - Used for advertising and device detection
 // Format: Standard 128-bit UUID
-// Generated UUID for DROPSHAKE service identification
+// Generated UUID for DropShake service identification
 export const DROPSHAKE_SERVICE_UUID = 'af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d';
 
-// Manufacturer ID for DROPSHAKE advertising data
+// Manufacturer ID for DropShake advertising data
 // 0xFFFF is reserved for testing/development per Bluetooth SIG
 export const DROPSHAKE_MANUFACTURER_ID = 0xFFFF;
 
