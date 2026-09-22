@@ -6,7 +6,7 @@ import { getTheme } from '../theme';
 import { useDarkMode, useToast, useUserProfile } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
-import { sendOtpCode, verifyOtpCode } from '../services/api';
+import { sendOtpCode, verifyOtpCode, getBlockedUsersWithProfiles, unblockUser, BlockedUserProfile } from '../services/api';
 
 interface SecuritySettingsScreenProps {
   navigation: any;
@@ -23,23 +23,53 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingField, setEditingField] = useState<'username' | 'password' | null>(null);
   const [tempValue, setTempValue] = useState('');
-  
+
   // Password change states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   // Password visibility states
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Confirmation modals
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteVerificationCode, setDeleteVerificationCode] = useState('');
   const [sendingDeleteCode, setSendingDeleteCode] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
+
+  // Blocked users state
+  const [showBlockedUsersModal, setShowBlockedUsersModal] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserProfile[]>([]);
+  const [loadingBlockedUsers, setLoadingBlockedUsers] = useState(false);
+
+  const handleOpenBlockedUsers = async () => {
+    setShowBlockedUsersModal(true);
+    setLoadingBlockedUsers(true);
+    try {
+      const users = await getBlockedUsersWithProfiles();
+      setBlockedUsers(users);
+    } catch (error: any) {
+      showToast({ message: error.message || 'Failed to load blocked users', type: 'error', duration: 3000 });
+    } finally {
+      setLoadingBlockedUsers(false);
+    }
+  };
+
+  const handleUnblock = async (userId: string) => {
+    try {
+      await unblockUser(userId);
+      setBlockedUsers(prev => prev.filter(u => u.userId !== userId));
+      showToast({ message: 'User unblocked', type: 'success', duration: 2000 });
+    } catch (error: any) {
+      showToast({ message: error.message || 'Failed to unblock user', type: 'error', duration: 3000 });
+    }
+  };
+
+
 
   // Get user email from profile context
   const userEmail = profile.email;
@@ -89,13 +119,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
         await api.changeUsername(tempValue, userId!);
         // Note: With Supabase, username changes don't require re-authentication
-        
+
         showToast({
           message: 'Username updated successfully',
           type: 'success',
           duration: 3000,
         });
-        
+
         setEditModalVisible(false);
       } else if (editingField === 'password') {
         if (!currentPassword || !newPassword || !confirmPassword) {
@@ -127,13 +157,13 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         }
 
         await api.changePassword(currentPassword, newPassword);
-        
+
         showToast({
           message: 'Password updated successfully',
           type: 'success',
           duration: 3000,
         });
-        
+
         setEditModalVisible(false);
         setCurrentPassword('');
         setNewPassword('');
@@ -239,7 +269,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         <Text style={[theme.type.h1, { fontSize: 20 }]}>Security Settings</Text>
         <View style={{ width: 28 }} />
       </View>
-      
+
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Username */}
         <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
@@ -298,6 +328,26 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               thumbColor={isDarkMode ? theme.colors.blue : theme.colors.muted}
             />
           </View>
+        </View>
+
+        {/* Blocked Users */}
+        <View style={[styles.card, { backgroundColor: theme.colors.white }]}>
+          <View style={styles.cardHeader}>
+            <Text style={[theme.type.h2, { fontSize: 16 }]}>Privacy</Text>
+          </View>
+          <Pressable
+            onPress={handleOpenBlockedUsers}
+            style={({ pressed }) => [
+              styles.row,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <MaterialCommunityIcons name="account-cancel" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+              <Text style={[theme.type.body, { color: theme.colors.text }]}>Blocked Users</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.colors.muted} />
+          </Pressable>
         </View>
 
         {/* Logout */}
@@ -448,6 +498,51 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
         </View>
       </Modal>
 
+      {/* Blocked Users Modal */}
+      <Modal visible={showBlockedUsersModal} transparent animationType="fade" onRequestClose={() => setShowBlockedUsersModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.white, maxHeight: '70%' }]}>
+            <Text style={[theme.type.h1, { fontSize: 20, marginBottom: 20 }]}>Blocked Users</Text>
+
+            {loadingBlockedUsers ? (
+              <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', paddingVertical: 20 }]}>
+                Loading...
+              </Text>
+            ) : blockedUsers.length === 0 ? (
+              <Text style={[theme.type.body, { color: theme.colors.muted, textAlign: 'center', paddingVertical: 20 }]}>
+                You haven't blocked anyone.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 300 }}>
+                {blockedUsers.map(user => (
+                  <View key={user.id} style={[styles.row, { paddingVertical: 12 }]}>
+                    <View style={styles.rowLeft}>
+                      <MaterialCommunityIcons name="account-circle" size={20} color={theme.colors.muted} style={styles.rowIcon} />
+                      <Text style={[theme.type.body, { color: theme.colors.text }]}>
+                        {user.name || user.username || 'Unknown user'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => handleUnblock(user.userId)}
+                      style={[styles.modalButton, { flex: 0, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.colors.blue }]}
+                    >
+                      <Text style={[theme.type.button, { color: '#FFFFFF', fontSize: 13 }]}>Unblock</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+
+            <Pressable
+              onPress={() => setShowBlockedUsersModal(false)}
+              style={[styles.modalButton, { borderWidth: 1, borderColor: theme.colors.border, marginTop: 16 }]}
+            >
+              <Text style={[theme.type.button, { color: theme.colors.text }]}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* Logout Confirmation Modal */}
       <Modal visible={showLogoutConfirm} transparent animationType="fade" onRequestClose={() => setShowLogoutConfirm(false)}>
         <View style={styles.modalOverlay}>
@@ -476,15 +571,15 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
       </Modal>
 
       {/* Delete Account Confirmation Modal */}
-      <Modal 
-        visible={showDeleteConfirm} 
-        transparent 
-        animationType="fade" 
+      <Modal
+        visible={showDeleteConfirm}
+        transparent
+        animationType="fade"
         onRequestClose={() => {
           // Prevent accidental closure - user must click Cancel
         }}
       >
-        <Pressable 
+        <Pressable
           style={styles.modalOverlay}
           onPress={() => {
             // Don't close modal when clicking outside
@@ -506,7 +601,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
             <Pressable
               onPress={handleSendDeleteCode}
               disabled={sendingDeleteCode || codeSent}
-              style={[styles.sendCodeButton, { 
+              style={[styles.sendCodeButton, {
                 backgroundColor: codeSent ? '#4CAF50' : theme.colors.blue,
                 opacity: (sendingDeleteCode || codeSent) ? 0.7 : 1,
                 marginBottom: 24
@@ -526,9 +621,9 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               placeholderTextColor={theme.colors.muted}
               keyboardType="number-pad"
               maxLength={6}
-              style={[styles.input, { 
-                backgroundColor: theme.colors.bg, 
-                color: theme.colors.text, 
+              style={[styles.input, {
+                backgroundColor: theme.colors.bg,
+                color: theme.colors.text,
                 marginBottom: 24,
                 textAlign: 'center',
                 fontSize: 20,
@@ -550,7 +645,7 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
               <Pressable
                 onPress={handleDeleteAccount}
                 disabled={deleteVerificationCode.length !== 6}
-                style={[styles.modalButton, { 
+                style={[styles.modalButton, {
                   backgroundColor: '#FF3B30',
                   opacity: deleteVerificationCode.length !== 6 ? 0.5 : 1
                 }]}

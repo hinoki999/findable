@@ -1855,6 +1855,47 @@ export async function getBlockedUsers(): Promise<BlockedUser[]> {
     throw new Error(error.message || 'Failed to load blocked users.');
   }
 }
+
+export interface BlockedUserProfile {
+  id: string;
+  userId: string;
+  name: string | null;
+  username: string | null;
+  createdAt: Date;
+}
+
+export async function getBlockedUsersWithProfiles(): Promise<BlockedUserProfile[]> {
+  try {
+    const blocked = await getBlockedUsers();
+    if (blocked.length === 0) return [];
+
+    const { data, error } = await supabase.rpc('get_blocked_user_profiles', {
+      target_ids: blocked.map(b => b.blockedUserId),
+    });
+
+    if (error) {
+      console.error('[BLOCKS] Failed to fetch blocked user profiles:', error);
+      throw new Error('Failed to load blocked user details.');
+    }
+
+    const profileMap = new Map((data || []).map((p: any) => [p.user_id, p]));
+
+    return blocked.map(b => {
+      const profile = profileMap.get(b.blockedUserId);
+      return {
+        id: b.id,
+        userId: b.blockedUserId,
+        name: profile?.name ?? null,
+        username: profile?.username ?? null,
+        createdAt: b.createdAt,
+      };
+    });
+  } catch (error: any) {
+    console.error('[BLOCKS] Get blocked users with profiles error:', error);
+    throw new Error(error.message || 'Failed to load blocked users.');
+  }
+}
+
 export async function getBlockedUserIds(): Promise<Set<string>> {
   try {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
