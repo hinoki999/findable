@@ -1878,7 +1878,9 @@ export async function getBlockedUsersWithProfiles(): Promise<BlockedUserProfile[
       throw new Error('Failed to load blocked user details.');
     }
 
-    const profileMap = new Map((data || []).map((p: any) => [p.user_id, p]));
+    const profileMap = new Map<string, { name: string | null; username: string | null }>(
+      (data || []).map((p: any) => [p.user_id, p])
+    );
 
     return blocked.map(b => {
       const profile = profileMap.get(b.blockedUserId);
