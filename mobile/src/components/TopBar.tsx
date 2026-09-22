@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,7 +35,7 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
       <View style={{ alignItems: 'center', flexDirection: 'column', gap: 2 }}>
         {logoMode ? (
           <>
-            {/* DropLink Logo with Gradient Effect */}
+            {/* DROPSHAKE Logo with Gradient Effect */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 {/* D - Full orange */}

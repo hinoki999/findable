@@ -4,7 +4,7 @@ import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 let permissionsGranted = false;
-const BLE_PERMISSIONS_KEY = '@droplink_ble_permissions_granted';
+const BLE_PERMISSIONS_KEY = '@DROPSHAKE_ble_permissions_granted';
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -14,7 +14,7 @@ Notifications.setNotificationHandler({
   }),
 });
 console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top level');
-import { DROPLINK_SERVICE_UUID, DROPLINK_MANUFACTURER_ID } from '../config/bleConfig';
+import { DROPSHAKE_SERVICE_UUID, DROPSHAKE_MANUFACTURER_ID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
 
@@ -22,7 +22,7 @@ import { supabase } from '../services/supabase';
  * Decode base64 manufacturer data and extract userId prefix
  * Uses atob() which is natively available in React Native
  * @param manufacturerData - Base64 encoded manufacturer data from BLE scan
- * @returns userId prefix string or null if not DropLink device
+ * @returns userId prefix string or null if not DROPSHAKE device
  */
 const extractUserIdFromManufacturerData = (manufacturerData: string | null): string | null => {
   if (!manufacturerData) return null;
@@ -69,7 +69,7 @@ export interface BleDevice {
   distanceFeet: number;
   bio?: string;
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
-  username?: string; // DropLink username from Supabase lookup
+  username?: string; // DROPSHAKE username from Supabase lookup
   userId?: string; // User ID from Supabase lookup (for sending drops)
   lastSeen?: number; // Timestamp (Date.now()) when device was last heard
 }
@@ -77,7 +77,7 @@ export interface BleDevice {
 export interface RecentScanEntry {
   name: string | null;
   id: string;
-  hasDropLinkUUID: boolean;
+  hasDROPSHAKEUUID: boolean;
 }
 
 interface UseBLEScannerReturn {
@@ -302,12 +302,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[BLE-ID] RAW BLE detection - device:', JSON.stringify({ id: device.id, name: device.name, rssi: device.rssi, serviceUUIDs: device.serviceUUIDs }, null, 2));
           setDevicesScanned(prev => prev + 1);
 
-          // Check if device has DropLink Service UUID (for recent scans tracking)
-          let hasDropLinkUUID = false;
+          // Check if device has DROPSHAKE Service UUID (for recent scans tracking)
+          let hasDROPSHAKEUUID = false;
           if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-            const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
-            hasDropLinkUUID = device.serviceUUIDs.some(
-              uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
+            const normalizedDROPSHAKEUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
+            hasDROPSHAKEUUID = device.serviceUUIDs.some(
+              uuid => normalizeUUID(uuid) === normalizedDROPSHAKEUUID
             );
           }
 
@@ -316,7 +316,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             const newEntry: RecentScanEntry = {
               name: device.name || null,
               id: device.id,
-              hasDropLinkUUID,
+              hasDROPSHAKEUUID,
             };
             // Remove duplicates (same ID) and add new entry at the end
             const filtered = prev.filter(entry => entry.id !== device.id);

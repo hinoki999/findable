@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, AppState, AppStateStatus, PermissionsAndroid } from 'react-native';
 import { State } from 'react-native-ble-plx';
-import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
+import { DROPSHAKE_SERVICE_UUID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { useAuth } from '../contexts/AuthContext';
 import BLEAdvertiserNative, { isBLEAdvertiserAvailable } from '../native/BLEAdvertiserNative';
@@ -53,7 +53,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
 
   // localName is no longer used for device identification (manufacturer data is used instead)
   // Keep for display/logging purposes only
-  const localName = `DropLink-${deviceId}`;
+  const localName = `DROPSHAKE-${deviceId}`;
 
   // ========== USER ID TRACING ==========
   // Log userId immediately when component mounts/updates
@@ -114,7 +114,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[BLE-ADV-DIAG] loading:', loading);
     console.log('[BLE-ADV-DIAG] isAvailable:', isAvailable);
     console.log('[BLE-ADV-DIAG] Platform:', Platform.OS);
-    console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
+    console.log('[BLE-ADV-DIAG] Service UUID:', DROPSHAKE_SERVICE_UUID);
     console.log('[BLE-ADV-DIAG] Will broadcast as:', localName);
     console.log('[BLE-ADV-DIAG] Username:', username || 'null');
     console.log('[BLE-ADV-DIAG] UserId:', userId || 'null');
@@ -266,13 +266,13 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       // Use first 8 characters of userId as deviceId
       const calculatedDeviceId = userId.substring(0, 8);
       // localName is no longer used for device identification (manufacturer data is used instead)
-      const currentLocalName = `DropLink-${calculatedDeviceId}`;
+      const currentLocalName = `DROPSHAKE-${calculatedDeviceId}`;
 
       console.log('[BLE-ADV-DIAG] Step 2: Starting native BLE advertising...');
       console.log('[BLE-ADV-DIAG] UserId:', userId);
       console.log('[BLE-ADV-DIAG] Calculated Device ID:', calculatedDeviceId);
       console.log('[BLE-ADV-DIAG] Device ID from state:', deviceId);
-      console.log('[BLE-ADV-DIAG] Service UUID:', DROPLINK_SERVICE_UUID);
+      console.log('[BLE-ADV-DIAG] Service UUID:', DROPSHAKE_SERVICE_UUID);
       console.log('[BLE-ADV-DIAG] Device name will be set to:', currentLocalName);
 
       // Validate deviceId is not the fallback value
@@ -282,7 +282,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
 
       // Start advertising with Service UUID and deviceId using native module
       // The native module handles setting the device name and advertising the UUID
-      const result = await BLEAdvertiserNative.startAdvertising(DROPLINK_SERVICE_UUID, calculatedDeviceId);
+      const result = await BLEAdvertiserNative.startAdvertising(DROPSHAKE_SERVICE_UUID, calculatedDeviceId);
 
       if (result.success) {
         // Store the actual name being broadcast for verification
@@ -291,7 +291,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
         setIsAdvertising(true);
         setError(null);
         console.log('[GHOST-MODE] ✅ Broadcasting as:', currentLocalName);
-        console.log('[GHOST-MODE] ✅ Service UUID:', DROPLINK_SERVICE_UUID);
+        console.log('[GHOST-MODE] ✅ Service UUID:', DROPSHAKE_SERVICE_UUID);
         console.log('[GHOST-MODE] ✅ RESULT: Advertising is NOW ACTIVE');
         console.log('[GHOST-MODE] ✅ You are now VISIBLE to nearby devices');
       } else {

@@ -12,7 +12,7 @@ import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
-import { DROPLINK_SERVICE_UUID } from '../config/bleConfig';
+import { DROPSHAKE_SERVICE_UUID } from '../config/bleConfig';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -219,32 +219,32 @@ export default function DropScreen() {
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
 
-  // Filter to only show DropLink users (same filtering as HomeScreen)
+  // Filter to only show DROPSHAKE users (same filtering as HomeScreen)
   // Normalize UUID for comparison
   const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
-  const normalizedDropLinkUUID = normalizeUUID(DROPLINK_SERVICE_UUID);
+  const normalizedDROPSHAKEUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
 
-  // Filter to only DropLink devices (by Service UUID)
-  // Manufacturer data provides user identity, Service UUID identifies DropLink devices
-  const dropLinkDevices = devices.filter(device => {
+  // Filter to only DROPSHAKE devices (by Service UUID)
+  // Manufacturer data provides user identity, Service UUID identifies DROPSHAKE devices
+  const DROPSHAKEDevices = devices.filter(device => {
     if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
       return device.serviceUUIDs.some(
-        uuid => normalizeUUID(uuid) === normalizedDropLinkUUID
+        uuid => normalizeUUID(uuid) === normalizedDROPSHAKEUUID
       );
     }
     return false;
   });
 
   // Then filter by max distance setting and sort by distance (closest first)
-  const filteredDevices = dropLinkDevices
+  const filteredDevices = DROPSHAKEDevices
     .filter(device => device.distanceFeet <= maxDistance)
     .sort((a, b) => a.distanceFeet - b.distanceFeet);
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] DropScreen devices state changed - total:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length);
+    console.log('[BLE-DUPE] DropScreen devices state changed - total:', (devices || []).length, 'DROPSHAKE:', (DROPSHAKEDevices || []).length, 'filtered:', (filteredDevices || []).length);
     console.log('[BLE-ID] DropScreen filteredDevices for UI render:', JSON.stringify((filteredDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices, filteredDevices]);
+  }, [devices, DROPSHAKEDevices, filteredDevices]);
 
   // Auto-start scanning when Drop page loads
   useEffect(() => {
@@ -668,7 +668,7 @@ export default function DropScreen() {
                     fontSize: 15,
                     color: theme.colors.muted,
                   }]}>
-                    No DropLink users nearby
+                    No DROPSHAKE users nearby
                   </Text>
                 </View>
               ) : null

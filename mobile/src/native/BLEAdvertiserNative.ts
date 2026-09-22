@@ -4,7 +4,7 @@ interface BLEAdvertiserNativeInterface {
   /**
    * Start BLE advertising with the specified service UUID and device identifier
    * @param serviceUUID - The UUID to advertise (must be valid UUID format)
-   * @param deviceId - 1-4 character device identifier (will be broadcast as "DropLink-XXXX")
+   * @param deviceId - 1-4 character device identifier (will be broadcast as "DROPSHAKE-XXXX")
    * @returns Promise that resolves with {success: boolean, serviceUUID: string}
    */
   startAdvertising(serviceUUID: string, deviceId: string): Promise<{
