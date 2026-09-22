@@ -27,10 +27,10 @@ class BLEAdvertiserService : Service() {
 
     companion object {
         private const val TAG = "BLEAdvertiserService"
-        private const val CHANNEL_ID = "DROPSHAKE_ble_advertiser"
+        private const val CHANNEL_ID = "droplink_ble_advertiser"
         private const val NOTIFICATION_ID = 1002
         // Manufacturer ID 0xFFFF is reserved for testing/prototyping per Bluetooth SIG
-        private const val DROPSHAKE_MANUFACTURER_ID = 0xFFFF
+        private const val DROPLINK_MANUFACTURER_ID = 0xFFFF
         
         const val ACTION_START_ADVERTISE = "com.hirule.mobile.START_BLE_ADVERTISE"
         const val ACTION_STOP_ADVERTISE = "com.hirule.mobile.STOP_BLE_ADVERTISE"
@@ -140,10 +140,10 @@ class BLEAdvertiserService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "DROPSHAKE Advertiser",
+                "DropLink Advertiser",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Background BLE advertising to make you visible to nearby DROPSHAKE users"
+                description = "Background BLE advertising to make you visible to nearby DropLink users"
                 setShowBadge(false)
             }
             
@@ -162,7 +162,7 @@ class BLEAdvertiserService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("DROPSHAKE Active")
+            .setContentTitle("DropLink Active")
             .setContentText("Currently broadcasting")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(pendingIntent)
@@ -234,7 +234,7 @@ class BLEAdvertiserService : Service() {
                 .setIncludeDeviceName(false)
                 .setIncludeTxPowerLevel(false)
                 .addServiceUuid(ParcelUuid(uuid))
-                .addManufacturerData(DROPSHAKE_MANUFACTURER_ID, manufacturerData)
+                .addManufacturerData(DROPLINK_MANUFACTURER_ID, manufacturerData)
                 .build()
 
             val scanResponse = AdvertiseData.Builder()
