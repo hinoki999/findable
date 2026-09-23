@@ -19,12 +19,12 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
   const insets = useSafeAreaInsets();
-  
+
   return (
-    <View style={{ 
-      backgroundColor: theme.colors.bg, 
-      borderBottomColor: theme.colors.border, 
-      borderBottomWidth: 1, 
+    <View style={{
+      backgroundColor: theme.colors.bg,
+      borderBottomColor: theme.colors.border,
+      borderBottomWidth: 1,
       paddingTop: insets.top + 10,
       paddingBottom: 10,
       position: 'relative',
@@ -37,78 +37,31 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
           <>
             {/* DropShake Logo with Gradient Effect */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                {/* D - Full orange */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#FF6B4A',
+              <LinearGradient
+                colors={['#FF6B4A', '#FFA892', '#92AAE8', '#4A90FF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={{
+                  fontSize: 22,
+                  fontFamily: 'Inter_600SemiBold',
                   letterSpacing: -0.5,
-                }}>D</Text>
-                {/* r - Orange */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#FF8A6E',
-                  letterSpacing: -0.5,
-                }}>r</Text>
-                {/* o - Light orange/peach */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#FFA892',
-                  letterSpacing: -0.5,
-                }}>o</Text>
-                {/* p - Very light/whitish */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#C8BFD6',
-                  letterSpacing: -0.5,
-                }}>p</Text>
-                {/* L - Light blue */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#92AAE8',
-                  letterSpacing: -0.5,
-                }}>L</Text>
-                {/* i - Blue */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#6B9DFF',
-                  letterSpacing: -0.5,
-                }}>i</Text>
-                {/* n - Blue */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#5A94FF',
-                  letterSpacing: -0.5,
-                }}>n</Text>
-                {/* k - Full blue */}
-                <Text style={{ 
-                  fontSize: 22, 
-                  fontFamily: 'Inter_600SemiBold', 
-                  color: '#4A90FF',
-                  letterSpacing: -0.5,
-                }}>k</Text>
-              </View>
+                }}>DropShake</Text>
+              </LinearGradient>
               {/* Logo Icon */}
               {logoIcon && (
-                <MaterialCommunityIcons 
-                  name={logoIcon as any} 
-                  size={24} 
+                <MaterialCommunityIcons
+                  name={logoIcon as any}
+                  size={24}
                   color={logoIcon === 'link-variant' ? '#FF6B4A' : theme.colors.blue}
                 />
               )}
             </View>
             {/* Subtitle below logo */}
             {subtitle && (
-              <Text style={{ 
-                fontSize: 11, 
-                color: theme.colors.muted, 
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.muted,
                 fontFamily: 'Inter_400Regular',
               }}>
                 {subtitle}
@@ -117,11 +70,11 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
           </>
         ) : (
           <>
-            <Text style={{ ...theme.type.title, textAlign:'center' }}>{title}</Text>
+            <Text style={{ ...theme.type.title, textAlign: 'center' }}>{title}</Text>
             {subtitle && (
-              <Text style={{ 
-                fontSize: 11, 
-                color: theme.colors.muted, 
+              <Text style={{
+                fontSize: 11,
+                color: theme.colors.muted,
                 fontFamily: 'Inter_400Regular',
                 marginTop: 2,
               }}>
@@ -131,19 +84,21 @@ export default function TopBar({ title, rightIcon, onRightIconPress, subtitle, l
           </>
         )}
       </View>
-      
-      {rightIcon && onRightIconPress && (
-        <Pressable 
-          onPress={onRightIconPress}
-          style={{ 
-            position: 'absolute', 
-            right: 16, 
-            padding: 8,
-          }}
-        >
-          <MaterialCommunityIcons name={rightIcon} size={24} color={theme.colors.blue} />
-        </Pressable>
-      )}
-    </View>
+
+      {
+        rightIcon && onRightIconPress && (
+          <Pressable
+            onPress={onRightIconPress}
+            style={{
+              position: 'absolute',
+              right: 16,
+              padding: 8,
+            }}
+          >
+            <MaterialCommunityIcons name={rightIcon} size={24} color={theme.colors.blue} />
+          </Pressable>
+        )
+      }
+    </View >
   );
 }
