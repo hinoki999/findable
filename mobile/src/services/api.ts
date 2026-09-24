@@ -1129,13 +1129,12 @@ export interface UserProfile {
 export interface UserSettings {
   darkMode: boolean;
   maxDistance: number;
-  privacyZonesEnabled: boolean;
 }
 
 export async function getUserSettings(): Promise<UserSettings> {
   if (USE_STUB) {
     await sleep(100);
-    return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+    return { darkMode: false, maxDistance: 33 };
   }
 
   try {
@@ -1157,7 +1156,7 @@ export async function getUserSettings(): Promise<UserSettings> {
       // If no settings found (PGRST116), return defaults
       if (error.code === 'PGRST116') {
         console.log('WARNING: No settings found, returning defaults');
-        return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+        return { darkMode: false, maxDistance: 33 };
       }
       console.error('Supabase settings query error:', error);
       throw new Error('Failed to load settings. Please try again.');
@@ -1169,7 +1168,6 @@ export async function getUserSettings(): Promise<UserSettings> {
     return {
       darkMode: data.dark_mode ?? false,
       maxDistance: data.max_distance ?? 33,
-      privacyZonesEnabled: data.privacy_zones_enabled ?? false,
     };
   } catch (error: any) {
     console.error('ERROR: Get settings error:', error);
@@ -1181,7 +1179,7 @@ export async function getUserSettings(): Promise<UserSettings> {
 
     // For other errors, return defaults to not block app
     console.log('WARNING: Returning default settings due to error');
-    return { darkMode: false, maxDistance: 33, privacyZonesEnabled: false };
+    return { darkMode: false, maxDistance: 33 };
   }
 }
 
@@ -1199,7 +1197,6 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
         user_id: userId,
         dark_mode: settings.darkMode,
         max_distance: settings.maxDistance,
-        privacy_zones_enabled: settings.privacyZonesEnabled,
       })
       .eq('user_id', userId);
 
@@ -1222,7 +1219,7 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
 }
 
 // ==================== PINNED CONTACTS ====================
-export async function getPinnedContacts(): Promise<number[]> {
+export async function getPinnedContacts(): Promise<string[]> {
   if (USE_STUB) {
     await sleep(100);
     return [];
@@ -1239,7 +1236,7 @@ export async function getPinnedContacts(): Promise<number[]> {
     // Query pinned contacts from Supabase
     const { data, error } = await supabase
       .from('pinned_contacts')
-      .select('device_id')
+      .select('contact_user_id')
       .eq('user_id', session.user.id);
 
     if (error) {
@@ -1250,14 +1247,14 @@ export async function getPinnedContacts(): Promise<number[]> {
     console.log(`SUCCESS: Loaded ${data?.length || 0} pinned contacts from Supabase`);
 
     // Return array of device IDs
-    return (data || []).map((row: any) => row.device_id);
+    return (data || []).map((row: any) => row.contact_user_id);
   } catch (error: any) {
     console.error('ERROR: Get pinned contacts error:', error);
     throw new Error(error.message || 'Failed to load pinned contacts. Please try again.');
   }
 }
 
-export async function pinContact(deviceId: number): Promise<void> {
+export async function pinContact(contactUserId: string): Promise<void> {
   if (USE_STUB) {
     await sleep(100);
     return;
@@ -1276,7 +1273,7 @@ export async function pinContact(deviceId: number): Promise<void> {
       .from('pinned_contacts')
       .insert({
         user_id: session.user.id,
-        device_id: deviceId,
+        contact_user_id: contactUserId,
         pinned_at: new Date().toISOString()
       });
 
@@ -1286,14 +1283,14 @@ export async function pinContact(deviceId: number): Promise<void> {
       throw new Error('Failed to pin contact. Please try again.');
     }
 
-    console.log(`SUCCESS: Contact ${deviceId} pinned successfully`);
+    console.log('SUCCESS: Contact pinned successfully');
   } catch (error: any) {
     console.error('ERROR: Pin contact error:', error);
     throw new Error(error.message || 'Failed to pin contact. Please try again.');
   }
 }
 
-export async function unpinContact(deviceId: number): Promise<void> {
+export async function unpinContact(contactUserId: string): Promise<void> {
   if (USE_STUB) {
     await sleep(100);
     return;
@@ -1312,14 +1309,14 @@ export async function unpinContact(deviceId: number): Promise<void> {
       .from('pinned_contacts')
       .delete()
       .eq('user_id', session.user.id)
-      .eq('device_id', deviceId);
+      .eq('contact_user_id', contactUserId);
 
     if (error) {
       console.error('Supabase unpin contact error:', error);
       throw new Error('Failed to unpin contact. Please try again.');
     }
 
-    console.log(`SUCCESS: Contact ${deviceId} unpinned successfully`);
+    console.log('SUCCESS: Contact unpinned successfully');
   } catch (error: any) {
     console.error('ERROR: Unpin contact error:', error);
     throw new Error(error.message || 'Failed to unpin contact. Please try again.');

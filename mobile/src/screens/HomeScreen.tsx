@@ -636,7 +636,6 @@ export default function HomeScreen() {
   const [linkPopupAnim] = useState(new Animated.Value(0));
   const [popupKey, setPopupKey] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [pinnedProfiles, setPinnedProfiles] = useState<Device[]>([]);
   const [expandedCardId, setExpandedCardId] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedBlipDevice, setSelectedBlipDevice] = useState<BleDevice | null>(null);
@@ -1483,15 +1482,6 @@ export default function HomeScreen() {
   // Undo state - using ref to avoid closure issues
   const lastActionRef = useRef<{ type: 'unpin' | 'delete', cardId: number, card: Device | null } | null>(null);
 
-  // Load pinned profiles
-  useEffect(() => {
-    (async () => {
-      const devices = await getDevices();
-      const pinned = devices.filter(d => d.id && pinnedIds.has(d.id));
-      setPinnedProfiles(pinned);
-    })();
-  }, [pinnedIds]);
-
   // Flashing animation for link badge
   useEffect(() => {
     if (hasUnviewedLinks) {
@@ -1715,7 +1705,7 @@ export default function HomeScreen() {
   };
 
   // Handle quick action button press (unpin or delete)
-  const handleQuickActionPress = (action: 'unpin' | 'delete', cardId: number, cardName: string) => {
+  const handleQuickActionPress = (action: 'delete', cardId: number, cardName: string) => {
     setConfirmAction(action);
     setConfirmCardId(cardId);
     setConfirmCardName(cardName);
@@ -1733,17 +1723,14 @@ export default function HomeScreen() {
     const actionType = confirmAction;
 
     // Store the card for undo BEFORE performing the action
-    const cardToStore = pinnedProfiles.find(p => p.id === confirmCardId) || null;
+    const savedDevices = await getDevices();
+    const cardToStore = savedDevices.find(d => d.id === confirmCardId) || null;
     const actionData = { type: actionType, cardId: confirmCardId, card: cardToStore };
     lastActionRef.current = actionData;
 
     // Perform the action
-    if (actionType === 'unpin') {
-      togglePin(confirmCardId);
-    } else if (actionType === 'delete') {
+    if (actionType === 'delete') {
       await deleteDevice(confirmCardId, userId!);
-      setPinnedProfiles(prev => prev.filter(p => p.id !== confirmCardId));
-      togglePin(confirmCardId);
     }
 
     setShowConfirmModal(false);
@@ -1752,7 +1739,7 @@ export default function HomeScreen() {
     setConfirmCardName('');
 
     showToast({
-      message: `${actionName} ${actionType === 'unpin' ? 'unpinned' : 'deleted'}`,
+      message: `${actionName} deleted`,
       type: 'success',
       duration: 4000,
       actionLabel: 'UNDO',
@@ -1768,19 +1755,8 @@ export default function HomeScreen() {
       return;
     }
 
-    if (lastAction.type === 'unpin') {
-      togglePin(lastAction.cardId);
-    } else if (lastAction.type === 'delete' && lastAction.card) {
+    if (lastAction.type === 'delete' && lastAction.card) {
       await restoreDevice(lastAction.card, userId!);
-
-      setPinnedProfiles(prev => {
-        if (prev.some(p => p.id === lastAction.cardId)) {
-          return prev;
-        }
-        return [...prev, lastAction.card!];
-      });
-
-      togglePin(lastAction.cardId);
     }
 
     lastActionRef.current = null;
@@ -1812,11 +1788,9 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      const devices = await getDevices();
-      const pinned = devices.filter(d => d.id && pinnedIds.has(d.id));
-      setPinnedProfiles(pinned);
+      await getDevices();
     } catch (error) {
-      console.error('Failed to refresh pinned profiles:', error);
+      console.error('Failed to refresh:', error);
     } finally {
       setRefreshing(false);
     }
@@ -2221,253 +2195,6 @@ export default function HomeScreen() {
               />
             )}
 
-            {/* Pinned Profiles Stack - REMOVED */}
-            {false && pinnedProfiles.length > 0 && (() => {
-              // Calculate total height of the stack
-              const cardHeight = 280; // Approximate full card height
-              // Dynamic spacing: increase when dragging
-              const baseSpacing = 45;
-              const spacingMultiplier = isDragging ? 1.8 : 1;
-              const stackSpacing = baseSpacing * spacingMultiplier;
-              const totalStackHeight = cardHeight + ((pinnedProfiles.length - 1) * stackSpacing);
-
-              return (
-                <Animated.View
-                  style={{
-                    position: 'absolute',
-                    left: '3%',
-                    top: '50%',
-                    transform: [
-                      { translateY: -240 },
-                      { translateY: dragOffset }
-                    ],
-                    width: 150,
-                    maxHeight: 600,
-                    zIndex: 10,
-                  }}
-                  {...panResponder.panHandlers}
-                >
-                  <ScrollView
-                    style={{ flex: 1 }}
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ minHeight: totalStackHeight }}
-                    scrollEnabled={!isDragging}
-                  >
-                    {pinnedProfiles.map((profile, index) => {
-                      const isExpanded = expandedCardId === profile.id;
-                      const isBottomCard = index === 0;
-                      // Reverse order: bottom card should be rendered last (highest in stack visually at bottom)
-                      const stackPosition = pinnedProfiles.length - 1 - index;
-
-                      // Parallax effect: cards deeper in stack move MORE to spread out
-                      const parallaxMultiplier = stackPosition * 0.5; // 50% more per position
-                      const parallaxOffset = dragOffset.interpolate({
-                        inputRange: [0, 200],
-                        outputRange: [0, 200 * parallaxMultiplier], // Positive to spread cards apart
-                      });
-
-                      // Get or create tap animation value for this card
-                      if (profile.id && !tapScales[profile.id]) {
-                        tapScales[profile.id] = new Animated.Value(1);
-                      }
-                      const tapScale = profile.id ? tapScales[profile.id] : new Animated.Value(1);
-
-                      const handleTap = () => {
-                        if (!profile.id) return;
-
-                        const now = Date.now();
-                        const timeSinceLastTap = now - lastTapTime.current;
-                        const isDoubleTap = timeSinceLastTap < 800 && lastTapCardId.current === profile.id;
-
-                        lastTapTime.current = now;
-                        lastTapCardId.current = profile.id;
-
-                        if (isDoubleTap) {
-                          // Double tap - toggle quick actions
-                          setActiveQuickActionCardId(activeQuickActionCardId === profile.id ? null : profile.id);
-                        } else {
-                          // Single tap - pulse animation and expand (not collapse)
-                          Animated.sequence([
-                            Animated.timing(tapScale, {
-                              toValue: 1.05,
-                              duration: 100,
-                              useNativeDriver: true,
-                            }),
-                            Animated.timing(tapScale, {
-                              toValue: 1,
-                              duration: 100,
-                              useNativeDriver: true,
-                            }),
-                          ]).start();
-
-                          // Hide quick actions when switching cards
-                          if (activeQuickActionCardId !== null && activeQuickActionCardId !== profile.id) {
-                            setActiveQuickActionCardId(null);
-                          }
-
-                          // Expand card - clicking on already expanded card keeps it expanded
-                          // Clicking on different card switches the expanded card
-                          if (!isBottomCard) {
-                            setExpandedCardId(profile.id);
-                          }
-                        }
-                      };
-
-                      return (
-                        <Animated.View
-                          key={profile.id}
-                          style={{
-                            position: 'absolute',
-                            top: stackPosition * stackSpacing,
-                            left: 0,
-                            right: 0,
-                            zIndex: activeQuickActionCardId === profile.id ? 1001 : (isExpanded ? 1000 : (pinnedProfiles.length - index)),
-                            transform: [
-                              { translateY: parallaxOffset },
-                              { scale: tapScale }
-                            ],
-                          }}
-                        >
-                          <Pressable
-                            onPress={handleTap}
-                            style={{
-                              ...theme.card,
-                              width: 150,
-                              overflow: isExpanded || activeQuickActionCardId === profile.id || isDragging ? 'visible' : 'hidden',
-                              zIndex: activeQuickActionCardId === profile.id ? 999 : 1,
-                            }}
-                          >
-                            {/* ID Header - Always visible */}
-                            <View style={{
-                              backgroundColor: '#FF6B4A',
-                              paddingVertical: 6,
-                              paddingHorizontal: 12,
-                              alignItems: 'center',
-                            }}>
-                              <Text style={[theme.type.h2, { color: theme.colors.white, fontSize: 12 }]}>
-                                {profile.name}
-                              </Text>
-                            </View>
-
-                            {/* ID Content - Show for bottom card, when expanded, or when dragging */}
-                            {(isBottomCard || isExpanded || isDragging) && (
-                              <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 4 }}>
-                                {/* Profile Picture */}
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                                  <View style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 16,
-                                    backgroundColor: '#FFE5DC',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                  }}>
-                                    <MaterialCommunityIcons name="account" size={18} color="#FF6B4A" />
-                                  </View>
-                                </View>
-
-                                {/* Contact Information */}
-                                <View style={{ marginBottom: 6 }}>
-                                  {/* Phone */}
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <MaterialCommunityIcons name="phone" size={10} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                                      +1 (555) 123-4567
-                                    </Text>
-                                  </View>
-
-                                  {/* Email */}
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <MaterialCommunityIcons name="email" size={10} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                                      user@example.com
-                                    </Text>
-                                  </View>
-
-                                  {/* Social Media */}
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <MaterialCommunityIcons name="instagram" size={10} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                                      @yourhandle
-                                    </Text>
-                                  </View>
-
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <MaterialCommunityIcons name="twitter" size={10} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                                      @yourhandle
-                                    </Text>
-                                  </View>
-
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 5 }}>
-                                    <MaterialCommunityIcons name="linkedin" size={10} color={theme.colors.muted} />
-                                    <Text style={[theme.type.body, { marginLeft: 4, color: theme.colors.text, fontSize: 8 }]}>
-                                      yourname
-                                    </Text>
-                                  </View>
-                                </View>
-                              </View>
-                            )}
-                          </Pressable>
-
-                          {/* Quick Action Buttons (shown on double-tap) - Always accessible */}
-                          {activeQuickActionCardId === profile.id && (
-                            <View style={{
-                              flexDirection: 'row',
-                              gap: 8,
-                              paddingHorizontal: 10,
-                              paddingTop: 4,
-                              paddingBottom: 10,
-                              backgroundColor: theme.colors.white,
-                              borderBottomLeftRadius: 12,
-                              borderBottomRightRadius: 12,
-                              width: 150,
-                            }}>
-                              <Pressable
-                                onPress={() => profile.id && handleQuickActionPress('unpin', profile.id, profile.name)}
-                                style={{
-                                  flex: 1,
-                                  backgroundColor: '#FFB89D',
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 12,
-                                  borderRadius: 8,
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <MaterialCommunityIcons name="pin-off" size={14} color="#fff" />
-                                <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
-                                  Unpin
-                                </Text>
-                              </Pressable>
-                              <Pressable
-                                onPress={() => profile.id && handleQuickActionPress('delete', profile.id, profile.name)}
-                                style={{
-                                  flex: 1,
-                                  backgroundColor: '#FF6B4A',
-                                  paddingVertical: 8,
-                                  paddingHorizontal: 12,
-                                  borderRadius: 8,
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <MaterialCommunityIcons name="delete" size={14} color="#fff" />
-                                <Text style={{ color: '#fff', fontSize: 10, marginLeft: 4, fontWeight: '600' }}>
-                                  Delete
-                                </Text>
-                              </Pressable>
-                            </View>
-                          )}
-                        </Animated.View>
-                      );
-                    })}
-                  </ScrollView>
-                </Animated.View>
-              );
-            })()}
           </View>
         </ScrollView>
 

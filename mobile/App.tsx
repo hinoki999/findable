@@ -54,8 +54,8 @@ export const useDarkMode = () => useContext(DarkModeContext);
 
 // Pinned Profiles Context - supports both number (legacy devices) and string (drops UUIDs)
 const PinnedProfilesContext = createContext<{
-  pinnedIds: Set<string | number>;
-  togglePin: (id: string | number) => void;
+  pinnedIds: Set<string>;
+  togglePin: (contactUserId: string) => void;
 }>({
   pinnedIds: new Set(),
   togglePin: () => { },
@@ -227,7 +227,7 @@ function MainApp() {
   const [subScreen, setSubScreen] = useState<string | null>(null); // For sub-screens like ProfilePhoto, SecuritySettings
   const [isDarkMode, setIsDarkMode] = useState(true);
   const insets = useSafeAreaInsets();
-  const [pinnedIds, setPinnedIds] = useState<Set<string | number>>(new Set());
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
 
   // ✅ FIXED: Initialize with socialMedia array to prevent crashes
   const [userProfile, setUserProfile] = useState<UserProfile>({
@@ -465,6 +465,21 @@ function MainApp() {
 
   // Start/stop background BLE scanning based on auth state
   // AND listen for device found events
+  // Load pinned contacts from server on login
+  useEffect(() => {
+    if (authLoading || !isAuthenticated || !userId) {
+      return;
+    }
+    (async () => {
+      try {
+        const api = await import('./src/services/api');
+        const ids = await api.getPinnedContacts();
+        setPinnedIds(new Set(ids));
+      } catch (error) {
+        console.error('Failed to load pinned contacts:', error);
+      }
+    })();
+  }, [authLoading, isAuthenticated, userId]);
   useEffect(() => {
     let unsubscribeDeviceFound: (() => void) | null = null;
 
@@ -831,7 +846,6 @@ function MainApp() {
       await api.saveUserSettings({
         darkMode: newValue,
         maxDistance,
-        privacyZonesEnabled: false, // TODO: Get from actual state
       }, userId!);
       console.log('✅ Dark mode saved to backend:', newValue);
     } catch (error) {
@@ -839,43 +853,40 @@ function MainApp() {
     }
   };
 
-  const togglePin = async (id: string | number) => {
+  const togglePin = async (contactUserId: string) => {
     let wasPinned = false;
     setPinnedIds(prev => {
       const newSet = new Set(prev);
-      wasPinned = newSet.has(id);
+      wasPinned = newSet.has(contactUserId);
       if (wasPinned) {
-        newSet.delete(id);
+        newSet.delete(contactUserId);
       } else {
-        newSet.add(id);
+        newSet.add(contactUserId);
       }
       return newSet;
     });
 
-    if (AUTH_BYPASS_ENABLED) {
-      return; // Skip backend calls for testing
-    }
-
-    // Save to backend (only for numeric IDs from legacy devices)
-    if (typeof id === 'number') {
-      try {
-        const api = await import('./src/services/api');
-        if (wasPinned) {
-          await api.unpinContact(id);
-          console.log('✅ Unpinned contact saved to backend:', id);
-        } else {
-          await api.pinContact(id);
-          console.log('✅ Pinned contact saved to backend:', id);
-        }
-      } catch (error) {
-        console.error('❌ Failed to save pin state:', error);
+    try {
+      const api = await import('./src/services/api');
+      if (wasPinned) {
+        await api.unpinContact(contactUserId);
+      } else {
+        await api.pinContact(contactUserId);
       }
-    } else {
-      // For string IDs (drop UUIDs), pinning is handled locally
-      console.log(`📌 Pin toggled for drop: ${id}, pinned: ${!wasPinned}`);
+    } catch (error) {
+      console.error('Failed to save pin state:', error);
+      // Revert local state so UI reflects reality
+      setPinnedIds(prev => {
+        const newSet = new Set(prev);
+        if (wasPinned) {
+          newSet.add(contactUserId);
+        } else {
+          newSet.delete(contactUserId);
+        }
+        return newSet;
+      });
     }
   };
-
   const updateProfile = async (updates: Partial<UserProfile>) => {
     console.log('[PROFILE-UPDATE] ===== updateProfile CALLED =====');
     console.log('[PROFILE-UPDATE] Received updates:', JSON.stringify(updates, null, 2));
@@ -959,7 +970,6 @@ function MainApp() {
       await api.saveUserSettings({
         darkMode: isDarkMode,
         maxDistance: distance,
-        privacyZonesEnabled: false, // TODO: Get from actual state
       }, userId!);
       console.log('✅ Max distance saved to backend:', distance);
     } catch (error) {
