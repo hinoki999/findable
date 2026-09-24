@@ -1197,8 +1197,7 @@ export async function saveUserSettings(settings: UserSettings, userId: string): 
         user_id: userId,
         dark_mode: settings.darkMode,
         max_distance: settings.maxDistance,
-      })
-      .eq('user_id', userId);
+      }, { onConflict: 'user_id' })
 
     if (error) {
       console.error('Supabase settings update error:', error);
