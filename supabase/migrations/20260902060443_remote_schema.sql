@@ -890,9 +890,9 @@ using ((auth.uid() = user_id));
 using ((auth.uid() = user_id));
 
 
-CREATE TRIGGER "drop-linked-notification" AFTER UPDATE ON public.drops FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://jfuhplqtujaakksmixii.supabase.co/functions/v1/send-drop-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdWhwbHF0dWphYWtrc21peGlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Mzk2OTQ3MSwiZXhwIjoyMDc5NTQ1NDcxfQ.JykihT_PpPfxgjhyvyusQBkK-2isetm9WhdqOYjYj3I"}', '{}', '5000');
+CREATE TRIGGER "drop-linked-notification" AFTER UPDATE ON public.drops FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://jfuhplqtujaakksmixii.supabase.co/functions/v1/send-drop-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer <REDACTED>"}', '{}', '5000');
 
-CREATE TRIGGER "drops-inserted-notification" AFTER INSERT ON public.drops FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://jfuhplqtujaakksmixii.supabase.co/functions/v1/send-drop-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmdWhwbHF0dWphYWtrc21peGlpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Mzk2OTQ3MSwiZXhwIjoyMDc5NTQ1NDcxfQ.JykihT_PpPfxgjhyvyusQBkK-2isetm9WhdqOYjYj3I"}', '{}', '5000');
+CREATE TRIGGER "drops-inserted-notification" AFTER INSERT ON public.drops FOR EACH ROW EXECUTE FUNCTION supabase_functions.http_request('https://jfuhplqtujaakksmixii.supabase.co/functions/v1/send-drop-notification', 'POST', '{"Content-type":"application/json","Authorization":"Bearer <REDACTED>"}', '{}', '5000');
 
 
   create policy "users_own_folder"
