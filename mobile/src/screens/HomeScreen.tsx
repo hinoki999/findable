@@ -7,8 +7,10 @@ import { getTheme } from '../theme';
 import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifications, useSettings, useBLEAdvertising } from '../../App';
 import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
-import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed, getBlockedUserIds } from '../services/api';
+import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useBlockedUsers } from '../contexts/BlockedUsersContext';
+import { isVisibleNearbyUser } from '../utils/nearbyVisibility';
 import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
@@ -627,7 +629,7 @@ export default function HomeScreen() {
   const [incomingDrops, setIncomingDrops] = useState<Drop[]>([]);
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
-  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set()); // Blocked users (either direction) for radar/drop filtering
+  const { blockedUserIds, loadFailed } = useBlockedUsers();
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
   const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
   const [showReturnLinkModal, setShowReturnLinkModal] = useState(false);
@@ -954,40 +956,17 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [userId]);
 
-  // Fetch blocked user relationships (either direction) for radar/drop filtering,
-  // then stay in sync via Realtime instead of polling.
+  // Block list is loaded by BlockedUsersProvider. If it has never loaded, the
+  // radar shows nobody - tell the user why.
   useEffect(() => {
-    if (!userId) return;
-
-    const fetchBlockedUserIds = async () => {
-      try {
-        const ids = await getBlockedUserIds();
-        setBlockedUserIds(ids);
-      } catch (error) {
-        // Silent fail - will retry on next relevant change
-      }
-    };
-
-    fetchBlockedUserIds();
-
-    const channel = supabase
-      .channel('blocks-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'blocks', filter: `blocker_id=eq.${userId}` },
-        () => fetchBlockedUserIds()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'blocks', filter: `blocked_id=eq.${userId}` },
-        () => fetchBlockedUserIds()
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId]);
+    if (loadFailed && !blockedUserIds) {
+      showToast({
+        message: 'Could not load your block list. Nearby users are hidden until it loads.',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  }, [loadFailed, blockedUserIds]);
   // Combine context-based and database-based unviewed links for badge
   const unviewedLinksFromContext = (linkNotifications || []).filter(notif => !notif.viewed && !notif.dismissed);
   const hasUnviewedLinks = (unviewedLinksFromContext || []).length > 0 || (unviewedLinksFromDb || []).length > 0;
@@ -1049,29 +1028,17 @@ export default function HomeScreen() {
   // Use devices directly from react-native-ble-plx (pre-populated by background scan on mount)
   const mergedDevices = devices;
 
-  // Filter devices: DropShake devices only (has DropShake Service UUID)
-  // Manufacturer data provides user identity, Service UUID identifies DropShake devices
-  const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
-  const normalizedDropShakeUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
+  // DropShake-only, in range, block list loaded, fully resolved, not blocked.
+  // Shared with DropScreen so both screens show the same people.
+  const filteredDevices = mergedDevices.filter(device =>
+    isVisibleNearbyUser(device, blockedUserIds, maxDistance)
+  );
 
-  const dropLinkDevices = mergedDevices.filter(device => {
-    // Filter by DropShake Service UUID only
-    if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-      return device.serviceUUIDs.some(
-        uuid => normalizeUUID(uuid) === normalizedDropShakeUUID
-      );
-    }
-    return false;
-  });
-
-  const filteredDevices = dropLinkDevices.filter(device => device.distanceFeet <= maxDistance);
-
-  // Deduplicate by username (or userId as fallback) - keep the one with strongest RSSI
-  // This prevents multiple dots for the same physical user when Android assigns new MAC addresses
-  // Devices without username or userId are excluded since we can't identify them as unique users
+  // Collapse multiple entries for the same person into one dot. Android rotates MAC
+  // addresses, so one phone can appear under several device IDs.
   const deduplicatedDevices = filteredDevices.reduce((acc, device) => {
-    // Deduplicate by normalized userId (first 8 chars) so the short manufacturer-data
-    // prefix and the full Supabase UUID for the same person collapse into one entry.
+    // Key on the first 8 chars of the userId (every device here has a full userId,
+    // guaranteed by isVisibleNearbyUser).
     const dedupeKey = device.userId ? device.userId.toLowerCase().slice(0, 8) : undefined;
 
     // Skip devices we can't uniquely identify by userId
@@ -1079,10 +1046,6 @@ export default function HomeScreen() {
       return acc;
     }
 
-    // Skip devices involved in a block relationship (either direction)
-    if (device.userId && blockedUserIds.has(device.userId)) {
-      return acc;
-    }
     const existingIndex = acc.findIndex(d =>
       d.userId ? d.userId.toLowerCase().slice(0, 8) === dedupeKey : false
     );
@@ -1130,9 +1093,9 @@ export default function HomeScreen() {
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
+    console.log('[BLE-DUPE] HomeScreen devices state changed - ble-plx:', (devices || []).length, 'filtered:', (filteredDevices || []).length, 'deduplicated:', (deduplicatedDevices || []).length);
     console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify((deduplicatedDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices, filteredDevices, deduplicatedDevices]);
+  }, [devices, filteredDevices, deduplicatedDevices]);
 
   // Sync selectedBlipDevice with devices array when username/userId is loaded
   useEffect(() => {

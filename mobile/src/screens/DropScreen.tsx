@@ -7,12 +7,13 @@ import { sendDrop, updateDropStatus, getAcceptedDrops, deleteDrop, Drop } from '
 import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile, usePinnedProfiles } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useBlockedUsers } from '../contexts/BlockedUsersContext';
+import { isVisibleNearbyUser } from '../utils/nearbyVisibility';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import NetworkBanner from '../components/NetworkBanner';
-import { DROPSHAKE_SERVICE_UUID } from '../config/bleConfig';
 
 // Helper function to get initials from name
 const getInitials = (name: string): string => {
@@ -218,33 +219,30 @@ export default function DropScreen() {
 
   // Use BLE scanner hook
   const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
+  const { blockedUserIds, loadFailed } = useBlockedUsers();
 
-  // Filter to only show DropShake users (same filtering as HomeScreen)
-  // Normalize UUID for comparison
-  const normalizeUUID = (uuid: string): string => uuid.toLowerCase().replace(/-/g, '');
-  const normalizedDropShakeUUID = normalizeUUID(DROPSHAKE_SERVICE_UUID);
-
-  // Filter to only DropShake devices (by Service UUID)
-  // Manufacturer data provides user identity, Service UUID identifies DropShake devices
-  const dropLinkDevices = devices.filter(device => {
-    if (device.serviceUUIDs && device.serviceUUIDs.length > 0) {
-      return device.serviceUUIDs.some(
-        uuid => normalizeUUID(uuid) === normalizedDropShakeUUID
-      );
-    }
-    return false;
-  });
-
-  // Then filter by max distance setting and sort by distance (closest first)
-  const filteredDevices = dropLinkDevices
-    .filter(device => device.distanceFeet <= maxDistance)
+  // Same visibility rule as HomeScreen's radar (DropShake-only, in range, block
+  // list loaded, fully resolved, not blocked), sorted closest first.
+  const filteredDevices = devices
+    .filter(device => isVisibleNearbyUser(device, blockedUserIds, maxDistance))
     .sort((a, b) => a.distanceFeet - b.distanceFeet);
+
+  // If the block list has never loaded, the list shows nobody - tell the user why.
+  useEffect(() => {
+    if (loadFailed && !blockedUserIds) {
+      showToast({
+        message: 'Could not load your block list. Nearby users are hidden until it loads.',
+        type: 'error',
+        duration: 3000,
+      });
+    }
+  }, [loadFailed, blockedUserIds]);
 
   // Log device counts for BLE debugging
   useEffect(() => {
-    console.log('[BLE-DUPE] DropScreen devices state changed - total:', (devices || []).length, 'dropLink:', (dropLinkDevices || []).length, 'filtered:', (filteredDevices || []).length);
+    console.log('[BLE-DUPE] DropScreen devices state changed - total:', (devices || []).length, 'filtered:', (filteredDevices || []).length);
     console.log('[BLE-ID] DropScreen filteredDevices for UI render:', JSON.stringify((filteredDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
-  }, [devices, dropLinkDevices, filteredDevices]);
+  }, [devices, filteredDevices]);
 
   // Auto-start scanning when Drop page loads
   useEffect(() => {

@@ -27,6 +27,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import Toast from './src/components/Toast';
 import { TutorialProvider, useTutorial } from './src/contexts/TutorialContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { BlockedUsersProvider } from './src/contexts/BlockedUsersContext';
 import { colors, type, getTheme } from './src/theme';
 import * as Updates from 'expo-updates';
 import { initMonitor, logAction } from './src/services/activityMonitor';
@@ -1187,7 +1188,9 @@ function MainApp() {
                       <BLEAdvertisingContext.Provider value={{ isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable: advertisingAvailable }}>
                         <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                           <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-                            {Screen()}
+                            <BlockedUsersProvider>
+                              {Screen()}
+                            </BlockedUsersProvider>
                           </View>
 
                           {/* Bottom nav - Hide when sub-screen is active */}

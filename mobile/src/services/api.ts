@@ -579,7 +579,9 @@ export async function sendDrop(
 
     if (blockCheckError) {
       console.error('[DROPS] Error checking blocks:', blockCheckError);
-    } else if (blockRow) {
+      throw new Error('Failed to send drop. Please try again.');
+    }
+    if (blockRow) {
       throw new Error('Unable to send drop to this user');
     }
 
@@ -1894,35 +1896,52 @@ export async function getBlockedUsersWithProfiles(): Promise<BlockedUserProfile[
   }
 }
 
+const BLOCKED_IDS_TIMEOUT_MS = 10000;
+
 export async function getBlockedUserIds(): Promise<Set<string>> {
+  const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Timed out loading blocked users.'));
+    }, BLOCKED_IDS_TIMEOUT_MS);
+  });
+
   try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-    if (sessionError || !session) {
-      return new Set();
-    }
-
-    const { data, error } = await supabase
-      .from('blocks')
-      .select('blocker_id, blocked_id')
-      .or(`blocker_id.eq.${session.user.id},blocked_id.eq.${session.user.id}`);
-
-    if (error) {
-      console.error('[BLOCKS] Failed to fetch block relationships:', error);
-      return new Set();
-    }
-
-    const ids = new Set<string>();
-    (data || []).forEach(row => {
-      if (row.blocker_id === session.user.id) ids.add(row.blocked_id);
-      if (row.blocked_id === session.user.id) ids.add(row.blocker_id);
-    });
-
-    return ids;
+    return await Promise.race([fetchBlockedUserIds(controller.signal), timeout]);
   } catch (error) {
     console.error('[BLOCKS] Get blocked user IDs error:', error);
-    return new Set();
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+async function fetchBlockedUserIds(signal: AbortSignal): Promise<Set<string>> {
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    throw new Error('User not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('blocks')
+    .select('blocker_id, blocked_id')
+    .or(`blocker_id.eq.${session.user.id},blocked_id.eq.${session.user.id}`)
+    .abortSignal(signal);
+
+  if (error) {
+    console.error('[BLOCKS] Failed to fetch block relationships:', error);
+    throw new Error('Failed to load blocked users.');
+  }
+
+  const ids = new Set<string>();
+  (data || []).forEach(row => {
+    if (row.blocker_id === session.user.id) ids.add(row.blocked_id);
+    if (row.blocked_id === session.user.id) ids.add(row.blocker_id);
+  });
+  return ids;
 }
 export type ReportReason = 'harassment' | 'inappropriate_content' | 'spam' | 'fake_profile' | 'other';
 
