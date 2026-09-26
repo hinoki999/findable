@@ -3701,11 +3701,6 @@ expo-linear-gradient@~15.0.7:
   resolved "https://registry.npmjs.org/expo-linear-gradient/-/expo-linear-gradient-15.0.7.tgz"
   integrity sha512-yF+y+9Shpr/OQFfy/wglB/0bykFMbwHBTuMRa5Of/r2P1wbkcacx8rg0JsUWkXH/rn2i2iWdubyqlxSJa3ggZA==
 
-expo-location@~19.0.7:
-  version "19.0.7"
-  resolved "https://registry.npmjs.org/expo-location/-/expo-location-19.0.7.tgz"
-  integrity sha512-YNkh4r9E6ECbPkBCAMG5A5yHDgS0pw+Rzyd0l2ZQlCtjkhlODB55nMCKr5CZnUI0mXTkaSm8CwfoCO8n2MpYfg==
-
 expo-manifests@~1.0.8:
   version "1.0.8"
   resolved "https://registry.npmjs.org/expo-manifests/-/expo-manifests-1.0.8.tgz"

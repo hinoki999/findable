@@ -1071,17 +1071,17 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
-              5. Location Data & GPS
+              5. Bluetooth Proximity & Location
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              By using the Application, you expressly consent to DropShake's collection, use, and transmission of location data, including GPS-derived location information, for the purpose of enabling proximity-based features within the Application. DropShake may use your location data to detect nearby users, facilitate drops, and improve Application functionality. Your location data will not be sold to third parties. You may withdraw consent to location access at any time through your device settings, with the understanding that doing so may limit or disable core features of the Application.
+              The Application does not collect GPS or other location data. Proximity to other users is estimated from the strength of Bluetooth Low Energy signals between devices, as described in Section 6. On Android 11 and earlier, the operating system requires apps to hold the location permission in order to scan for Bluetooth devices; on those versions DropShake requests this permission for Bluetooth scanning only and does not access your location. Proximity data will not be sold to third parties. You may withdraw Bluetooth or location permissions at any time through your device settings, with the understanding that doing so may limit or disable core features of the Application.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
               6. Bluetooth & Proximity Technology
             </Text>
             <Text style={{ fontSize: 14, color: theme.colors.text, marginBottom: 20, lineHeight: 22, fontFamily: 'Inter_400Regular' }}>
-              The Application utilizes Bluetooth Low Energy (BLE) technology to detect the proximity of other users' devices. BLE functionality is used solely for proximity-based interactions between users who have the Application open and active. You are responsible for enabling or disabling Bluetooth permissions on your device at any time.
+              The Application uses Bluetooth Low Energy (BLE) technology to detect other DropShake users near you. While you are discoverable, your device broadcasts a short identifier linked to your DropShake account, and the Application scans for the identifiers broadcast by other users' devices. Broadcasting and scanning continue while the Application is in the background or closed; on Android, a persistent notification is shown while this is active. While you are discoverable, nearby DropShake users can see your name and username. You are discoverable by default. Turning on Ghost Mode stops your device from broadcasting, so you no longer appear to other users; while Ghost Mode is on, you will not be able to receive drops. You may also disable Bluetooth permissions for the Application at any time through your device settings.
             </Text>
 
             <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 8, fontFamily: 'Inter_500Medium' }}>
@@ -1166,7 +1166,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             </Text>
 
             <Text style={{ fontSize: 12, color: theme.colors.muted, textAlign: 'center', marginBottom: 40, fontFamily: 'Inter_400Regular' }}>
-              Last Updated: March 2026
+              Last Updated: September 2026
             </Text>
           </ScrollView>
         </View>
