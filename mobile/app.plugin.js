@@ -35,9 +35,22 @@ const withBluetoothPermissionFlags = (config) => {
 
       if (name === 'android.permission.BLUETOOTH_SCAN') {
         perm.$['android:usesPermissionFlags'] = 'neverForLocation';
+        perm.$['tools:targetApi'] = 's';
       }
 
       if (name === 'android.permission.ACCESS_FINE_LOCATION') {
+        perm.$['android:maxSdkVersion'] = '30';
+      }
+
+      if (name === 'android.permission.READ_EXTERNAL_STORAGE') {
+        perm.$['android:maxSdkVersion'] = '32';
+      }
+    });
+
+    // react-native-ble-plx also declares ACCESS_FINE_LOCATION via
+    // <uses-permission-sdk-23>; cap it too or it stays declared on API 31+.
+    (manifest['uses-permission-sdk-23'] || []).forEach((perm) => {
+      if (perm.$['android:name'] === 'android.permission.ACCESS_FINE_LOCATION') {
         perm.$['android:maxSdkVersion'] = '30';
       }
     });

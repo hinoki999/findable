@@ -59,8 +59,6 @@ These are tracked for the cleanup phase. Leave them unless explicitly asked.
 - **`android/app/google-services.json`** still says `droplink-5700c`. That is the
   live Firebase project ID. Changing the string breaks FCM. A real rename is
   separate infrastructure work.
-- **`src/contexts/AuthContext.tsx`: `DEVICE_UNIQUE_ID_KEY = 'droplink_device_unique_id'`.**
-  Persistent storage key. Renaming it invalidates every existing install's device ID.
 
 ---
 
@@ -74,6 +72,12 @@ These are tracked for the cleanup phase. Leave them unless explicitly asked.
 | DropLink → DropShake rename | app.json, strings.xml, native Kotlin BLE services, all UI strings, Terms & Conditions. Casing is `DropShake`. |
 | Pinned contacts persistence | `pinContact`/`unpinContact`/`getPinnedContacts` now use `contact_user_id` (uuid). Pins load from server on login. |
 | Migration `20260924000000_security_hardening.sql` | Applied and pushed. Covers SEC-02, 03, 06a, 06b, 07 (partial), 08, 11, 12, DRIFT-2. |
+| 1 — Production build type | `eas.json` production profile no longer forces APK; builds an app bundle. `preview` still builds APK. |
+| 2 — Trigger key | Migration `20260925000000_drop_notification_vault_key.sql`: `notify_drop_change()` reads the key from Vault (`drop_notification_secret_key`) and sends it as `apikey`. `send-drop-notification` has `verify_jwt = false` and checks `apikey` against `SUPABASE_SECRET_KEYS`. Old JWT redacted from the 2026-09-02 migration. Tested (200). |
+| 3 — Block checks fail closed | `getBlockedUserIds` throws (10s timeout); `sendDrop` stops on block-check error. `BlockedUsersContext` holds the list app-wide (nobody shown until first load, last-known list kept on later failures, 10s retry). `isVisibleNearbyUser` in `src/utils/nearbyVisibility.ts` is the single visibility rule for HomeScreen and DropScreen; it also hides devices whose `userId` is still the 8-char BLE prefix. |
+| 4 — Secrets and PII in logs | Token, OTP and profile-dumping `console.log` lines deleted. `babel.config.js` strips all `console.*` except `console.error` in production (verified via `expo export`). `console.error` on personal-data writes logs only `code` + `message` — Sentry records console output as breadcrumbs. |
+| 5 — Auth bypass | `AUTH_BYPASS_ENABLED` and every gated branch removed from `AuthContext.tsx` and `App.tsx`, including `DEVICE_UNIQUE_ID_KEY`, which only the bypass used. |
+| 9 — Dead CI workflows | Railway-era workflows deleted; only `eas-update.yml` and `ota-update.yml` remain (manual trigger only). |
 
 **Schema drift resolved (was blocking):** the live database differs from the
 committed schema in known ways. Confirmed live: `pinned_contacts` has
@@ -88,52 +92,7 @@ database, not the 2026-09-02 snapshot.
 Group items that touch the same file. Do not work strictly top to bottom if
 batching is cheaper — but finish and report each item before starting the next.
 
-### Critical
-
-**1 — eas.json production profile emits APK**
-`mobile/eas.json` production profile sets `"android": { "buildType": "apk" }`.
-Google Play requires an app bundle. Delete the `buildType` override; EAS
-defaults to app-bundle. Leave `preview` alone — a sideloadable APK is wanted there.
-
-**2 — Database triggers contain a hardcoded key**
-`supabase/migrations/20260902060443_remote_schema.sql` lines ~893 and ~895
-contain trigger definitions with a JWT embedded in plaintext. The key itself is
-already revoked, so this is no longer a live exposure — but the next
-`supabase db pull` will re-commit whatever key is there. Rewrite the triggers to
-read the key from Supabase Vault, or move the notification dispatch out of a
-trigger entirely. **Ask before changing trigger behaviour** — these fire the
-drop/link push notifications.
-
 ### High
-
-**3 — Block checks fail open in the client**
-`mobile/src/services/api.ts`:
-- `getBlockedUserIds` returns an empty `Set` on no-session, on query error, and
-  in its catch. An empty Set means "nobody is blocked", so one transient error
-  silently disables block filtering for the life of the screen. Make all three
-  paths throw.
-- `sendDrop`'s block check logs `blockCheckError` and then continues to the
-  insert. Make the error branch throw.
-- Then check the callers: `HomeScreen.tsx` around line 965 swallows the result
-  with a `// Silent fail` comment. Surface the failure to the user instead.
-
-**4 — Secrets and PII logged in release builds**
-No `babel.config.js` exists anywhere outside `node_modules`, so every
-`console.log` ships. `api.ts` logs a full auth token, live OTP codes, and other
-users' complete profile rows. Two parts:
-- Delete the specific offending log lines (full token, `[PHONE-VERIFY] Code input`,
-  `[DROP-SCREEN] Full result set`, `[DROP-CRASH] senderProfile`).
-- Add a `babel.config.js` with `transform-remove-console` for production builds,
-  preserving `console.error`.
-
-**5 — Auth-bypass backdoor ships in the bundle**
-`mobile/src/contexts/AuthContext.tsx:26` — `AUTH_BYPASS_ENABLED = false`. The
-flag is off, but the gated code is a complete credential-free login path:
-derives a password from a device id, signs in against production Supabase, and
-on failure fabricates a session with `token: 'bypass-token'` reporting
-`isAuthenticated: true`. It also writes to a `profiles` table that does not exist.
-Remove the flag and every gated branch entirely (roughly lines 77–207, 251–291,
-335–346, 380–383, 407–447 — verify current line numbers, they have shifted).
 
 **6 — Bluetooth permission flags never reach the shipped manifest**
 `mobile/app.plugin.js` adds `android:usesPermissionFlags="neverForLocation"` to
@@ -157,13 +116,6 @@ proximity is RSSI-derived only. The Terms also reference Twilio SMS verification
 which is disabled in code. Rewrite that section to describe Bluetooth proximity
 accurately. **Draft it and show Caitlin before applying — this is legal text.**
 Also remove the unused `expo-location` dependency.
-
-**9 — Six of seven CI workflows fail permanently**
-`.github/workflows/` — `error-monitoring.yml` (runs every 5 min),
-`staging-deploy.yml`, `production-deploy.yml`, `database-backup.yml` (daily),
-`test-suite.yml` (hourly, watches a `backend/**` directory that no longer
-exists). All reference removed Railway infrastructure. `eas-update.yml` and
-`ota-update.yml` are `workflow_dispatch` only and harmless. Delete the dead ones.
 
 **10 — No typecheck or lint in CI; preview builds from every branch**
 `mobile/package.json` has `typecheck` and `lint` scripts. Neither appears in any
@@ -234,10 +186,9 @@ broken. Distinguish by creating a fresh account and checking whether a
 `user_profiles` row appears. If creation is broken, that is a launch blocker.
 
 **18 — `send-drop-notification` Edge Function**
-Dashboard-only, not in the repo. Reads `SUPABASE_SERVICE_ROLE_KEY` from an env
-var (auto-populated by Supabase), so the key rotation most likely did not break
-it — but this has not been tested since. Needs a two-device test, or check the
-function's logs for errors after the rotation timestamp.
+Source is now in the repo at `supabase/functions/send-drop-notification/index.ts`
+(downloaded 2026-09-25). Called with the Vault key since item 2; returned 200 in
+testing. Still needs an end-to-end two-device check that pushes actually arrive.
 
 ### Low
 
