@@ -1,9 +1,10 @@
-# EAS Workflow: typecheck and lint gate
+# EAS Workflow: typecheck, lint and runtime-version gate
 # Runs on every push to develop. Builds and OTA updates are started manually,
-# so this workflow only reports whether the code typechecks and lints cleanly.
+# so this workflow only reports whether the code typechecks and lints cleanly and
+# whether the runtime version matches between app.json and the Android project.
 
 # Workflow name (displayed in Expo dashboard)
-name: Typecheck and lint
+name: Checks
 
 # Trigger: Run this workflow when code is pushed to develop
 on:
@@ -13,7 +14,7 @@ on:
 
 jobs:
   checks:
-    name: Typecheck and lint
+    name: Typecheck, lint and runtime version
     steps:
       - uses: eas/checkout
       - uses: eas/install_node_modules
@@ -21,3 +22,5 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Runtime version in sync
+        run: npm run check:runtime

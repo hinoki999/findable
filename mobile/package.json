@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "postinstall": "patch-package",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check:runtime": "node scripts/check-runtime-version.js"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
