@@ -205,10 +205,6 @@ const formatPhoneNumber = (text: string): string => {
   return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
 };
 
-// AUTH BYPASS: Set to true to skip all backend calls for BLE testing
-// NOTE: Set to false for production - profile updates need Supabase
-const AUTH_BYPASS_ENABLED = false;
-
 // Main App Component (wrapped by AuthProvider)
 function MainApp() {
   const { isAuthenticated, loading: authLoading, login, userId, refreshAuth } = useAuth();
@@ -386,9 +382,6 @@ function MainApp() {
   // Function to load all user data from backend
   // Wrapped in useCallback to provide stable reference for useEffect dependencies
   const loadUserData = useCallback(async (auth: boolean, uid: string | null, options?: { onlyPhoto?: boolean }) => {
-    if (AUTH_BYPASS_ENABLED) {
-      return; // Skip backend calls for testing
-    }
     if (!auth || !uid) return;
 
     try {
@@ -837,10 +830,6 @@ function MainApp() {
     const newValue = !isDarkMode;
     setIsDarkMode(newValue);
 
-    if (AUTH_BYPASS_ENABLED) {
-      return; // Skip backend calls for testing
-    }
-
     // Save to backend
     try {
       const api = await import('./src/services/api');
@@ -891,16 +880,8 @@ function MainApp() {
   const updateProfile = async (updates: Partial<UserProfile>) => {
     console.log('[PROFILE-UPDATE] ===== updateProfile CALLED =====');
     console.log('[PROFILE-UPDATE] Received updates:', JSON.stringify(updates, null, 2));
-    console.log('[PROFILE-UPDATE] AUTH_BYPASS_ENABLED:', AUTH_BYPASS_ENABLED);
 
     const newProfile = { ...userProfile, ...updates };
-
-    if (AUTH_BYPASS_ENABLED) {
-      // Update local state only for testing
-      setUserProfile(newProfile);
-      showToast({ message: 'Profile updated', type: 'success', duration: 2000 });
-      return;
-    }
 
     try {
       if (!userId) {
@@ -959,10 +940,6 @@ function MainApp() {
 
   const updateMaxDistance = async (distance: number) => {
     setMaxDistance(distance);
-
-    if (AUTH_BYPASS_ENABLED) {
-      return; // Skip backend calls for testing
-    }
 
     // Save to backend
     try {
