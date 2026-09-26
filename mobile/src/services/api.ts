@@ -1,6 +1,5 @@
 // src/services/api.ts
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 import { ENV } from '../config/environment';
 import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
@@ -1595,11 +1594,6 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
     throw new Error(error.message || 'Invalid or expired code. Please try again.');
   }
 }
-
-// DISABLED: Twilio account suspended
-// const TWILIO_ACCOUNT_SID = Constants.expoConfig?.extra?.twilioAccountSid || '';
-// const TWILIO_AUTH_TOKEN = Constants.expoConfig?.extra?.twilioAuthToken || '';
-// const TWILIO_VERIFY_SERVICE_SID = Constants.expoConfig?.extra?.twilioVerifyServiceSid || '';
 
 // DISABLED: Twilio account suspended - stub functions to prevent app crashes
 export async function sendPhoneVerificationCodeTwilio(phoneNumber: string): Promise<void> {

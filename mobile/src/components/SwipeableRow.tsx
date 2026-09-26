@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Animated, PanResponder, Dimensions, Platform } from 'react-native';
+import { View, Text, Animated, PanResponder, Dimensions, Platform, ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface SwipeableRowProps {
@@ -363,7 +363,7 @@ export default function SwipeableRow({
         style={{
           transform: [{ translateX }],
           backgroundColor: 'transparent',
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: (isDragging ? 'grabbing' : 'grab') as ViewStyle['cursor'],
         }}
         // @ts-ignore
         draggable={false}

@@ -2,7 +2,7 @@
 // Railway backend removed - app uses Supabase directly
 export type Environment = 'development' | 'production';
 
-const CURRENT_ENV: Environment = 'production';
+const CURRENT_ENV = 'production' as Environment;
 
 const ENV_CONFIG = {
   development: {

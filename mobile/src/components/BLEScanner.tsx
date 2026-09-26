@@ -8,7 +8,8 @@ const BLE_PERMISSIONS_KEY = '@dropshake_ble_permissions_granted';
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),

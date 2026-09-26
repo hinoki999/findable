@@ -11,9 +11,9 @@ Read this fully before doing anything.
 2. **Never apply an edit without showing the diff first.** One item at a time.
 3. **Evidence before diagnosis.** Read the actual file. Never assume a line's
    content from a filename, a comment, or a previous grep.
-4. **After every code change, run `npx tsc --noEmit` from `mobile/`.** There are
-   4 known pre-existing errors (listed below). Anything beyond those 4 is
-   something you introduced — fix it before moving on.
+4. **After every code change, run `npx tsc --noEmit` from `mobile/`.** It must
+   report zero errors. Any error is something you introduced — fix it before
+   moving on.
 5. **Never run `supabase db reset` or any destructive database command.**
 6. **If a fix requires a product decision, stop and ask.** Do not pick a
    reasonable-looking default.
@@ -29,15 +29,7 @@ Read this fully before doing anything.
   database migrations in `supabase/migrations/`.
 - **Status:** Pre-launch. No real users. 3 test accounts.
 - **Supabase project ref:** `jfuhplqtujaakksmixii`
-
-### Known pre-existing TypeScript errors (do not count these as regressions)
-```
-src/components/BLEScanner.tsx:10    — expo-notifications NotificationBehavior shape
-src/components/SwipeableRow.tsx:363 — Animated style cursor type
-src/config/environment.ts:22        — comparison of non-overlapping literal types
-src/screens/ScannerScreen.tsx:10    — saveDevice called with 1 arg, expects 2
-```
-These are tracked for the cleanup phase. Leave them unless explicitly asked.
+- **TypeScript:** `npx tsc --noEmit` is clean (0 errors) as of 2026-09-26.
 
 ---
 
@@ -78,6 +70,7 @@ These are tracked for the cleanup phase. Leave them unless explicitly asked.
 | 4 — Secrets and PII in logs | Token, OTP and profile-dumping `console.log` lines deleted. `babel.config.js` strips all `console.*` except `console.error` in production (verified via `expo export`). `console.error` on personal-data writes logs only `code` + `message` — Sentry records console output as breadcrumbs. |
 | 5 — Auth bypass | `AUTH_BYPASS_ENABLED` and every gated branch removed from `AuthContext.tsx` and `App.tsx`, including `DEVICE_UNIQUE_ID_KEY`, which only the bypass used. |
 | 9 — Dead CI workflows | Railway-era workflows deleted; only `eas-update.yml` and `ota-update.yml` remain (manual trigger only). |
+| 10 — CI typecheck/lint gate | The committed `mobile/.eas/workflows/preview.yml` was never valid (build/update settings not under `params:`) and EAS shows zero runs, so it never built or published anything. Replaced with a checks-only workflow: on push to `develop`, runs `npm run typecheck` and `npm run lint` (validated with `eas workflow:validate`). No automatic builds or OTA updates — Caitlin starts those manually. The 4 old TypeScript errors were fixed to make the gate pass (`ScannerScreen.tsx`, an unrouted test screen, was deleted). Lint: 0 errors, 126 warnings. |
 
 **Schema drift resolved (was blocking):** the live database differs from the
 committed schema in known ways. Confirmed live: `pinned_contacts` has
@@ -116,12 +109,6 @@ proximity is RSSI-derived only. The Terms also reference Twilio SMS verification
 which is disabled in code. Rewrite that section to describe Bluetooth proximity
 accurately. **Draft it and show Caitlin before applying — this is legal text.**
 Also remove the unused `expo-location` dependency.
-
-**10 — No typecheck or lint in CI; preview builds from every branch**
-`mobile/package.json` has `typecheck` and `lint` scripts. Neither appears in any
-workflow. `mobile/.eas/workflows/preview.yml` triggers on `branches: ['**']`, so
-any branch publishes to the shared preview channel. Add `npm run typecheck` as a
-gate and scope the trigger to `develop`.
 
 ### Medium
 
@@ -203,7 +190,7 @@ are stubs that always throw. Three `// TEMP DISABLED` gates exist at
 **20 — Feedback / bug-report field.** Own table, sibling section to blocked-users
 in Settings, likely emailed via Brevo.
 
-**21 — General cleanup.** ESLint warnings, the 4 known TS errors, remove emojis,
+**21 — General cleanup.** ESLint warnings (126, 0 errors), remove emojis,
 README, documentation.
 
 **22 — Rename the Supabase project** from "DropLink" (cosmetic, dashboard only).

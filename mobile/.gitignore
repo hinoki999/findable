@@ -24,6 +24,11 @@ AppData/
 *.tmp
 *.log
 *.cache
+# Debug dumps and backups
+/*.txt
+*.ini
+*.bak
+*.bak.*
 
 # IDE
 .vscode/
