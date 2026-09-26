@@ -930,8 +930,7 @@ function MainApp() {
         .select();
 
       if (error) {
-        console.error('[PROFILE-UPDATE] Supabase UPDATE error:', error);
-        console.error('[PROFILE-UPDATE] Error details:', JSON.stringify(error, null, 2));
+        console.error('[PROFILE-UPDATE] Supabase UPDATE error:', error.code, error.message);
         throw new Error(error.message || 'Failed to update profile in database');
       }
 

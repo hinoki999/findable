@@ -41,7 +41,6 @@ async function getAuthToken(): Promise<string | null> {
   console.log('═══════════════════════════════════════════════════════');
   console.log('DEBUG: POINT D: api.ts - Token Retrieved from Storage');
   console.log('  timestamp:', new Date().toISOString());
-  console.log('  retrieved token:', token);
   console.log('  typeof token:', typeof token);
   console.log('  token length:', token?.length);
   console.log('  is null?:', token === null);
@@ -72,8 +71,6 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     console.log('═══════════════════════════════════════════════════════');
     console.log('DEBUG: POINT E: api.ts - Authorization Header Constructed');
     console.log('  timestamp:', new Date().toISOString());
-    console.log('  token used:', token);
-    console.log('  Authorization header:', headers['Authorization']);
     console.log('  Header length:', headers['Authorization']?.length);
     console.log('  Contains Bearer?:', headers['Authorization']?.startsWith('Bearer '));
     console.log('═══════════════════════════════════════════════════════');
@@ -278,7 +275,7 @@ export async function saveDevice(d: Device, userId: string): Promise<any> {
     }
 
     if (error) {
-      console.error('Supabase device save error:', error);
+      console.error('Supabase device save error:', error.code, error.message);
       throw new Error('Failed to save device. Please try again.');
     }
 
@@ -511,7 +508,6 @@ export async function sendDrop(
   const callTimestamp = Date.now();
   console.log('[DROP-DUPE] sendDrop ENTRY - timestamp:', callTimestamp, 'receiverId:', receiverId);
   console.log('[DROP-CRASH] sendDrop called with receiverId:', receiverId, 'distanceFeet:', distanceFeet);
-  console.log('[DROP-CRASH] senderProfile:', JSON.stringify(senderProfile, null, 2));
 
   try {
     console.log('[DROP-CRASH] Step 1: Getting session...');
@@ -619,7 +615,7 @@ export async function sendDrop(
         .update({ status: 'linked', responded_at: new Date().toISOString() })
         .eq('id', reverseDrop.id);
       if (reverseUpdateError) {
-        console.error('[DROPS] Failed to update reverse drop status:', reverseUpdateError);
+        console.error('[DROPS] Failed to update reverse drop status:', reverseUpdateError.code, reverseUpdateError.message);
       }
 
       // Return the linked drop (no new pending drop inserted)
@@ -649,7 +645,6 @@ export async function sendDrop(
       sender_social_media: senderProfile.socialMedia || null,
     };
 
-    console.log('[DROP-CRASH] Step 5: Drop data built:', JSON.stringify(dropData, null, 2));
     console.log('[DROP-DUPE] About to insert single drop row, timestamp:', callTimestamp);
 
     // Insert ONE row with status 'pending'
@@ -661,15 +656,13 @@ export async function sendDrop(
       .single();
 
     if (error) {
-      console.error('[DROPS] Supabase drop insert error:', error);
-      console.error('[DROP-CRASH] Step 5 FAILED - Supabase error:', JSON.stringify(error, null, 2));
+      console.error('[DROPS] Supabase drop insert error:', error.code, error.message);
       throw new Error('Failed to send drop. Please try again.');
     }
 
     console.log('[DROP-CRASH] Step 6: Insert successful');
     console.log('[DROPS] SUCCESS: Drop created with id:', data?.id);
     console.log('[DROP-DUPE] Insert completed - drop ID:', data?.id, 'timestamp:', callTimestamp);
-    console.log('[DROP-DUPE] Full insert response:', JSON.stringify(data, null, 2));
 
     console.log('[DROP-CRASH] Step 7: Returning drop:', data?.id);
     console.log('[DROP-DUPE] sendDrop EXIT - timestamp:', callTimestamp, 'returning drop ID:', data?.id);
@@ -718,7 +711,6 @@ export async function getIncomingDrops(): Promise<Drop[]> {
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} incoming drops`);
     console.log('[DROP-SCREEN] Query returned', data?.length || 0, 'results');
-    console.log('[DROP-SCREEN] Full result set:', JSON.stringify(data, null, 2));
     console.log('[DROP-SCREEN] getIncomingDrops EXIT - timestamp:', callTimestamp);
     return (data || []).map(mapDropFromDb);
   } catch (error: any) {
@@ -800,7 +792,6 @@ export async function getAcceptedDrops(): Promise<Drop[]> {
 
     console.log(`[DROPS] SUCCESS: Loaded ${data?.length || 0} accepted drops`);
     console.log('[DROP-SCREEN] Query returned', data?.length || 0, 'accepted drops');
-    console.log('[DROP-SCREEN] Full result set:', JSON.stringify(data, null, 2));
     console.log('[DROP-SCREEN] getAcceptedDrops EXIT - timestamp:', callTimestamp);
     return (data || []).map(mapDropFromDb);
   } catch (error: any) {
@@ -1000,7 +991,7 @@ export async function updateDropStatus(
       .single();
 
     if (error) {
-      console.error('[DROPS] Supabase drop update error:', error);
+      console.error('[DROPS] Supabase drop update error:', error.code, error.message);
       throw new Error('Failed to update drop. Please try again.');
     }
 
@@ -1101,7 +1092,7 @@ export async function deleteDrop(dropId: string): Promise<void> {
     console.log('[DROPS] SOFT-DELETE: Supabase response - data:', data, ', error:', error);
 
     if (error) {
-      console.error('[DROPS] SOFT-DELETE: Supabase update error:', error);
+      console.error('[DROPS] SOFT-DELETE: Supabase update error:', error.code, error.message);
       throw new Error('Failed to delete drop. Please try again.');
     }
 
@@ -1379,7 +1370,7 @@ export async function changeUsername(newUsername: string, userId: string): Promi
       .eq('user_id', userId);
 
     if (profileError) {
-      console.error('Failed to update username in profile:', profileError);
+      console.error('Failed to update username in profile:', profileError.code, profileError.message);
       throw new Error('Failed to change username. Please try again.');
     }
 
@@ -1547,7 +1538,6 @@ export async function sendPhoneVerificationCode(phoneNumber: string, userId: str
 export async function verifyPhoneCode(phoneNumber: string, code: string, userId: string): Promise<void> {
   console.log('[PHONE-VERIFY] verifyPhoneCode called');
   console.log('[PHONE-VERIFY] Raw phone input:', phoneNumber);
-  console.log('[PHONE-VERIFY] Code input:', code);
   console.log('[PHONE-VERIFY] userId:', userId);
   try {
     let formattedPhone = phoneNumber.replace(/\D/g, '');
@@ -1592,9 +1582,7 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
       .eq('user_id', userId);
 
     if (updateError) {
-      console.error('[PHONE-VERIFY] user_profiles update error:', updateError);
-      console.error('[PHONE-VERIFY] Update error details:', JSON.stringify(updateError, null, 2));
-      console.error('Failed to update phone verification status:', updateError);
+      console.error('[PHONE-VERIFY] user_profiles update error:', updateError.code, updateError.message);
       throw new Error('Verification succeeded but failed to save status. Please contact support.');
     }
 
@@ -1968,7 +1956,7 @@ export async function reportUser(reportedUserId: string, reason: ReportReason, d
       });
 
     if (error) {
-      console.error('[REPORTS] Failed to submit report:', error);
+      console.error('[REPORTS] Failed to submit report:', error.code, error.message);
       throw new Error('Failed to submit report. Please try again.');
     }
 

@@ -82,7 +82,6 @@ export default function DropScreen() {
       console.log('[DROP-SCREEN] Calling getAcceptedDrops API...');
       const drops = await getAcceptedDrops();
       console.log('[DROP-SCREEN] getAcceptedDrops returned', drops.length, 'drops');
-      console.log('[DROP-SCREEN] Full result set:', JSON.stringify(drops.map(d => ({ id: d.id, senderName: d.senderName, status: d.status })), null, 2));
       console.log('[DROP-STATE] DropScreen setAcceptedDrops - count:', drops.length);
       setAcceptedDrops(drops);
     } catch (error: any) {

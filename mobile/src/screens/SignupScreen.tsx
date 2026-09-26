@@ -502,9 +502,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       });
 
       if (profileError) {
-        console.error('[EMAIL-VERIFY] user_profiles insert error:', profileError);
-        console.error('[EMAIL-VERIFY] user_profiles insert error details:', JSON.stringify(profileError, null, 2));
-        console.error(`ERROR: Failed to create user_profiles: ${profileError.message}`);
+        console.error('[EMAIL-VERIFY] user_profiles insert error:', profileError.code, profileError.message);
         throw new Error(`Failed to create profile: ${profileError.message}`);
       }
       console.log('[EMAIL-VERIFY] user_profiles insert succeeded');

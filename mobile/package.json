@@ -51,6 +51,7 @@
     "@types/react": "~19.1.0",
     "@typescript-eslint/eslint-plugin": "^8.69.0",
     "@typescript-eslint/parser": "^8.69.0",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "canvas": "^3.2.1",
     "dotenv": "^17.2.3",
     "eslint": "^10.9.1",
