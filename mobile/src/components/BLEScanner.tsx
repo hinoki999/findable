@@ -72,6 +72,7 @@ export interface BleDevice {
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
   username?: string; // DropShake username from Supabase lookup
   userId?: string; // User ID from Supabase lookup (for sending drops)
+  profilePhoto?: string; // Profile photo URL from Supabase lookup (shown on the blip before a drop)
   lastSeen?: number; // Timestamp (Date.now()) when device was last heard
 }
 
@@ -352,6 +353,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 const normalizedDeviceId = deviceId.toLowerCase().trim();
                 let userId: string | null = null;
                 let displayName: string | null = null;
+                let profilePhoto: string | undefined;
 
                 // Query user_profiles via RPC function (handles uuid::text cast server-side)
                 // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
@@ -370,6 +372,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                   userId = profile.user_id;
                   // Use name for display, fall back to username, then deviceId
                   displayName = profile.name || profile.username || deviceId || 'User';
+                  profilePhoto = profile.profile_photo || undefined;
                   console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
                   console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
                 } else {
@@ -384,7 +387,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                     console.log('[BLE-DUPE] Profile update - prevDevices.length:', prevDevices.length);
                     return prevDevices.map(d =>
                       d.id === device.id
-                        ? { ...d, username: displayName || deviceId || 'User', userId: userId }
+                        ? { ...d, username: displayName || deviceId || 'User', userId: userId, profilePhoto }
                         : d
                     );
                   });
@@ -397,7 +400,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                     console.log('[BLE-DUPE] DeviceId fallback - prevDevices.length:', prevDevices.length);
                     return prevDevices.map(d =>
                       d.id === device.id
-                        ? { ...d, username: deviceId, userId: undefined }
+                        ? { ...d, username: deviceId, userId: undefined, profilePhoto: undefined }
                         : d
                     );
                   });

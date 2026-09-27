@@ -517,9 +517,11 @@ function MainApp() {
                         const { data: userProfileData, error: userProfileError } = await supabase
                           .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
 
-                        if (!userProfileError && userProfileData) {
-                          foundUserId = userProfileData.user_id;
-                          displayName = userProfileData.name || userProfileData.username || deviceId;
+                        // RPC returns a table (array); take the first row
+                        const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
+                        if (!userProfileError && profile) {
+                          foundUserId = profile.user_id;
+                          displayName = profile.name || profile.username || deviceId;
                         }
                       } catch (err) {
                         console.error('[BG-SCAN-SEED] Profile lookup error:', err);
@@ -576,9 +578,11 @@ function MainApp() {
               const { data: userProfileData, error: userProfileError } = await supabase
                 .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
 
-              if (!userProfileError && userProfileData) {
-                foundUserId = userProfileData.user_id;
-                displayName = userProfileData.name || userProfileData.username || deviceId;
+              // RPC returns a table (array); take the first row
+              const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
+              if (!userProfileError && profile) {
+                foundUserId = profile.user_id;
+                displayName = profile.name || profile.username || deviceId;
                 console.log('[BG-SCAN-NATIVE] Profile found - userId:', foundUserId, 'displayName:', displayName);
               }
             } catch (err) {

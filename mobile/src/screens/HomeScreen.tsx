@@ -16,7 +16,6 @@ import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
 import { DROPSHAKE_SERVICE_UUID } from '../config/bleConfig';
-import { supabase } from '../services/supabase';
 
 
 // ========== TENSOR MATHEMATICS ENGINE ==========
@@ -646,7 +645,6 @@ export default function HomeScreen() {
   const [isSendingDrop, setIsSendingDrop] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
-  const [blipProfilePhoto, setBlipProfilePhoto] = useState<string | null>(null);
 
   // Auto-dismiss drop error after 5 seconds
   useEffect(() => {
@@ -1097,48 +1095,21 @@ export default function HomeScreen() {
     console.log('[BLE-ID] HomeScreen deduplicatedDevices for UI render:', JSON.stringify((deduplicatedDevices || []).map(d => ({ id: d.id, name: d.name, username: d.username, userId: d.userId })), null, 2));
   }, [devices, filteredDevices, deduplicatedDevices]);
 
-  // Sync selectedBlipDevice with devices array when username/userId is loaded
+  // Sync selectedBlipDevice with devices array when username/userId/photo is loaded
   useEffect(() => {
     if (selectedBlipDeviceId && selectedBlipDevice) {
       // Find the current device in the devices array (it may have been updated with username)
       const currentDevice = devices.find(d => d.id === selectedBlipDeviceId);
       if (currentDevice && (
         currentDevice.username !== selectedBlipDevice.username ||
-        currentDevice.userId !== selectedBlipDevice.userId
+        currentDevice.userId !== selectedBlipDevice.userId ||
+        currentDevice.profilePhoto !== selectedBlipDevice.profilePhoto
       )) {
         setSelectedBlipDevice(currentDevice);
       }
     }
   }, [devices, selectedBlipDeviceId, selectedBlipDevice]);
 
-  // Fetch profile photo when blip modal opens with a userId
-  useEffect(() => {
-    const fetchBlipProfilePhoto = async () => {
-      if (showBlipModal && selectedBlipDevice?.userId) {
-        try {
-          const { data, error } = await supabase
-            .from('user_profiles')
-            .select('profile_photo')
-            .eq('user_id', selectedBlipDevice.userId)
-            .single();
-
-          if (!error && data?.profile_photo) {
-            setBlipProfilePhoto(data.profile_photo);
-          } else {
-            setBlipProfilePhoto(null);
-          }
-        } catch (err) {
-          console.error('[BLIP-MODAL] Error fetching profile photo:', err);
-          setBlipProfilePhoto(null);
-        }
-      } else if (!showBlipModal) {
-        // Clear photo when modal closes
-        setBlipProfilePhoto(null);
-      }
-    };
-
-    fetchBlipProfilePhoto();
-  }, [showBlipModal, selectedBlipDevice?.userId]);
 
   // ========== TENSOR-BASED SPATIAL SYSTEM ==========
 
@@ -3361,7 +3332,7 @@ export default function HomeScreen() {
                   width: 60,
                   height: 60,
                   borderRadius: 30,
-                  backgroundColor: blipProfilePhoto ? 'transparent' : '#E5FFE5',
+                  backgroundColor: selectedBlipDevice?.profilePhoto ? 'transparent' : '#E5FFE5',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 12,
@@ -3369,8 +3340,8 @@ export default function HomeScreen() {
                   borderColor: '#007AFF',
                   overflow: 'hidden',
                 }}>
-                  {blipProfilePhoto ? (
-                    <Image source={{ uri: blipProfilePhoto }} style={{ width: 60, height: 60 }} />
+                  {selectedBlipDevice?.profilePhoto ? (
+                    <Image source={{ uri: selectedBlipDevice.profilePhoto }} style={{ width: 60, height: 60 }} />
                   ) : (
                     <MaterialCommunityIcons
                       name="account-circle"

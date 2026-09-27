@@ -115,7 +115,15 @@ export default function DropScreen() {
 
     try {
       console.log('[DROPS] Creating link with:', contactName);
-      await updateDropStatus(contactId, 'returned');
+      // Share the current user's contact card back, same as the incoming-drop flow
+      await updateDropStatus(contactId, 'returned', {
+        name: profile?.name,
+        email: profile?.email,
+        phone: profile?.phone,
+        bio: profile?.bio,
+        profilePhoto: profile?.profilePhoto,
+        socialMedia: profile?.socialMedia,
+      });
 
       // IMMEDIATELY close modals and update UI after successful updateDropStatus
       setShowLinkConfirmModal(false);

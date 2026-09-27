@@ -595,26 +595,15 @@ export async function sendDrop(
     } else if (reverseDrop) {
       console.log('[DROPS] Mutual drop detected - auto-linking. reverseDrop:', reverseDrop.id);
 
-      // Create the link using the existing reverse drop (they dropped first)
-      const { error: mutualLinkError } = await supabase
-        .from('links')
-        .insert({
-          user_id_1: receiverId,
-          user_id_2: senderId,
-          drop_id: reverseDrop.id,
-        });
-      if (mutualLinkError) {
-        console.error('[DROPS] Failed to auto-create mutual link:', mutualLinkError);
+      // They dropped first: link_drop records this user's drop back, marks theirs
+      // linked and creates the link in one transaction.
+      const { error: linkError } = await supabase.rpc('link_drop', {
+        p_drop_id: reverseDrop.id,
+        p_profile: senderProfile,
+      });
+      if (linkError) {
+        console.error('[DROPS] link_drop failed:', linkError.code, linkError.message);
         throw new Error('Failed to create link. Please try again.');
-      }
-
-      // Mark the reverse drop as linked so it's no longer pending
-      const { error: reverseUpdateError } = await supabase
-        .from('drops')
-        .update({ status: 'linked', responded_at: new Date().toISOString() })
-        .eq('id', reverseDrop.id);
-      if (reverseUpdateError) {
-        console.error('[DROPS] Failed to update reverse drop status:', reverseUpdateError.code, reverseUpdateError.message);
       }
 
       // Return the linked drop (no new pending drop inserted)
@@ -931,7 +920,7 @@ export async function markLinkViewed(linkId: string): Promise<void> {
 
 /**
  * Update drop status (accept, return, or decline)
- * When status is 'returned', creates a SECOND drop row in reverse direction
+ * When status is 'returned', link_drop creates the reverse drop and the link
  * @param dropId - The drop to update
  * @param status - New status
  * @param responseProfile - If returning, include responder's contact info for the reverse drop
@@ -972,17 +961,28 @@ export async function updateDropStatus(
       throw new Error('Drop not found or you are not the receiver.');
     }
 
-    // Determine the actual status to set in database
-    // 'returned' becomes 'linked' for mutual connections
-    const dbStatus = status === 'returned' ? 'linked' : status;
-    const respondedAt = new Date().toISOString();
+    // 'returned' = link back: link_drop writes the reverse drop, marks this one
+    // linked and creates the link in one transaction.
+    if (status === 'returned') {
+      const { error: linkError } = await supabase.rpc('link_drop', {
+        p_drop_id: dropId,
+        p_profile: responseProfile ?? {},
+      });
 
-    // Update the single drop record
+      if (linkError) {
+        console.error('[DROPS] link_drop failed:', linkError.code, linkError.message);
+        throw new Error('Failed to create link. Please try again.');
+      }
+
+      console.log('[DROPS] SUCCESS: Drop linked:', dropId);
+      return mapDropFromDb({ ...drop, status: 'linked', responded_at: new Date().toISOString() });
+    }
+
     const { data, error } = await supabase
       .from('drops')
       .update({
-        status: dbStatus,
-        responded_at: respondedAt,
+        status,
+        responded_at: new Date().toISOString(),
       })
       .eq('id', dropId)
       .eq('receiver_id', userId)
@@ -994,31 +994,7 @@ export async function updateDropStatus(
       throw new Error('Failed to update drop. Please try again.');
     }
 
-    console.log('[DROPS] SUCCESS: Drop updated:', dropId, dbStatus);
-
-    // If status is 'returned' (mutual link), create a link record
-    if (status === 'returned') {
-      console.log('[DROPS] Creating link for drop:', dropId);
-
-      // Insert into links table: user_id_1 = sender, user_id_2 = receiver (current user)
-      // viewed_at is NULL on creation so both users see it as a new link notification
-      const { data: linkData, error: linkError } = await supabase
-        .from('links')
-        .insert({
-          user_id_1: drop.sender_id,
-          user_id_2: userId,
-          drop_id: dropId,
-        })
-        .select()
-        .single();
-
-      if (linkError) {
-        console.error('[DROPS] Failed to create link:', linkError);
-        // Don't throw - drop status was updated successfully
-      } else {
-        console.log('[DROPS] SUCCESS: Link created:', linkData?.id);
-      }
-    }
+    console.log('[DROPS] SUCCESS: Drop updated:', dropId, status);
 
     return mapDropFromDb(data);
   } catch (error: any) {
