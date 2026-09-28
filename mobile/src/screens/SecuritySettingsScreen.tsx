@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, TextInput, Modal, ScrollView, Alert, StyleSheet, Switch } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { getTheme } from '../theme';
-import { useDarkMode, useToast, useUserProfile } from '../../App';
+import { useDarkMode, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
 import * as api from '../services/api';
+import { supabase } from '../services/supabase';
 import { sendOtpCode, verifyOtpCode, getBlockedUsersWithProfiles, unblockUser, BlockedUserProfile } from '../services/api';
 
 interface SecuritySettingsScreenProps {
@@ -16,7 +17,6 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { showToast } = useToast();
   const { logout, username, login, userId } = useAuth();
-  const { profile } = useUserProfile();
   const theme = getTheme(isDarkMode);
 
   // Modal states
@@ -71,8 +71,11 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
 
 
 
-  // Get user email from profile context
-  const userEmail = profile.email;
+  // Email from the auth account, not the profile (the profile can hold a placeholder)
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserEmail(data.user?.email ?? null));
+  }, []);
 
   const handleEdit = (field: 'username' | 'password') => {
     setEditingField(field);
@@ -216,6 +219,15 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
   };
 
   const handleDeleteAccount = async () => {
+    if (!userEmail) {
+      showToast({
+        message: 'No email found. Please add an email to your account.',
+        type: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
     if (!deleteVerificationCode || deleteVerificationCode.length !== 6) {
       showToast({
         message: 'Please enter the 6-digit verification code',

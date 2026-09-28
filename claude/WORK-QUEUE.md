@@ -210,6 +210,9 @@ that still contains them. Note Expo still loads `.env` even after
 - Dead code: `BLEService.ts`, `native/BLEAdvertiser.ts`, `DeviceDetail`,
   `DeviceList`, three unused loggers, `handleDirectSignup`, `authStorage.ts`, the
   unused `nativeDevices` context, the never-rendered `errorLogs` state
+- Dead "New Link!" pop-up at `HomeScreen.tsx:2971` — nothing sets
+  `showNewLinkModal` to true, so it never opens. The "New Links" section in the
+  drops sheet is the only live in-app link notification
 - `Documents/findable-app/` committed by accident
 - `ai-builder/main.py` overwrites the real `BLEScanner.tsx`
 - `wipe_user_data.py` (two copies) deletes with no confirmation

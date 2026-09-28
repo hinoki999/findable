@@ -68,7 +68,6 @@ export interface BleDevice {
   name: string;
   rssi: number;
   distanceFeet: number;
-  bio?: string;
   serviceUUIDs?: string[]; // Store service UUIDs for filtering in UI
   username?: string; // DropShake username from Supabase lookup
   userId?: string; // User ID from Supabase lookup (for sending drops)

@@ -3377,31 +3377,6 @@ export default function HomeScreen() {
                 </View>
               </View>
 
-              {/* Bio Section (if available) */}
-              {selectedBlipDevice && (selectedBlipDevice as any).bio && (
-                <View style={{
-                  backgroundColor: '#F5FFF5',
-                  padding: 12,
-                  borderRadius: 8,
-                  marginBottom: 16,
-                  borderLeftWidth: 3,
-                  borderLeftColor: '#00FF00',
-                }}>
-                  <Text style={{
-                    fontSize: 11,
-                    fontWeight: '600',
-                    color: theme.colors.muted,
-                    marginBottom: 4,
-                    textTransform: 'uppercase',
-                  }}>
-                    Bio
-                  </Text>
-                  <Text style={{ fontSize: 13, color: theme.colors.text, lineHeight: 18 }}>
-                    {(selectedBlipDevice as any).bio}
-                  </Text>
-                </View>
-              )}
-
               {/* Message */}
               <Text style={[theme.type.body, { textAlign: 'center', marginBottom: 20, color: theme.colors.muted, fontSize: 14 }]}>
                 Would you like to send your contact card?

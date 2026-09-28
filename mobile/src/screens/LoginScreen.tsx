@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoid
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
-import { sendOtpCode, verifyOtpCode, resetPasswordWithOtp, getUsernameByEmail } from '../services/api';
+import { sendOtpCode, verifyOtpCode, resetPasswordWithOtp, endRecoverySession, getUsernameByEmail } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LoginScreenProps {
@@ -141,7 +141,7 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
     setForgotError('');
 
     try {
-      await resetPasswordWithOtp(forgotEmail, recoveryCode, newPassword);
+      await resetPasswordWithOtp(forgotEmail, newPassword);
 
       // Success! Close modal and show success message
       setShowForgotModal(false);
@@ -157,6 +157,11 @@ export default function LoginScreen({ onLoginSuccess, onSignupPress, onBack }: L
   };
 
   const closeForgotModal = () => {
+    // Past the code step, verifyOtpCode has signed the user in. Leaving now
+    // (X, back, or "Return to Login") must not leave them signed in.
+    if (forgotStep === 'newPassword' || forgotStep === 'showUsername') {
+      endRecoverySession();
+    }
     setShowForgotModal(false);
     setForgotType(null);
     setForgotStep('email');

@@ -1575,19 +1575,21 @@ export async function verifyPhoneCodeTwilio(phoneNumber: string, code: string, u
   throw new Error('Phone verification is temporarily unavailable. Twilio account suspended.');
 }
 
-// Reset password after OTP verification
-export async function resetPasswordWithOtp(email: string, code: string, newPassword: string): Promise<void> {
+// Set a new password after the recovery code was verified. verifyOtpCode already
+// consumed the code and created the session, so it must not be verified again.
+export async function resetPasswordWithOtp(email: string, newPassword: string): Promise<void> {
   try {
-    // First verify the OTP (this creates a session and logs user in)
-    await verifyOtpCode(email, code);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || session.user.email?.toLowerCase() !== email.toLowerCase()) {
+      throw new Error('Your reset session has expired. Please request a new code.');
+    }
 
-    // Then update password
     const { error } = await supabase.auth.updateUser({
       password: newPassword
     });
 
     if (error) {
-      console.error('Failed to reset password:', error);
+      console.error('Failed to reset password:', error.code, error.message);
       throw new Error('Failed to reset password. Please try again.');
     }
 
@@ -1599,6 +1601,15 @@ export async function resetPasswordWithOtp(email: string, code: string, newPassw
   } catch (error: any) {
     console.error('ERROR: Reset password error:', error);
     throw new Error(error.message || 'Failed to reset password. Please try again.');
+  }
+}
+
+// Verifying a recovery code signs the user in. If they leave the recovery flow
+// without finishing, end that session so they aren't signed in without a password.
+export async function endRecoverySession(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error('Failed to end recovery session:', error.code, error.message);
   }
 }
 
@@ -1629,7 +1640,7 @@ export async function deleteAccount(userId: string): Promise<void> {
     const { error: authError } = await supabase.rpc('delete_user');
     if (authError) {
       console.error('Auth deletion error:', authError);
-      throw new Error('Account deletion incomplete: profile removed but authentication record could not be deleted. Please contact support.');
+      throw new Error('Account deletion failed. Please try again or contact support.');
     }
     console.log('SUCCESS: Account deletion complete');
   } catch (error: any) {
