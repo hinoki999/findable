@@ -18,6 +18,7 @@ interface UseBLEAdvertiserReturn {
   isAdvertising: boolean;
   startAdvertising: () => Promise<void>;
   stopAdvertising: () => Promise<void>;
+  stopAdvertisingForSignOut: () => Promise<void>;
   error: string | null;
   isAvailable: boolean;
   localName: string;
@@ -323,8 +324,11 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     console.log('[GHOST-MODE] isAvailable:', isAvailable);
     console.log('[GHOST-MODE] isAdvertisingRef.current:', isAdvertisingRef.current);
 
-    if (!isAvailable || !isAdvertisingRef.current) {
-      console.log('[GHOST-MODE] Skip: Not available or not currently advertising');
+    // Always reach native, even when JS thinks we aren't advertising (e.g. after
+    // Bluetooth was turned off): native is what saves the Ghost Mode choice, and
+    // skipping it left the user visible again on the next launch.
+    if (!isAvailable) {
+      console.log('[GHOST-MODE] Skip: Not available');
       console.log('[GHOST-MODE] ============================================');
       return;
     }
@@ -344,6 +348,20 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       console.log('[GHOST-MODE] ============================================');
     }
   }, [isAvailable]); // Removed isAdvertising - use ref to prevent useEffect re-triggers
+
+  // Stop advertising on sign-out. Not gated on isAvailable: that is false while
+  // auth is loading, which is exactly when a sign-out happens.
+  const stopAdvertisingForSignOut = useCallback(async () => {
+    if (Platform.OS !== 'android' || !isBLEAdvertiserAvailable) return;
+    try {
+      await BLEAdvertiserNative.stopAdvertisingForSignOut();
+      isAdvertisingRef.current = false;
+      setIsAdvertising(false);
+      setBroadcastName(null);
+    } catch (err) {
+      console.error('[BLE-ADV] Failed to stop advertising on sign-out:', err);
+    }
+  }, []);
 
   // Handle app state changes (pause advertising in background on iOS)
   // NOTE: We only pause on background, NOT resume on foreground.
@@ -424,6 +442,7 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
     isAdvertising,
     startAdvertising,
     stopAdvertising,
+    stopAdvertisingForSignOut,
     error,
     isAvailable,
     localName,

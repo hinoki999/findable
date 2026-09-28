@@ -19,6 +19,13 @@ interface BLEAdvertiserNativeInterface {
   stopAdvertising(): Promise<void>;
 
   /**
+   * Stop BLE advertising because the user signed out: also forgets the saved
+   * device ID so the service can't resume broadcasting it. Leaves the Ghost
+   * Mode preference unchanged.
+   */
+  stopAdvertisingForSignOut(): Promise<void>;
+
+  /**
    * Check if currently advertising
    * @returns Promise that resolves with boolean advertising state
    */
@@ -37,6 +44,9 @@ const BLEAdvertiserStub: BLEAdvertiserNativeInterface = {
     return { success: false, serviceUUID };
   },
   async stopAdvertising() {
+    // No-op
+  },
+  async stopAdvertisingForSignOut() {
     // No-op
   },
   async isAdvertising() {

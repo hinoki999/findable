@@ -509,12 +509,14 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       console.log('SUCCESS: user_profiles record created');
       console.log('[SIGNUP-VERIFY-DEBUG] Profile created successfully after verification');
 
-      // Create user_settings record in Supabase
-      const { error: settingsError } = await supabase.from('user_settings').insert({
+      // Create user_settings record in Supabase. Upsert: a settings row can
+      // already exist for this user by the time we get here, and a plain insert
+      // then fails on user_settings_user_id_key after the account is created.
+      const { error: settingsError } = await supabase.from('user_settings').upsert({
         user_id: userId,
         dark_mode: true,
         max_distance: 33
-      });
+      }, { onConflict: 'user_id' });
 
       if (settingsError) {
         console.error(`ERROR: Failed to create user_settings: ${settingsError.message}`);

@@ -260,17 +260,21 @@ function MainApp() {
   // BLE Advertising state - managed at App level so it persists across tab navigation
   const [isDiscoverable, setIsDiscoverable] = useState(true);
   const [discoverableLoaded, setDiscoverableLoaded] = useState(false);
-  const { isAdvertising, startAdvertising, stopAdvertising, isAvailable: advertisingAvailable } = useBLEAdvertiser();
+  const { isAdvertising, startAdvertising, stopAdvertising, stopAdvertisingForSignOut, isAvailable: advertisingAvailable } = useBLEAdvertiser();
 
   // Refs to stabilize advertising callbacks (prevents useEffect re-runs)
   const startAdvertisingRef = useRef(startAdvertising);
   const stopAdvertisingRef = useRef(stopAdvertising);
+  const stopAdvertisingForSignOutRef = useRef(stopAdvertisingForSignOut);
   useEffect(() => {
     startAdvertisingRef.current = startAdvertising;
   }, [startAdvertising]);
   useEffect(() => {
     stopAdvertisingRef.current = stopAdvertising;
   }, [stopAdvertising]);
+  useEffect(() => {
+    stopAdvertisingForSignOutRef.current = stopAdvertisingForSignOut;
+  }, [stopAdvertisingForSignOut]);
 
   // Load persisted ghost mode preference from native SharedPreferences on mount
   useEffect(() => {
@@ -395,6 +399,7 @@ function MainApp() {
       // Handle onlyPhoto option
       if (options?.onlyPhoto && profile) {
         setProfilePhotoUri(profile.profile_photo);
+        setUserProfile(prev => ({ ...prev, profilePhoto: profile.profile_photo }));
         return;
       }
 
@@ -675,6 +680,23 @@ function MainApp() {
     registerPushToken();
   }, [isAuthenticated, userId]);
 
+  // Signing out (or switching accounts) stops the broadcast of the previous
+  // user's ID. The effect below returns early without a userId, so it never
+  // stopped anything on sign-out, and its start guard stayed set so the next
+  // user never started advertising. Declared before that effect so the guard
+  // is reset before it runs.
+  const advertisedUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (authLoading) return;
+    const previousUserId = advertisedUserIdRef.current;
+    advertisedUserIdRef.current = userId;
+    if (previousUserId && previousUserId !== userId) {
+      console.log('[BLE-ADV-APP] User changed or signed out - stopping advertising');
+      hasRequestedAdvertisingRef.current = false;
+      stopAdvertisingForSignOutRef.current();
+    }
+  }, [userId, authLoading]);
+
   // BLE Advertising control - start/stop based on isDiscoverable toggle
   // Runs at App level so advertising persists when navigating between tabs
   useEffect(() => {
@@ -686,28 +708,31 @@ function MainApp() {
       return;
     }
 
+    // Ghost Mode is handled before the checks below so it always reaches native,
+    // which saves the choice. Previously, turning Ghost Mode on while any of those
+    // checks failed was never saved, and the next launch made the user visible.
+    if (!isDiscoverable) {
+      console.log('[BLE-ADV-APP] 🔓 isDiscoverable=false, resetting hasRequestedAdvertisingRef and stopping');
+      hasRequestedAdvertisingRef.current = false;
+      stopAdvertisingRef.current();
+      return;
+    }
+
     // Wait for BLE availability, auth loading to complete, and userId to be available
     if (!advertisingAvailable || authLoading || !userId) {
       console.log('[BLE-ADV-APP] Early return - prerequisites not met');
       return;
     }
 
-    // Start advertising when isDiscoverable is true (ACTIVE mode)
-    if (isDiscoverable) {
-      // Use synchronous ref guard instead of isAdvertising state
-      // This prevents multiple calls when useEffect fires rapidly due to multiple dependency changes
-      if (!hasRequestedAdvertisingRef.current && !isAdvertising) {
-        console.log('[BLE-ADV-APP] 🔒 Setting hasRequestedAdvertisingRef = true, calling startAdvertising');
-        hasRequestedAdvertisingRef.current = true;
-        startAdvertisingRef.current();
-      } else {
-        console.log('[BLE-ADV-APP] Skipping start - hasRequestedAdvertisingRef:', hasRequestedAdvertisingRef.current, 'isAdvertising:', isAdvertising);
-      }
+    // Start advertising (ACTIVE mode)
+    // Use synchronous ref guard instead of isAdvertising state
+    // This prevents multiple calls when useEffect fires rapidly due to multiple dependency changes
+    if (!hasRequestedAdvertisingRef.current && !isAdvertising) {
+      console.log('[BLE-ADV-APP] 🔒 Setting hasRequestedAdvertisingRef = true, calling startAdvertising');
+      hasRequestedAdvertisingRef.current = true;
+      startAdvertisingRef.current();
     } else {
-      // Stop advertising when isDiscoverable is false (GHOST mode)
-      console.log('[BLE-ADV-APP] 🔓 isDiscoverable=false, resetting hasRequestedAdvertisingRef and stopping');
-      hasRequestedAdvertisingRef.current = false;
-      stopAdvertisingRef.current();
+      console.log('[BLE-ADV-APP] Skipping start - hasRequestedAdvertisingRef:', hasRequestedAdvertisingRef.current, 'isAdvertising:', isAdvertising);
     }
   }, [isDiscoverable, discoverableLoaded, advertisingAvailable, authLoading, userId, isAdvertising]);
 
@@ -811,6 +836,7 @@ function MainApp() {
     if (uploadedPhotoUri) {
       console.log('✅ [App] Using uploaded photo URI directly:', uploadedPhotoUri);
       setProfilePhotoUri(uploadedPhotoUri);
+      setUserProfile(prev => ({ ...prev, profilePhoto: uploadedPhotoUri }));
     } else {
       console.log('✅ [App] Loading profile photo from backend...');
       await loadUserData(isAuthenticated, userId, { onlyPhoto: true });
@@ -893,7 +919,9 @@ function MainApp() {
         return;
       }
 
-      // Build the update object with all profile fields
+      // Build the update object with all profile fields. profile_photo is left
+      // out: only uploadProfilePhoto writes it, and the value held here can be
+      // stale, which overwrote a newly uploaded photo on the next profile edit.
       const updateData = {
         name: newProfile.name,
         email: newProfile.email,
@@ -901,7 +929,6 @@ function MainApp() {
         bio: newProfile.bio,
         social_media: newProfile.socialMedia,
         phone_verified: newProfile.phoneVerified || false,
-        profile_photo: newProfile.profilePhoto || null,
       };
 
       console.log('[PROFILE-UPDATE] Before UPDATE - userId:', userId);
@@ -1116,6 +1143,7 @@ function MainApp() {
         onPhotoSaved={async (uri) => {
           // Optimistic update for immediate feedback
           setProfilePhotoUri(uri);
+          setUserProfile(prev => ({ ...prev, profilePhoto: uri }));
 
           // Verify database actually has it (defensive merge won't overwrite on failure)
           await loadUserData(isAuthenticated, userId, { onlyPhoto: true });

@@ -19,6 +19,12 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
 
     companion object {
         private const val TAG = "BLEAdvertiserNative"
+
+        // SharedPreferences shared with BLEAdvertiserService
+        private const val PREFS_NAME = "BLEAdvertiserPrefs"
+        private const val PREF_DEVICE_ID = "deviceId"
+        private const val PREF_SERVICE_UUID = "serviceUUID"
+        private const val PREF_IS_DISCOVERABLE = "isDiscoverable"
     }
 
     private val bluetoothManager: BluetoothManager? by lazy {
@@ -92,14 +98,29 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
     fun stopAdvertising(promise: Promise) {
         Log.d(TAG, "stopAdvertising called (ghost mode - user explicitly disabled discoverability)")
         try {
-            // User explicitly chose ghost mode from JS - use ghost mode stop
-            // This sets isDiscoverable=false in SharedPreferences, preventing restart
-            stopForegroundServiceGhostMode()
-            
+            // Save the choice here, synchronously, rather than relying on the
+            // service to do it: the service may not be running (Bluetooth off,
+            // a failed start), and then the choice was never saved and the next
+            // launch or sticky restart made the user visible again.
+            val saved = advertiserPrefs().edit()
+                .putBoolean(PREF_IS_DISCOVERABLE, false)
+                .commit()
+            if (!saved) {
+                promise.reject("BLE_ERROR", "Failed to save Ghost Mode")
+                return
+            }
+
+            // Stops the service if it is running (onDestroy stops the broadcast);
+            // does nothing if it is not. Unlike sending it an intent, this never
+            // starts the service just to stop it.
+            reactApplicationContext.stopService(
+                Intent(reactApplicationContext, BLEAdvertiserService::class.java)
+            )
+
             synchronized(this) {
                 isCurrentlyAdvertising = false
             }
-            
+
             Log.d(TAG, "✅ Advertising stopped (ghost mode)")
             promise.resolve(null)
         } catch (e: Exception) {
@@ -107,6 +128,38 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
             promise.reject("BLE_ERROR", "Failed to stop advertising: ${e.message}")
         }
     }
+
+    @ReactMethod
+    fun stopAdvertisingForSignOut(promise: Promise) {
+        Log.d(TAG, "stopAdvertisingForSignOut called")
+        try {
+            // Forget the signed-out user's device ID so a sticky restart of the
+            // service can't resume broadcasting it. The Ghost Mode preference is
+            // a device setting and is left as it is.
+            advertiserPrefs().edit()
+                .remove(PREF_DEVICE_ID)
+                .remove(PREF_SERVICE_UUID)
+                .commit()
+
+            reactApplicationContext.stopService(
+                Intent(reactApplicationContext, BLEAdvertiserService::class.java)
+            )
+
+            synchronized(this) {
+                isCurrentlyAdvertising = false
+            }
+
+            Log.d(TAG, "✅ Advertising stopped (sign-out)")
+            promise.resolve(null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping advertising on sign-out", e)
+            promise.reject("BLE_ERROR", "Failed to stop advertising: ${e.message}")
+        }
+    }
+
+    // Same file and keys as BLEAdvertiserService
+    private fun advertiserPrefs() =
+        reactApplicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     @ReactMethod
     fun isAdvertising(promise: Promise) {
@@ -159,19 +212,6 @@ class BLEAdvertiserNative(reactContext: ReactApplicationContext) : ReactContextB
         }
     }
 
-    private fun stopForegroundServiceGhostMode() {
-        try {
-            // Use ACTION_GHOST_MODE_STOP when user explicitly enables ghost mode
-            // This sets isDiscoverable=false in SharedPreferences, preventing restart
-            val intent = Intent(reactApplicationContext, BLEAdvertiserService::class.java).apply {
-                action = BLEAdvertiserService.ACTION_GHOST_MODE_STOP
-            }
-            reactApplicationContext.startService(intent)
-            Log.d(TAG, "✅ Foreground service ghost mode stop requested (sets isDiscoverable=false)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop foreground service (ghost mode)", e)
-        }
-    }
 
     @ReactMethod
     fun requestBatteryOptimizationExemption(promise: Promise) {

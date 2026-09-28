@@ -1683,20 +1683,27 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 
   if (uploadError) throw uploadError;
 
-  // Get public URL
+  // Get public URL. The path is the same on every upload, so add a version
+  // parameter; otherwise image caches keep showing the previous photo.
   const { data: { publicUrl } } = supabase.storage
     .from('profile_photos')
     .getPublicUrl(filePath);
+  const photoUrl = `${publicUrl}?v=${Date.now()}`;
 
-  // Update database
-  const { error: dbError } = await supabase
+  // Update database. An update that matches no row returns no error, so check
+  // that a row was actually written.
+  const { data: updatedRows, error: dbError } = await supabase
     .from('user_profiles')
-    .update({ profile_photo: publicUrl })
-    .eq('user_id', userId);
+    .update({ profile_photo: photoUrl })
+    .eq('user_id', userId)
+    .select('user_id');
 
   if (dbError) throw dbError;
+  if (!updatedRows || updatedRows.length === 0) {
+    throw new Error('Profile not found - photo was uploaded but could not be saved to your profile');
+  }
 
-  return publicUrl;
+  return photoUrl;
 }
 
 // Save push notification token to user profile
