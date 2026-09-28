@@ -535,21 +535,11 @@ export async function sendDrop(
     console.log('[DROPS] Sending drop from', senderId, 'to', receiverId, 'distance:', distanceFeet);
     console.log('[DROP-CRASH] Step 3: Checking for existing drops/links...');
 
-    // Check if a pending or accepted drop already exists from current user to receiver
-    const { data: existingDrop, error: existingDropError } = await supabase
-      .from('drops')
-      .select('id, status')
-      .eq('sender_id', senderId)
-      .eq('receiver_id', receiverId)
-      .in('status', ['pending', 'accepted'])
-      .maybeSingle();
-
-    if (existingDropError) {
-      console.error('[DROPS] Error checking existing drops:', existingDropError);
-    } else if (existingDrop) {
-      console.log('[DROPS] Existing drop found:', existingDrop.id, 'status:', existingDrop.status);
-      throw new Error('You have already dropped this user');
-    }
+    // A second drop to the same person is refused by the server (unique index
+    // drops_one_open_per_pair), handled at the insert below. There is no
+    // client-side pre-check: a declined drop is invisible to the sender, so a
+    // pre-check could only catch the pending case, and the two would then take
+    // different paths.
 
     // Check if a link already exists between the two users
     const { data: existingLink, error: existingLinkError } = await supabase
@@ -645,6 +635,11 @@ export async function sendDrop(
 
     if (error) {
       console.error('[DROPS] Supabase drop insert error:', error.code, error.message);
+      // Earlier drop to this person still pending, accepted or declined. Same
+      // message for all three, so a decline can't be told apart.
+      if (error.code === '23505' && error.message?.includes('drops_one_open_per_pair')) {
+        throw new Error('You have already dropped this user');
+      }
       throw new Error('Failed to send drop. Please try again.');
     }
 
