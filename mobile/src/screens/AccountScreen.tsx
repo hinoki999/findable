@@ -51,7 +51,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { profile, updateProfile } = useUserProfile();
   const { showToast } = useToast();
-  const { logout, username, userId, login } = useAuth();
+  const { logout, username, userId, login, refreshAuth } = useAuth();
   const { isActive, currentStep, totalSteps, currentScreen, startScreenTutorial, nextStep, prevStep, skipTutorial } = useTutorial();
   
   const { name, phone, email, bio, socialMedia, phoneVerified } = profile || {};
@@ -277,6 +277,7 @@ export default function AccountScreen({ navigation, profilePhotoUri }: AccountSc
       // Call API to change username
       try {
         await api.changeUsername(tempValue.trim(), userId!);
+        await refreshAuth(); // re-read the signed-in user so the new username shows
         logAction('Username changed', { oldUsername: username, newUsername: tempValue.trim() });
         // Note: With Supabase, username changes don't require re-authentication
 

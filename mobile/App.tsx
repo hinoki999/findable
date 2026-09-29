@@ -35,11 +35,9 @@ import { supabase } from './src/services/supabase';
 import {
   startBackgroundScan,
   stopBackgroundScan,
-  onBackgroundDeviceFound,
-  getBackgroundDevices,
-  BackgroundBLEDevice
 } from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
+import { PROFILE_PLACEHOLDERS, realValue } from './src/utils/profilePlaceholders';
 import { useBLEAdvertiser } from './src/components/BLEAdvertiser';
 
 // Dark Mode Context
@@ -79,6 +77,7 @@ interface UserProfile {
   profilePhoto?: string;
   phoneVerified?: boolean;
 }
+
 
 const UserProfileContext = createContext<{
   profile: UserProfile;
@@ -154,21 +153,6 @@ const LinkNotificationsContext = createContext<{
 });
 
 export const useLinkNotifications = () => useContext(LinkNotificationsContext);
-
-// Native BLE Devices Context - devices detected by native background scanner
-export interface NativeBLEDeviceWithProfile extends BackgroundBLEDevice {
-  userId?: string;        // Full user UUID from Supabase lookup
-  username?: string;      // Display name from Supabase lookup
-  serviceUUIDs?: string[];
-}
-
-const NativeBLEDevicesContext = createContext<{
-  nativeDevices: NativeBLEDeviceWithProfile[];
-}>({
-  nativeDevices: [],
-});
-
-export const useNativeBLEDevices = () => useContext(NativeBLEDevicesContext);
 
 // BLE Advertising Context - manages ghost mode / discoverable state at app level
 // This ensures advertising persists across tab navigation (HomeScreen unmounts on tab change)
@@ -252,10 +236,8 @@ function MainApp() {
   const scanStartedRef = useRef(false);
 
   // Native BLE devices detected by background scanner
-  const [nativeDevices, setNativeDevices] = useState<NativeBLEDeviceWithProfile[]>([]);
 
   // RSSI history for native scanner smoothing (same as BLEScanner.tsx)
-  const nativeRssiHistoryRef = useRef<Map<string, number[]>>(new Map());
 
   // BLE Advertising state - managed at App level so it persists across tab navigation
   const [isDiscoverable, setIsDiscoverable] = useState(true);
@@ -480,8 +462,6 @@ function MainApp() {
     })();
   }, [authLoading, isAuthenticated, userId]);
   useEffect(() => {
-    let unsubscribeDeviceFound: (() => void) | null = null;
-
     const checkAndStart = async () => {
       console.log('[BG-SCAN-DEBUG] useEffect fired - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'userId:', userId ? userId.substring(0, 8) : 'null');
       if (authLoading) {
@@ -496,141 +476,7 @@ function MainApp() {
         if (bleGranted) {
           console.log('[BG-SCAN-DEBUG] BLE permissions confirmed - starting scan');
           scanStartedRef.current = true;
-          startBackgroundScan()
-            .then(async (started) => {
-              if (started) {
-                // Seed nativeDevices with previously detected devices from SharedPreferences
-                // This fills the radar immediately on app open without waiting for new detections
-                console.log('[BG-SCAN-DEBUG] Scan started, seeding from SharedPreferences...');
-                try {
-                  const storedDevices = await getBackgroundDevices();
-                  console.log('[BG-SCAN-DEBUG] Retrieved', storedDevices.length, 'stored devices');
-
-                  if (storedDevices.length > 0) {
-                    // Process each stored device with profile lookup
-                    for (const device of storedDevices) {
-                      const { id, deviceId, name, rssi, distanceFeet } = device;
-
-                      if (!deviceId) continue;
-
-                      // Profile lookup
-                      let foundUserId: string | null = null;
-                      let displayName: string | null = null;
-
-                      try {
-                        const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
-                        const { data: userProfileData, error: userProfileError } = await supabase
-                          .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
-
-                        // RPC returns a table (array); take the first row
-                        const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
-                        if (!userProfileError && profile) {
-                          foundUserId = profile.user_id;
-                          displayName = profile.name || profile.username || deviceId;
-                        }
-                      } catch (err) {
-                        console.error('[BG-SCAN-SEED] Profile lookup error:', err);
-                      }
-
-                      // Initialize RSSI history
-                      nativeRssiHistoryRef.current.set(id, [rssi]);
-
-                      // Add to state
-                      setNativeDevices(prev => {
-                        const exists = prev.find(d => d.id === id);
-                        if (exists) return prev;
-
-                        return [...prev, {
-                          id,
-                          deviceId,
-                          name,
-                          rssi,
-                          distanceFeet,
-                          userId: foundUserId || undefined,
-                          username: displayName || undefined,
-                          serviceUUIDs: ['af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d'],
-                        }];
-                      });
-                    }
-                    console.log('[BG-SCAN-DEBUG] Seeded nativeDevices with stored devices');
-                  }
-                } catch (err) {
-                  console.error('[BG-SCAN-DEBUG] Failed to seed from SharedPreferences:', err);
-                }
-              }
-            })
-            .catch(err => console.error('[BG-SCAN] Failed to start:', err));
-
-          // Subscribe to native device found events
-          unsubscribeDeviceFound = onBackgroundDeviceFound(async (device) => {
-            console.log('[BG-SCAN-NATIVE] Device found:', device);
-
-            const { id, deviceId, name, rssi, distanceFeet } = device;
-
-            if (!deviceId) {
-              console.log('[BG-SCAN-NATIVE] No deviceId, skipping');
-              return;
-            }
-
-            // Profile lookup using correct RPC function
-            let foundUserId: string | null = null;
-            let displayName: string | null = null;
-
-            try {
-              const normalizedDeviceId = deviceId.toLowerCase().replace(/-/g, '');
-              console.log('[BG-SCAN-NATIVE] Looking up profile for deviceId:', normalizedDeviceId);
-
-              const { data: userProfileData, error: userProfileError } = await supabase
-                .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
-
-              // RPC returns a table (array); take the first row
-              const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
-              if (!userProfileError && profile) {
-                foundUserId = profile.user_id;
-                displayName = profile.name || profile.username || deviceId;
-                console.log('[BG-SCAN-NATIVE] Profile found - userId:', foundUserId, 'displayName:', displayName);
-              }
-            } catch (err) {
-              console.error('[BG-SCAN-NATIVE] Profile lookup error:', err);
-            }
-
-            // Update RSSI history for smoothing
-            const rssiHistory = nativeRssiHistoryRef.current.get(id) || [];
-            rssiHistory.push(rssi);
-            if (rssiHistory.length > 5) {
-              rssiHistory.shift();
-            }
-            nativeRssiHistoryRef.current.set(id, rssiHistory);
-
-            const averagedRssi = rssiHistory.reduce((sum, val) => sum + val, 0) / rssiHistory.length;
-            // Recalculate distance with averaged RSSI
-            const measuredPower = -59;
-            const distanceMeters = Math.pow(10, (measuredPower - averagedRssi) / (10 * 2));
-            const smoothedDistanceFeet = distanceMeters * 3.28084;
-
-            // Update native devices state
-            setNativeDevices(prev => {
-              const exists = prev.find(d => d.id === id);
-              const updatedDevice: NativeBLEDeviceWithProfile = {
-                id,
-                deviceId,
-                name,
-                rssi,
-                distanceFeet: smoothedDistanceFeet,
-                userId: foundUserId || undefined,
-                username: displayName || undefined,
-                serviceUUIDs: ['af7d9e8c-3b2a-4f1e-9c8d-5e6f7a8b9c0d'],
-              };
-
-              if (!exists) {
-                console.log('[BG-SCAN-NATIVE] Adding new device:', id);
-                return [...prev, updatedDevice];
-              } else {
-                console.log('[BG-SCAN-NATIVE] Updating existing device:', id);
-                return prev.map(d => d.id === id ? { ...d, ...updatedDevice } : d);
-              }
-            });
-          });
+          startBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to start:', err));
 
         } else {
           console.log('[BG-SCAN-DEBUG] BLE permissions not yet granted - scan deferred');
@@ -639,23 +485,12 @@ function MainApp() {
         console.log('[BG-SCAN-DEBUG] STOP branch - scanStartedRef was true, stopping');
         scanStartedRef.current = false;
         stopBackgroundScan().catch(err => console.error('[BG-SCAN] Failed to stop:', err));
-        // Clear native devices when stopping
-        setNativeDevices([]);
-        nativeRssiHistoryRef.current.clear();
       } else {
         console.log('[BG-SCAN-DEBUG] NO-OP branch - not authenticated and scan was never started');
       }
     };
 
     checkAndStart();
-
-    // Cleanup: unsubscribe from events (but don't stop scan)
-    return () => {
-      if (unsubscribeDeviceFound) {
-        console.log('[BG-SCAN-NATIVE] Removing device found listener');
-        unsubscribeDeviceFound();
-      }
-    };
   }, [isAuthenticated, userId, authLoading]);
 
   // Save pending push token after auth resolves
@@ -922,13 +757,13 @@ function MainApp() {
       // Build the update object with all profile fields. profile_photo is left
       // out: only uploadProfilePhoto writes it, and the value held here can be
       // stale, which overwrote a newly uploaded photo on the next profile edit.
+      // email and phone_verified are not written: the database keeps email in step
+      // with the auth account and only the server may mark a phone verified.
       const updateData = {
-        name: newProfile.name,
-        email: newProfile.email,
-        phone: newProfile.phone,
-        bio: newProfile.bio,
+        name: realValue(newProfile.name, PROFILE_PLACEHOLDERS.name),
+        phone: realValue(newProfile.phone, PROFILE_PLACEHOLDERS.phone),
+        bio: realValue(newProfile.bio, PROFILE_PLACEHOLDERS.bio),
         social_media: newProfile.socialMedia,
-        phone_verified: newProfile.phoneVerified || false,
       };
 
       console.log('[PROFILE-UPDATE] Before UPDATE - userId:', userId);
@@ -1192,7 +1027,6 @@ function MainApp() {
                     dismissNotification,
                     hasUnviewedLinks
                   }}>
-                    <NativeBLEDevicesContext.Provider value={{ nativeDevices }}>
                       <BLEAdvertisingContext.Provider value={{ isDiscoverable, setIsDiscoverable, isAdvertising, isAvailable: advertisingAvailable }}>
                         <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
                           <View style={{ flex: 1 }} {...panResponder.panHandlers}>
@@ -1298,7 +1132,6 @@ function MainApp() {
                           )}
                         </View>
                       </BLEAdvertisingContext.Provider>
-                    </NativeBLEDevicesContext.Provider>
                   </LinkNotificationsContext.Provider>
                 </SettingsContext.Provider>
               </ToastContext.Provider>

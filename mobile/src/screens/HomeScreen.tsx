@@ -629,8 +629,6 @@ export default function HomeScreen() {
   const [unviewedLinksFromDb, setUnviewedLinksFromDb] = useState<Link[]>([]);
   const [allLinks, setAllLinks] = useState<Link[]>([]); // All links for radar detection
   const { blockedUserIds, loadFailed } = useBlockedUsers();
-  const [showNewLinkModal, setShowNewLinkModal] = useState(false);
-  const [currentNewLink, setCurrentNewLink] = useState<Link | null>(null);
   const [showReturnLinkModal, setShowReturnLinkModal] = useState(false);
   const [returnedDropInfo, setReturnedDropInfo] = useState<{ name: string; username?: string } | null>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
@@ -644,7 +642,6 @@ export default function HomeScreen() {
   const [showBlipModal, setShowBlipModal] = useState(false);
   const [isSendingDrop, setIsSendingDrop] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
-  const [errorLogs, setErrorLogs] = useState<string[]>([]);
 
   // Auto-dismiss drop error after 5 seconds
   useEffect(() => {
@@ -655,26 +652,6 @@ export default function HomeScreen() {
       return () => clearTimeout(timer);
     }
   }, [dropError]);
-
-  // Capture console.error messages
-  useEffect(() => {
-    const originalError = console.error;
-    console.error = (...args: any[]) => {
-      const errorMessage = args.map(arg =>
-        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-      ).join(' ');
-      const timestamp = new Date().toLocaleTimeString();
-      setErrorLogs(prev => {
-        const newLogs = [`[${timestamp}] ${errorMessage}`, ...prev];
-        return newLogs.slice(0, 5); // Keep last 5 errors
-      });
-      originalError.apply(console, args);
-    };
-
-    return () => {
-      console.error = originalError;
-    };
-  }, []);
 
   // Link markers state (accepted links only, not returned drops)
   const [linkedDevices, setLinkedDevices] = useState<Device[]>([]);
@@ -1589,33 +1566,6 @@ export default function HomeScreen() {
         type: 'error',
         duration: 3000,
       });
-    }
-  };
-
-  // Handle dismissing the new link notification modal
-  const handleDismissNewLink = async () => {
-    if (currentNewLink) {
-      try {
-        await markLinkViewed(currentNewLink.id);
-
-        // Remove from unviewed list
-        setUnviewedLinksFromDb(prev => prev.filter(l => l.id !== currentNewLink.id));
-
-        // Check if there are more unviewed links to show
-        const remainingLinks = unviewedLinksFromDb.filter(l => l.id !== currentNewLink.id);
-        if (remainingLinks.length > 0) {
-          setCurrentNewLink(remainingLinks[0]);
-        } else {
-          setCurrentNewLink(null);
-          setShowNewLinkModal(false);
-        }
-      } catch (error) {
-        console.error('[LINKS] Failed to mark link as viewed:', error);
-        setShowNewLinkModal(false);
-        setCurrentNewLink(null);
-      }
-    } else {
-      setShowNewLinkModal(false);
     }
   };
 
@@ -2964,135 +2914,6 @@ export default function HomeScreen() {
                   </Text>
                 </Pressable>
               </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* New Link Notification Modal */}
-        <Modal
-          visible={showNewLinkModal}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={handleDismissNewLink}
-        >
-          <View style={{
-            flex: 1,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-          }}>
-            <View style={{
-              backgroundColor: theme.colors.white,
-              borderRadius: 20,
-              padding: 24,
-              width: '90%',
-              maxWidth: 320,
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.25,
-              shadowRadius: 16,
-              elevation: 12,
-            }}>
-              {/* Link Icon */}
-              <View style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
-                backgroundColor: 'rgba(0, 200, 130, 0.15)',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 16,
-              }}>
-                <LinkIcon size={40} />
-              </View>
-
-              {/* Title */}
-              <Text style={[theme.type.h1, {
-                fontSize: 24,
-                color: theme.colors.green,
-                marginBottom: 8,
-                textAlign: 'center',
-              }]}>
-                New Link!
-              </Text>
-
-              {/* Subtitle */}
-              <Text style={[theme.type.body, {
-                fontSize: 16,
-                color: theme.colors.text,
-                marginBottom: 4,
-                textAlign: 'center',
-              }]}>
-                You're now linked with
-              </Text>
-
-              {/* Contact Name */}
-              <Text style={[theme.type.h2, {
-                fontSize: 20,
-                color: theme.colors.text,
-                marginBottom: 4,
-                textAlign: 'center',
-              }]}>
-                {currentNewLink?.otherUserName || 'User'}
-              </Text>
-
-              {/* Username */}
-              {currentNewLink?.otherUserUsername && (
-                <Text style={[theme.type.body, {
-                  fontSize: 14,
-                  color: theme.colors.muted,
-                  marginBottom: 20,
-                  textAlign: 'center',
-                }]}>
-                  @{currentNewLink.otherUserUsername}
-                </Text>
-              )}
-
-              {/* Info Text */}
-              <Text style={[theme.type.body, {
-                fontSize: 13,
-                color: theme.colors.muted,
-                marginBottom: 24,
-                textAlign: 'center',
-                paddingHorizontal: 10,
-              }]}>
-                View their contact info on the Links page
-              </Text>
-
-              {/* OK Button */}
-              <Pressable
-                onPress={handleDismissNewLink}
-                style={{
-                  backgroundColor: theme.colors.green,
-                  paddingVertical: 14,
-                  paddingHorizontal: 40,
-                  borderRadius: 12,
-                  width: '100%',
-                }}
-              >
-                <Text style={[theme.type.body, {
-                  color: '#fff',
-                  textAlign: 'center',
-                  fontWeight: '600',
-                  fontSize: 16,
-                }]}>
-                  Got it!
-                </Text>
-              </Pressable>
-
-              {/* Badge count if more links */}
-              {(unviewedLinksFromDb || []).length > 1 && (
-                <Text style={[theme.type.body, {
-                  fontSize: 12,
-                  color: theme.colors.muted,
-                  marginTop: 12,
-                  textAlign: 'center',
-                }]}>
-                  +{(unviewedLinksFromDb || []).length - 1} more new link{(unviewedLinksFromDb || []).length > 2 ? 's' : ''}
-                </Text>
-              )}
             </View>
           </View>
         </Modal>

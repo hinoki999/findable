@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 let permissionsGranted = false;
-const BLE_PERMISSIONS_KEY = '@dropshake_ble_permissions_granted';
+// A resolved prefix is reused this long before looking it up again, so a changed
+// name or photo shows up within a minute without a lookup on every advertisement
+const PROFILE_CACHE_TTL_MS = 60 * 1000;
 // Set notification handler once at top level
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -114,7 +115,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const errorRef = useRef<string | null>(null);
   const startScanCountRef = useRef(0);
   const staleCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const profileCacheRef = useRef<Map<string, { userId: string; displayName: string }>>(new Map());
+  const profileCacheRef = useRef<Map<string, { userId: string; displayName: string; profilePhoto?: string; fetchedAt: number }>>(new Map());
   const [debugLog, setDebugLog] = useState<string[]>([]);
   const [devicesScanned, setDevicesScanned] = useState(0);
   const [recentScans, setRecentScans] = useState<RecentScanEntry[]>([]);
@@ -146,21 +147,10 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const requestPermissions = useCallback(async (): Promise<boolean> => {
     console.log('[PERMS-DEBUG] requestPermissions called, Platform.OS:', Platform.OS);
 
-    // Check in-session cache first
+    // In-session cache only. Android restarts the app process when a permission
+    // is revoked in Settings, so this can't go stale; a persisted "granted" could.
     if (permissionsGranted) {
       return true;
-    }
-
-    // Check persistent cache
-    try {
-      const stored = await AsyncStorage.getItem(BLE_PERMISSIONS_KEY);
-      console.log('[PERMS-DEBUG] AsyncStorage cached value:', stored);
-      if (stored === 'true') {
-        permissionsGranted = true;
-        return true;
-      }
-    } catch (err) {
-      console.warn('[PERMS-DEBUG] AsyncStorage read error:', err);
     }
 
     if (Platform.OS === 'android') {
@@ -187,18 +177,19 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[PERMS-DEBUG] Requesting permissions:', allPermissions);
           const granted = await PermissionsAndroid.requestMultiple(allPermissions);
 
-          const allGranted = Object.values(granted).every(
-            permission =>
-              permission === PermissionsAndroid.RESULTS.GRANTED ||
-              permission === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN
-          );
+          const results = Object.values(granted);
+          const allGranted = results.every(permission => permission === PermissionsAndroid.RESULTS.GRANTED);
 
           console.log('[PERMS-DEBUG] allGranted:', allGranted);
 
           if (!allGranted) {
+            // "Don't ask again" means denied: Android won't show the prompt, only Settings can grant it
+            const message = results.includes(PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN)
+              ? 'Bluetooth permission is turned off. Enable it for DropShake in Settings.'
+              : 'Bluetooth permissions not granted';
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
-            errorRef.current = 'Bluetooth permissions not granted';
-            setError('Bluetooth permissions not granted');
+            errorRef.current = message;
+            setError(message);
             return false;
           }
         }
@@ -208,13 +199,6 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         setError('Failed to request permissions');
         return false;
       }
-    }
-
-    // Persist granted state
-    try {
-      await AsyncStorage.setItem(BLE_PERMISSIONS_KEY, 'true');
-    } catch (err) {
-      console.warn('[PERMS-DEBUG] AsyncStorage write error:', err);
     }
 
     setTimeout(async () => {
@@ -334,81 +318,84 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
           console.log('[BLE-ID] Device:', device.id, 'manufacturerData:', device.manufacturerData, 'extracted deviceId:', deviceId);
 
           // Lookup username and userId from Supabase if deviceId is found
+          let freshProfile: { userId: string; displayName: string; profilePhoto?: string } | undefined;
           if (deviceId) {
-            // Check cache first — skip Supabase if we already resolved this prefix
+            // Reuse a recent successful lookup for this prefix instead of querying again
             const cachedProfile = profileCacheRef.current.get(deviceId.toLowerCase().trim());
-            if (cachedProfile) {
+            if (cachedProfile && Date.now() - cachedProfile.fetchedAt < PROFILE_CACHE_TTL_MS) {
+              freshProfile = cachedProfile;
               setDevices(prevDevices => prevDevices.map(d =>
                 d.id === device.id
-                  ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, lastSeen: Date.now() }
+                  ? { ...d, username: cachedProfile.displayName, userId: cachedProfile.userId, profilePhoto: cachedProfile.profilePhoto }
                   : d
               ));
-              return;
+            } else {
+
+              console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
+              (async () => {
+                try {
+                  const normalizedDeviceId = deviceId.toLowerCase().trim();
+                  let userId: string | null = null;
+                  let displayName: string | null = null;
+                  let profilePhoto: string | undefined;
+
+                  // Query user_profiles via RPC function (handles uuid::text cast server-side)
+                  // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
+                  console.log('[BLE-ID] Calling RPC get_profile_by_user_id_prefix with:', normalizedDeviceId);
+                  const { data: userProfileData, error: userProfileError } = await supabase
+                    .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
+
+                  if (userProfileError) {
+                    console.error('[BLE-ID] Supabase RPC lookup error:', JSON.stringify(userProfileError, null, 2));
+                  }
+
+                  // RPC returns an array, get first result
+                  const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
+
+                  if (!userProfileError && profile) {
+                    userId = profile.user_id;
+                    // Use name for display, fall back to username, then deviceId
+                    displayName = profile.name || profile.username || deviceId || 'User';
+                    profilePhoto = profile.profile_photo || undefined;
+                    profileCacheRef.current.set(normalizedDeviceId, { userId: profile.user_id, displayName: displayName ?? 'User', profilePhoto, fetchedAt: Date.now() });
+                    console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
+                    console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
+                  } else {
+                    console.log('[BLE-ID] No profile found for deviceId:', deviceId);
+                  }
+
+                  // Update device if found, or use deviceId as fallback
+                  if (userId) {
+                    console.log('[BLE-ID] Updating device with profile - deviceId:', device.id, 'username:', displayName, 'userId:', userId);
+                    console.log('[BLE-DUPE] setDevices (profile update) - device.id:', device.id);
+                    setDevices(prevDevices => {
+                      console.log('[BLE-DUPE] Profile update - prevDevices.length:', prevDevices.length);
+                      return prevDevices.map(d =>
+                        d.id === device.id
+                          ? { ...d, username: displayName || deviceId || 'User', userId: userId, profilePhoto }
+                          : d
+                      );
+                    });
+                  } else {
+                    // User not found in database, but device exists - use deviceId as identifier
+                    // This allows the device to be displayed even if profile lookup fails
+                    console.log('[BLE-ID] Using deviceId as fallback identifier:', deviceId);
+                    console.log('[BLE-DUPE] setDevices (deviceId fallback) - device.id:', device.id);
+                    setDevices(prevDevices => {
+                      console.log('[BLE-DUPE] DeviceId fallback - prevDevices.length:', prevDevices.length);
+                      return prevDevices.map(d =>
+                        d.id === device.id
+                          ? { ...d, username: deviceId, userId: undefined, profilePhoto: undefined }
+                          : d
+                      );
+                    });
+                  }
+                } catch (err: any) {
+                  console.error('[BLE-ID] Profile lookup EXCEPTION:', err?.message);
+                  // Silently fail - device will show without username
+                }
+              })();
             }
-
-            console.log('[BLE-ID] Starting Supabase profile lookup for deviceId:', deviceId);
-            (async () => {
-              try {
-                const normalizedDeviceId = deviceId.toLowerCase().trim();
-                let userId: string | null = null;
-                let displayName: string | null = null;
-                let profilePhoto: string | undefined;
-
-                // Query user_profiles via RPC function (handles uuid::text cast server-side)
-                // deviceId is first 8 chars of UUID, so we match user_id starting with deviceId
-                console.log('[BLE-ID] Calling RPC get_profile_by_user_id_prefix with:', normalizedDeviceId);
-                const { data: userProfileData, error: userProfileError } = await supabase
-                  .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
-
-                if (userProfileError) {
-                  console.error('[BLE-ID] Supabase RPC lookup error:', JSON.stringify(userProfileError, null, 2));
-                }
-
-                // RPC returns an array, get first result
-                const profile = Array.isArray(userProfileData) ? userProfileData[0] : userProfileData;
-
-                if (!userProfileError && profile) {
-                  userId = profile.user_id;
-                  // Use name for display, fall back to username, then deviceId
-                  displayName = profile.name || profile.username || deviceId || 'User';
-                  profilePhoto = profile.profile_photo || undefined;
-                  console.log('[BLE-ID] Profile lookup SUCCESS - userId:', userId, 'displayName:', displayName);
-                  console.log('[BLE-ID] Full profile data:', JSON.stringify(profile, null, 2));
-                } else {
-                  console.log('[BLE-ID] No profile found for deviceId:', deviceId);
-                }
-
-                // Update device if found, or use deviceId as fallback
-                if (userId) {
-                  console.log('[BLE-ID] Updating device with profile - deviceId:', device.id, 'username:', displayName, 'userId:', userId);
-                  console.log('[BLE-DUPE] setDevices (profile update) - device.id:', device.id);
-                  setDevices(prevDevices => {
-                    console.log('[BLE-DUPE] Profile update - prevDevices.length:', prevDevices.length);
-                    return prevDevices.map(d =>
-                      d.id === device.id
-                        ? { ...d, username: displayName || deviceId || 'User', userId: userId, profilePhoto }
-                        : d
-                    );
-                  });
-                } else {
-                  // User not found in database, but device exists - use deviceId as identifier
-                  // This allows the device to be displayed even if profile lookup fails
-                  console.log('[BLE-ID] Using deviceId as fallback identifier:', deviceId);
-                  console.log('[BLE-DUPE] setDevices (deviceId fallback) - device.id:', device.id);
-                  setDevices(prevDevices => {
-                    console.log('[BLE-DUPE] DeviceId fallback - prevDevices.length:', prevDevices.length);
-                    return prevDevices.map(d =>
-                      d.id === device.id
-                        ? { ...d, username: deviceId, userId: undefined, profilePhoto: undefined }
-                        : d
-                    );
-                  });
-                }
-              } catch (err: any) {
-                console.error('[BLE-ID] Profile lookup EXCEPTION:', err?.message);
-                // Silently fail - device will show without username
-              }
-            })();
           }
 
           // Add ALL devices to devices array (no filtering)
@@ -461,7 +448,10 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                 rssi: currentRssi,
                 distanceFeet,
                 serviceUUIDs: device.serviceUUIDs || undefined, // Store service UUIDs for UI filtering
-                username: undefined, // Will be populated by async lookup if deviceId found
+                // From a fresh cache entry if there is one, otherwise filled in by the async lookup
+                username: freshProfile?.displayName,
+                userId: freshProfile?.userId,
+                profilePhoto: freshProfile?.profilePhoto,
                 lastSeen: Date.now(), // Timestamp when last heard
               }];
             } else if (existsByUserId && !existsByMac) {

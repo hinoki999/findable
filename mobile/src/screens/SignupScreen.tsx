@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDarkMode } from '../../App';
 import { getTheme } from '../theme';
 import { checkUsernameAvailability, checkEmailAvailability, sendOtpCode, verifyOtpCode } from '../services/api';
@@ -17,6 +18,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
   const { isDarkMode } = useDarkMode();
   const theme = getTheme(isDarkMode);
   const { signup, refreshAuth } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -180,34 +182,40 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     }
   };
 
-  // Birthday formatting: auto-add slashes as user types MM/DD/YYYY
+  // Birthday formatting: MM/DD/YYYY. A typed slash ends the month or day, so
+  // 1/5/1990 is accepted and padded to 01/05/1990. Digits alone still advance
+  // automatically after 2 (month), 2 (day) and 4 (year).
   const formatBirthday = (text: string) => {
-    // Remove all non-digits
-    let digits = text.replace(/\D/g, '');
+    const maxLengths = [2, 2, 4];
+    const fields = ['', '', ''];
+    let index = 0;
+    let shownFields = 1;
 
-    // Limit to 8 digits (MMDDYYYY)
-    digits = digits.slice(0, 8);
+    for (const char of text) {
+      if (/\d/.test(char)) {
+        if (fields[index].length === maxLengths[index]) {
+          if (index === 2) break;
+          index++;
+          shownFields = Math.max(shownFields, index + 1);
+        }
+        fields[index] += char;
+      } else if (char === '/' && index < 2 && fields[index].length > 0) {
+        fields[index] = fields[index].padStart(2, '0');
+        index++;
+        shownFields = Math.max(shownFields, index + 1);
+      }
+    }
 
-    // Format with slashes
-    let formatted = '';
-    if (digits.length > 0) {
-      formatted = digits.slice(0, 2);
-    }
-    if (digits.length > 2) {
-      formatted += '/' + digits.slice(2, 4);
-    }
-    if (digits.length > 4) {
-      formatted += '/' + digits.slice(4, 8);
-    }
+    const formatted = fields.slice(0, shownFields).join('/');
 
     setBirthday(formatted);
     setBirthdayError(''); // Clear error on typing
 
     // Validate age only when full date is entered
-    if (digits.length === 8) {
-      const month = parseInt(digits.slice(0, 2), 10);
-      const day = parseInt(digits.slice(2, 4), 10);
-      const year = parseInt(digits.slice(4, 8), 10);
+    if (fields[0].length === 2 && fields[1].length === 2 && fields[2].length === 4) {
+      const month = parseInt(fields[0], 10);
+      const day = parseInt(fields[1], 10);
+      const year = parseInt(fields[2], 10);
 
       // Basic date validation
       if (month < 1 || month > 12 || day < 1 || day > 31) {
@@ -260,6 +268,13 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
       return;
     }
     setTermsError('');
+
+    // Anything the field checks flagged while typing (e.g. username or email taken)
+    const fieldError = nameError || usernameError || passwordError || confirmPasswordError || emailError || birthdayError;
+    if (fieldError) {
+      setError(fieldError);
+      return;
+    }
 
     // Final validation
     if (!name || name.trim().length < 1) {
@@ -320,102 +335,6 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
     setShowVerificationModal(true);
     setVerificationStep('confirm');
     console.log('[EMAIL-VERIFY] verificationStep set to: confirm');
-  };
-
-  const handleDirectSignup = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      // Create account directly with Supabase (no email verification)
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.toLowerCase().trim(),
-        password: password,
-        options: {
-          data: { username: username },
-          emailRedirectTo: undefined, // Disable email confirmation requirement
-        }
-      });
-
-      if (signUpError) {
-        throw new Error(signUpError.message || 'Failed to create account');
-      }
-
-      if (!data.user) {
-        throw new Error('Account creation failed. Please try again.');
-      }
-
-      const userId = data.user.id;
-      console.log(`SUCCESS: Account created, userId: ${userId}`);
-
-      // Create user_profiles record in Supabase
-      console.log('[SIGNUP-DEBUG] Creating profile with name:', name, 'username:', username, 'email:', email);
-      const { error: profileError } = await supabase.from('user_profiles').insert({
-        user_id: userId,
-        email: email.toLowerCase().trim(),
-        username: username,   // Login username for identification
-        name: name,           // Display name for BLE discovery
-        phone: null,
-        bio: null,
-        profile_photo: null,
-        social_media: []
-      });
-
-      if (profileError) {
-        console.error(`ERROR: Failed to create user_profiles: ${profileError.message}`);
-        throw new Error(`Failed to create profile: ${profileError.message}`);
-      }
-      console.log('SUCCESS: user_profiles record created');
-      console.log('[SIGNUP-DEBUG] Profile created successfully, user_id:', userId);
-
-      // Create user_settings record in Supabase
-      const { error: settingsError } = await supabase.from('user_settings').insert({
-        user_id: userId,
-        dark_mode: true,
-        max_distance: 33
-      });
-
-      if (settingsError) {
-        console.error(`ERROR: Failed to create user_settings: ${settingsError.message}`);
-        throw new Error(`Failed to create settings: ${settingsError.message}`);
-      }
-      console.log('SUCCESS: user_settings record created');
-
-      // Check if we got a session from signUp (Supabase may auto-confirm in development)
-      let session = data.session;
-
-      // If no session, sign in immediately (email confirmation may be required in production)
-      if (!session) {
-        console.log('No session from signUp, attempting sign in...');
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.toLowerCase().trim(),
-          password: password,
-        });
-
-        if (signInError || !signInData.user) {
-          throw new Error('Account created but sign-in failed. Please try logging in.');
-        }
-
-        session = signInData.session;
-      }
-
-      // Update auth context by refreshing auth state (we've already created account and signed in)
-      await refreshAuth();
-
-      console.log('SUCCESS: User signed in and auth context updated');
-
-      // Navigate to home screen
-      if (typeof onSignupSuccess !== 'function') {
-        throw new Error('Navigation handler (onSignupSuccess) is missing or invalid');
-      }
-
-      onSignupSuccess(undefined);
-    } catch (err: any) {
-      console.error(`ERROR: Direct signup error: ${err.message}`);
-      setError(err.message || 'Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleSendCode = async () => {
@@ -829,7 +748,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
               }
             ]}
             onPress={handleSignup}
-            disabled={!canSubmit || loading}
+            // Only disabled while submitting: handleSignup explains any validation failure
+            disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
@@ -1013,7 +933,8 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
         presentationStyle="pageSheet"
         onRequestClose={() => setShowTermsModal(false)}
       >
-        <View style={{ flex: 1, backgroundColor: theme.colors.bg }}>
+        {/* Android draws edge-to-edge: keep the header and footer clear of the system bars */}
+        <View style={{ flex: 1, backgroundColor: theme.colors.bg, paddingTop: insets.top, paddingBottom: insets.bottom }}>
           {/* Header */}
           <View style={{
             flexDirection: 'row',
@@ -1037,6 +958,7 @@ export default function SignupScreen({ onSignupSuccess, onLoginPress, onBack }: 
             <Pressable
               onPress={() => setShowTermsModal(false)}
               style={{ position: 'absolute', right: 16, padding: 4 }}
+              hitSlop={12}
             >
               <MaterialCommunityIcons name="close" size={24} color={theme.colors.text} />
             </Pressable>

@@ -5,6 +5,7 @@ import { storage } from './storage';
 import { logApiCall, logError } from './activityMonitor';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { supabase } from './supabase';
+import { withoutPlaceholders } from '../utils/profilePlaceholders';
 
 const USE_STUB = false; // Connected to backend!
 const REQUEST_TIMEOUT = 30000; // 30 seconds
@@ -589,7 +590,7 @@ export async function sendDrop(
       // linked and creates the link in one transaction.
       const { error: linkError } = await supabase.rpc('link_drop', {
         p_drop_id: reverseDrop.id,
-        p_profile: senderProfile,
+        p_profile: withoutPlaceholders(senderProfile),
       });
       if (linkError) {
         console.error('[DROPS] link_drop failed:', linkError.code, linkError.message);
@@ -609,18 +610,20 @@ export async function sendDrop(
     console.log('[DROP-CRASH] Step 4: Building drop data...');
 
     // Drop data - single row with status 'pending'
+    const card = withoutPlaceholders(senderProfile);
     const dropData = {
       sender_id: senderId,
       receiver_id: receiverId,
       status: 'pending',
       distance_feet: distanceFeet || null,
-      sender_name: senderProfile.name || null,
-      sender_username: senderProfile.username || null,
-      sender_email: senderProfile.email || null,
-      sender_phone: senderProfile.phone || null,
-      sender_bio: senderProfile.bio || null,
-      sender_profile_photo: senderProfile.profilePhoto || null,
-      sender_social_media: senderProfile.socialMedia || null,
+      // Placeholder text ("(555) 123-4567", "Add bio"...) is sent as empty, never as data
+      sender_name: card.name || null,
+      sender_username: card.username || null,
+      sender_email: card.email || null,
+      sender_phone: card.phone || null,
+      sender_bio: card.bio || null,
+      sender_profile_photo: card.profilePhoto || null,
+      sender_social_media: card.socialMedia || null,
     };
 
     console.log('[DROP-DUPE] About to insert single drop row, timestamp:', callTimestamp);
@@ -955,7 +958,7 @@ export async function updateDropStatus(
     if (status === 'returned') {
       const { error: linkError } = await supabase.rpc('link_drop', {
         p_drop_id: dropId,
-        p_profile: responseProfile ?? {},
+        p_profile: withoutPlaceholders(responseProfile ?? {}),
       });
 
       if (linkError) {
@@ -1327,14 +1330,28 @@ export async function changeUsername(newUsername: string, userId: string): Promi
       throw new Error('User not authenticated');
     }
 
-    // Update username in user_profiles table
-    const { error: profileError } = await supabase
+    // Same rules as signup; the screens check too, but this is the one place that writes it
+    if (newUsername.length < 3 || newUsername.length > 20 || !/^[a-zA-Z0-9_.]+$/.test(newUsername)) {
+      throw new Error('Username must be 3-20 characters: letters, numbers, underscores and periods only');
+    }
+
+    // The login username lives in user_profiles.username (name is the display name)
+    const { data: updatedRows, error: profileError } = await supabase
       .from('user_profiles')
-      .update({ name: newUsername })
-      .eq('user_id', userId);
+      .update({ username: newUsername })
+      .eq('user_id', userId)
+      .select('user_id');
 
     if (profileError) {
       console.error('Failed to update username in profile:', profileError.code, profileError.message);
+      // user_profiles_username_key is unique on lower(username)
+      if (profileError.code === '23505') {
+        throw new Error('Username is already taken');
+      }
+      throw new Error('Failed to change username. Please try again.');
+    }
+
+    if (!updatedRows || updatedRows.length === 0) {
       throw new Error('Failed to change username. Please try again.');
     }
 
@@ -1363,7 +1380,22 @@ export async function changeUsername(newUsername: string, userId: string): Promi
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   try {
-    // Supabase built-in password update
+    const { data: { session } } = await supabase.auth.getSession();
+    const email = session?.user?.email;
+    if (!email) {
+      throw new Error('User not authenticated');
+    }
+
+    // Confirm the current password before changing it: signing in again with it
+    // fails if it's wrong, and leaves the existing session in place
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      throw new Error('Current password is incorrect');
+    }
+
     const { error } = await supabase.auth.updateUser({
       password: newPassword
     });
@@ -1607,18 +1639,28 @@ export async function endRecoverySession(): Promise<void> {
   }
 }
 
-// Get username by email (for username recovery)
+// Get the username for username recovery. Runs after the recovery code was
+// verified, which signed the user in, so it reads their own profile row.
 export async function getUsernameByEmail(email: string): Promise<string> {
   try {
-    const { data, error } = await supabase
-      .rpc('get_name_by_email', { check_email: email });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || session.user.email?.toLowerCase() !== email.toLowerCase()) {
+      throw new Error('Your recovery session has expired. Please request a new code.');
+    }
 
-    if (error || !data) {
-      console.error('Failed to get username:', error);
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('username')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+
+    const username = data?.username || session.user.user_metadata?.username;
+    if (error || !username) {
+      console.error('Failed to get username:', error?.code, error?.message);
       throw new Error('No account found with this email address.');
     }
 
-    return data;
+    return username;
   } catch (error: any) {
     console.error('ERROR: Get username error:', error);
     throw new Error(error.message || 'Failed to retrieve username. Please try again.');

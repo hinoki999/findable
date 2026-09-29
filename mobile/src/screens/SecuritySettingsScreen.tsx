@@ -16,7 +16,7 @@ interface SecuritySettingsScreenProps {
 export default function SecuritySettingsScreen({ navigation }: SecuritySettingsScreenProps) {
   const { isDarkMode, toggleDarkMode } = useDarkMode();
   const { showToast } = useToast();
-  const { logout, username, login, userId } = useAuth();
+  const { logout, username, login, userId, refreshAuth } = useAuth();
   const theme = getTheme(isDarkMode);
 
   // Modal states
@@ -120,7 +120,8 @@ export default function SecuritySettingsScreen({ navigation }: SecuritySettingsS
           return;
         }
 
-        await api.changeUsername(tempValue, userId!);
+        await api.changeUsername(tempValue.trim(), userId!);
+        await refreshAuth(); // re-read the signed-in user so the new username shows
         // Note: With Supabase, username changes don't require re-authentication
 
         showToast({
