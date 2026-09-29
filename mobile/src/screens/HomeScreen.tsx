@@ -15,6 +15,7 @@ import LinkIcon from '../components/LinkIcon';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
+import BluetoothNotice from '../components/BluetoothNotice';
 import { DROPSHAKE_SERVICE_UUID } from '../config/bleConfig';
 
 
@@ -690,7 +691,7 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
 
   // Use BLE scanner for nearby devices
-  const { devices, isScanning, isBluetoothOff, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
+  const { devices, isScanning, isBluetoothOff, permissionStatus, startScan, stopScan, startScanCount, addDebugDevice } = useBLEScanner();
 
   // Pre-populate devices from native background scanner on mount
   useEffect(() => {
@@ -1950,24 +1951,23 @@ export default function HomeScreen() {
               right: 0,
               alignItems: 'center',
             }}
-            pointerEvents="none"
+            // box-none: only the Bluetooth notice takes touches; the rest of the
+            // overlay stays transparent to the radar's gestures
+            pointerEvents="box-none"
           >
-            <Text style={[theme.type.muted, {
-              textAlign: 'center',
-              fontSize: 15,
-            }]}>
-              No drops nearby
-            </Text>
-            {isBluetoothOff && (
+            <View pointerEvents="none">
               <Text style={[theme.type.muted, {
                 textAlign: 'center',
-                fontSize: 13,
-                marginTop: 8,
-                color: '#FF6B4A',
+                fontSize: 15,
               }]}>
-                Turn on Bluetooth to detect nearby users
+                No drops nearby
               </Text>
-            )}
+            </View>
+            <BluetoothNotice
+              isBluetoothOff={isBluetoothOff}
+              permissionStatus={permissionStatus}
+              onRequestPermission={startScan}
+            />
           </View>
         )}
 

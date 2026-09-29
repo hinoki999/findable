@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useBlockedUsers } from '../contexts/BlockedUsersContext';
 import { isVisibleNearbyUser } from '../utils/nearbyVisibility';
 import { useBLEScanner, BleDevice } from '../components/BLEScanner';
+import BluetoothNotice from '../components/BluetoothNotice';
 import { DeviceCard } from '../components/DeviceCard';
 import { useTutorial } from '../contexts/TutorialContext';
 import TutorialOverlay from '../components/TutorialOverlay';
@@ -225,7 +226,7 @@ export default function DropScreen() {
   };
 
   // Use BLE scanner hook
-  const { devices, isScanning, startScan, stopScan, error } = useBLEScanner();
+  const { devices, isScanning, isBluetoothOff, permissionStatus, startScan, stopScan, error } = useBLEScanner();
   const { blockedUserIds, loadFailed } = useBlockedUsers();
 
   // Same visibility rule as HomeScreen's radar (DropShake-only, in range, block
@@ -675,8 +676,20 @@ export default function DropScreen() {
                   }]}>
                     No DropShake users nearby
                   </Text>
+                  <BluetoothNotice
+                    isBluetoothOff={isBluetoothOff}
+                    permissionStatus={permissionStatus}
+                    onRequestPermission={startScan}
+                  />
                 </View>
-              ) : null
+              ) : (
+                // Accepted drops fill the screen, but a Bluetooth problem still needs saying
+                <BluetoothNotice
+                  isBluetoothOff={isBluetoothOff}
+                  permissionStatus={permissionStatus}
+                  onRequestPermission={startScan}
+                />
+              )
             }
           />
 

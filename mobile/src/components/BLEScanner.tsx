@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, AppState } from 'react-native';
 import { Device, State } from 'react-native-ble-plx';
 import * as Notifications from 'expo-notifications';
 let permissionsGranted = false;
@@ -82,10 +82,14 @@ export interface RecentScanEntry {
   hasDropShakeUUID: boolean;
 }
 
+// 'blocked' = "Don't ask again": Android won't show the prompt, only Settings can grant it
+export type BluetoothPermissionStatus = 'unknown' | 'granted' | 'denied' | 'blocked';
+
 interface UseBLEScannerReturn {
   devices: BleDevice[];
   isScanning: boolean;
   isBluetoothOff: boolean;
+  permissionStatus: BluetoothPermissionStatus;
   startScan: () => void;
   stopScan: () => void;
   error: string | null;
@@ -113,6 +117,12 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
   const [isBluetoothOff, setIsBluetoothOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<string | null>(null);
+  const [permissionStatus, setPermissionStatus] = useState<BluetoothPermissionStatus>('unknown');
+  const permissionStatusRef = useRef<BluetoothPermissionStatus>('unknown');
+  const updatePermissionStatus = (status: BluetoothPermissionStatus) => {
+    permissionStatusRef.current = status;
+    setPermissionStatus(status);
+  };
   const startScanCountRef = useRef(0);
   const staleCleanupRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const profileCacheRef = useRef<Map<string, { userId: string; displayName: string; profilePhoto?: string; fetchedAt: number }>>(new Map());
@@ -190,6 +200,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             console.log('[PERMS-DEBUG] Not all permissions granted, returning false');
             errorRef.current = message;
             setError(message);
+            updatePermissionStatus(results.includes(PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) ? 'blocked' : 'denied');
             return false;
           }
         }
@@ -210,6 +221,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     }, 500);
 
     permissionsGranted = true;
+    updatePermissionStatus('granted');
     return true;
   }, []);
 
@@ -531,13 +543,34 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     }
   }, [addDebugLog]);
 
-  // Monitor Bluetooth state changes (handle Bluetooth being disabled)
-  // Use ref for startScan to avoid recreating listener when startScan changes
+  // Latest startScan for the listeners below, so they are registered only once
   const startScanRef = useRef(startScan);
   useEffect(() => {
     startScanRef.current = startScan;
   }, [startScan]);
 
+  // Coming back from Settings: if the user granted Bluetooth there, start scanning.
+  // Only checks the permission; it never shows a prompt.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active' || Platform.OS !== 'android') return;
+      if (permissionStatusRef.current !== 'denied' && permissionStatusRef.current !== 'blocked') return;
+      const needed = [
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        ...(Platform.Version < 31 ? [PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] : []),
+      ];
+      const results = await Promise.all(needed.map(p => PermissionsAndroid.check(p)));
+      if (results.every(Boolean)) {
+        permissionsGranted = true;
+        updatePermissionStatus('granted');
+        startScanRef.current();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Monitor Bluetooth state changes (handle Bluetooth being disabled)
   useEffect(() => {
     if (Platform.OS === 'web' || !bleManager) {
       console.log('[BLE-SCAN] State change listener skip - web or no bleManager');
@@ -576,6 +609,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
             addDebugLog('stateChange: Unauthorized (initial)');
             console.warn('[BLE-DEBUG] Bluetooth unauthorized');
             errorRef.current = 'Bluetooth permission denied';
+            if (permissionStatusRef.current !== 'blocked') updatePermissionStatus('denied');
             setError('Bluetooth permission denied');
             setIsScanning(false);
             addDebugLog('setIsScanning(false) - from Unauthorized (initial)');
@@ -621,6 +655,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         addDebugLog('stateChange: Unauthorized -> stopping scan');
         console.warn('[BLE-DEBUG] Bluetooth unauthorized');
         errorRef.current = 'Bluetooth permission denied';
+        if (permissionStatusRef.current !== 'blocked') updatePermissionStatus('denied');
         setError('Bluetooth permission denied');
         setIsScanning(false);
         addDebugLog('setIsScanning(false) - from Unauthorized');
@@ -676,6 +711,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
     devices,
     isScanning,
     isBluetoothOff,
+    permissionStatus,
     startScan,
     stopScan,
     error,
