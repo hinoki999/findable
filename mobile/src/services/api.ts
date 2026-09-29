@@ -844,7 +844,7 @@ export async function getLinkedDrops(): Promise<Link[]> {
 
 /**
  * Get unviewed link notifications
- * Returns links where user is user_id_1 or user_id_2 AND viewed_at IS NULL
+ * Returns links where the current user hasn't viewed their own side yet
  */
 export async function getUnviewedLinks(): Promise<Link[]> {
   try {
@@ -858,12 +858,11 @@ export async function getUnviewedLinks(): Promise<Link[]> {
     console.log('[DROPS] Fetching unviewed links for user:', userId);
 
     // Query links table with join to drops table for profile data
-    // Only return links where viewed_at IS NULL
+    // Each user has their own viewed column; only return links this user hasn't viewed
     const { data, error } = await supabase
       .from('links')
       .select('*, drops(sender_id, receiver_id, sender_name, sender_username, sender_email, sender_phone, sender_bio, sender_profile_photo, sender_social_media, distance_feet)')
-      .or(`user_id_1.eq.${userId},user_id_2.eq.${userId}`)
-      .is('viewed_at', null)
+      .or(`and(user_id_1.eq.${userId},viewed_at_user_1.is.null),and(user_id_2.eq.${userId},viewed_at_user_2.is.null)`)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -881,7 +880,7 @@ export async function getUnviewedLinks(): Promise<Link[]> {
 
 /**
  * Mark a link as viewed
- * Sets viewed_at timestamp so it won't show as a new notification
+ * Sets only the current user's viewed column, so the other user still sees it
  * @param linkId - The link to mark as viewed
  */
 export async function markLinkViewed(linkId: string): Promise<void> {
@@ -894,15 +893,10 @@ export async function markLinkViewed(linkId: string): Promise<void> {
 
     console.log('[DROPS] Marking link as viewed:', linkId);
 
-    const { error } = await supabase
-      .from('links')
-      .update({
-        viewed_at: new Date().toISOString(),
-      })
-      .eq('id', linkId);
+    const { error } = await supabase.rpc('mark_link_viewed', { p_link_id: linkId });
 
     if (error) {
-      console.error('[DROPS] Supabase mark link viewed error:', error);
+      console.error('[DROPS] mark_link_viewed error:', error.code, error.message);
       throw new Error('Failed to mark link as viewed.');
     }
 
