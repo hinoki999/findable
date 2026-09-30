@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { logAuth, logStateChange } from '../services/activityMonitor';
 import { supabase } from '../services/supabase';
+import { reportError } from '../utils/reportError';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -67,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setState(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
-      console.error('[AUTH-CONTEXT-TRACE] ❌ Error checking stored auth:', error);
+      reportError('auth-check-stored-session', error);
       setState(prev => ({ ...prev, loading: false }));
     }
   };
@@ -148,19 +149,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
-      logAuth('Logout');
-      logStateChange('auth.isAuthenticated', true, false);
-      setState({
-        isAuthenticated: false,
-        userId: null,
-        username: null,
-        token: null,
-        loading: false,
-      });
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        reportError('auth-sign-out', error);
+      }
     } catch (error) {
-      console.error('Error logging out:', error);
+      reportError('auth-sign-out', error);
     }
+    // The user asked to log out: leave the app signed out even if the server call failed
+    logAuth('Logout');
+    logStateChange('auth.isAuthenticated', true, false);
+    setState({
+      isAuthenticated: false,
+      userId: null,
+      username: null,
+      token: null,
+      loading: false,
+    });
   };
 
   const setLoading = (loading: boolean) => {

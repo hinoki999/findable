@@ -6,6 +6,7 @@ import { logApiCall, logError } from './activityMonitor';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { supabase } from './supabase';
 import { withoutPlaceholders } from '../utils/profilePlaceholders';
+import { reportError } from '../utils/reportError';
 
 const USE_STUB = false; // Connected to backend!
 const REQUEST_TIMEOUT = 30000; // 30 seconds
@@ -115,7 +116,9 @@ export async function secureFetch(
       const payload = JSON.parse(atob(token.split('.')[1]));
       logData.user_id = payload.user_id || payload.sub || null;
     }
-  } catch { }
+  } catch {
+    // No or malformed stored token: the log entry just goes without a user_id
+  }
 
   // Capture start time for performance tracking
   const startTime = Date.now();
@@ -549,9 +552,12 @@ export async function sendDrop(
       .or(`and(user_id_1.eq.${senderId},user_id_2.eq.${receiverId}),and(user_id_1.eq.${receiverId},user_id_2.eq.${senderId})`)
       .maybeSingle();
 
+    // Fail closed like the block check: an unanswered check must not let the drop through
     if (existingLinkError) {
-      console.error('[DROPS] Error checking existing links:', existingLinkError);
-    } else if (existingLink) {
+      reportError('send-drop-link-check', existingLinkError);
+      throw new Error('Failed to send drop. Please try again.');
+    }
+    if (existingLink) {
       console.log('[DROPS] Existing link found:', existingLink.id);
       throw new Error('You are already linked with this person');
     }
@@ -581,9 +587,12 @@ export async function sendDrop(
       .eq('status', 'pending')
       .maybeSingle();
 
+    // Unanswered, this would insert a new drop where a link was due
     if (reverseDropError) {
-      console.error('[DROPS] Error checking reverse drop:', reverseDropError);
-    } else if (reverseDrop) {
+      reportError('send-drop-reverse-check', reverseDropError);
+      throw new Error('Failed to send drop. Please try again.');
+    }
+    if (reverseDrop) {
       console.log('[DROPS] Mutual drop detected - auto-linking. reverseDrop:', reverseDrop.id);
 
       // They dropped first: link_drop records this user's drop back, marks theirs
@@ -830,9 +839,12 @@ export async function getLinkedDrops(): Promise<Link[]> {
       const { data: profilesData, error: profilesError } = await supabase
         .rpc('get_contact_profiles', { target_ids: receiverUserIds });
 
+      // Without profiles the links would show with no contact details
       if (profilesError) {
-        console.error('[DROPS] Error fetching receiver profiles:', profilesError);
-      } else if (profilesData) {
+        reportError('links-load-contact-profiles', profilesError);
+        throw new Error('Failed to load links.');
+      }
+      if (profilesData) {
         receiverProfiles = new Map(profilesData.map((p: any) => [p.user_id, p]));
         console.log('[DROPS] Loaded', receiverProfiles.size, 'receiver profiles');
       }
@@ -1062,6 +1074,10 @@ export async function deleteDrop(dropId: string): Promise<void> {
       console.error('[DROPS] SOFT-DELETE: Supabase update error:', error.code, error.message);
       throw new Error('Failed to delete drop. Please try again.');
     }
+
+    // 0 rows is deliberately not an error: a sender's declined drop is hidden from
+    // them, so their delete of it matches nothing. Reporting that would reveal the
+    // decline (20260928000400).
 
     if (!data || data.length === 0) {
       console.error('[DROPS] SOFT-DELETE: No rows updated - drop not found or not owned by user');
@@ -1360,9 +1376,10 @@ export async function changeUsername(newUsername: string, userId: string): Promi
       data: { username: newUsername }
     });
 
+    // The profile holds the username; auth metadata is what the app displays until
+    // the next sign-in. Not fatal, but the screen would show the old username.
     if (authError) {
-      console.error('Failed to update username in auth:', authError);
-      // Don't throw - profile update succeeded, metadata update is optional
+      reportError('change-username-auth-metadata', authError);
     }
 
     console.log('SUCCESS: Username changed successfully');
@@ -1568,17 +1585,25 @@ export async function verifyPhoneCode(phoneNumber: string, code: string, userId:
 
     console.log('[PHONE-VERIFY] verifyOtp SUCCESS, user id:', data.user.id);
     console.log('[PHONE-VERIFY] Calling supabase user_profiles update for user_id:', userId);
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from('user_profiles')
       .update({
         phone_verified: true,
         phone_verification_code: null,
         verification_code_expires: null
       })
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .select('phone_verified');
 
     if (updateError) {
       console.error('[PHONE-VERIFY] user_profiles update error:', updateError.code, updateError.message);
+      throw new Error('Verification succeeded but failed to save status. Please contact support.');
+    }
+
+    // phone_verified is server-owned (user_profiles_protect_fields), so this write
+    // can succeed without changing it. Only report success if it's actually set.
+    if (!updatedRows || updatedRows.length === 0 || updatedRows[0].phone_verified !== true) {
+      reportError('verify-phone-save-status', new Error('phone_verified not set after verification'));
       throw new Error('Verification succeeded but failed to save status. Please contact support.');
     }
 
@@ -1635,7 +1660,8 @@ export async function resetPasswordWithOtp(email: string, newPassword: string): 
 export async function endRecoverySession(): Promise<void> {
   const { error } = await supabase.auth.signOut();
   if (error) {
-    console.error('Failed to end recovery session:', error.code, error.message);
+    // The user could stay signed in without having set a password
+    reportError('end-recovery-session', error);
   }
 }
 
@@ -1759,11 +1785,18 @@ export const savePushToken = async (token: string): Promise<void> => {
     return;
   }
   console.log('[PUSH-DEBUG] User found, updating user_profiles with push_token...');
-  const { error: updateError } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from('user_profiles')
     .update({ push_token: token })
-    .eq('user_id', user.id);
-  console.log('[PUSH-DEBUG] Supabase update result - error:', updateError ? updateError.message : 'none (success)');
+    .eq('user_id', user.id)
+    .select('user_id');
+  // Without a saved token this device gets no drop or link notifications
+  if (updateError) {
+    throw new Error(`Failed to save push token: ${updateError.message}`);
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    throw new Error('Failed to save push token: no profile row updated');
+  }
 };
 
 // ==================== BLOCKING ====================

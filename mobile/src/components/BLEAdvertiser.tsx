@@ -6,6 +6,7 @@ import { bleManager } from '../services/bleManager';
 import { useAuth } from '../contexts/AuthContext';
 import BLEAdvertiserNative, { isBLEAdvertiserAvailable } from '../native/BLEAdvertiserNative';
 import { supabase } from '../services/supabase';
+import { reportError } from '../utils/reportError';
 
 // Feature flag - can disable advertising if needed
 const ADVERTISING_ENABLED = true;
@@ -359,7 +360,8 @@ export const useBLEAdvertiser = (): UseBLEAdvertiserReturn => {
       setIsAdvertising(false);
       setBroadcastName(null);
     } catch (err) {
-      console.error('[BLE-ADV] Failed to stop advertising on sign-out:', err);
+      // The previous user's ID could still be broadcasting
+      reportError('ble-advertise-stop-signout', err);
     }
   }, []);
 

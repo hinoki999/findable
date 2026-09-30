@@ -19,6 +19,7 @@ console.log('[PUSH-DEBUG] Notifications.setNotificationHandler registered at top
 import { DROPSHAKE_SERVICE_UUID, DROPSHAKE_MANUFACTURER_ID } from '../config/bleConfig';
 import { bleManager } from '../services/bleManager';
 import { supabase } from '../services/supabase';
+import { reportError } from '../utils/reportError';
 
 /**
  * Decode base64 manufacturer data and extract userId prefix
@@ -216,7 +217,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       try {
         await Notifications.requestPermissionsAsync();
       } catch (error) {
-        console.warn('[PERMS-DEBUG] Notification permission request error:', error);
+        reportError('notification-permission-request', error, { once: true });
       }
     }, 500);
 
@@ -358,7 +359,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                     .rpc('get_profile_by_user_id_prefix', { prefix: normalizedDeviceId });
 
                   if (userProfileError) {
-                    console.error('[BLE-ID] Supabase RPC lookup error:', JSON.stringify(userProfileError, null, 2));
+                    // Runs on every advertisement: report once per session
+                    reportError('ble-profile-lookup', userProfileError, { once: true });
                   }
 
                   // RPC returns an array, get first result
@@ -403,8 +405,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
                     });
                   }
                 } catch (err: any) {
-                  console.error('[BLE-ID] Profile lookup EXCEPTION:', err?.message);
-                  // Silently fail - device will show without username
+                  // The device stays unresolved (hidden) until a later sighting succeeds
+                  reportError('ble-profile-lookup', err, { once: true });
                 }
               })();
             }
@@ -535,7 +537,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       addDebugLog('stopScan: completed');
       console.log('[BLE-DEBUG] Scanning stopped');
     } catch (err: any) {
-      console.error('[BLE-SCAN] stopScan EXCEPTION:', err?.message);
+      reportError('ble-scan-stop', err);
       addDebugLog(`stopScan error: ${err instanceof Error ? err.message : 'unknown'}`);
       console.error('[BLE-DEBUG] Error stopping scan:', err);
       setIsScanning(false);

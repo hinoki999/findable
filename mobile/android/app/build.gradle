@@ -82,6 +82,10 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
+// Uploads source maps for release builds (the @sentry/react-native/expo plugin adds this
+// on prebuild, which never runs here because android/ is committed). Needs SENTRY_AUTH_TOKEN.
+apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
+
 android {
     ndkVersion rootProject.ext.ndkVersion
 

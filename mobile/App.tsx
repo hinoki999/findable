@@ -1,11 +1,23 @@
 import 'react-native-gesture-handler';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Sentry from '@sentry/react-native';
+import { scrubBreadcrumb, scrubEvent, scrubSpan, scrubTransaction } from './src/utils/sentryScrub';
 
 Sentry.init({
   dsn: 'https://799c50b2e124c9fad116346946179c7b@o4512008784052224.ingest.us.sentry.io/4512008860205056',
+  // Dev builds don't report at all: their logs carry real emails, phone numbers and codes
+  enabled: !__DEV__,
+  // Release builds are tagged by their EAS channel (preview / production)
+  environment: __DEV__ ? 'development' : (Updates.channel || 'unknown'),
+  sendDefaultPii: false,
   tracesSampleRate: 1.0,
   debug: false,
+  // Personal data is scrubbed before anything leaves the device (src/utils/sentryScrub.ts).
+  // Spans and transactions too: span descriptions are full PostgREST URLs with user IDs.
+  beforeBreadcrumb: breadcrumb => scrubBreadcrumb(breadcrumb),
+  beforeSend: event => scrubEvent(event),
+  beforeSendTransaction: event => scrubTransaction(event),
+  beforeSendSpan: span => scrubSpan(span),
 });
 import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { View, Pressable, Text, PanResponder, PermissionsAndroid, NativeModules, Platform } from 'react-native';
@@ -38,6 +50,7 @@ import {
 } from './src/native/BLEScannerModule';
 import { savePushToken } from './src/services/api';
 import { PROFILE_PLACEHOLDERS, realValue } from './src/utils/profilePlaceholders';
+import { reportError } from './src/utils/reportError';
 import { useBLEAdvertiser } from './src/components/BLEAdvertiser';
 
 // Dark Mode Context
@@ -271,7 +284,7 @@ function MainApp() {
           console.log('[BLE-ADV-APP] Native module not available, using default isDiscoverable=true');
         }
       } catch (error) {
-        console.error('[BLE-ADV-APP] Failed to load isDiscoverable:', error);
+        reportError('app-load-discoverable', error);
         // Keep default true on error
       } finally {
         setDiscoverableLoaded(true);
@@ -318,7 +331,7 @@ function MainApp() {
           console.log('📱 No cached profile found - fresh install detected');
         }
       } catch (error) {
-        console.error('📱 Failed to load profile from AsyncStorage:', error);
+        reportError('app-load-cached-profile', error, { once: true });
       }
     };
 
@@ -336,7 +349,7 @@ function MainApp() {
           console.log('💾 Profile saved successfully');
         }
       } catch (error) {
-        console.error('💾 Failed to save profile to AsyncStorage:', error);
+        reportError('app-save-cached-profile', error, { once: true });
       }
     };
 
@@ -353,7 +366,7 @@ function MainApp() {
           await Updates.reloadAsync();
         }
       } catch (error) {
-        console.log('Error checking for updates:', error);
+        reportError('app-check-updates', error, { once: true });
       }
     }
 
@@ -432,7 +445,7 @@ function MainApp() {
         })));
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      reportError('app-load-user-data', error);
     }
   }, []);
 
@@ -457,7 +470,7 @@ function MainApp() {
         const ids = await api.getPinnedContacts();
         setPinnedIds(new Set(ids));
       } catch (error) {
-        console.error('Failed to load pinned contacts:', error);
+        reportError('app-load-pinned-contacts', error);
       }
     })();
   }, [authLoading, isAuthenticated, userId]);
@@ -509,7 +522,8 @@ function MainApp() {
           console.error('[PUSH-DEBUG] No FCM token returned');
         }
       } catch (error: any) {
-        console.error('[PUSH-DEBUG] Push registration error:', error.message);
+        // Without a saved token this device gets no drop or link notifications
+        reportError('app-push-registration', error, { once: true });
       }
     };
     registerPushToken();
@@ -587,7 +601,7 @@ function MainApp() {
           console.log('✅ App is up to date');
         }
       } catch (error) {
-        console.error('❌ Update check failed:', error);
+        reportError('app-check-updates', error, { once: true });
       }
     }
 
@@ -704,7 +718,8 @@ function MainApp() {
       }, userId!);
       console.log('✅ Dark mode saved to backend:', newValue);
     } catch (error) {
-      console.error('❌ Failed to save dark mode:', error);
+      reportError('app-save-dark-mode', error);
+      showToast({ message: "Couldn't save your setting. Please try again.", type: 'error', duration: 3000 });
     }
   };
 
@@ -781,6 +796,12 @@ function MainApp() {
         throw new Error(error.message || 'Failed to update profile in database');
       }
 
+      // No row matched (e.g. the profile row is missing): nothing was saved
+      if (!data || data.length === 0) {
+        reportError('app-update-profile', new Error('No profile row updated'));
+        throw new Error('Could not save your profile. Please try again.');
+      }
+
       console.log('[PROFILE-UPDATE] After UPDATE - success, returned data:', JSON.stringify(data, null, 2));
 
       // Update local state
@@ -816,7 +837,8 @@ function MainApp() {
       }, userId!);
       console.log('✅ Max distance saved to backend:', distance);
     } catch (error) {
-      console.error('❌ Failed to save max distance:', error);
+      reportError('app-save-max-distance', error);
+      showToast({ message: "Couldn't save your setting. Please try again.", type: 'error', duration: 3000 });
     }
   };
 

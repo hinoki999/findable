@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
 import { supabase } from '../services/supabase';
+import { reportError } from '../utils/reportError';
 
 export type ScreenName = 'Home' | 'Drop' | 'History' | 'Account';
 
@@ -108,7 +109,7 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
       setIsLoaded(true);
       
     } catch (error) {
-      console.error('[TUTORIAL] initializeTutorials error:', error);
+      reportError('tutorial-initialize', error);
       setCompletedTutorials({
         Home: true,
         Drop: true,
@@ -227,18 +228,22 @@ export const TutorialProvider: React.FC<{ children: ReactNode }> = ({ children }
         return;
       }
       
-      const { error } = await supabase
+      const { data: updatedRows, error } = await supabase
         .from('user_profiles')
         .update({ has_completed_onboarding: true })
-        .eq('user_id', session.user.id);
+        .eq('user_id', session.user.id)
+        .select('user_id');
       
       if (error) {
-        console.error('[TUTORIAL] Error marking onboarding complete:', error);
+        reportError('tutorial-mark-onboarding', error);
+      } else if (!updatedRows || updatedRows.length === 0) {
+        // No profile row: the flag wasn't saved, so onboarding would show again
+        reportError('tutorial-mark-onboarding', new Error('No profile row updated'));
       } else {
         console.log('[TUTORIAL] Successfully marked has_completed_onboarding = true in user_profiles');
       }
     } catch (error) {
-      console.error('[TUTORIAL] markOnboardingComplete error:', error);
+      reportError('tutorial-mark-onboarding', error);
     }
   };
 

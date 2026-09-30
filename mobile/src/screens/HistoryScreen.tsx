@@ -2,6 +2,7 @@
 import { View, Text, FlatList, ActivityIndicator, Pressable, Modal, TextInput, RefreshControl, Dimensions, Image } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getDevices, deleteDevice, restoreDevice, Device, getLinkedDrops, deleteDrop, Drop, Link, blockUser, reportUser, ReportReason } from '../services/api';
+import { reportError } from '../utils/reportError';
 import { colors, type, card, getTheme, shadow } from '../theme';
 import { useDarkMode, usePinnedProfiles, useToast } from '../../App';
 import { useAuth } from '../contexts/AuthContext';
@@ -91,9 +92,9 @@ export default function HistoryScreen() {
         setData(drops);
         setErr(null);
       } catch (e: any) {
-        console.error('[DROPS] ERROR: HISTORY: Failed to load drops:', e);
-        // Don't show error toast - just log it
-        console.log('[DROPS] WARNING: HISTORY: Error loading links (this is OK if user has no links yet)');
+        // A failed load is not the same as having no links: say so
+        reportError('history-load-links', e);
+        showToast({ message: "Couldn't load your links. Pull down to try again.", type: 'error', duration: 3000 });
         setData([]);
         setErr(null);
       } finally {
@@ -173,8 +174,9 @@ export default function HistoryScreen() {
       setErr(null);
       console.log('[DROPS] HISTORY: Refreshed, loaded', drops.length, 'linked drops');
     } catch (e: any) {
-      console.error('[DROPS] ERROR: HISTORY: Failed to refresh drops:', e);
-      console.log('[DROPS] WARNING: HISTORY: Refresh failed, keeping existing data');
+      // Keep the existing list, but say the refresh failed
+      reportError('history-refresh-links', e);
+      showToast({ message: "Couldn't refresh your links.", type: 'error', duration: 3000 });
       setErr(null);
     } finally {
       setRefreshing(false);
@@ -690,7 +692,8 @@ export default function HistoryScreen() {
                       setBlockReportMode('choose');
                       closeContactModal();
                     } catch (err) {
-                      console.error('[BLOCKS] Failed to block from HistoryScreen:', err);
+                      reportError('history-block-user', err);
+                      showToast({ message: "Couldn't block this user. Please try again.", type: 'error', duration: 3000 });
                     }
                   }}
                   style={{
@@ -745,7 +748,8 @@ export default function HistoryScreen() {
                         setBlockReportMode('choose');
                         closeContactModal();
                       } catch (err) {
-                        console.error('[REPORTS] Failed to report from HistoryScreen:', err);
+                        reportError('history-report-user', err);
+                        showToast({ message: "Couldn't send the report. Please try again.", type: 'error', duration: 3000 });
                       }
                     }}
                     style={{

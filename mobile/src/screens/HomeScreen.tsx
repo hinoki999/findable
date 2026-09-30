@@ -8,6 +8,7 @@ import { useDarkMode, usePinnedProfiles, useUserProfile, useToast, useLinkNotifi
 import { getBackgroundDevices, BackgroundBLEDevice } from '../native/BLEScannerModule';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { saveDevice, getDevices, deleteDevice, restoreDevice, Device, sendDrop, getIncomingDrops, getLinkedDrops, updateDropStatus, deleteDrop, Drop, Link, getUnviewedLinks, markLinkViewed } from '../services/api';
+import { reportError } from '../utils/reportError';
 import { useAuth } from '../contexts/AuthContext';
 import { useBlockedUsers } from '../contexts/BlockedUsersContext';
 import { isVisibleNearbyUser } from '../utils/nearbyVisibility';
@@ -715,7 +716,7 @@ export default function HomeScreen() {
           addDebugDevice(bleDevice);
         }
       } catch (error) {
-        console.error('[BG-SEED] Failed to seed background devices:', error);
+        reportError('home-seed-background-devices', error, { once: true });
       }
     };
 
@@ -845,7 +846,7 @@ export default function HomeScreen() {
         );
         setLinkedDevices(links);
       } catch (error) {
-        // Silent fail - linked devices will refresh on next mount
+        reportError('home-load-linked-devices', error, { once: true });
       }
     };
 
@@ -870,8 +871,8 @@ export default function HomeScreen() {
         console.log('[DROP-SCREEN] HomeScreen received drops:', JSON.stringify(drops.map(d => ({ id: d.id, senderName: d.senderName })), null, 2));
         setIncomingDrops(drops);
       } catch (error: any) {
-        console.error('[DROP-STATE] HomeScreen fetchIncomingDropsFromTable error:', error?.message);
-        // Silent fail - drops will refresh on next mount
+        // Polled: report once per session, the next poll retries
+        reportError('home-poll-incoming-drops', error, { once: true });
       }
     };
 
@@ -903,8 +904,8 @@ export default function HomeScreen() {
         setUnviewedLinksFromDb(filteredLinks);
         // Modal auto-trigger removed - modal only opens via handleRaindropPress
       } catch (error: any) {
-        console.error('[DROP-MODAL] fetchUnviewedLinksFromDb error:', error?.message);
-        // Silent fail - links will refresh on next mount
+        // Polled every 5 seconds: report once per session, the next poll retries
+        reportError('home-poll-unviewed-links', error, { once: true });
       }
     };
 
@@ -923,7 +924,8 @@ export default function HomeScreen() {
         const links = await getLinkedDrops();
         setAllLinks(links);
       } catch (error) {
-        // Silent fail - will retry on next interval
+        // Polled every 10 seconds: report once per session, the next poll retries
+        reportError('home-poll-links', error, { once: true });
       }
     };
 
@@ -1579,7 +1581,10 @@ export default function HomeScreen() {
     try {
       await markLinkViewed(linkId);
     } catch (error) {
-      console.error('[LINKS] Failed to dismiss link card:', error);
+      reportError('home-dismiss-link', error);
+      // Not saved: let the next poll bring the card back rather than hide it for this session only
+      dismissedLinkIdsRef.current.delete(linkId);
+      showToast({ message: "Couldn't dismiss this link. Please try again.", type: 'error', duration: 3000 });
     }
   };
 
@@ -1675,7 +1680,8 @@ export default function HomeScreen() {
     try {
       await getDevices();
     } catch (error) {
-      console.error('Failed to refresh:', error);
+      reportError('home-refresh', error);
+      showToast({ message: "Couldn't refresh. Please try again.", type: 'error', duration: 3000 });
     } finally {
       setRefreshing(false);
     }

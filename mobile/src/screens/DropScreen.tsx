@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TopBar from '../components/TopBar';
 import { colors, card, type, radius, getTheme, shadow } from '../theme';
 import { sendDrop, updateDropStatus, getAcceptedDrops, deleteDrop, Drop } from '../services/api';
+import { reportError } from '../utils/reportError';
 import { useDarkMode, useLinkNotifications, useToast, useSettings, useUserProfile, usePinnedProfiles } from '../../App';
 import { useTabNavigation } from '../contexts/TabNavigationContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -77,7 +78,8 @@ export default function DropScreen() {
     fetchAcceptedDrops();
   }, []);
 
-  const fetchAcceptedDrops = async () => {
+  // Returns false if the load failed, so a pull-to-refresh can say so
+  const fetchAcceptedDrops = async (): Promise<boolean> => {
     console.log('[DROP-SCREEN] fetchAcceptedDrops ENTRY');
     try {
       console.log('[DROP-SCREEN] Calling getAcceptedDrops API...');
@@ -85,9 +87,10 @@ export default function DropScreen() {
       console.log('[DROP-SCREEN] getAcceptedDrops returned', drops.length, 'drops');
       console.log('[DROP-STATE] DropScreen setAcceptedDrops - count:', drops.length);
       setAcceptedDrops(drops);
+      return true;
     } catch (error: any) {
-      console.error('[DROPS] Failed to fetch accepted drops:', error);
-      console.error('[DROP-SCREEN] fetchAcceptedDrops EXCEPTION:', error?.message);
+      reportError('drop-load-accepted-drops', error, { once: true });
+      return false;
     }
   };
 
@@ -359,7 +362,10 @@ export default function DropScreen() {
     setRefreshing(true);
     // Refresh accepted drops
     console.log('[DROP-SCREEN] Calling fetchAcceptedDrops from onRefresh...');
-    await fetchAcceptedDrops();
+    const loaded = await fetchAcceptedDrops();
+    if (!loaded) {
+      showToast({ message: "Couldn't refresh your drops. Please try again.", type: 'error', duration: 3000 });
+    }
     // Stop current scan and start a new one
     console.log('[BLE-SCAN] onRefresh stopping scan...');
     stopScan();
