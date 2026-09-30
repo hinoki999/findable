@@ -12,8 +12,11 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -52,6 +55,9 @@ class BLEScannerService : Service() {
     private var isScanning = false
     private val detectedDevices = mutableMapOf<String, DetectedDevice>()
     private val handler = Handler(Looper.getMainLooper())
+    private var bluetoothStateReceiver: BroadcastReceiver? = null
+    // Bluetooth is off: scanning is impossible and the notification says so
+    private var bluetoothOff = false
     
     data class DetectedDevice(
         val id: String,           // MAC address
@@ -67,12 +73,14 @@ class BLEScannerService : Service() {
         Log.d(TAG, "BLEScannerService created")
         createNotificationChannel()
         initBluetooth()
+        // Scanning stops when Bluetooth is turned off; this restarts it when it's back on
+        registerBluetoothStateReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START_SCAN -> {
-                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+                startForegroundCompat()
                 startScanning()
             }
             ACTION_STOP_SCAN -> {
@@ -84,7 +92,7 @@ class BLEScannerService : Service() {
             else -> {
                 // System restart via START_STICKY (null intent) - resume scanning
                 Log.d(TAG, "Service restarted by system (START_STICKY), resuming scanning")
-                startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+                startForegroundCompat()
                 startScanning()
             }
         }
@@ -93,8 +101,20 @@ class BLEScannerService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // The three-argument startForeground (with a service type) exists only on API 29+;
+    // calling it on Android 7-9 (minSdk is 24) crashes the service
+    private fun startForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
+    }
+
     private fun initBluetooth() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        bluetoothOff = bluetoothManager?.adapter?.isEnabled == false
+        // Null while Bluetooth is off, so this runs again when it turns back on
         bluetoothLeScanner = bluetoothManager?.adapter?.bluetoothLeScanner
         Log.d(TAG, "Bluetooth initialized, scanner available: ${bluetoothLeScanner != null}")
     }
@@ -125,7 +145,9 @@ class BLEScannerService : Service() {
         )
 
         val deviceCount = detectedDevices.size
-        val contentText = if (deviceCount > 0) {
+        val contentText = if (bluetoothOff) {
+            "Bluetooth is off. Turn it on to find nearby users."
+        } else if (deviceCount > 0) {
             "$deviceCount DropShake user${if (deviceCount > 1) "s" else ""} nearby"
         } else {
             "Scanning for nearby users..."
@@ -153,9 +175,14 @@ class BLEScannerService : Service() {
             return
         }
 
+        if (bluetoothLeScanner == null) {
+            initBluetooth()
+        }
         val scanner = bluetoothLeScanner
         if (scanner == null) {
+            // Bluetooth off (or no BLE): the state receiver retries when it turns on
             Log.e(TAG, "BluetoothLeScanner is null")
+            updateNotification()
             return
         }
 
@@ -333,9 +360,50 @@ class BLEScannerService : Service() {
         }
     }
 
+    private fun registerBluetoothStateReceiver() {
+        if (bluetoothStateReceiver != null) return
+        bluetoothStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
+                    // The system has already stopped the scan; forget it so a restart isn't
+                    // refused as "Already scanning"
+                    Log.d(TAG, "Bluetooth turning off, scan stopped")
+                    isScanning = false
+                    handler.removeCallbacksAndMessages(null)
+                    bluetoothLeScanner = null
+                    bluetoothOff = true
+                    updateNotification()
+                } else if (state == BluetoothAdapter.STATE_ON) {
+                    Log.d(TAG, "Bluetooth on, restarting scan")
+                    initBluetooth()
+                    startScanning()
+                    updateNotification()
+                }
+            }
+        }
+        try {
+            val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(bluetoothStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(bluetoothStateReceiver, filter)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering Bluetooth state receiver", e)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopScanning()
+        try {
+            bluetoothStateReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering Bluetooth state receiver", e)
+        }
+        bluetoothStateReceiver = null
         handler.removeCallbacksAndMessages(null)
         Log.d(TAG, "BLEScannerService destroyed")
     }

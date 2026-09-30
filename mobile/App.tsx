@@ -25,7 +25,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { getMessaging, getToken } from '@react-native-firebase/messaging';
+import { getMessaging, getToken, onTokenRefresh } from '@react-native-firebase/messaging';
 import DropScreen from './src/screens/DropScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import AccountScreen from './src/screens/AccountScreen';
@@ -527,6 +527,13 @@ function MainApp() {
       }
     };
     registerPushToken();
+
+    // FCM rotates tokens from time to time; without saving the new one, notifications
+    // silently stop arriving on this device
+    const unsubscribeTokenRefresh = onTokenRefresh(getMessaging(), (token) => {
+      savePushToken(token).catch(error => reportError('app-push-token-refresh', error));
+    });
+    return unsubscribeTokenRefresh;
   }, [isAuthenticated, userId]);
 
   // Signing out (or switching accounts) stops the broadcast of the previous

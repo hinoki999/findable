@@ -25,7 +25,19 @@ interface WebhookPayload {
 interface UserProfile {
   user_id: string;
   name: string | null;
+  username?: string | null;
   push_token: string | null;
+}
+
+// Names shown in a push come from the account's profile, never from the drop row
+// (sender_name is written by the sender and could say anything). Control characters
+// and line breaks are removed and the length capped, so a name can't fake extra
+// notification text.
+function displayName(profile: { name?: string | null; username?: string | null } | undefined): string {
+  const raw = profile?.name || profile?.username || "";
+  const clean = raw.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim();
+  if (!clean) return "Someone";
+  return clean.length > 40 ? `${clean.slice(0, 39)}…` : clean;
 }
 
 // Base64url encode for JWT
@@ -180,18 +192,19 @@ serve(async (req) => {
     const { type, record, old_record } = payload;
 
     if (type === "INSERT" && record.status === "pending") {
-      const { data: receiver } = await supabase
+      const { data: profiles } = await supabase
         .from("user_profiles")
-        .select("user_id, name, push_token")
-        .eq("user_id", record.receiver_id)
-        .single();
+        .select("user_id, name, username, push_token")
+        .in("user_id", [record.sender_id, record.receiver_id]);
+      const sender = profiles?.find((p: UserProfile) => p.user_id === record.sender_id);
+      const receiver = profiles?.find((p: UserProfile) => p.user_id === record.receiver_id);
 
       if (receiver?.push_token) {
         console.log("[FCM] Sending drop notification to receiver:", record.receiver_id.substring(0, 8));
         await sendFCMNotification(
           receiver.push_token,
           "New Drop!",
-          `${record.sender_name || "Someone"} sent you a drop`,
+          `${displayName(sender)} sent you a drop`,
           accessToken
         );
       } else {
@@ -202,7 +215,7 @@ serve(async (req) => {
     if (type === "UPDATE" && record.status === "linked" && old_record?.status !== "linked") {
       const { data: profiles } = await supabase
         .from("user_profiles")
-        .select("user_id, name, push_token")
+        .select("user_id, name, username, push_token")
         .in("user_id", [record.sender_id, record.receiver_id]);
 
       if (profiles) {
@@ -213,7 +226,7 @@ serve(async (req) => {
           await sendFCMNotification(
             sender.push_token,
             "New Link!",
-            `You linked with ${receiver?.name || "Someone"}`,
+            `You linked with ${displayName(receiver)}`,
             accessToken
           );
         }
@@ -221,7 +234,7 @@ serve(async (req) => {
           await sendFCMNotification(
             receiver.push_token,
             "New Link!",
-            `You linked with ${sender?.name || "Someone"}`,
+            `You linked with ${displayName(sender)}`,
             accessToken
           );
         }

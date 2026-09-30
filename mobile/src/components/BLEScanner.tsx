@@ -133,6 +133,10 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Ref to track scanning state for Bluetooth state listener (prevents stale closures)
   const isScanningRef = useRef(isScanning);
+  // Whether the screen wants scanning, independent of whether a scan is running right
+  // now: Bluetooth turning off stops the scan (isScanning goes false), and this is what
+  // lets it restart when Bluetooth comes back on
+  const wantsScanRef = useRef(false);
   useEffect(() => {
     isScanningRef.current = isScanning;
   }, [isScanning]);
@@ -239,6 +243,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
       return;
     }
 
+    wantsScanRef.current = true;
     startScanCountRef.current += 1;
     console.log('[BLE-SCAN] Starting scan #', startScanCountRef.current);
     addDebugLog(`startScan: proceeding (count: ${startScanCountRef.current})`);
@@ -511,6 +516,7 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
 
   // Stop scanning
   const stopScan = useCallback(() => {
+    wantsScanRef.current = false;
     console.log('[BLE-SCAN] stopScan called - timestamp:', Date.now());
     addDebugLog('stopScan called');
 
@@ -642,8 +648,8 @@ export const useBLEScanner = (): UseBLEScannerReturn => {
         setIsBluetoothOff(false);
         errorRef.current = null;
         setError(null);
-        // Auto-restart scanning if we were scanning before
-        if (isScanningRef.current) {
+        // Auto-restart scanning if the screen wanted it (isScanning was cleared on PoweredOff)
+        if (wantsScanRef.current) {
           console.log('[BLE-SCAN] Auto-restarting scan after Bluetooth re-enabled');
           addDebugLog('stateChange: PoweredOn -> restarting scan');
           console.log('[BLE-DEBUG] Restarting scan after Bluetooth re-enabled');

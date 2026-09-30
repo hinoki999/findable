@@ -83,8 +83,32 @@ def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBu
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 // Uploads source maps for release builds (the @sentry/react-native/expo plugin adds this
-// on prebuild, which never runs here because android/ is committed). Needs SENTRY_AUTH_TOKEN.
+// on prebuild, which never runs here because android/ is committed). Uses SENTRY_AUTH_TOKEN when set.
 apply from: new File(["node", "--print", "require('path').dirname(require.resolve('@sentry/react-native/package.json'))"].execute().text.trim(), "sentry.gradle")
+
+// The source map upload must never fail a build. Without SENTRY_AUTH_TOKEN it is skipped;
+// if it runs and fails (bad token, network), the error is logged as a warning and the
+// build carries on. That build just has unreadable release stack traces in Sentry.
+gradle.taskGraph.whenReady { graph ->
+    graph.allTasks.findAll { it.name.contains("_SentryUpload_") }.each { uploadTask ->
+        if (!System.getenv("SENTRY_AUTH_TOKEN")) {
+            uploadTask.enabled = false
+            logger.warn("SENTRY_AUTH_TOKEN is not set: skipping Sentry source map upload (${uploadTask.name})")
+            return
+        }
+        def uploadActions = uploadTask.actions.toList()
+        uploadTask.actions.clear()
+        uploadTask.doLast {
+            uploadActions.each { action ->
+                try {
+                    action.execute(uploadTask)
+                } catch (Exception e) {
+                    logger.warn("Sentry source map upload failed, continuing the build: ${e.message}")
+                }
+            }
+        }
+    }
+}
 
 android {
     ndkVersion rootProject.ext.ndkVersion

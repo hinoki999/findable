@@ -15,6 +15,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelUuid
@@ -55,12 +56,18 @@ class BLEAdvertiserService : Service() {
     private var currentServiceUUID: String? = null
     private var advertiseCallback: AdvertiseCallback? = null
     private var bluetoothStateReceiver: BroadcastReceiver? = null
+    // Bluetooth is off: advertising is impossible and the notification says so
+    private var bluetoothOff = false
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "BLEAdvertiserService created")
         createNotificationChannel()
         initBluetooth()
+        bluetoothOff = bluetoothAdapter?.isEnabled == false
+        // Registered for the service's whole life (not only while advertising), so turning
+        // Bluetooth back on restarts advertising instead of leaving the user invisible
+        registerBluetoothStateReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -69,7 +76,7 @@ class BLEAdvertiserService : Service() {
         // CRITICAL: Call startForeground() IMMEDIATELY and UNCONDITIONALLY
         // Android requires this within 5 seconds of startForegroundService() call
         // Must happen BEFORE any permission checks, BLE init, or other operations
-        startForeground(NOTIFICATION_ID, createNotification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        startForegroundCompat()
         Log.d(TAG, "startForeground called immediately in onStartCommand")
         
         // Handle null intent (service restarted by system after being killed)
@@ -129,6 +136,16 @@ class BLEAdvertiserService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // The three-argument startForeground (with a service type) exists only on API 29+;
+    // calling it on Android 7-9 (minSdk is 24) crashes the service
+    private fun startForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        } else {
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
+    }
+
     private fun initBluetooth() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         bluetoothAdapter = bluetoothManager?.adapter
@@ -163,7 +180,7 @@ class BLEAdvertiserService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("DropShake Active")
-            .setContentText("Currently broadcasting")
+            .setContentText(if (bluetoothOff) "Bluetooth is off. Turn it on to be visible." else "Currently broadcasting")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -179,9 +196,13 @@ class BLEAdvertiserService : Service() {
 
     private fun startAdvertising(serviceUUID: String, deviceId: String) {
         Log.d(TAG, "startAdvertising called with serviceUUID: $serviceUUID, deviceId: $deviceId")
-        Log.d(TAG, "startAdvertising guard check - isAdvertising: $isAdvertising")
-        
-        if (isAdvertising) {
+        Log.d(TAG, "startAdvertising guard check - isAdvertising: $isAdvertising, pending: ${advertiseCallback != null}")
+
+        // advertiseCallback is set as soon as a start is requested, before onStartSuccess.
+        // Checking only isAdvertising let a second request in while the first was still
+        // starting; the first callback was then overwritten and its advertisement could
+        // never be stopped, not even by Ghost Mode.
+        if (advertiseCallback != null) {
             if (deviceId == currentDeviceId) {
                 Log.d(TAG, "Already advertising, ignoring duplicate start request")
                 return  // Don't stop and restart - just keep current advertising running
@@ -201,10 +222,16 @@ class BLEAdvertiserService : Service() {
 
         if (!adapter.isEnabled) {
             Log.e(TAG, "Bluetooth is not enabled")
+            // The state receiver starts advertising once Bluetooth is turned on
+            bluetoothOff = true
+            updateNotification()
             broadcastFailure("Bluetooth is not enabled")
             return
         }
 
+        // Fetched fresh: the adapter returns no advertiser while Bluetooth is off, so one
+        // cached when the service started with Bluetooth off would stay null
+        bluetoothLeAdvertiser = adapter.bluetoothLeAdvertiser
         val advertiser = bluetoothLeAdvertiser
         if (advertiser == null) {
             Log.e(TAG, "BLE Advertiser is null - device may not support BLE advertising")
@@ -249,6 +276,16 @@ class BLEAdvertiserService : Service() {
 
             advertiseCallback = object : AdvertiseCallback() {
                 override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+                    if (advertiseCallback !== this) {
+                        // Superseded while starting: stop it rather than leave it running untracked
+                        Log.d(TAG, "Stale advertisement started - stopping it")
+                        try {
+                            bluetoothLeAdvertiser?.stopAdvertising(this)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error stopping stale advertisement", e)
+                        }
+                        return
+                    }
                     Log.d(TAG, "✅ Advertising started successfully")
                     Log.d(TAG, "onStartSuccess - isAdvertising at callback time: $isAdvertising, advertiseCallback is null: ${advertiseCallback == null}")
                     Log.d(TAG, "Broadcasting with manufacturer data: $deviceId")
@@ -273,13 +310,13 @@ class BLEAdvertiserService : Service() {
                         else -> "Unknown error: $errorCode"
                     }
                     Log.e(TAG, "❌ Advertising failed: $errorMessage (code: $errorCode)")
-                    
+                    if (advertiseCallback !== this) return
+
                     isAdvertising = false
+                    advertiseCallback = null
                     broadcastFailure(errorMessage)
                 }
             }
-
-            registerBluetoothStateReceiver()
 
             // Save advertising state BEFORE starting async advertising
             // This ensures SharedPreferences has isDiscoverable=true even if app is killed
@@ -324,7 +361,6 @@ class BLEAdvertiserService : Service() {
             advertiseCallback = null
             currentDeviceId = null
             currentServiceUUID = null
-            unregisterBluetoothStateReceiver()
         }
     }
 
@@ -338,12 +374,20 @@ class BLEAdvertiserService : Service() {
                     Log.d(TAG, "Bluetooth state changed: $state")
                     
                     if (state == BluetoothAdapter.STATE_OFF || state == BluetoothAdapter.STATE_TURNING_OFF) {
+                        // The system drops the advertisement with Bluetooth
                         Log.d(TAG, "Bluetooth turning off, stopping advertising")
                         isAdvertising = false
                         advertiseCallback = null
                         currentDeviceId = null
                         currentServiceUUID = null
+                        bluetoothOff = true
                         updateNotification()
+                    } else if (state == BluetoothAdapter.STATE_ON) {
+                        Log.d(TAG, "Bluetooth on, resuming advertising if still discoverable")
+                        bluetoothOff = false
+                        initBluetooth()
+                        updateNotification()
+                        resumeFromSavedState()
                     }
                 }
             }
@@ -359,6 +403,18 @@ class BLEAdvertiserService : Service() {
             Log.d(TAG, "Bluetooth state receiver registered")
         } catch (e: Exception) {
             Log.e(TAG, "Error registering Bluetooth state receiver", e)
+        }
+    }
+
+    // Restart with the saved deviceId, unless the user went into Ghost Mode or signed out
+    // (both clear the saved state)
+    private fun resumeFromSavedState() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val isDiscoverable = prefs.getBoolean(KEY_IS_DISCOVERABLE, false)
+        val savedDeviceId = prefs.getString(KEY_DEVICE_ID, null)
+        val savedServiceUUID = prefs.getString(KEY_SERVICE_UUID, null)
+        if (isDiscoverable && savedDeviceId != null && savedServiceUUID != null) {
+            startAdvertising(savedServiceUUID, savedDeviceId)
         }
     }
 
@@ -420,6 +476,7 @@ class BLEAdvertiserService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopAdvertisingInternal()
+        unregisterBluetoothStateReceiver()
         Log.d(TAG, "BLEAdvertiserService destroyed")
     }
 }

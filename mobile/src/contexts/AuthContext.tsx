@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { logAuth, logStateChange } from '../services/activityMonitor';
 import { supabase } from '../services/supabase';
 import { reportError } from '../utils/reportError';
+import { clearPushToken } from '../services/api';
+import { getMessaging, getToken, deleteToken } from '@react-native-firebase/messaging';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -148,6 +150,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    // Before signing out (the profile write needs the session): unlink this device's
+    // push token from the account, so the next person on this phone doesn't get the
+    // previous user's notifications
+    let messaging: ReturnType<typeof getMessaging> | null = null;
+    try {
+      messaging = getMessaging();
+      const token = await getToken(messaging);
+      if (token) {
+        await clearPushToken(token);
+      }
+    } catch (error) {
+      reportError('auth-sign-out-push-token', error);
+    }
+
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
@@ -166,6 +182,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       token: null,
       loading: false,
     });
+
+    // After signing out: retire this device's token, so it stops working even if clearing
+    // it from the profile failed. The next sign-in registers a fresh one.
+    if (messaging) {
+      try {
+        await deleteToken(messaging);
+      } catch (error) {
+        reportError('auth-sign-out-delete-push-token', error);
+      }
+    }
   };
 
   const setLoading = (loading: boolean) => {

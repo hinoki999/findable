@@ -14,3 +14,5 @@ local.properties
 
 # Bundle artifacts
 *.jsbundle
+# Written by sentry.gradle on every release build
+app/src/main/assets/modules.json

@@ -1775,6 +1775,21 @@ export async function uploadProfilePhoto(imageUri: string, userId: string): Prom
 }
 
 // Save push notification token to user profile
+// On logout: stop sending the signed-out user's notifications to this device. Only
+// clears the token if it's still this device's, so the user's other phone keeps working.
+export const clearPushToken = async (token: string): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ push_token: null })
+    .eq('user_id', user.id)
+    .eq('push_token', token);
+  if (error) {
+    throw new Error(`Failed to clear push token: ${error.message}`);
+  }
+};
+
 export const savePushToken = async (token: string): Promise<void> => {
   console.log('[PUSH-DEBUG] savePushToken called with token:', token.substring(0, 30) + '...');
   console.log('[PUSH-DEBUG] Calling supabase.auth.getUser()...');
